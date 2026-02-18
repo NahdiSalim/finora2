@@ -1,0 +1,34 @@
+# @see: https://github.com/typicode/husky/issues/968#issuecomment-1184296264
+if [ -t 2 ]; then
+  exec >/dev/tty 2>&1
+fi
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+
+if [ "$branch" = "main" ]; then
+  echo "You can't commit directly to main branch"
+  exit 1
+fi
+
+# Engine version force
+
+if [ "$(node -v)" != "v24.13.1" ]; then
+  echo "You must use Node v24.13.1"
+  exit 1
+fi
+
+
+#!/bin/sh
+# Check if package-lock.json is present in the staged files
+if git diff --cached --name-only | grep -E 'package-lock.json'; then
+    echo "Error: package-lock.json should not be committed when using pnpm!"
+    exit 1
+fi
+
+
+pnpm exec lint-staged --allow-empty
+
+# If lint-staged succeeds, generate types
+# if pnpm exec lint-staged --allow-empty; then
+#   echo "Running lint:types..."
+#    pnpm lint:types

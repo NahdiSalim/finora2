@@ -88,7 +88,7 @@ export function SignInView() {
             }}
           >
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Connexion à LastDream
+              Connexion à Finora
             </Typography>
             <Typography
               variant="body2"

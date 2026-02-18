@@ -8,6 +8,6 @@ export type ConfigValue = {
 };
 
 export const CONFIG: ConfigValue = {
-  appName: 'PPR',
+  appName: 'FINORA',
   appVersion: packageJson.version,
 };

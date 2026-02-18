@@ -1,5 +1,6 @@
 {
     "name": "finora",
+      "author": "SWIFTECH",
     "private": true,
     "version": "1.0.0",
     "scripts": {
@@ -8,7 +9,6 @@
         "fix": "eslint --config eslint.config.mjs"
     },
     "keywords": [],
-    "author": "DIGID",
     "license": "ISC",
     "lint-staged": {
         "**/*.{ts,tsx}": [

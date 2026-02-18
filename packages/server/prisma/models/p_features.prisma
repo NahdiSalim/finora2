@@ -1,0 +1,12 @@
+model p_features {
+    role_id    Int
+    feature_id Int
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
+
+    role    Role    @relation(fields: [role_id], references: [id], onDelete: Cascade)
+    feature Feature @relation(fields: [feature_id], references: [id], onDelete: Cascade)
+
+    @@id([role_id, feature_id])
+    @@index([feature_id])
+}

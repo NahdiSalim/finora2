@@ -1,0 +1,15 @@
+model RefreshToken {
+  id          Int       @id @default(autoincrement())
+  token       String    @unique 
+  userId      Int      
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime  @default(now())
+  isRevoked   Boolean   @default(false)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}

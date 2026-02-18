@@ -1,4 +1,4 @@
 packages:
   - packages/*
 
-nodeLinker: hoisted
+nodeLinker: node-modules

@@ -1,0 +1,12 @@
+model p_pages {
+    role_id   Int
+    page_id   Int
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    role Role  @relation(fields: [role_id], references: [id], onDelete: Cascade)
+    page Pages @relation(fields: [page_id], references: [id], onDelete: Cascade)
+
+    @@id([role_id, page_id])
+    @@index([page_id])
+}

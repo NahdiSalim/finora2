@@ -6,7 +6,7 @@ export class AppController {
   getApiRoot() {
     return {
       ok: true,
-      message: 'THAMM+ API is running',
+      message: 'Finora API is running',
     };
   }
 }

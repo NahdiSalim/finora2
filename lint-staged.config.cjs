@@ -1,3 +1,4 @@
 module.exports = {
-  "*.{ts,tsx}": ["pnpm run fix"],
+  "*.{ts,tsx}": ["prettier --write"],
+  "*.{json,css,scss,md}": ["prettier --write"],
 };

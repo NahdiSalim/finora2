@@ -2,7 +2,7 @@ import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { Navigate } from 'react-router-dom';
 
-import { Box, Grid, Link, Button, Typography } from '@mui/material';
+import { Box, Link, Button, Typography, FormControlLabel, Checkbox } from '@mui/material';
 import DotSpinner from 'src/components/common/DotSpinner';
 
 import { useRouter } from 'src/routes/hooks';
@@ -37,12 +37,13 @@ export function SignInView() {
 
   const onSubmit = async (data: SignInFormData) => {
     try {
+      console.log('data', data);
       const result = await login(data).unwrap();
+      console.log('result', result);
+      localStorage.setItem('token', result.data.accessToken);
+      localStorage.setItem('refresh_token', result.data.refreshToken);
 
-      localStorage.setItem('token', result.token.access_token);
-      localStorage.setItem('refresh_token', result.token.refresh_token);
-
-      const firstRoute = result.user.features?.[0]?.pages?.[0]?.route || '/';
+      const firstRoute = '/';
       router.push(firstRoute);
     } catch (error: unknown) {
       const message =
@@ -76,73 +77,84 @@ export function SignInView() {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      <Grid container spacing={3} sx={{ maxWidth: '434px', width: '100%' }}>
-        <Grid size={{ xs: 12 }}>
-          <Box
-            sx={{
-              gap: 1.5,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-            }}
-          >
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Connexion à Finora
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                color: 'text.secondary',
-              }}
-            >
-              Entrez vos identifiants ci-dessous
-            </Typography>
-          </Box>
-        </Grid>
+    <Box
+      component="form"
+      onSubmit={handleSubmit(onSubmit)}
+      sx={{
+        width: '100%',
+        maxWidth: 434,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 3,
+      }}
+    >
+      <Box>
+        <Typography sx={{ fontSize: 28, fontWeight: 700, color: '#111827' }}>
+          Se connecter
+        </Typography>
 
-        <Grid size={{ xs: 12 }}>
-          <CustomInput
-            {...register('email')}
-            fullWidth
-            label="Email"
-            error={!!errors.email}
-            helperText={errors.email?.message}
-          />
-        </Grid>
+        <Typography sx={{ fontSize: 14, color: '#6B7280', mt: 1 }}>
+          Entrez vos informations pour vous connecter.
+        </Typography>
+      </Box>
 
-        <Grid size={{ xs: 12 }}>
-          <CustomInput
-            {...register('password')}
-            fullWidth
-            label="Mot de passe"
-            isPassword
-            error={!!errors.password}
-            helperText={errors.password?.message}
-          />
-        </Grid>
+      <CustomInput
+        {...register('email')}
+        label="Adresse email"
+        error={!!errors.email}
+        helperText={errors.email?.message}
+        fullWidth
+      />
 
-        <Grid size={{ xs: 12 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Link component={RouterLink} href="/forgot-password" variant="body2" color="inherit">
-              Mot de passe oublié?
-            </Link>
-          </Box>
-        </Grid>
+      <CustomInput
+        {...register('password')}
+        label="Mot de passe"
+        isPassword
+        error={!!errors.password}
+        helperText={errors.password?.message}
+        fullWidth
+      />
 
-        <Grid size={{ xs: 12 }}>
-          <Button
-            fullWidth
-            type="submit"
-            color="primary"
-            variant="contained"
-            disabled={isLoading}
-            startIcon={isLoading && <DotSpinner size={20} />}
-          >
-            {isLoading ? 'Connexion en cours…' : 'Se connecter'}
-          </Button>
-        </Grid>
-      </Grid>
-    </form>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <FormControlLabel
+          control={<Checkbox />}
+          label={<Typography sx={{ fontSize: 13 }}>Se souvenir de moi</Typography>}
+        />
+
+        <Link
+          component={RouterLink}
+          href="/forgot-password"
+          sx={{
+            fontSize: 13,
+            color: '#2563EB',
+            '&:hover': { textDecoration: 'underline' },
+          }}
+        >
+          Mot de passe oublié ?
+        </Link>
+      </Box>
+
+      <Button
+        fullWidth
+        type="submit"
+        disabled={isLoading}
+        variant="contained"
+        sx={{
+          height: 48,
+          borderRadius: '12px',
+          textTransform: 'none',
+          fontWeight: 600,
+          fontSize: 15,
+          boxShadow: 'none',
+          backgroundColor: '#2563EB',
+          '&:hover': {
+            backgroundColor: '#1D4ED8',
+            boxShadow: 'none',
+          },
+        }}
+      >
+        {isLoading ? 'Connexion en cours…' : 'Se connecter'}
+      </Button>
+    </Box>
   );
 }

@@ -22,14 +22,13 @@ async function bootstrap() {
       forbidNonWhitelisted: false,
       transform: true,
       skipMissingProperties: true,
-    }),
+    })
   );
 
   app.useGlobalFilters(new GlobalExceptionFilter());
 
-  if (process.env.NODE_ENV !== 'production') {
-    setupSwagger(app);
-  }
+  // Setup Swagger documentation
+  setupSwagger(app);
 
   // Fix path for both dev (src) and prod (dist)
   const uploadsPath = join(__dirname, '..', '..', 'uploads');
@@ -44,6 +43,6 @@ async function bootstrap() {
 
   await app.listen(process.env.PORT || 3000, '0.0.0.0');
   console.log(`server is listening on port ${process.env.PORT || 3000}`);
-  console.log(`API → http://localhost:${process.env.PORT || 3000}/api`);
+  console.log(`API → http://localhost:${process.env.PORT || 3000}/docs`);
 }
 bootstrap();

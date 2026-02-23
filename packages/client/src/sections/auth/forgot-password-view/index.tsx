@@ -1,22 +1,29 @@
-import { useForm } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
-import { Box, Typography, Button } from '@mui/material';
-import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
-import { useRouter } from 'src/routes/hooks';
-import CustomInput from 'src/components/common/CustomInput';
+import { useForm } from "react-hook-form";
+import { useState, useCallback } from "react";
+import { yupResolver } from "@hookform/resolvers/yup";
+
+import CheckCircle from "@mui/icons-material/CheckCircle";
+import ArrowBackIosIcon from "@mui/icons-material/ArrowBackIos";
+import { Box, Grid, Link, Button, Typography } from "@mui/material";
+import DotSpinner from "src/components/common/DotSpinner";
+
+import { useRouter } from "src/routes/hooks";
+import { RouterLink } from "src/routes/components";
+import CustomInput from "src/components/common/CustomInput";
 
 import {
   forgotPasswordValidationSchema,
   type ForgotPasswordFormData,
-} from 'src/validations/Auth/auth-validation';
+} from "src/validations/Auth/auth-validation";
 
-import { useForgotPasswordMutation } from 'src/lib/services/authApi';
-import { useAlert } from 'src/contexts/AlertContext';
-import DotSpinner from 'src/components/common/DotSpinner';
+import { useAlert } from "src/contexts/AlertContext";
+import { useForgotPasswordMutation } from "src/lib/services/authApi";
 
 export function ForgotPasswordView() {
   const router = useRouter();
   const { showAlert } = useAlert();
+  const [emailSent, setEmailSent] = useState(false);
+  const [submittedEmail, setSubmittedEmail] = useState("");
   const [forgotPassword, { isLoading }] = useForgotPasswordMutation();
 
   const {
@@ -25,45 +32,75 @@ export function ForgotPasswordView() {
     formState: { errors },
   } = useForm<ForgotPasswordFormData>({
     resolver: yupResolver(forgotPasswordValidationSchema),
-    defaultValues: { email: '' },
+    defaultValues: {
+      email: "",
+    },
   });
 
   const onSubmit = async (data: ForgotPasswordFormData) => {
     try {
       await forgotPassword(data).unwrap();
-      router.push('/check-email');
-    } catch (error: any) {
-      showAlert("Erreur lors de l'envoi de l'email", error);
+      setSubmittedEmail(data.email);
+      setEmailSent(true);
+    } catch (error: unknown) {
+      const message =
+        (typeof error === "object" &&
+          error !== null &&
+          "data" in error &&
+          (error as { data?: { message?: string } })?.data?.message) ||
+        "Échec de l'envoi de l'email. Veuillez réessayer.";
+
+      showAlert(message, "error");
     }
   };
 
-  return (
-    <Box
-      sx={{
-        width: '100%',
-        minHeight: 600,
-        display: 'flex',
-        alignItems: 'center', // centre verticalement
-        justifyContent: 'center', // centre horizontalement
-      }}
-    >
-      <Box
-        sx={{
-          width: '100%',
-          maxWidth: 420,
-        }}
-      >
-        {/* Title Block */}
-        <Box sx={{ mb: 4 }}>
-          <Typography
+  const handleBackToSignIn = useCallback(() => {
+    router.push("/sign-in");
+  }, [router]);
+
+  if (emailSent) {
+    return (
+      <Grid container spacing={3} sx={{ maxWidth: "434px", width: "100%" }}>
+        <Grid size={{ xs: 12 }}>
+          <Box
             sx={{
-              fontSize: 24,
-              fontWeight: 700,
-              color: '#111827',
+              gap: 1.5,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
             }}
           >
-            Mot de passe oublié ?
-          </Typography>
+            <Box
+              sx={{
+                width: 64,
+                height: 64,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "50%",
+                bgcolor: "success.lighter",
+                color: "success.main",
+              }}
+            >
+              <CheckCircle sx={{ fontSize: 40 }} />
+            </Box>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              Email envoyé!
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                textAlign: "center",
+              }}
+            >
+              Nous avons envoyé un email de réinitialisation à{" "}
+              <strong>{submittedEmail}</strong>.
+              <br />
+              Veuillez vérifier votre boîte de réception.
+            </Typography>
+          </Box>
+        </Grid>
 
           <Typography
             sx={{
@@ -76,33 +113,46 @@ export function ForgotPasswordView() {
           </Typography>
         </Box>
 
-        {/* Form */}
-        <Box
-          component="form"
-          onSubmit={handleSubmit(onSubmit)}
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 3,
-          }}
-        >
-          <Typography
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <Grid container spacing={3} sx={{ maxWidth: "434px", width: "100%" }}>
+        <Grid size={{ xs: 12 }}>
+          <Box
             sx={{
-              fontSize: 14,
-              fontWeight: 500,
-              color: '#374151',
+              gap: 1.5,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
             }}
           >
-            Adresse email <span style={{ color: '#EF4444' }}>*</span>
-          </Typography>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              Mot de passe oublié?
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                textAlign: "center",
+              }}
+            >
+              Entrez votre adresse email et nous vous enverrons un lien pour
+              réinitialiser votre mot de passe
+            </Typography>
+          </Box>
+        </Grid>
 
+        <Box sx={{ width: "100%" }} />
+
+        <Grid size={{ xs: 12 }}>
           <CustomInput
-            {...register('email')}
-            placeholder="Enter your email"
+            {...register("email")}
+            fullWidth
+            label="Adresse email"
             type="email"
             error={!!errors.email}
             helperText={errors.email?.message}
-            fullWidth
+            required
+            placeholder="Entrer votre adresse email"
           />
 
           <Button
@@ -121,27 +171,27 @@ export function ForgotPasswordView() {
               },
             }}
           >
-            {isLoading ? <DotSpinner size={20} /> : 'Envoyer le lien'}
+            {isLoading
+              ? "Envoi en cours…"
+              : "Envoyer le lien de réinitialisation"}
           </Button>
         </Box>
 
-        {/* Back Button */}
-        <Box sx={{ mt: 4 }}>
-          <Button
-            fullWidth
-            variant="outlined"
-            startIcon={<ArrowBackIosIcon />}
-            onClick={() => router.push('/sign-in')}
-            sx={{
-              height: 48,
-              borderRadius: '12px',
-              textTransform: 'none',
-            }}
-          >
-            Retour à la connexion
-          </Button>
-        </Box>
-      </Box>
-    </Box>
+        <Grid size={{ xs: 12 }}>
+          <Box sx={{ display: "flex", justifyContent: "center" }}>
+            <Link
+              component={RouterLink}
+              href="/sign-in"
+              variant="body2"
+              color="inherit"
+              sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+            >
+              <ArrowBackIosIcon sx={{ fontSize: 16 }} />
+              Retour à la connexion
+            </Link>
+          </Box>
+        </Grid>
+      </Grid>
+    </form>
   );
 }

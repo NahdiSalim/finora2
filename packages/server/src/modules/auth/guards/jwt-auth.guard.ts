@@ -16,7 +16,7 @@ export interface AuthRequest extends Request {
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private reflector: Reflector,
-    private authService: AuthService,
+    private authService: AuthService
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -32,19 +32,22 @@ export class JwtAuthGuard implements CanActivate {
 
     const originalToken = this.extractTokenFromHeader(request);
 
+    console.log('🔍 JWT Guard Debug:');
+    console.log('Authorization header:', request.headers.authorization);
+    console.log('Extracted token:', originalToken ? 'Token found' : 'NO TOKEN');
+
     if (!originalToken) {
       throw new ApiError(
         errors.NEED_AUTH.message,
         errors.NEED_AUTH.code,
-        errors.NEED_AUTH.errorCode,
+        errors.NEED_AUTH.errorCode
       );
     }
 
     //console.log('Original token received:', originalToken);
 
     try {
-      const { user, newTokens } =
-        await this.authService.verifyAndRefreshToken(originalToken);
+      const { user, newTokens } = await this.authService.verifyAndRefreshToken(originalToken);
 
       const fullUser = await this.authService.getFullUserById(user.sub);
 
@@ -73,7 +76,7 @@ export class JwtAuthGuard implements CanActivate {
       throw new ApiError(
         errors.INVALID_TOKEN.message,
         errors.INVALID_TOKEN.code,
-        errors.INVALID_TOKEN.errorCode,
+        errors.INVALID_TOKEN.errorCode
       );
     }
   }

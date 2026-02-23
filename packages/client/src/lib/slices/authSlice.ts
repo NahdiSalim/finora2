@@ -61,14 +61,14 @@ export const authSlice = createSlice({
       state.isAuth = true;
     });
     builder.addMatcher(authApi.endpoints.loginInternal.matchFulfilled, (state, { payload }) => {
-      const { features, ...userProps } = payload.user;
+      const { features, ...userProps } = payload.data.user;
       state.user = userProps;
       state.features = features;
-      state.token = payload.token.access_token;
-      state.refresh_token = payload.token.refresh_token;
+      state.token = payload.data.accessToken;
+      state.refresh_token = payload.data.refreshToken;
       state.isAuth = true;
-      localStorage.setItem('token', payload.token.access_token);
-      localStorage.setItem('refresh_token', payload.token.refresh_token);
+      localStorage.setItem('token', payload.data.accessToken);
+      localStorage.setItem('refresh_token', payload.data.refreshToken);
     });
   },
 });

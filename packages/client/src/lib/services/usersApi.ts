@@ -97,7 +97,7 @@ export const usersApi = createApi({
         }
 
         return {
-          url: `/auth/all?${params.toString()}`,
+          url: `/users/all?${params.toString()}`,
           method: 'GET',
         };
       },

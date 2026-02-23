@@ -144,55 +144,24 @@ export function SignInView() {
           }
         />
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <FormControlLabel
-            control={<Checkbox />}
-            label={<Typography sx={{ fontSize: 13 }}>Se souvenir de moi</Typography>}
-          />
-
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
           <Link
             component={RouterLink}
             href="/forgot-password"
             sx={{
               fontSize: 13,
-              color: '#2563EB',
-              '&:hover': { textDecoration: 'underline' },
+              color: "#2563EB",
+              "&:hover": { textDecoration: "underline" },
             }}
           >
             Mot de passe oublié ?
           </Link>
-        </Box>
-
-        <Button
-          fullWidth
-          type="submit"
-          disabled={isLoading}
-          variant="contained"
-          sx={{
-            fontSize: 13,
-            color: "#2563EB",
-            "&:hover": { textDecoration: "underline" },
-          }}
-        >
-          {isLoading ? 'Connexion en cours…' : 'Se connecter'}
-        </Button>
-
-        <Box sx={{ mt: 4, textAlign: 'center' }}>
-          <Typography sx={{ fontSize: 14, color: '#6B7280' }}>
-            Vous n&apos;avez pas de compte ?
-            <Link
-              component={RouterLink}
-              href="/register"
-              sx={{
-                ml: 1,
-                fontWeight: 600,
-                color: '#2563EB',
-                '&:hover': { textDecoration: 'underline' },
-              }}
-            >
-              Inscrivez-vous
-            </Link>
-          </Typography>
         </Box>
       </Box>
 
@@ -217,6 +186,23 @@ export function SignInView() {
       >
         {isLoading ? "Connexion en cours…" : "Se connecter"}
       </Button>
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Typography sx={{ fontSize: 14, color: "#6B7280" }}>
+          Vous n&apos;avez pas de compte ?
+          <Link
+            component={RouterLink}
+            href="/register"
+            sx={{
+              ml: 1,
+              fontWeight: 600,
+              color: "#2563EB",
+              "&:hover": { textDecoration: "underline" },
+            }}
+          >
+            Inscrivez-vous
+          </Link>
+        </Typography>
+      </Box>
     </Box>
   );
 }

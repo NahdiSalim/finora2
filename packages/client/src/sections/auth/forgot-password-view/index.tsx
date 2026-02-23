@@ -5,7 +5,6 @@ import { yupResolver } from "@hookform/resolvers/yup";
 import CheckCircle from "@mui/icons-material/CheckCircle";
 import ArrowBackIosIcon from "@mui/icons-material/ArrowBackIos";
 import { Box, Grid, Link, Button, Typography } from "@mui/material";
-import DotSpinner from "src/components/common/DotSpinner";
 
 import { useRouter } from "src/routes/hooks";
 import { RouterLink } from "src/routes/components";
@@ -102,17 +101,18 @@ export function ForgotPasswordView() {
           </Box>
         </Grid>
 
-          <Typography
-            sx={{
-              color: '#6B7280',
-              fontSize: 14,
-              mt: 1,
-            }}
-          >
-            Ne vous inquiétez pas, nous pouvons vous aider!
-          </Typography>
-        </Box>
-
+        <Typography
+          sx={{
+            color: "#6B7280",
+            fontSize: 14,
+            mt: 1,
+          }}
+        >
+          Ne vous inquiétez pas, nous pouvons vous aider!
+        </Typography>
+      </Grid>
+    );
+  }
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <Grid container spacing={3} sx={{ maxWidth: "434px", width: "100%" }}>
@@ -162,12 +162,12 @@ export function ForgotPasswordView() {
             disabled={isLoading}
             sx={{
               height: 48,
-              borderRadius: '12px',
-              textTransform: 'none',
+              borderRadius: "12px",
+              textTransform: "none",
               fontWeight: 600,
-              backgroundColor: '#2563EB',
-              '&:hover': {
-                backgroundColor: '#1D4ED8',
+              backgroundColor: "#2563EB",
+              "&:hover": {
+                backgroundColor: "#1D4ED8",
               },
             }}
           >
@@ -175,7 +175,7 @@ export function ForgotPasswordView() {
               ? "Envoi en cours…"
               : "Envoyer le lien de réinitialisation"}
           </Button>
-        </Box>
+        </Grid>
 
         <Grid size={{ xs: 12 }}>
           <Box sx={{ display: "flex", justifyContent: "center" }}>

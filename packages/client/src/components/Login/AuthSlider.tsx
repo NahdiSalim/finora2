@@ -6,15 +6,18 @@ import { Box, Typography } from '@mui/material';
 const slides = [
   {
     title: 'The all-in-one platform',
-    description: 'Manage your accounting, tasks, documents and keep everything organized.',
+    description:
+      'Manage your accounting, tasks, documents and keep everything organized, secure, and stress-free.',
   },
   {
     title: 'Simplify your workflow',
-    description: 'Streamline your business processes with our intuitive tools.',
+    description:
+      'Streamline your business processes with our intuitive tools and automated solutions.',
   },
   {
     title: 'Stay organized',
-    description: 'Keep all your important documents secure and accessible.',
+    description:
+      'Keep all your important documents and data in one secure, easily accessible place.',
   },
 ];
 
@@ -38,12 +41,18 @@ export default function AuthSlider() {
         justifyContent: 'space-between',
         p: 4,
         color: '#fff',
+        borderRadius: 3,
         background: "url('public/assets/bg-slider.svg') center/cover no-repeat",
       }}
     >
       {/* Logo */}
       <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-        <Box component="img" src="/assets/logo-finora.png" alt="Logo" sx={{ maxWidth: 160 }} />
+        <Box
+          component="img"
+          src="public/assets/logo-finora.png"
+          alt="Logo"
+          sx={{ maxWidth: 160 }}
+        />
       </Box>
 
       {/* Content */}
@@ -56,24 +65,41 @@ export default function AuthSlider() {
           alignItems: 'center',
         }}
       >
-        <Typography
+        <Typography sx={{ fontWeight: 700, fontSize: 18 }}>{slides[index].title}</Typography>
+
+        {/* Images Container */}
+        <Box
           sx={{
-            fontWeight: 700,
-            fontSize: 18,
+            position: 'relative',
+            width: 260,
           }}
         >
-          {slides[index].title}
-        </Typography>
+          {/* Dashboard */}
+          <Box
+            component="img"
+            src="public/assets/dash-slider.png"
+            alt="Dashboard"
+            sx={{
+              width: '100%',
+              borderRadius: 3,
+            }}
+          />
 
-        <Box
-          component="img"
-          src="/assets/dash-slider.png"
-          alt="Dashboard"
-          sx={{
-            maxWidth: 260,
-            borderRadius: '16px',
-          }}
-        />
+          {/* Folder Overlay */}
+          <Box
+            component="img"
+            src="public/assets/folder-slider.png"
+            alt="Folder"
+            sx={{
+              position: 'absolute',
+              right: -20,
+              bottom: -20,
+              width: 80,
+              borderRadius: 2,
+              boxShadow: '0 8px 20px rgba(0,0,0,0.2)',
+            }}
+          />
+        </Box>
 
         <Typography
           sx={{
@@ -87,13 +113,7 @@ export default function AuthSlider() {
       </Box>
 
       {/* Indicators */}
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          gap: 1,
-        }}
-      >
+      <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
         {slides.map((_, i) => (
           <Box
             key={i}

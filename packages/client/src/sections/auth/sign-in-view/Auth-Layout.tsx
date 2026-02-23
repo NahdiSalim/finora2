@@ -19,7 +19,7 @@ export default function AuthLayout() {
       <Box
         sx={{
           width: '100%',
-          maxWidth: 900,
+          maxWidth: 1200,
           backgroundColor: '#fff',
           borderRadius: '24px',
           boxShadow: '0px 20px 40px rgba(0,0,0,0.08)',

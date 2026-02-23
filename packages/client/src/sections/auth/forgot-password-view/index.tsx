@@ -1,14 +1,8 @@
 import { useForm } from 'react-hook-form';
-import { useState, useCallback } from 'react';
 import { yupResolver } from '@hookform/resolvers/yup';
-
-import CheckCircle from '@mui/icons-material/CheckCircle';
+import { Box, Typography, Button } from '@mui/material';
 import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
-import { Box, Grid, Link, Button, Typography } from '@mui/material';
-import DotSpinner from 'src/components/common/DotSpinner';
-
 import { useRouter } from 'src/routes/hooks';
-import { RouterLink } from 'src/routes/components';
 import CustomInput from 'src/components/common/CustomInput';
 
 import {
@@ -16,14 +10,13 @@ import {
   type ForgotPasswordFormData,
 } from 'src/validations/Auth/auth-validation';
 
-import { useAlert } from 'src/contexts/AlertContext';
 import { useForgotPasswordMutation } from 'src/lib/services/authApi';
+import { useAlert } from 'src/contexts/AlertContext';
+import DotSpinner from 'src/components/common/DotSpinner';
 
 export function ForgotPasswordView() {
   const router = useRouter();
   const { showAlert } = useAlert();
-  const [emailSent, setEmailSent] = useState(false);
-  const [submittedEmail, setSubmittedEmail] = useState('');
   const [forgotPassword, { isLoading }] = useForgotPasswordMutation();
 
   const {
@@ -32,157 +25,123 @@ export function ForgotPasswordView() {
     formState: { errors },
   } = useForm<ForgotPasswordFormData>({
     resolver: yupResolver(forgotPasswordValidationSchema),
-    defaultValues: {
-      email: '',
-    },
+    defaultValues: { email: '' },
   });
 
   const onSubmit = async (data: ForgotPasswordFormData) => {
     try {
       await forgotPassword(data).unwrap();
-      setSubmittedEmail(data.email);
-      setEmailSent(true);
-    } catch (error: unknown) {
-      const message =
-        (typeof error === 'object' &&
-          error !== null &&
-          'data' in error &&
-          (error as { data?: { message?: string } })?.data?.message) ||
-        "Échec de l'envoi de l'email. Veuillez réessayer.";
-
-      showAlert(message, 'error');
+      router.push('/check-email');
+    } catch (error: any) {
+      showAlert("Erreur lors de l'envoi de l'email", error);
     }
   };
 
-  const handleBackToSignIn = useCallback(() => {
-    router.push('/sign-in');
-  }, [router]);
-
-  if (emailSent) {
-    return (
-      <Grid container spacing={3} sx={{ maxWidth: '434px', width: '100%' }}>
-        <Grid size={{ xs: 12 }}>
-          <Box
-            sx={{
-              gap: 1.5,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-            }}
-          >
-            <Box
-              sx={{
-                width: 64,
-                height: 64,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '50%',
-                bgcolor: 'success.lighter',
-                color: 'success.main',
-              }}
-            >
-              <CheckCircle sx={{ fontSize: 40 }} />
-            </Box>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Email envoyé!
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                color: 'text.secondary',
-                textAlign: 'center',
-              }}
-            >
-              Nous avons envoyé un email de réinitialisation à <strong>{submittedEmail}</strong>.
-              <br />
-              Veuillez vérifier votre boîte de réception.
-            </Typography>
-          </Box>
-        </Grid>
-
-        <Grid size={{ xs: 12 }}>
-          <Button
-            fullWidth
-            color="primary"
-            variant="contained"
-            onClick={handleBackToSignIn}
-            startIcon={<ArrowBackIosIcon />}
-          >
-            Retour à la connexion
-          </Button>
-        </Grid>
-      </Grid>
-    );
-  }
-
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      <Grid container spacing={3} sx={{ maxWidth: '434px', width: '100%' }}>
-        <Grid size={{ xs: 12 }}>
-          <Box
+    <Box
+      sx={{
+        width: '100%',
+        minHeight: 600,
+        display: 'flex',
+        alignItems: 'center', // centre verticalement
+        justifyContent: 'center', // centre horizontalement
+      }}
+    >
+      <Box
+        sx={{
+          width: '100%',
+          maxWidth: 420,
+        }}
+      >
+        {/* Title Block */}
+        <Box sx={{ mb: 4 }}>
+          <Typography
             sx={{
-              gap: 1.5,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
+              fontSize: 24,
+              fontWeight: 700,
+              color: '#111827',
             }}
           >
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Mot de passe oublié?
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                color: 'text.secondary',
-                textAlign: 'center',
-              }}
-            >
-              Entrez votre adresse email et nous vous enverrons un lien pour réinitialiser votre mot
-              de passe
-            </Typography>
-          </Box>
-        </Grid>
+            Mot de passe oublié ?
+          </Typography>
 
-        <Grid size={{ xs: 12 }}>
+          <Typography
+            sx={{
+              color: '#6B7280',
+              fontSize: 14,
+              mt: 1,
+            }}
+          >
+            Ne vous inquiétez pas, nous pouvons vous aider!
+          </Typography>
+        </Box>
+
+        {/* Form */}
+        <Box
+          component="form"
+          onSubmit={handleSubmit(onSubmit)}
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 3,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: 14,
+              fontWeight: 500,
+              color: '#374151',
+            }}
+          >
+            Adresse email <span style={{ color: '#EF4444' }}>*</span>
+          </Typography>
+
           <CustomInput
             {...register('email')}
-            fullWidth
-            label="Adresse email"
+            placeholder="Enter your email"
             type="email"
             error={!!errors.email}
             helperText={errors.email?.message}
+            fullWidth
           />
-        </Grid>
 
-        <Grid size={{ xs: 12 }}>
           <Button
             fullWidth
             type="submit"
-            color="primary"
             variant="contained"
             disabled={isLoading}
-            startIcon={isLoading && <DotSpinner size={20} />}
+            sx={{
+              height: 48,
+              borderRadius: '12px',
+              textTransform: 'none',
+              fontWeight: 600,
+              backgroundColor: '#2563EB',
+              '&:hover': {
+                backgroundColor: '#1D4ED8',
+              },
+            }}
           >
-            {isLoading ? 'Envoi en cours…' : 'Envoyer le lien de réinitialisation'}
+            {isLoading ? <DotSpinner size={20} /> : 'Envoyer le lien'}
           </Button>
-        </Grid>
+        </Box>
 
-        <Grid size={{ xs: 12 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-            <Link
-              component={RouterLink}
-              href="/sign-in"
-              variant="body2"
-              color="inherit"
-              sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-            >
-              <ArrowBackIosIcon sx={{ fontSize: 16 }} />
-              Retour à la connexion
-            </Link>
-          </Box>
-        </Grid>
-      </Grid>
-    </form>
+        {/* Back Button */}
+        <Box sx={{ mt: 4 }}>
+          <Button
+            fullWidth
+            variant="outlined"
+            startIcon={<ArrowBackIosIcon />}
+            onClick={() => router.push('/sign-in')}
+            sx={{
+              height: 48,
+              borderRadius: '12px',
+              textTransform: 'none',
+            }}
+          >
+            Retour à la connexion
+          </Button>
+        </Box>
+      </Box>
+    </Box>
   );
 }

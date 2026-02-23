@@ -76,73 +76,131 @@ export function SignInView() {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      <Grid container spacing={3} sx={{ maxWidth: '434px', width: '100%' }}>
-        <Grid size={{ xs: 12 }}>
-          <Box
+    <Box
+      sx={{
+        width: "100%",
+        maxWidth: 434,
+        display: "flex",
+        flexDirection: "column",
+        gap: 3,
+      }}
+    >
+      <Box>
+        <Typography sx={{ fontSize: 28, fontWeight: 700, color: "#111827" }}>
+          Se connecter
+        </Typography>
+
+        <Typography sx={{ fontSize: 14, color: "#6B7280", mt: 1 }}>
+          Entrez vos informations pour vous connecter.
+        </Typography>
+      </Box>
+
+      <CustomInput
+        {...register("email")}
+        label="Adresse email"
+        error={!!errors.email}
+        helperText={errors.email?.message}
+        fullWidth
+        required
+        placeholder="Entrer votre adresse email"
+      />
+
+      <PasswordField mode="login" required />
+
+      <PhoneInput
+        label="Numéro de téléphone"
+        required
+        placeholder="Entrer votre numéro de téléphone"
+        helperText="Nous ne partagerons jamais votre numéro"
+      />
+
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <FormControlLabel
+          control={<Checkbox />}
+          label={
+            <Typography sx={{ fontSize: 13 }}>Se souvenir de moi</Typography>
+          }
+        />
+
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <FormControlLabel
+            control={<Checkbox />}
+            label={<Typography sx={{ fontSize: 13 }}>Se souvenir de moi</Typography>}
+          />
+
+          <Link
+            component={RouterLink}
+            href="/forgot-password"
             sx={{
-              gap: 1.5,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
+              fontSize: 13,
+              color: '#2563EB',
+              '&:hover': { textDecoration: 'underline' },
             }}
           >
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Connexion à Finora
-            </Typography>
-            <Typography
-              variant="body2"
+            Mot de passe oublié ?
+          </Link>
+        </Box>
+
+        <Button
+          fullWidth
+          type="submit"
+          disabled={isLoading}
+          variant="contained"
+          sx={{
+            fontSize: 13,
+            color: "#2563EB",
+            "&:hover": { textDecoration: "underline" },
+          }}
+        >
+          {isLoading ? 'Connexion en cours…' : 'Se connecter'}
+        </Button>
+
+        <Box sx={{ mt: 4, textAlign: 'center' }}>
+          <Typography sx={{ fontSize: 14, color: '#6B7280' }}>
+            Vous n&apos;avez pas de compte ?
+            <Link
+              component={RouterLink}
+              href="/register"
               sx={{
-                color: 'text.secondary',
+                ml: 1,
+                fontWeight: 600,
+                color: '#2563EB',
+                '&:hover': { textDecoration: 'underline' },
               }}
             >
-              Entrez vos identifiants ci-dessous
-            </Typography>
-          </Box>
-        </Grid>
-
-        <Grid size={{ xs: 12 }}>
-          <CustomInput
-            {...register('email')}
-            fullWidth
-            label="Email"
-            error={!!errors.email}
-            helperText={errors.email?.message}
-          />
-        </Grid>
-
-        <Grid size={{ xs: 12 }}>
-          <CustomInput
-            {...register('password')}
-            fullWidth
-            label="Mot de passe"
-            isPassword
-            error={!!errors.password}
-            helperText={errors.password?.message}
-          />
-        </Grid>
-
-        <Grid size={{ xs: 12 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Link component={RouterLink} href="/forgot-password" variant="body2" color="inherit">
-              Mot de passe oublié?
+              Inscrivez-vous
             </Link>
-          </Box>
-        </Grid>
+          </Typography>
+        </Box>
+      </Box>
 
-        <Grid size={{ xs: 12 }}>
-          <Button
-            fullWidth
-            type="submit"
-            color="primary"
-            variant="contained"
-            disabled={isLoading}
-            startIcon={isLoading && <DotSpinner size={20} />}
-          >
-            {isLoading ? 'Connexion en cours…' : 'Se connecter'}
-          </Button>
-        </Grid>
-      </Grid>
-    </form>
+      <Button
+        fullWidth
+        type="submit"
+        disabled={isLoading}
+        variant="contained"
+        sx={{
+          height: 48,
+          borderRadius: "12px",
+          textTransform: "none",
+          fontWeight: 600,
+          fontSize: 15,
+          boxShadow: "none",
+          backgroundColor: "#2563EB",
+          "&:hover": {
+            backgroundColor: "#1D4ED8",
+            boxShadow: "none",
+          },
+        }}
+      >
+        {isLoading ? "Connexion en cours…" : "Se connecter"}
+      </Button>
+    </Box>
   );
 }

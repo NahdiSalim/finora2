@@ -22,10 +22,13 @@ export const DocumentValidationPage = lazy(
   () => import('src/sections/user/document-validation/index')
 );
 export const SignInPage = lazy(() => import('src/pages/sign-in'));
+export const RegisterPage = lazy(() => import('src/pages/register'));
+
 export const ForgotPasswordPage = lazy(() => import('src/pages/forgot-password'));
 export const ResetPasswordPage = lazy(() => import('src/pages/reset-password'));
 export const Page404 = lazy(() => import('src/pages/page-not-found'));
 export const PageForbidden = lazy(() => import('src/pages/page-forbidden'));
+export const CheckEmailPage = lazy(() => import('src/pages/check-email'));
 
 // ----------------------------------------------------------------------
 
@@ -133,6 +136,27 @@ export const routesSection: RouteObject[] = [
       </AuthLayout>
     ),
   },
+  {
+    path: 'register',
+    element: <AuthLayout />,
+    children: [
+      {
+        index: true,
+        element: <RegisterPage />,
+      },
+    ],
+  },
+  {
+    path: 'check-email',
+    element: <AuthLayout />,
+    children: [
+      {
+        index: true,
+        element: <CheckEmailPage />,
+      },
+    ],
+  },
+
   {
     path: 'forgot-password',
     element: (

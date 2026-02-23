@@ -10,37 +10,37 @@ import { errors } from 'src/common/errors/errors';
 export class PermissionGuard implements CanActivate {
   constructor(
     private reflector: Reflector,
-    private prisma: PrismaService,
+    private prisma: PrismaService
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const taskSlug = this.reflector.getAllAndOverride<string>(PERMISSION_KEY, [
+    const actionCode = this.reflector.getAllAndOverride<string>(PERMISSION_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
 
-    if (!taskSlug) {
+    if (!actionCode) {
       return true;
     }
 
     const request = context.switchToHttp().getRequest();
     const user: CurrentUser = request.user;
 
-    const hasPermission = await this.prisma.p_tasks.findFirst({
+    const hasPermission = await this.prisma.roleAction.findFirst({
       where: {
-        role_id: user.roleId,
-        task: {
-          slug: taskSlug,
+        roleId: user.roleId,
+        action: {
+          code: actionCode,
         },
       },
-      select: { task_id: true },
+      select: { actionId: true },
     });
 
     if (!hasPermission) {
       throw new ApiError(
         errors.PERMISSION_DENIED.message,
         errors.PERMISSION_DENIED.code,
-        errors.PERMISSION_DENIED.errorCode,
+        errors.PERMISSION_DENIED.errorCode
       );
     }
 

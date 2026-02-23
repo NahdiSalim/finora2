@@ -1,0 +1,22 @@
+model ClientAccountingFirmRelationship {
+  id                  Int       @id @default(autoincrement())
+  clientCompanyId     Int
+  accountingFirmId    Int
+  status              String    @default("pending") // "pending" | "active" | "terminated"
+  requestDate         DateTime  @default(now())
+  responseDate        DateTime?
+  contractId          Int?
+  relationshipStart   DateTime?
+  relationshipEnd     DateTime?
+  terminationReason   String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  clientCompany       Company   @relation("ClientCompany", fields: [clientCompanyId], references: [id])
+  accountingFirm      Company   @relation("AccountingFirm", fields: [accountingFirmId], references: [id])
+  contract            Contract? @relation(fields: [contractId], references: [id])
+
+  @@index([clientCompanyId])
+  @@index([accountingFirmId])
+  @@index([status])
+}

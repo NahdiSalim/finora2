@@ -1,0 +1,29 @@
+model ChatThread {
+  id              Int       @id @default(autoincrement())
+  title           String?
+  contextType     String?   // "document" | "annotation"
+  contextId       Int?
+  documentId      Int?
+  spatialContext  String?   @db.Text // JSON with coordinates/page info
+  createdById     Int
+  participants    String[]  // Array of user IDs
+  messages        String[]  // Array of message IDs
+  lastMessageId   Int?
+  resolved        Boolean   @default(false)
+  resolvedAt      DateTime?
+  resolvedById    Int?
+  status          String    @default("active") // "active" | "archived"
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  createdBy       User      @relation("ChatThreadCreatedBy", fields: [createdById], references: [id])
+  document        Document? @relation(fields: [documentId], references: [id])
+  resolvedBy      User?     @relation("ChatThreadResolvedBy", fields: [resolvedById], references: [id])
+  
+  chatMessages    ChatMessage[]
+
+  @@index([createdById])
+  @@index([documentId])
+  @@index([resolved])
+  @@index([status])
+}

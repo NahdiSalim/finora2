@@ -10,7 +10,10 @@ import {
   Req,
   Res,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { User } from '@prisma/client';
 import {
   ApiBadRequestResponse,
@@ -20,13 +23,20 @@ import {
   ApiQuery,
   ApiResponse,
   ApiTags,
+  ApiConsumes,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { UserService } from './user.serivce';
 import { UpdateUserDto } from './update-user.dto';
+import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
+import { UpdateCompanyDto } from './dto/update-company.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/types/user-type';
 import type { Response } from 'express';
+import type { AuthRequest } from '../auth/types/user-type';
+
 export interface RequestWithUser extends Request {
   user: CurrentUser;
 }
@@ -138,5 +148,49 @@ export class UserController {
   })
   async deleteUser(@Param('id') id: number): Promise<User> {
     return await this.userService.deleteUser(id);
+  }
+
+  @Patch('profile')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('photo'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Update user profile with photo' })
+  @ApiOkResponse({ description: 'Profile updated successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'Email already exists or validation error',
+  })
+  async updateProfile(
+    @Req() req: AuthRequest,
+    @Body() dto: UpdateUserProfileDto,
+    @UploadedFile() photo?: Express.Multer.File
+  ) {
+    const userId = req.user!.id;
+    return await this.userService.updateProfile(userId, dto, photo);
+  }
+
+  @Patch('company')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('logo'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Update company information with logo (accountant/client only)' })
+  @ApiOkResponse({ description: 'Company updated successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'User not associated with company',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Only accountants and clients can update company',
+  })
+  async updateCompany(
+    @Req() req: AuthRequest,
+    @Body() dto: UpdateCompanyDto,
+    @UploadedFile() logo?: Express.Multer.File
+  ) {
+    const userId = req.user!.id;
+    return await this.userService.updateCompany(userId, dto, logo);
   }
 }

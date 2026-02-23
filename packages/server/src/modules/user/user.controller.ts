@@ -26,17 +26,21 @@ import { UpdateUserDto } from './update-user.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { CurrentUser } from '../auth/types/user-type';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionGuard } from '../auth/guards/permission.guard';
 import type { Response } from 'express';
 export interface RequestWithUser extends Request {
   user: CurrentUser;
 }
 
 @ApiTags('users')
+@UseGuards(JwtAuthGuard, PermissionGuard)
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Get()
+  @RequirePermission('view_user')
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 5 })
   @ApiQuery({ name: 'search', required: false, type: String, example: 'admin' })
@@ -44,12 +48,12 @@ export class UserController {
   async findAll(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('search') search?: string
+    @Query('search') search?: string,
   ) {
     return await this.userService.getAll(
       page ? Number(page) : undefined,
       limit ? Number(limit) : undefined,
-      search
+      search,
     );
   }
 
@@ -86,7 +90,7 @@ export class UserController {
   async updateUser(
     @Param('id') id: number,
     @Body() body: UpdateUserDto,
-    @Req() req: RequestWithUser
+    @Req() req: RequestWithUser,
   ) {
     const userId = req.user.id;
     // const userId = 3;
@@ -103,10 +107,15 @@ export class UserController {
     enum: ['fr', 'en'],
     description: 'Export language (fr or en)',
   })
-  async exportUsers(@Query('lang') lang: 'fr' | 'en' = 'fr', @Res() res: Response) {
+  async exportUsers(
+    @Query('lang') lang: 'fr' | 'en' = 'fr',
+    @Res() res: Response,
+  ) {
     const csvBuffer = await this.userService.exportUsersCSV(lang);
 
-    const fileName = `users_${lang}_${new Date().toISOString().slice(0, 10)}.csv`;
+    const fileName = `users_${lang}_${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);

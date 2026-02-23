@@ -1,349 +1,259 @@
-import { useState, useRef, useCallback } from "react";
-import {
-  Box,
-  Typography,
-  Button,
-  IconButton,
-  useTheme,
-  alpha,
-} from "@mui/material";
-import {
-  InsertDriveFile as FileIcon,
-  Close as CloseIcon,
-} from "@mui/icons-material";
+import { useCallback, useState, useEffect } from 'react';
 
-interface FileUploadProps {
-  label: string;
-  value?: File | null;
-  onChange?: (file: File | null) => void;
+import CloseIcon from '@mui/icons-material/Close';
+import { Box, IconButton, Typography, Button, styled } from '@mui/material';
+
+const SUPPORTED_IMAGE_FORMATS = ['image/jpg', 'image/jpeg', 'image/png', 'image/webp'];
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
+const VisuallyHiddenInput = styled('input')({
+  clip: 'rect(0 0 0 0)',
+  clipPath: 'inset(50%)',
+  height: 1,
+  overflow: 'hidden',
+  position: 'absolute',
+  bottom: 0,
+  left: 0,
+  whiteSpace: 'nowrap',
+  width: 1,
+});
+
+export type FileUploadProps = {
+  label?: string;
+  onFileChange?: (file: File | null) => void;
+  accept?: string;
+  preview?: string;
+  maxSize?: number;
+  supportedFormats?: string[];
   error?: boolean;
   helperText?: string;
-  maxSize?: number; // in MB
-  acceptedFiles?: string[];
-  disabled?: boolean;
-}
+  required?: boolean;
+};
 
-export default function FileUpload({
-  label,
-  value = null,
-  onChange,
-  error = false,
+export function FileUpload({
+  label = 'Profile Photo',
+  onFileChange,
+  accept = 'image/*',
+  preview,
+  maxSize = MAX_FILE_SIZE,
+  supportedFormats = SUPPORTED_IMAGE_FORMATS,
+  error: externalError = false,
   helperText,
-  maxSize = 5,
-  acceptedFiles = [".jpg", ".png", ".pdf", ".docx"],
-  disabled = false,
+  required = false,
 }: FileUploadProps) {
-  const theme = useTheme();
-  const [file, setFile] = useState<File | null>(value);
-  const [dragActive, setDragActive] = useState(false);
-  const [uploadError, setUploadError] = useState<string>("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>(preview || '');
+  const [isDragging, setIsDragging] = useState(false);
+  const [error, setError] = useState<string>('');
 
-  // Validate and handle file
-  const handleFile = useCallback(
-    (selectedFile: File) => {
-      setUploadError("");
+  useEffect(() => {
+    if (preview) {
+      setPreviewUrl(preview);
+    }
+  }, [preview]);
 
-      // Validate file size
-      if (selectedFile.size > maxSize * 1024 * 1024) {
-        const errorMsg = `La taille du fichier doit être inférieure à ${maxSize}MB`;
-        setUploadError(errorMsg);
-        return;
-      }
+  const validateFile = (file: File): string | null => {
+    if (file.size > maxSize) {
+      return `File is too large. Maximum size: ${maxSize / (1024 * 1024)}MB`;
+    }
 
-      // Validate file type
-      const fileExt = "." + selectedFile.name.split(".").pop()?.toLowerCase();
-      if (!acceptedFiles.includes(fileExt)) {
-        const errorMsg = `Types de fichiers acceptés: ${acceptedFiles.join(", ")}`;
-        setUploadError(errorMsg);
-        return;
-      }
+    if (!supportedFormats.includes(file.type)) {
+      return `Unsupported file format. Accepted formats: ${supportedFormats.map((f) => f.split('/')[1]).join(', ')}`;
+    }
 
-      setFile(selectedFile);
-      onChange?.(selectedFile);
-    },
-    [maxSize, acceptedFiles, onChange],
-  );
+    return null;
+  };
 
-  // Handle drag and drop
-  const handleDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setDragActive(false);
+  const handleFileChange = (file: File) => {
+    setError('');
 
-      if (disabled) return;
+    // Validation du fichier
+    const validationError = validateFile(file);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
 
-      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-        handleFile(e.dataTransfer.files[0]);
-      }
-    },
-    [disabled, handleFile],
-  );
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreviewUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    onFileChange?.(file);
+  };
 
-  const handleDragOver = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (!disabled) {
-        setDragActive(true);
-      }
-    },
-    [disabled],
-  );
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      handleFileChange(file);
+    }
+  };
 
-  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+  const handleRemoveFile = useCallback(() => {
+    setPreviewUrl('');
+    setError('');
+    onFileChange?.(null);
+  }, [onFileChange]);
+
+  const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-  }, []);
+    setIsDragging(true);
+  };
 
-  // Handle file removal
-  const handleRemove = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      setFile(null);
-      setUploadError("");
-      onChange?.(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    },
-    [onChange],
-  );
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
 
-  // Handle click to open file dialog
-  const handleClick = useCallback(() => {
-    if (!disabled) {
-      fileInputRef.current?.click();
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      handleFileChange(file);
     }
-  }, [disabled]);
-
-  // Format file size for display
-  const formatFileSize = useCallback((bytes: number): string => {
-    if (bytes < 1024 * 1024) {
-      return `${(bytes / 1024).toFixed(0)} KB`;
-    }
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }, []);
-
-  // Get file extension for display
-  const getFileExtension = useCallback((filename: string): string => {
-    return filename.split(".").pop()?.toUpperCase() || "FILE";
-  }, []);
-
-  const hasError = error || !!uploadError;
-  const displayHelperText = uploadError || helperText;
+  };
 
   return (
-    <Box sx={{ width: "100%" }}>
-      {/* Label */}
-      <Typography
-        variant="subtitle2"
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+      }}
+    >
+      <Button
         component="label"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        disabled={!!previewUrl}
         sx={{
-          mb: 1,
-          display: "block",
-          color: theme.palette.text.primary,
-          fontWeight: theme.typography.fontWeightMedium,
+          width: 200,
+          height: 200,
+          borderRadius: '50%',
+          border: '2px dashed',
+          borderColor:
+            error || externalError
+              ? 'error.main'
+              : isDragging
+                ? 'rgba(145, 158, 171, 0.5)'
+                : 'rgba(145, 158, 171, 0.32)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: previewUrl ? 'default' : 'pointer',
+          bgcolor: 'transparent',
+          transition: 'all 0.3s ease',
+          position: 'relative',
+          overflow: 'hidden',
+          padding: '12px',
+          boxSizing: 'border-box',
+          minWidth: 'unset',
+          textTransform: 'none',
+          '&:hover': {
+            borderColor:
+              error || externalError
+                ? 'error.main'
+                : previewUrl
+                  ? 'rgba(145, 158, 171, 0.32)'
+                  : 'rgba(145, 158, 171, 0.5)',
+            bgcolor: 'transparent',
+          },
+          '&.Mui-disabled': {
+            bgcolor: 'transparent',
+            borderColor: 'rgba(145, 158, 171, 0.32)',
+          },
         }}
       >
-        {label}
-      </Typography>
-
-      {/* Empty State - Drop Zone */}
-      {!file ? (
-        <Box
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onClick={handleClick}
-          sx={{
-            border: 2,
-            borderStyle: "dashed",
-            borderColor: hasError
-              ? theme.palette.error.main
-              : dragActive
-                ? theme.palette.primary.main
-                : theme.palette.divider,
-            borderRadius: 2,
-            backgroundColor: dragActive
-              ? alpha(theme.palette.primary.main, 0.04)
-              : theme.palette.background.default,
-            minHeight: 170,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 2,
-            cursor: disabled ? "not-allowed" : "pointer",
-            opacity: disabled ? 0.6 : 1,
-            transition: theme.transitions.create(
-              ["border-color", "background-color"],
-              { duration: theme.transitions.duration.short },
-            ),
-            ...(!disabled && {
-              "&:hover": {
-                borderColor: theme.palette.primary.main,
-                backgroundColor: alpha(theme.palette.primary.main, 0.02),
-              },
-            }),
-          }}
-        >
-          <FileIcon
-            sx={{
-              fontSize: 40,
-              color: theme.palette.action.disabled,
-            }}
-          />
-
-          <Typography
-            variant="body2"
-            sx={{
-              fontWeight: theme.typography.fontWeightMedium,
-              color: theme.palette.text.primary,
-            }}
-          >
-            Glissez-déposez vos documents
-          </Typography>
-
-          <Button
-            variant="outlined"
-            disabled={disabled}
-            sx={{
-              borderRadius: 1.5,
-              textTransform: "none",
-              px: 3,
-              pointerEvents: "none", // Prevent button click, let parent handle it
-            }}
-          >
-            Sélectionner un fichier
-          </Button>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            hidden
-            disabled={disabled}
-            accept={acceptedFiles.join(",")}
-            onChange={(e) => {
-              if (e.target.files && e.target.files[0]) {
-                handleFile(e.target.files[0]);
-              }
-            }}
-          />
-        </Box>
-      ) : (
-        /* Uploaded State - File Display */
+        {!previewUrl && (
+          <VisuallyHiddenInput accept={accept} type="file" onChange={handleInputChange} />
+        )}
         <Box
           sx={{
-            borderRadius: 2,
-            backgroundColor: theme.palette.background.default,
-            border: 1,
-            borderColor: theme.palette.divider,
-            px: 2,
-            py: 1.5,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            transition: theme.transitions.create("background-color"),
-            "&:hover": {
-              backgroundColor: alpha(theme.palette.primary.main, 0.02),
-            },
+            width: '100%',
+            height: '100%',
+            borderRadius: '50%',
+            bgcolor: isDragging ? 'rgba(145, 158, 171, 0.12)' : 'rgba(145, 158, 171, 0.08)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
+            overflow: 'hidden',
           }}
         >
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 2,
-              flex: 1,
-              minWidth: 0, // Allow text truncation
-            }}
-          >
-            {/* File Extension Badge */}
+          {previewUrl ? (
             <Box
+              component="img"
+              src={previewUrl}
+              alt="Preview"
               sx={{
-                width: 40,
-                height: 40,
-                borderRadius: 1,
-                backgroundColor: alpha(theme.palette.primary.main, 0.1),
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
               }}
-            >
-              <Typography
-                variant="caption"
+            />
+          ) : (
+            <>
+              <Box
+                component="img"
+                src="/assets/Iconupload.png"
+                alt="Upload"
                 sx={{
-                  fontWeight: theme.typography.fontWeightBold,
-                  color: theme.palette.primary.main,
+                  width: 48,
+                  height: 48,
+                  mb: 1,
                 }}
-              >
-                {getFileExtension(file.name)}
-              </Typography>
-            </Box>
-
-            {/* File Info */}
-            <Box sx={{ minWidth: 0, flex: 1 }}>
+              />
               <Typography
                 variant="body2"
                 sx={{
-                  fontWeight: theme.typography.fontWeightMedium,
-                  color: theme.palette.text.primary,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
+                  color: error || externalError ? 'error.main' : 'text.secondary',
+                  textAlign: 'center',
+                  px: 2,
                 }}
               >
-                {file.name}
+                {label}
+                {required && ' *'}
               </Typography>
-
-              <Typography
-                variant="caption"
-                sx={{
-                  color: theme.palette.text.secondary,
-                }}
-              >
-                {formatFileSize(file.size)}
-              </Typography>
-            </Box>
-          </Box>
-
-          {/* Remove Button */}
-          <IconButton
-            onClick={handleRemove}
-            size="small"
-            disabled={disabled}
-            sx={{
-              color: theme.palette.text.secondary,
-              transition: theme.transitions.create(["color", "transform"]),
-              "&:hover": {
-                color: theme.palette.error.main,
-                backgroundColor: alpha(theme.palette.error.main, 0.08),
-                transform: "scale(1.1)",
-              },
-            }}
-          >
-            <CloseIcon fontSize="small" />
-          </IconButton>
+            </>
+          )}
         </Box>
+      </Button>
+      {previewUrl && (
+        <IconButton
+          onClick={handleRemoveFile}
+          sx={{
+            position: 'absolute',
+            top: +15,
+            right: +15,
+            backgroundColor: 'error.main',
+            color: 'white',
+            width: 26,
+            height: 26,
+            zIndex: 10,
+            '&:hover': {
+              backgroundColor: 'error.dark',
+            },
+          }}
+        >
+          <CloseIcon fontSize="small" />
+        </IconButton>
       )}
-
-      {/* Helper Text / Error Message */}
-      {displayHelperText && (
+      {(error || helperText) && (
         <Typography
           variant="caption"
           sx={{
+            color: 'error.main',
             mt: 1,
-            display: "block",
-            color: hasError
-              ? theme.palette.error.main
-              : theme.palette.text.secondary,
+            display: 'block',
+            textAlign: 'center',
           }}
         >
-          {displayHelperText}
+          {error || helperText}
         </Typography>
       )}
     </Box>

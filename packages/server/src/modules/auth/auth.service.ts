@@ -19,7 +19,7 @@ export class AuthService {
     private hashService: HashService,
     private jwtTokenService: JwtTokenService,
     private mailService: MailService,
-    private configService: ConfigService
+    private configService: ConfigService,
   ) {}
 
   // Login
@@ -46,7 +46,7 @@ export class AuthService {
         throw new ApiError(
           errors.BAD_CREDENTIEL.message,
           errors.BAD_CREDENTIEL.code,
-          errors.BAD_CREDENTIEL.errorCode
+          errors.BAD_CREDENTIEL.errorCode,
         );
       }
 
@@ -55,12 +55,13 @@ export class AuthService {
         throw new ApiError(
           errors.BAD_CREDENTIEL.message,
           errors.BAD_CREDENTIEL.code,
-          errors.BAD_CREDENTIEL.errorCode
+          errors.BAD_CREDENTIEL.errorCode,
         );
       }
 
       const payload = { sub: user.id, email: user.email };
-      const { accessToken, refreshToken } = this.jwtTokenService.generateTokens(payload);
+      const { accessToken, refreshToken } =
+        this.jwtTokenService.generateTokens(payload);
 
       await this.jwtTokenService.storeRefreshToken(user.id, refreshToken);
 
@@ -103,27 +104,30 @@ export class AuthService {
         throw new ApiError(
           errors.INVALID_TOKEN.message,
           errors.INVALID_TOKEN.code,
-          errors.INVALID_TOKEN.errorCode
+          errors.INVALID_TOKEN.errorCode,
         );
       }
 
       const { sub, email } = decoded as unknown as JwtPayload;
 
-      const storedRefreshToken = await this.jwtTokenService.findValidRefreshToken(sub);
+      const storedRefreshToken =
+        await this.jwtTokenService.findValidRefreshToken(sub);
 
       if (!storedRefreshToken) {
         console.log('No valid refresh token found for user:', sub);
         throw new ApiError(
           errors.INVALID_TOKEN.message,
           errors.INVALID_TOKEN.code,
-          errors.INVALID_TOKEN.errorCode
+          errors.INVALID_TOKEN.errorCode,
         );
       }
 
-      const { accessToken, refreshToken } = this.jwtTokenService.generateTokens({
-        sub,
-        email,
-      });
+      const { accessToken, refreshToken } = this.jwtTokenService.generateTokens(
+        {
+          sub,
+          email,
+        },
+      );
 
       await this.jwtTokenService.deleteOldRefreshToken(storedRefreshToken.id);
 
@@ -144,7 +148,7 @@ export class AuthService {
       throw new ApiError(
         errors.INVALID_TOKEN.message,
         errors.INVALID_TOKEN.code,
-        errors.INVALID_TOKEN.errorCode
+        errors.INVALID_TOKEN.errorCode,
       );
     }
   }
@@ -156,7 +160,10 @@ export class AuthService {
     const jwtSecret = this.configService.getOrThrow<string>('JWT_SECRET');
 
     try {
-      const decoded = jwt.verify(accessToken, jwtSecret) as unknown as JwtPayload;
+      const decoded = jwt.verify(
+        accessToken,
+        jwtSecret,
+      ) as unknown as JwtPayload;
       return { user: decoded };
     } catch (error) {
       if (error instanceof jwt.TokenExpiredError) {
@@ -167,7 +174,7 @@ export class AuthService {
       throw new ApiError(
         errors.INVALID_TOKEN.message,
         errors.INVALID_TOKEN.code,
-        errors.INVALID_TOKEN.errorCode
+        errors.INVALID_TOKEN.errorCode,
       );
     }
   }
@@ -181,17 +188,12 @@ export class AuthService {
           id: true,
           email: true,
           username: true,
-          phone: true,
           isActive: true,
-          createdAt: true,
-          updatedAt: true,
           role: {
             select: {
               id: true,
               nameFr: true,
               nameEn: true,
-              descriptionFr: true,
-              descriptionEn: true,
 
               p_tasks: {
                 include: {
@@ -223,7 +225,6 @@ export class AuthService {
                       id: true,
                       slug: true,
                       PageUrl: true,
-                      featureId: true,
                     },
                   },
                 },
@@ -237,7 +238,7 @@ export class AuthService {
         throw new ApiError(
           errors.NOT_FOUND.message,
           errors.NOT_FOUND.code,
-          errors.NOT_FOUND.errorCode
+          errors.NOT_FOUND.errorCode,
         );
       }
 
@@ -245,7 +246,7 @@ export class AuthService {
         throw new ApiError(
           errors.NOT_FOUND.message,
           errors.NOT_FOUND.code,
-          errors.NOT_FOUND.errorCode
+          errors.NOT_FOUND.errorCode,
         );
       }
 
@@ -253,86 +254,30 @@ export class AuthService {
         throw new ApiError(
           errors.BLOCKED_USER.message,
           errors.BLOCKED_USER.code,
-          errors.BLOCKED_USER.errorCode
+          errors.BLOCKED_USER.errorCode,
         );
       }
 
-      // Build features structure with pages and actions
-      const featuresMap = new Map();
-      const role = user.role; // TypeScript assertion
-
-      // First, create all features
-      role.p_features.forEach((pf) => {
-        if (!featuresMap.has(pf.feature.id)) {
-          featuresMap.set(pf.feature.id, {
-            id: String(pf.feature.id),
-            name: pf.feature.slug,
-            code: pf.feature.slug,
-            pages: [],
-          });
-        }
-      });
-
-      // Then, add pages to their respective features
-      role.p_pages.forEach((pp) => {
-        const feature = featuresMap.get(pp.page.featureId);
-        if (feature) {
-          // Get actions (tasks) for this page
-          const pageActions = role.p_tasks
-            .filter((pt) => pt.task.id_page === pp.page.id)
-            .map((pt) => ({
-              id: String(pt.task.id),
-              name: pt.task.slug,
-              code: this.mapTaskToActionCode(pt.task.slug),
-            }));
-
-          feature.pages.push({
-            id: String(pp.page.id),
-            name: pp.page.slug,
-            code: pp.page.slug,
-            route: pp.page.PageUrl,
-            actions: pageActions,
-          });
-        }
-      });
-
-      const features = Array.from(featuresMap.values());
-
-      // Return structure matching frontend VerifyUserResponse
       return {
-        id: String(user.id),
-        email: user.email,
-        full_name: user.username,
-        sex: null,
-        dateOfBirth: null,
-        status: user.isActive ? 'active' : 'inactive',
-        address: null,
-        phone: user.phone || '',
-        is_active: user.isActive,
-        created_at: user.createdAt.toISOString(),
-        updated_at: user.updatedAt.toISOString(),
+        id: user?.id,
+        email: user?.email,
+        username: user?.username,
+        isActive: user?.isActive,
         role: {
-          id: String(role.id),
-          name: role.nameEn,
-          code: role.nameFr.toLowerCase().replace(/\s+/g, '_'),
-          description: role.descriptionEn,
+          id: user?.role?.id,
+          nameEn: user?.role?.nameEn,
+          nameFr: user?.role?.nameFr,
         },
-        features,
-        token: '', // Token is in the Authorization header
+        permissions: {
+          features: user.role.p_features.map((pf) => pf.feature),
+          pages: user.role.p_pages.map((pp) => pp.page),
+          tasks: user.role.p_tasks.map((pt) => pt.task),
+        },
       };
     } catch (err) {
-      console.error('Get current user error:', err);
+      console.error('Login error:', err);
       throw err;
     }
-  }
-
-  // Helper method to map task slugs to action codes
-  private mapTaskToActionCode(slug: string): 'READ' | 'CREATE' | 'UPDATE' | 'DELETE' {
-    if (slug.includes('view') || slug.includes('read')) return 'READ';
-    if (slug.includes('add') || slug.includes('create')) return 'CREATE';
-    if (slug.includes('edit') || slug.includes('update')) return 'UPDATE';
-    if (slug.includes('delete') || slug.includes('remove')) return 'DELETE';
-    return 'READ'; // Default
   }
 
   // Get full user by ID
@@ -359,7 +304,7 @@ export class AuthService {
         throw new ApiError(
           errors.NOT_FOUND.message,
           errors.NOT_FOUND.code,
-          errors.NOT_FOUND.errorCode
+          errors.NOT_FOUND.errorCode,
         );
       }
 
@@ -367,7 +312,7 @@ export class AuthService {
         throw new ApiError(
           errors.BLOCKED_USER.message,
           errors.BLOCKED_USER.code,
-          errors.BLOCKED_USER.errorCode
+          errors.BLOCKED_USER.errorCode,
         );
       }
 
@@ -388,7 +333,7 @@ export class AuthService {
       throw new ApiError(
         errors.BAD_EMAIL_CREDENTIEL.message,
         errors.BAD_EMAIL_CREDENTIEL.code,
-        errors.BAD_EMAIL_CREDENTIEL.errorCode
+        errors.BAD_EMAIL_CREDENTIEL.errorCode,
       );
     }
 
@@ -420,7 +365,7 @@ export class AuthService {
   async resetPassword(
     token: string,
     password: string,
-    confirmepassword: string
+    confirmepassword: string,
   ): Promise<{ message: string }> {
     try {
       const hashedToken = this.hashService.hashToken(token);
@@ -429,7 +374,7 @@ export class AuthService {
         throw new ApiError(
           errors.BAD_REQUEST.message,
           errors.BAD_REQUEST.code,
-          errors.BAD_REQUEST.errorCode
+          errors.BAD_REQUEST.errorCode,
         );
       }
 
@@ -437,7 +382,7 @@ export class AuthService {
         throw new ApiError(
           errors.BAD_REQUEST.message,
           errors.BAD_REQUEST.code,
-          errors.BAD_REQUEST.errorCode
+          errors.BAD_REQUEST.errorCode,
         );
       }
 
@@ -454,7 +399,7 @@ export class AuthService {
         throw new ApiError(
           errors.INVALID_TOKEN.message,
           errors.INVALID_TOKEN.code,
-          errors.INVALID_TOKEN.errorCode
+          errors.INVALID_TOKEN.errorCode,
         );
       }
 

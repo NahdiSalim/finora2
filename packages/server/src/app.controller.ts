@@ -7,8 +7,8 @@ export class AppController {
     return {
       ok: true,
       message: 'Finora API is running',
-      documentation: '/docs',
-      api: '/api',
     };
   }
 }
+
+

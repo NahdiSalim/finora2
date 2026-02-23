@@ -227,7 +227,7 @@ export function RegisterView() {
           sx={{ mt: 2.5 }}
           endIcon={isLoading ? <DotSpinner size={20} /> : <ArrowForwardIcon />}
         >
-          {isLoading ? "Inscription..." : "S&apos;inscrire"}
+          {isLoading ? "Inscription..." : "S'inscrire"}
         </CustomButton>
 
         {/* Login Link */}

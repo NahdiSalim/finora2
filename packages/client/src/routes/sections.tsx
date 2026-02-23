@@ -5,6 +5,7 @@ import Box from '@mui/material/Box';
 
 import DotSpinner from 'src/components/common/DotSpinner';
 
+import { AuthLayout } from 'src/layouts/auth';
 import { DashboardLayout } from 'src/layouts/dashboard';
 
 import AuthGuard from 'src/guard/AuthGuard';
@@ -12,7 +13,6 @@ import PermissionGuard from 'src/guard/PermissionGuard';
 import DefaultRedirect from 'src/components/default-redirect';
 import RoleView from 'src/sections/roles';
 import RoleFormRouter from 'src/sections/roles/RoleFormRouter';
-import AuthLayout from 'src/sections/auth/sign-in-view/Auth-Layout';
 
 // ----------------------------------------------------------------------
 
@@ -130,13 +130,11 @@ export const routesSection: RouteObject[] = [
   // Auth routes (sans protection)
   {
     path: 'sign-in',
-    element: <AuthLayout />,
-    children: [
-      {
-        index: true,
-        element: <SignInPage />,
-      },
-    ],
+    element: (
+      <AuthLayout>
+        <SignInPage />
+      </AuthLayout>
+    ),
   },
   {
     path: 'register',
@@ -161,24 +159,21 @@ export const routesSection: RouteObject[] = [
 
   {
     path: 'forgot-password',
-    element: <AuthLayout />,
-    children: [
-      {
-        index: true,
-        element: <ForgotPasswordPage />,
-      },
-    ],
+    element: (
+      <AuthLayout>
+        <ForgotPasswordPage />
+      </AuthLayout>
+    ),
   },
   {
     path: 'reset-password',
-    element: <AuthLayout />,
-    children: [
-      {
-        index: true,
-        element: <ResetPasswordPage />,
-      },
-    ],
+    element: (
+      <AuthLayout>
+        <ResetPasswordPage />
+      </AuthLayout>
+    ),
   },
+
   // Error pages
   { path: '403', element: <PageForbidden /> },
   { path: '404', element: <Page404 /> },

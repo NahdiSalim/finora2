@@ -1,12 +1,8 @@
-import type {
-  CSSObject,
-  Breakpoint,
-  TypographyVariantsOptions,
-} from "@mui/material/styles";
+import type { CSSObject, Breakpoint, TypographyVariantsOptions } from '@mui/material/styles';
 
-import { pxToRem, setFont } from "minimal-shared/utils";
+import { pxToRem, setFont } from 'minimal-shared/utils';
 
-import { themeConfig } from "../theme-config";
+import { themeConfig } from '../theme-config';
 
 // ----------------------------------------------------------------------
 
@@ -15,8 +11,8 @@ import { themeConfig } from "../theme-config";
  * @to {@link file://./../extend-theme-types.d.ts}
  */
 export type FontStyleExtend = {
-  fontWeightSemiBold: CSSObject["fontWeight"];
-  fontSecondaryFamily: CSSObject["fontFamily"];
+  fontWeightSemiBold: CSSObject['fontWeight'];
+  fontSecondaryFamily: CSSObject['fontFamily'];
 };
 
 export type ResponsiveFontSizesInput = Partial<Record<Breakpoint, number>>;
@@ -46,97 +42,88 @@ const secondaryFont = setFont(themeConfig.fontFamily.secondary);
 export const typography: TypographyVariantsOptions = {
   fontFamily: primaryFont,
   fontSecondaryFamily: secondaryFont,
-
-  fontWeightLight: "300",
-  fontWeightRegular: "400",
-  fontWeightMedium: "500",
-  fontWeightSemiBold: "600",
-  fontWeightBold: "700",
-
-  // ======================
-  // HEADINGS (Poppins Bold)
-  // ======================
-
+  fontWeightLight: '300',
+  fontWeightRegular: '400',
+  fontWeightMedium: '500',
+  fontWeightSemiBold: '600',
+  fontWeightBold: '700',
   h1: {
     fontFamily: primaryFont,
-    fontWeight: 700,
+    fontWeight: 400,
     lineHeight: 1.2,
     fontSize: pxToRem(68),
   },
   h2: {
     fontFamily: primaryFont,
-    fontWeight: 700,
+    fontWeight: 400,
     lineHeight: 1.2,
     fontSize: pxToRem(56),
   },
   h3: {
     fontFamily: primaryFont,
-    fontWeight: 700,
+    fontWeight: 400,
     lineHeight: 1.2,
-    fontSize: pxToRem(46),
+    fontSize: pxToRem(44),
   },
   h4: {
     fontFamily: primaryFont,
-    fontWeight: 700,
+    fontWeight: 400,
     lineHeight: 1.2,
     fontSize: pxToRem(38),
   },
   h5: {
     fontFamily: primaryFont,
-    fontWeight: 700,
+    fontWeight: 400,
     lineHeight: 1.2,
     fontSize: pxToRem(32),
   },
   h6: {
     fontFamily: primaryFont,
-    fontWeight: 700,
+    fontWeight: 400,
     lineHeight: 1.2,
     fontSize: pxToRem(26),
   },
-
-  // If your system supports custom variant (H7)
   subtitle1: {
     fontFamily: primaryFont,
-    fontWeight: 700,
-    lineHeight: 1.3,
+    fontWeight: 400,
+    lineHeight: 1.5,
     fontSize: pxToRem(22),
   },
-
-  // ======================
-  // BODY
-  // ======================
-
+  subtitle2: {
+    fontFamily: primaryFont,
+    fontWeight: 500,
+    lineHeight: 1.5,
+    fontSize: pxToRem(26),
+  },
   body1: {
     fontFamily: primaryFont,
-    fontWeight: 500, // Medium
-    lineHeight: 1.6,
+    fontWeight: 400,
+    lineHeight: 1.5,
     fontSize: pxToRem(18),
   },
   body2: {
     fontFamily: primaryFont,
     fontWeight: 400,
-    lineHeight: 1.6,
+    lineHeight: 1.5,
     fontSize: pxToRem(16),
   },
   caption: {
     fontFamily: primaryFont,
     fontWeight: 400,
-    lineHeight: 1.6,
+    lineHeight: 1.5,
     fontSize: pxToRem(14),
   },
   overline: {
     fontFamily: primaryFont,
     fontWeight: 400,
-    lineHeight: 1.6,
+    lineHeight: 1.5,
     fontSize: pxToRem(12),
   },
-
-  // Optional smallest body (10px)
   button: {
     fontFamily: primaryFont,
     fontWeight: 500,
     lineHeight: 1.5,
-    fontSize: pxToRem(10),
-    textTransform: "unset",
+    fontSize: pxToRem(14),
+    textTransform: 'unset',
   },
 };

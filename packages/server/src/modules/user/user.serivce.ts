@@ -15,8 +15,8 @@ export class UserService {
   constructor(
     private prisma: PrismaService,
     private hashService: HashService,
-    private jwtTokenService: JwtTokenService
-  ) {}
+    private jwtTokenService: JwtTokenService,
+  ) { }
 
   async getAll(page: number = 1, limit: number = 10, search?: string) {
     const skip = (page - 1) * limit;
@@ -71,12 +71,20 @@ export class UserService {
   public async create(createUserDto: CreateUserDto) {
     const { username, email, password, phone, id_role } = createUserDto;
 
+    if (id_role === 1) {
+      throw new ApiError(
+        errors.ERR_ANOTHORIZED.message,
+        errors.ERR_ANOTHORIZED.code,
+        errors.ERR_ANOTHORIZED.errorCode
+      );
+    }
+
     const existingUser = await this.prisma.user.findFirst({ where: { email } });
     if (existingUser) {
       throw new ApiError(
         errors.ERR_USER_EXISTS.message,
         errors.ERR_USER_EXISTS.code,
-        errors.ERR_USER_EXISTS.errorCode
+        errors.ERR_USER_EXISTS.errorCode,
       );
     }
 
@@ -94,7 +102,8 @@ export class UserService {
       });
 
       const payload = { sub: user.id, email: user.email };
-      const { accessToken, refreshToken } = this.jwtTokenService.generateTokens(payload);
+      const { accessToken, refreshToken } =
+        this.jwtTokenService.generateTokens(payload);
 
       await this.jwtTokenService.storeRefreshToken(user.id, refreshToken);
 
@@ -113,7 +122,11 @@ export class UserService {
       };
     } catch (error) {
       console.error('User creation error:', error);
-      throw error;
+      throw new ApiError(
+        errors.SERVER_ERROR.message,
+        errors.SERVER_ERROR.code,
+        errors.SERVER_ERROR.errorCode,
+      );
     }
   }
 
@@ -140,7 +153,7 @@ export class UserService {
   async update(
     targetUserId: number,
     body: UpdateUserDto,
-    currentUserId: number
+    currentUserId: number,
   ): Promise<{
     status: string;
     code: string;
@@ -158,7 +171,7 @@ export class UserService {
         throw new ApiError(
           errors.NOT_FOUND.message,
           errors.NOT_FOUND.code,
-          errors.NOT_FOUND.errorCode
+          errors.NOT_FOUND.errorCode,
         );
       }
     }
@@ -172,7 +185,7 @@ export class UserService {
       throw new ApiError(
         errors.ERR_ANOTHORIZED.message,
         errors.ERR_ANOTHORIZED.code,
-        errors.ERR_ANOTHORIZED.errorCode
+        errors.ERR_ANOTHORIZED.errorCode,
       );
     }
 
@@ -186,7 +199,7 @@ export class UserService {
       throw new ApiError(
         errors.NOT_FOUND.message,
         errors.NOT_FOUND.code,
-        errors.NOT_FOUND.errorCode
+        errors.NOT_FOUND.errorCode,
       );
     }
 
@@ -195,7 +208,7 @@ export class UserService {
       throw new ApiError(
         errors.ADMIN_UPDATE_FORBIDDEN.message,
         errors.ADMIN_UPDATE_FORBIDDEN.code,
-        errors.ADMIN_UPDATE_FORBIDDEN.errorCode
+        errors.ADMIN_UPDATE_FORBIDDEN.errorCode,
       );
     }
 
@@ -212,7 +225,7 @@ export class UserService {
         throw new ApiError(
           'ERR_EMAIL_EXISTS',
           errors.BAD_REQUEST.code,
-          errors.ERR_EMAIL_EXISTS.errorCode
+          errors.ERR_EMAIL_EXISTS.errorCode,
         );
       }
     }
@@ -240,7 +253,7 @@ export class UserService {
       throw new ApiError(
         errors.NOT_FOUND.message,
         errors.NOT_FOUND.code,
-        errors.NOT_FOUND.errorCode
+        errors.NOT_FOUND.errorCode,
       );
     }
 
@@ -248,7 +261,7 @@ export class UserService {
       throw new ApiError(
         errors.FORBIDDEN_DELETE_ADMIN_USER.message,
         errors.FORBIDDEN_DELETE_ADMIN_USER.code,
-        errors.FORBIDDEN_DELETE_ADMIN_USER.errorCode
+        errors.FORBIDDEN_DELETE_ADMIN_USER.errorCode,
       );
     }
 
@@ -269,7 +282,7 @@ export class UserService {
       throw new ApiError(
         errors.NOT_FOUND.message,
         errors.NOT_FOUND.code,
-        errors.NOT_FOUND.errorCode
+        errors.NOT_FOUND.errorCode,
       );
     }
 
@@ -277,7 +290,7 @@ export class UserService {
       throw new ApiError(
         errors.ADMIN_ROLE_UPDATE_FORBIDDEN.message,
         errors.ADMIN_ROLE_UPDATE_FORBIDDEN.code,
-        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.errorCode
+        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.errorCode,
       );
     }
 
@@ -287,7 +300,9 @@ export class UserService {
     });
 
     return {
-      message: updatedUser.isActive ? 'User has been activated!' : 'User has been deactivated!',
+      message: updatedUser.isActive
+        ? 'User has been activated!'
+        : 'User has been deactivated!',
       user: updatedUser,
     };
   }

@@ -64,6 +64,18 @@ export interface LoginResponse {
     };
   };
 }
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  phoneNumber: string;
+  role: 'CLIENT' | 'COMPTABLE';
+}
+
+export interface RegisterResponse {
+  message: string;
+  // adapte selon ton backend
+  data?: any;
+}
 
 export interface ForgotPasswordRequest {
   email: string;

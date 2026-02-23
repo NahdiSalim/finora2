@@ -102,20 +102,16 @@ export function ForgotPasswordView() {
           </Box>
         </Grid>
 
-        <Grid size={{ xs: 12 }}>
-          <Button
-            fullWidth
-            color="primary"
-            variant="contained"
-            onClick={handleBackToSignIn}
-            startIcon={<ArrowBackIosIcon />}
+          <Typography
+            sx={{
+              color: '#6B7280',
+              fontSize: 14,
+              mt: 1,
+            }}
           >
-            Retour à la connexion
-          </Button>
-        </Grid>
-      </Grid>
-    );
-  }
+            Ne vous inquiétez pas, nous pouvons vous aider!
+          </Typography>
+        </Box>
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
@@ -158,22 +154,28 @@ export function ForgotPasswordView() {
             required
             placeholder="Entrer votre adresse email"
           />
-        </Grid>
 
-        <Grid size={{ xs: 12 }}>
           <Button
             fullWidth
             type="submit"
-            color="primary"
             variant="contained"
             disabled={isLoading}
-            startIcon={isLoading && <DotSpinner size={20} />}
+            sx={{
+              height: 48,
+              borderRadius: '12px',
+              textTransform: 'none',
+              fontWeight: 600,
+              backgroundColor: '#2563EB',
+              '&:hover': {
+                backgroundColor: '#1D4ED8',
+              },
+            }}
           >
             {isLoading
               ? "Envoi en cours…"
               : "Envoyer le lien de réinitialisation"}
           </Button>
-        </Grid>
+        </Box>
 
         <Grid size={{ xs: 12 }}>
           <Box sx={{ display: "flex", justifyContent: "center" }}>

@@ -24,6 +24,22 @@ export const forgotPasswordValidationSchema = yup.object().shape({
     .max(100, 'Email cannot exceed 100 characters'),
 });
 
+export const registerValidationSchema = yup.object({
+  email: yup.string().required("L'adresse email est obligatoire").email('Email invalide'),
+
+  phoneNumber: yup.string().required('Le numéro de téléphone est obligatoire'),
+
+  password: yup
+    .string()
+    .required('Le mot de passe est obligatoire')
+    .min(6, 'Le mot de passe doit contenir au moins 6 caractères'),
+
+  role: yup.string().oneOf(['CLIENT', 'COMPTABLE']).required('Le rôle est obligatoire'),
+
+  agreeToTerms: yup.boolean().oneOf([true], 'Vous devez accepter les termes et conditions'),
+});
+export type RegisterFormData = yup.InferType<typeof registerValidationSchema>;
+
 export type ForgotPasswordFormData = yup.InferType<typeof forgotPasswordValidationSchema>;
 
 export const newPasswordValidationSchema = yup.object().shape({

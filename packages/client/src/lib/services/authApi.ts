@@ -9,6 +9,8 @@ import type {
   VerifyUserResponse,
   RefreshTokenRequest,
   RefreshTokenResponse,
+  RegisterResponse,
+  RegisterRequest,
 } from 'src/types/auth';
 import { baseQueryWithReauth } from './baseQueryWithReauth';
 
@@ -39,6 +41,14 @@ export const authApi = createApi({
         body: data,
       }),
     }),
+    register: builder.mutation<RegisterResponse, RegisterRequest>({
+      query: (data) => ({
+        url: '/auth/register',
+        method: 'POST',
+        body: data,
+      }),
+    }),
+
     verifyUser: builder.query<VerifyUserResponse, void>({
       query: () => ({
         url: '/auth/me',
@@ -64,5 +74,6 @@ export const {
   useForgotPasswordMutation,
   useResetPasswordMutation,
   useVerifyUserQuery,
+  useRegisterMutation,
   useRefreshTokenMutation,
 } = authApi;

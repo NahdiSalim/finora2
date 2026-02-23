@@ -1,29 +1,29 @@
-import { useForm } from 'react-hook-form';
-import { useState, useCallback } from 'react';
-import { yupResolver } from '@hookform/resolvers/yup';
+import { useForm } from "react-hook-form";
+import { useState, useCallback } from "react";
+import { yupResolver } from "@hookform/resolvers/yup";
 
-import CheckCircle from '@mui/icons-material/CheckCircle';
-import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
-import { Box, Grid, Link, Button, Typography } from '@mui/material';
-import DotSpinner from 'src/components/common/DotSpinner';
+import CheckCircle from "@mui/icons-material/CheckCircle";
+import ArrowBackIosIcon from "@mui/icons-material/ArrowBackIos";
+import { Box, Grid, Link, Button, Typography } from "@mui/material";
+import DotSpinner from "src/components/common/DotSpinner";
 
-import { useRouter } from 'src/routes/hooks';
-import { RouterLink } from 'src/routes/components';
-import CustomInput from 'src/components/common/CustomInput';
+import { useRouter } from "src/routes/hooks";
+import { RouterLink } from "src/routes/components";
+import CustomInput from "src/components/common/CustomInput";
 
 import {
   forgotPasswordValidationSchema,
   type ForgotPasswordFormData,
-} from 'src/validations/Auth/auth-validation';
+} from "src/validations/Auth/auth-validation";
 
-import { useAlert } from 'src/contexts/AlertContext';
-import { useForgotPasswordMutation } from 'src/lib/services/authApi';
+import { useAlert } from "src/contexts/AlertContext";
+import { useForgotPasswordMutation } from "src/lib/services/authApi";
 
 export function ForgotPasswordView() {
   const router = useRouter();
   const { showAlert } = useAlert();
   const [emailSent, setEmailSent] = useState(false);
-  const [submittedEmail, setSubmittedEmail] = useState('');
+  const [submittedEmail, setSubmittedEmail] = useState("");
   const [forgotPassword, { isLoading }] = useForgotPasswordMutation();
 
   const {
@@ -33,7 +33,7 @@ export function ForgotPasswordView() {
   } = useForm<ForgotPasswordFormData>({
     resolver: yupResolver(forgotPasswordValidationSchema),
     defaultValues: {
-      email: '',
+      email: "",
     },
   });
 
@@ -44,42 +44,42 @@ export function ForgotPasswordView() {
       setEmailSent(true);
     } catch (error: unknown) {
       const message =
-        (typeof error === 'object' &&
+        (typeof error === "object" &&
           error !== null &&
-          'data' in error &&
+          "data" in error &&
           (error as { data?: { message?: string } })?.data?.message) ||
         "Échec de l'envoi de l'email. Veuillez réessayer.";
 
-      showAlert(message, 'error');
+      showAlert(message, "error");
     }
   };
 
   const handleBackToSignIn = useCallback(() => {
-    router.push('/sign-in');
+    router.push("/sign-in");
   }, [router]);
 
   if (emailSent) {
     return (
-      <Grid container spacing={3} sx={{ maxWidth: '434px', width: '100%' }}>
+      <Grid container spacing={3} sx={{ maxWidth: "434px", width: "100%" }}>
         <Grid size={{ xs: 12 }}>
           <Box
             sx={{
               gap: 1.5,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
             }}
           >
             <Box
               sx={{
                 width: 64,
                 height: 64,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '50%',
-                bgcolor: 'success.lighter',
-                color: 'success.main',
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "50%",
+                bgcolor: "success.lighter",
+                color: "success.main",
               }}
             >
               <CheckCircle sx={{ fontSize: 40 }} />
@@ -90,11 +90,12 @@ export function ForgotPasswordView() {
             <Typography
               variant="body2"
               sx={{
-                color: 'text.secondary',
-                textAlign: 'center',
+                color: "text.secondary",
+                textAlign: "center",
               }}
             >
-              Nous avons envoyé un email de réinitialisation à <strong>{submittedEmail}</strong>.
+              Nous avons envoyé un email de réinitialisation à{" "}
+              <strong>{submittedEmail}</strong>.
               <br />
               Veuillez vérifier votre boîte de réception.
             </Typography>
@@ -118,14 +119,14 @@ export function ForgotPasswordView() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
-      <Grid container spacing={3} sx={{ maxWidth: '434px', width: '100%' }}>
+      <Grid container spacing={3} sx={{ maxWidth: "434px", width: "100%" }}>
         <Grid size={{ xs: 12 }}>
           <Box
             sx={{
               gap: 1.5,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
             }}
           >
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -134,24 +135,28 @@ export function ForgotPasswordView() {
             <Typography
               variant="body2"
               sx={{
-                color: 'text.secondary',
-                textAlign: 'center',
+                color: "text.secondary",
+                textAlign: "center",
               }}
             >
-              Entrez votre adresse email et nous vous enverrons un lien pour réinitialiser votre mot
-              de passe
+              Entrez votre adresse email et nous vous enverrons un lien pour
+              réinitialiser votre mot de passe
             </Typography>
           </Box>
         </Grid>
 
+        <Box sx={{ width: "100%" }} />
+
         <Grid size={{ xs: 12 }}>
           <CustomInput
-            {...register('email')}
+            {...register("email")}
             fullWidth
             label="Adresse email"
             type="email"
             error={!!errors.email}
             helperText={errors.email?.message}
+            required
+            placeholder="Entrer votre adresse email"
           />
         </Grid>
 
@@ -164,18 +169,20 @@ export function ForgotPasswordView() {
             disabled={isLoading}
             startIcon={isLoading && <DotSpinner size={20} />}
           >
-            {isLoading ? 'Envoi en cours…' : 'Envoyer le lien de réinitialisation'}
+            {isLoading
+              ? "Envoi en cours…"
+              : "Envoyer le lien de réinitialisation"}
           </Button>
         </Grid>
 
         <Grid size={{ xs: 12 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+          <Box sx={{ display: "flex", justifyContent: "center" }}>
             <Link
               component={RouterLink}
               href="/sign-in"
               variant="body2"
               color="inherit"
-              sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+              sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
             >
               <ArrowBackIosIcon sx={{ fontSize: 16 }} />
               Retour à la connexion

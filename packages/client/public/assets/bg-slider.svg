@@ -1,0 +1,37 @@
+<svg width="1244" height="981" viewBox="0 0 1244 981" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip0_4610_371)">
+<path d="M0 42C0 18.8041 18.804 0 42 0H1244V981H42C18.804 981 0 962.196 0 939V42Z" fill="#1D61E7"/>
+<path d="M1044.18 812.351L1141.89 757.595C1146.95 754.758 1153.15 754.885 1158.09 757.926L1246.38 812.248C1251.12 815.16 1254 820.319 1254 825.875V936.368C1254 941.646 1251.4 946.584 1247.04 949.567L1158.72 1010.08C1153.48 1013.68 1146.6 1013.82 1141.21 1010.46L1043.53 949.5C1038.85 946.577 1036 941.447 1036 935.926V826.308C1036 820.519 1039.13 815.181 1044.18 812.351Z" stroke="white" stroke-opacity="0.2" stroke-width="5"/>
+<path d="M-85.039 798.856L31.7564 733.356C35.4499 731.284 39.9758 731.377 43.5818 733.597L149.449 798.781C152.899 800.905 155 804.666 155 808.717V940.449C155 944.297 153.103 947.897 149.93 950.073L44.0403 1022.68C40.2137 1025.3 35.196 1025.41 31.2607 1022.95L-85.5125 950.024C-88.926 947.892 -91 944.151 -91 940.127V809.033C-91 804.812 -88.7205 800.921 -85.039 798.856Z" stroke="white" stroke-opacity="0.2" stroke-width="4.92"/>
+<path d="M-39.0348 13.5087L68.3408 -46.6501C72.0321 -48.7182 76.5537 -48.626 80.1577 -46.4092L177.445 13.4339C180.897 15.5573 183 19.3198 183 23.3726V144.402C183 148.251 181.102 151.853 177.926 154.028L80.6162 220.687C76.7914 223.307 71.7784 223.414 67.8452 220.96L-39.5082 153.979C-42.9242 151.848 -45 148.106 -45 144.079V23.6884C-45 19.4658 -42.7187 15.5727 -39.0348 13.5087Z" stroke="white" stroke-opacity="0.2" stroke-width="5.92"/>
+<g filter="url(#filter0_f_4610_371)">
+<path d="M49.961 771.856L166.756 706.356C170.45 704.284 174.976 704.377 178.582 706.597L284.449 771.781C287.899 773.905 290 777.666 290 781.717V913.449C290 917.297 288.103 920.897 284.93 923.073L179.04 995.68C175.214 998.304 170.196 998.411 166.261 995.953L49.4875 923.024C46.074 920.892 44 917.151 44 913.127V782.033C44 777.812 46.2795 773.921 49.961 771.856Z" fill="white" fill-opacity="0.06"/>
+</g>
+<g filter="url(#filter1_f_4610_371)">
+<path d="M1041.96 28.3356L1175.5 -46.6379C1179.19 -48.7129 1183.72 -48.6205 1187.33 -46.3964L1308.45 28.2612C1311.9 30.3857 1314 34.1453 1314 38.1943V188.895C1314 192.741 1312.11 196.339 1308.94 198.515L1187.79 281.672C1183.96 284.3 1178.94 284.408 1175 281.946L1041.48 198.467C1038.07 196.334 1036 192.595 1036 188.573V38.5103C1036 34.2913 1038.28 30.401 1041.96 28.3356Z" fill="white" fill-opacity="0.06"/>
+</g>
+<g filter="url(#filter2_f_4610_371)">
+<path d="M937.956 113.336L1071.5 38.3621C1075.19 36.2871 1079.72 36.3795 1083.33 38.6036L1204.45 113.261C1207.9 115.386 1210 119.145 1210 123.194V273.895C1210 277.741 1208.11 281.339 1204.94 283.515L1083.79 366.672C1079.96 369.3 1074.94 369.408 1071 366.946L937.483 283.467C934.072 281.334 932 277.595 932 273.573V123.51C932 119.291 934.277 115.401 937.956 113.336Z" fill="white" fill-opacity="0.06"/>
+</g>
+</g>
+<defs>
+<filter id="filter0_f_4610_371" x="40" y="700.865" width="254" height="300.859" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feGaussianBlur stdDeviation="2" result="effect1_foregroundBlur_4610_371"/>
+</filter>
+<filter id="filter1_f_4610_371" x="1032" y="-52.1309" width="286" height="339.852" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feGaussianBlur stdDeviation="2" result="effect1_foregroundBlur_4610_371"/>
+</filter>
+<filter id="filter2_f_4610_371" x="928" y="32.8691" width="286" height="339.852" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feGaussianBlur stdDeviation="2" result="effect1_foregroundBlur_4610_371"/>
+</filter>
+<clipPath id="clip0_4610_371">
+<path d="M0 42C0 18.8041 18.804 0 42 0H1244V981H42C18.804 981 0 962.196 0 939V42Z" fill="white"/>
+</clipPath>
+</defs>
+</svg>

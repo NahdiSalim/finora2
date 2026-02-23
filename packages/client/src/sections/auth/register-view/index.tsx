@@ -1,21 +1,23 @@
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
-import { useRegisterMutation } from 'src/lib/services/authApi';
-import { useRouter } from 'src/routes/hooks';
-import { useAlert } from 'src/contexts/AlertContext';
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import { useRegisterMutation } from "src/lib/services/authApi";
+import { useRouter } from "src/routes/hooks";
+import { useAlert } from "src/contexts/AlertContext";
 
-import { Box, Typography, Button, Checkbox, Radio, Link } from '@mui/material';
+import { Box, Typography, Checkbox, Link } from "@mui/material";
 
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import DotSpinner from 'src/components/common/DotSpinner';
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import DotSpinner from "src/components/common/DotSpinner";
 
 import {
   registerValidationSchema,
   type RegisterFormData,
-} from 'src/validations/Auth/auth-validation';
+} from "src/validations/Auth/auth-validation";
+import RadioCard from "src/components/common/RadioCard";
+import CustomButton from "src/components/common/CustomButton";
+import { Icon } from "@iconify/react/dist/iconify.js";
 
 export function RegisterView() {
   const router = useRouter();
@@ -32,47 +34,47 @@ export function RegisterView() {
   } = useForm<RegisterFormData>({
     resolver: yupResolver(registerValidationSchema),
     defaultValues: {
-      email: '',
-      phoneNumber: '',
-      password: '',
-      role: 'CLIENT',
+      email: "",
+      phoneNumber: "",
+      password: "",
+      role: "CLIENT",
       agreeToTerms: false,
     },
   });
 
-  const role = watch('role');
-  const agree = watch('agreeToTerms');
-  const password = watch('password');
+  const role = watch("role");
+  const agree = watch("agreeToTerms");
+  const password = watch("password");
 
   const onSubmit = async (data: RegisterFormData) => {
     try {
       await registerUser(data).unwrap();
       router.push(`/check-email?email=${data.email}`);
     } catch {
-      showAlert("Erreur lors de l'inscription", 'error');
+      showAlert("Erreur lors de l'inscription", "error");
     }
   };
 
   // 🔥 STYLE COMMUN POUR TOUS LES INPUTS
   const inputStyles = {
-    width: '100%',
+    width: "100%",
     height: 48,
-    borderRadius: '12px',
-    border: '1px solid #E5E7EB',
+    borderRadius: "12px",
+    border: "1px solid #E5E7EB",
     px: 2,
     fontSize: 14,
-    transition: 'all 0.2s ease',
-    '&:focus': {
-      outline: 'none',
-      borderColor: '#2563EB',
-      boxShadow: '0 0 0 2px rgba(37, 99, 235, 0.15)',
+    transition: "all 0.2s ease",
+    "&:focus": {
+      outline: "none",
+      borderColor: "#2563EB",
+      boxShadow: "0 0 0 2px rgba(37, 99, 235, 0.15)",
     },
   };
   // CONDITIONS
-  const hasLowercase = /[a-z]/.test(password || '');
-  const hasUppercase = /[A-Z]/.test(password || '');
-  const hasNumber = /\d/.test(password || '');
-  const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password || '');
+  const hasLowercase = /[a-z]/.test(password || "");
+  const hasUppercase = /[A-Z]/.test(password || "");
+  const hasNumber = /\d/.test(password || "");
+  const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password || "");
 
   const conditions = [hasLowercase, hasUppercase, hasNumber, hasSpecial];
   const strength = (conditions.filter(Boolean).length / 4) * 100;
@@ -80,12 +82,12 @@ export function RegisterView() {
   // COLOR LOGIC
   const strengthColor =
     strength === 100
-      ? '#16A34A' // green
+      ? "#16A34A" // green
       : strength >= 75
-        ? '#EAB308' // yellow
+        ? "#EAB308" // yellow
         : strength >= 25
-          ? '#F97316' // orange
-          : '#DC2626'; // red
+          ? "#F97316" // orange
+          : "#DC2626"; // red
 
   return (
     <Box
@@ -93,61 +95,45 @@ export function RegisterView() {
       onSubmit={handleSubmit(onSubmit)}
       sx={{
         maxWidth: 470,
-        mx: 'auto',
+        mx: "auto",
       }}
     >
       {/* TITLE */}
       <Typography sx={{ fontSize: 28, fontWeight: 700 }}>S’inscrire</Typography>
 
-      <Typography sx={{ fontSize: 14, color: '#6B7280', mt: 1 }}>
+      <Typography sx={{ fontSize: 14, color: "#6B7280", mt: 1 }}>
         Inscrivez-vous pour profiter des fonctionnalités de FINORA
       </Typography>
 
       {/* ROLE */}
-      <Typography sx={{ mt: 3, mb: 1, fontSize: 14 }}>S’inscrire en tant que</Typography>
+      <Typography sx={{ mt: 3, mb: 1, fontSize: 14 }}>
+        S’inscrire en tant que
+      </Typography>
 
-      <Box sx={{ display: 'flex', gap: 2 }}>
-        {['CLIENT', 'COMPTABLE'].map((value) => (
-          <Box
-            key={value}
-            onClick={() => setValue('role', value as any)}
-            sx={{
-              flex: 1,
-              height: 44,
-              display: 'flex',
-              alignItems: 'center',
-              borderRadius: 2,
-              border: '1px solid',
-              borderColor: role === value ? '#2563EB' : '#E5E7EB',
-              backgroundColor: role === value ? '#EFF6FF' : '#FFFFFF',
-              px: 2,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            <Radio
-              checked={role === value}
-              size="small"
-              sx={{
-                color: '#D1D5DB',
-                '&.Mui-checked': {
-                  color: '#2563EB',
-                },
-              }}
-            />
-            <Typography sx={{ fontSize: 13 }}>
-              {value === 'CLIENT' ? 'Une entreprise' : 'Cabinet de comptabilité'}
-            </Typography>
-          </Box>
+      <Box sx={{ display: "flex", flexDirection: "row", gap: 2 }}>
+        {[
+          { value: "CLIENT", label: "Une entreprise" },
+          { value: "COMPTABLE", label: "Cabinet de comptabilité" },
+        ].map((option) => (
+          <RadioCard
+            key={option.value}
+            value={option.value}
+            label={option.label}
+            selectedValue={role}
+            onSelect={setValue}
+            fieldName="role"
+          />
         ))}
       </Box>
 
       {/* EMAIL */}
-      <Typography sx={{ mt: 3, mb: 1, fontSize: 14 }}>Adresse email professionnelle</Typography>
+      <Typography sx={{ mt: 3, mb: 1, fontSize: 14 }}>
+        Adresse email professionnelle
+      </Typography>
 
       <Box
         component="input"
-        {...register('email')}
+        {...register("email")}
         placeholder="ex john@domain.com"
         sx={inputStyles}
       />
@@ -159,17 +145,19 @@ export function RegisterView() {
       )}
 
       {/* PHONE */}
-      <Typography sx={{ mt: 3, mb: 1, fontSize: 14 }}>Numéro de téléphone</Typography>
+      <Typography sx={{ mt: 3, mb: 1, fontSize: 14 }}>
+        Numéro de téléphone
+      </Typography>
 
-      <Box sx={{ display: 'flex' }}>
+      <Box sx={{ display: "flex" }}>
         <Box
           sx={{
             px: 2,
-            display: 'flex',
-            alignItems: 'center',
-            border: '1px solid #E5E7EB',
-            borderRight: 'none',
-            borderRadius: '12px 0 0 12px',
+            display: "flex",
+            alignItems: "center",
+            border: "1px solid #E5E7EB",
+            borderRight: "none",
+            borderRadius: "12px 0 0 12px",
             fontSize: 14,
           }}
         >
@@ -178,23 +166,25 @@ export function RegisterView() {
 
         <Box
           component="input"
-          {...register('phoneNumber')}
+          {...register("phoneNumber")}
           placeholder="Entrer votre numéro"
           sx={{
             ...inputStyles,
-            borderRadius: '0 12px 12px 0',
+            borderRadius: "0 12px 12px 0",
           }}
         />
       </Box>
 
       {/* PASSWORD */}
-      <Typography sx={{ mt: 3, mb: 1, fontSize: 14 }}>Mot de passe *</Typography>
+      <Typography sx={{ mt: 3, mb: 1, fontSize: 14 }}>
+        Mot de passe *
+      </Typography>
 
-      <Box sx={{ position: 'relative' }}>
+      <Box sx={{ position: "relative" }}>
         <Box
           component="input"
-          type={showPassword ? 'text' : 'password'}
-          {...register('password')}
+          type={showPassword ? "text" : "password"}
+          {...register("password")}
           placeholder="Entrer votre mot de passe"
           sx={inputStyles}
         />
@@ -203,24 +193,24 @@ export function RegisterView() {
           <VisibilityIcon
             onClick={() => setShowPassword(false)}
             sx={{
-              position: 'absolute',
+              position: "absolute",
               right: 12,
               top: 14,
               fontSize: 18,
-              color: '#9CA3AF',
-              cursor: 'pointer',
+              color: "#9CA3AF",
+              cursor: "pointer",
             }}
           />
         ) : (
           <VisibilityOffIcon
             onClick={() => setShowPassword(true)}
             sx={{
-              position: 'absolute',
+              position: "absolute",
               right: 12,
               top: 14,
               fontSize: 18,
-              color: '#9CA3AF',
-              cursor: 'pointer',
+              color: "#9CA3AF",
+              cursor: "pointer",
             }}
           />
         )}
@@ -232,9 +222,9 @@ export function RegisterView() {
           {/* Progress Bar Background */}
           <Box
             sx={{
-              width: '100%',
+              width: "100%",
               height: 8,
-              backgroundColor: '#E5E7EB',
+              backgroundColor: "#E5E7EB",
               borderRadius: 20,
             }}
           >
@@ -245,7 +235,7 @@ export function RegisterView() {
                 width: `${strength}%`,
                 backgroundColor: strengthColor,
                 borderRadius: 20,
-                transition: 'all 0.3s ease',
+                transition: "all 0.3s ease",
               }}
             />
           </Box>
@@ -254,39 +244,42 @@ export function RegisterView() {
           <Box
             sx={{
               mt: 2,
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
               gap: 1.5,
               fontSize: 12,
             }}
           >
             {[
-              { label: 'Une lettre minuscule', valid: hasLowercase },
-              { label: 'Une lettre majuscule', valid: hasUppercase },
-              { label: 'Un chiffre', valid: hasNumber },
-              { label: 'Un caractère spécial', valid: hasSpecial },
+              { label: "Une lettre minuscule", valid: hasLowercase },
+              { label: "Une lettre majuscule", valid: hasUppercase },
+              { label: "Un chiffre", valid: hasNumber },
+              { label: "Un caractère spécial", valid: hasSpecial },
             ].map((item) => (
-              <Box key={item.label} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box
+                key={item.label}
+                sx={{ display: "flex", alignItems: "center", gap: 1 }}
+              >
                 <Box
                   sx={{
                     width: 12,
                     height: 12,
-                    borderRadius: '50%',
-                    backgroundColor: item.valid ? '#16A34A' : '#D1D5DB',
-                    color: '#fff',
+                    borderRadius: "50%",
+                    backgroundColor: item.valid ? "#16A34A" : "#D1D5DB",
+                    color: "#fff",
                     fontSize: 8,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
                 >
-                  {item.valid ? '✓' : ''}
+                  {item.valid ? "✓" : ""}
                 </Box>
 
                 <Typography
                   sx={{
                     fontSize: 12,
-                    color: item.valid ? '#16A34A' : '#6B7280',
+                    color: item.valid ? "#16A34A" : "#6B7280",
                   }}
                 >
                   {item.label}
@@ -298,59 +291,53 @@ export function RegisterView() {
       )}
 
       {/* TERMS */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mt: 3 }}>
+      <Box sx={{ display: "flex", alignItems: "center", mt: 3 }}>
         <Checkbox
           checked={agree}
-          onChange={() => setValue('agreeToTerms', !agree)}
+          onChange={() => setValue("agreeToTerms", !agree)}
           sx={{
-            color: '#D1D5DB',
-            '&.Mui-checked': {
-              color: '#2563EB',
+            color: "#D1D5DB",
+            "&.Mui-checked": {
+              color: "#2563EB",
             },
           }}
         />
 
         <Typography sx={{ fontSize: 13 }}>
-          J’accepte <span style={{ color: '#2563EB' }}>les termes et conditions</span>
+          J’accepte{" "}
+          <span style={{ color: "#2563EB" }}>les termes et conditions</span>
         </Typography>
       </Box>
 
       {/* BUTTON */}
-      <Button
-        fullWidth
-        type="submit"
-        disabled={isLoading}
+      <CustomButton
         variant="contained"
-        sx={{
-          mt: 3,
-          height: 48,
-          borderRadius: '12px',
-          backgroundColor: '#1E63D5',
-          textTransform: 'none',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-          '&:hover': {
-            backgroundColor: '#1D4ED8',
-          },
-        }}
-        endIcon={isLoading ? <DotSpinner size={20} /> : <ArrowForwardIcon />}
+        fullWidth
+        endIcon={
+          isLoading ? (
+            <DotSpinner size={20} />
+          ) : (
+            <Icon icon="eva:arrow-ios-forward-fill" />
+          )
+        }
       >
-        {isLoading ? 'Inscription...' : 'S’inscrire'}
-      </Button>
+        {isLoading ? "Inscription..." : "S’inscrire"}
+      </CustomButton>
 
       {/* LOGIN LINK */}
       <Typography
         sx={{
-          textAlign: 'center',
+          textAlign: "center",
           mt: 3,
           fontSize: 13,
         }}
       >
-        Vous avez déjà un compte ?{' '}
+        Vous avez déjà un compte ?{" "}
         <Link
-          onClick={() => router.push('/sign-in')}
+          onClick={() => router.push("/sign-in")}
           sx={{
-            color: '#2563EB',
-            cursor: 'pointer',
+            color: "#2563EB",
+            cursor: "pointer",
           }}
         >
           Se connecter

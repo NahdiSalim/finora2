@@ -54,13 +54,14 @@ export interface LoginInternalRequest {
 }
 
 export interface LoginResponse {
-  message: string;
-  token: {
-    access_token: string;
-    refresh_token: string;
-  };
-  user: User & {
-    features: Feature[];
+  data: {
+    message: string;
+
+    accessToken: string;
+    refreshToken: string;
+    user: User & {
+      features: Feature[];
+    };
   };
 }
 

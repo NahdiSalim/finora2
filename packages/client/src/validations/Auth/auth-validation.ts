@@ -42,9 +42,10 @@ export const registerValidationSchema = yup.object({
     .oneOf(["CLIENT", "COMPTABLE"])
     .required("Le rôle est obligatoire"),
 
-  agreeToTerms: yup
-    .boolean()
-    .oneOf([true], "Vous devez accepter les termes et conditions"),
+agreeToTerms: yup
+  .boolean()
+  .required("Vous devez accepter les termes et conditions")
+  .oneOf([true], "Vous devez accepter les termes et conditions"),
 });
 export type RegisterFormData = yup.InferType<typeof registerValidationSchema>;
 

@@ -1,25 +1,25 @@
-import { useEffect, useState } from 'react';
-import type { Resolver } from 'react-hook-form';
-import { useForm, Controller } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import dayjs from 'dayjs';
+import { useEffect, useState } from "react";
+import type { Resolver } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import type { Dayjs } from "dayjs";
+import dayjs from "dayjs";
 
-import { Box, Grid, MenuItem, Button, Typography } from '@mui/material';
-import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
+import { Box, Grid, MenuItem, Button, Typography } from "@mui/material";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 
-import CustomInput from 'src/components/common/CustomInput';
-import { FormButtons } from 'src/components/common/FormButtons';
-import { FileUpload } from 'src/components/common/FileUpload';
-import AutocompleteInfiniteScroll from 'src/components/common/AutocompleteInfiniteScroll';
-import { type ClientFormData } from 'src/types/user';
+import CustomInput from "src/components/common/CustomInput";
+import { FormButtons } from "src/components/common/FormButtons";
+import AutocompleteInfiniteScroll from "src/components/common/AutocompleteInfiniteScroll";
+import { type ClientFormData } from "src/types/user";
 import {
   clientValidationSchema,
   clientUpdateValidationSchema,
-} from 'src/validations/users/user-validation';
+} from "src/validations/users/user-validation";
 import {
   useCreateUserMutation,
   useUpdateUserMutation,
@@ -27,9 +27,10 @@ import {
   useGetResidenceTypesForSelectInfiniteQuery,
   useGetCountriesForSelectInfiniteQuery,
   useGetRegionsForSelectInfiniteQuery,
-} from 'src/lib/services/usersApi';
-import { useAlert } from 'src/contexts/AlertContext';
-import { buildReturnUrl, getReturnPage } from 'src/utils/navigationHelpers';
+} from "src/lib/services/usersApi";
+import { useAlert } from "src/contexts/AlertContext";
+import { buildReturnUrl, getReturnPage } from "src/utils/navigationHelpers";
+import FileUpload from "src/components/common/FileUpload";
 
 interface ClientFormProps {
   roleCode: string;
@@ -44,15 +45,19 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
 
   const [createUser, { isLoading: creating }] = useCreateUserMutation();
   const [updateUser, { isLoading: updating }] = useUpdateUserMutation();
-  const { data: userData, isLoading: userLoading } = useGetUserByIdQuery(id!, { skip: !isEdit });
+  const { data: userData, isLoading: userLoading } = useGetUserByIdQuery(id!, {
+    skip: !isEdit,
+  });
 
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string>('');
+  const [photoPreview, setPhotoPreview] = useState<string>("");
   const [documentMainFile, setDocumentMainFile] = useState<File | null>(null);
   const [documentBackFile, setDocumentBackFile] = useState<File | null>(null);
-  const [existingDocumentMainUrl, setExistingDocumentMainUrl] = useState<string>('');
-  const [existingDocumentBackUrl, setExistingDocumentBackUrl] = useState<string>('');
-  const [documentType, setDocumentType] = useState<string>('');
+  const [existingDocumentMainUrl, setExistingDocumentMainUrl] =
+    useState<string>("");
+  const [existingDocumentBackUrl, setExistingDocumentBackUrl] =
+    useState<string>("");
+  const [documentType, setDocumentType] = useState<string>("");
 
   const {
     register,
@@ -63,20 +68,20 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
     watch,
   } = useForm<ClientFormData>({
     resolver: yupResolver(
-      isEdit ? clientUpdateValidationSchema : clientValidationSchema
+      isEdit ? clientUpdateValidationSchema : clientValidationSchema,
     ) as Resolver<ClientFormData>,
     defaultValues: {
-      full_name: '',
-      email: '',
-      phone: '',
+      full_name: "",
+      email: "",
+      phone: "",
       roleCode,
       gender: undefined,
-      birth_date: '',
-      address: '',
-      origin_country: '',
-      region: '',
-      residence_type: '',
-      document_type: '',
+      birth_date: "",
+      address: "",
+      origin_country: "",
+      region: "",
+      residence_type: "",
+      document_type: "",
       photo: null,
       document_main: null,
       document_back: null,
@@ -85,8 +90,8 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
 
   useEffect(() => {
     const subscription = watch((value, { name }) => {
-      if (name === 'document_type') {
-        setDocumentType(value.document_type || '');
+      if (name === "document_type") {
+        setDocumentType(value.document_type || "");
       }
     });
     return () => subscription.unsubscribe();
@@ -95,17 +100,18 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
   useEffect(() => {
     if (isEdit && userData?.client) {
       const client = userData.client;
-      const uploadsUrl = import.meta.env.VITE_UPLOADS_URL || import.meta.env.VITE_API_URL;
+      const uploadsUrl =
+        import.meta.env.VITE_UPLOADS_URL || import.meta.env.VITE_API_URL;
 
-      setValue('full_name', userData.full_name || '');
-      setValue('email', userData.email || '');
-      setValue('phone', userData.phone || '');
-      setValue('gender', client.gender || '');
-      setValue('birth_date', client.birth_date || '');
-      setValue('address', client.address || '');
-      setValue('origin_country', client.origin_country?.value || '');
-      setValue('region', client.region?.value || '');
-      setValue('residence_type', client.residence_type?.value || '');
+      setValue("full_name", userData.full_name || "");
+      setValue("email", userData.email || "");
+      setValue("phone", userData.phone || "");
+      setValue("gender", client.gender || "");
+      setValue("birth_date", client.birth_date || "");
+      setValue("address", client.address || "");
+      setValue("origin_country", client.origin_country?.value || "");
+      setValue("region", client.region?.value || "");
+      setValue("residence_type", client.residence_type?.value || "");
 
       if (client.photo) {
         setPhotoPreview(`${uploadsUrl}/${client.photo}`);
@@ -114,13 +120,18 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
       if (client.residencyDocuments && client.residencyDocuments.length > 0) {
         const firstDoc = client.residencyDocuments[0];
         const docType =
-          firstDoc.document_type === 'visa' || firstDoc.type === 'visa' ? 'visa' : 'titre_sejour';
+          firstDoc.document_type === "visa" || firstDoc.type === "visa"
+            ? "visa"
+            : "titre_sejour";
 
-        setValue('document_type', docType);
+        setValue("document_type", docType);
         setDocumentType(docType);
         setExistingDocumentMainUrl(`${uploadsUrl}/${firstDoc.file_url}`);
 
-        if (docType === 'titre_sejour' && client.residencyDocuments.length > 1) {
+        if (
+          docType === "titre_sejour" &&
+          client.residencyDocuments.length > 1
+        ) {
           const backDoc = client.residencyDocuments[1];
           if (backDoc?.file_url) {
             setExistingDocumentBackUrl(`${uploadsUrl}/${backDoc.file_url}`);
@@ -134,69 +145,83 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
     try {
       const formData = new FormData();
 
-      formData.append('full_name', data.full_name);
-      formData.append('phone', data.phone);
-      formData.append('email', data.email);
-      formData.append('roleCode', roleCode);
+      formData.append("full_name", data.full_name);
+      formData.append("phone", data.phone);
+      formData.append("email", data.email);
+      formData.append("roleCode", roleCode);
 
-      if (data.gender) formData.append('gender', data.gender);
-      if (data.birth_date) formData.append('birth_date', data.birth_date);
-      if (data.address) formData.append('address', data.address);
-      if (data.origin_country) formData.append('origin_country', data.origin_country);
-      if (data.region) formData.append('region', data.region);
-      if (data.residence_type) formData.append('residence_type', data.residence_type);
-      if (data.document_type) formData.append('document_type', data.document_type);
+      if (data.gender) formData.append("gender", data.gender);
+      if (data.birth_date) formData.append("birth_date", data.birth_date);
+      if (data.address) formData.append("address", data.address);
+      if (data.origin_country)
+        formData.append("origin_country", data.origin_country);
+      if (data.region) formData.append("region", data.region);
+      if (data.residence_type)
+        formData.append("residence_type", data.residence_type);
+      if (data.document_type)
+        formData.append("document_type", data.document_type);
 
-      if (photoFile) formData.append('photo', photoFile);
+      if (photoFile) formData.append("photo", photoFile);
 
       if (documentMainFile) {
-        formData.append('document_main', documentMainFile);
+        formData.append("document_main", documentMainFile);
       }
 
-      if (documentBackFile && data.document_type === 'titre_sejour') {
-        formData.append('document_back', documentBackFile);
+      if (documentBackFile && data.document_type === "titre_sejour") {
+        formData.append("document_back", documentBackFile);
       }
 
       if (isEdit && id) {
         await updateUser({ id, formData }).unwrap();
-        showAlert('Client updated successfully!', 'success');
+        showAlert("Client updated successfully!", "success");
       } else {
         await createUser(formData).unwrap();
-        showAlert('Client created successfully!', 'success');
+        showAlert("Client created successfully!", "success");
       }
 
       const returnPage = getReturnPage(searchParams, isEdit);
-      navigate(buildReturnUrl('/users', isEdit, returnPage));
+      navigate(buildReturnUrl("/users", isEdit, returnPage));
     } catch (err: unknown) {
       const errorMessage =
-        (err as { data?: { message?: string }; message?: string })?.data?.message ||
+        (err as { data?: { message?: string }; message?: string })?.data
+          ?.message ||
         (err as { message?: string })?.message ||
-        `Error ${isEdit ? 'updating' : 'creating'} client`;
-      showAlert(errorMessage, 'error');
+        `Error ${isEdit ? "updating" : "creating"} client`;
+      showAlert(errorMessage, "error");
     }
   };
 
-  const handleCancel = () => navigate('/users');
+  const handleCancel = () => navigate("/users");
   const handlePhotoChange = (file: File | null) => {
     setPhotoFile(file);
-    setValue('photo', file);
+    setValue("photo", file);
   };
 
   return (
     <>
       {isEdit && roleCode && (
         <Grid size={12}>
-          <CustomInput fullWidth label="Role" value={roleCode} disabled isEdit={isEdit} />
+          <CustomInput
+            fullWidth
+            label="Role"
+            value={roleCode}
+            disabled
+            isEdit={isEdit}
+          />
         </Grid>
       )}
 
-      <Grid size={12} sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-        <FileUpload label="Upload Photo" onFileChange={handlePhotoChange} preview={photoPreview} />
+      <Grid size={12} sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+        <FileUpload
+          label="Upload Photo"
+          value={photoFile}
+          onChange={handlePhotoChange}
+        />
       </Grid>
 
       <Grid size={12}>
         <CustomInput
-          {...register('full_name')}
+          {...register("full_name")}
           fullWidth
           label="Full Name *"
           error={!!errors.full_name}
@@ -207,7 +232,7 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
 
       <Grid size={{ xs: 12, md: 6 }}>
         <CustomInput
-          {...register('email')}
+          {...register("email")}
           fullWidth
           label="Email *"
           type="email"
@@ -219,7 +244,7 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
 
       <Grid size={{ xs: 12, md: 6 }}>
         <CustomInput
-          {...register('phone')}
+          {...register("phone")}
           fullWidth
           label="Phone *"
           placeholder="+971501234567"
@@ -242,7 +267,7 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
               error={!!errors.gender}
               helperText={errors.gender?.message}
               isEdit={isEdit}
-              value={field.value || ''}
+              value={field.value || ""}
             >
               <MenuItem value="male">Male</MenuItem>
               <MenuItem value="female">Female</MenuItem>
@@ -261,7 +286,9 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
                 label="Birth Date"
                 format="DD/MM/YYYY"
                 value={field.value ? dayjs(field.value) : null}
-                onChange={(v) => field.onChange(v ? v.format('YYYY-MM-DD') : '')}
+                onChange={(v: Dayjs | null) =>
+                  field.onChange(v ? v.format("YYYY-MM-DD") : "")
+                }
                 slotProps={{
                   textField: {
                     fullWidth: true,
@@ -277,7 +304,7 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
 
       <Grid size={12}>
         <CustomInput
-          {...register('address')}
+          {...register("address")}
           fullWidth
           label="Address"
           error={!!errors.address}
@@ -293,7 +320,7 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
           render={({ field }) => (
             <AutocompleteInfiniteScroll
               label="Origin Country *"
-              value={field.value || ''}
+              value={field.value || ""}
               onChange={(value) => field.onChange(value)}
               useInfiniteQuery={useGetCountriesForSelectInfiniteQuery}
               itemLabelKey="name_en"
@@ -304,7 +331,12 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
               emptyMessage="No countries found"
               initialSelectedItems={
                 isEdit && userData?.client?.origin_country
-                  ? [userData.client.origin_country as unknown as Record<string, unknown>]
+                  ? [
+                      userData.client.origin_country as unknown as Record<
+                        string,
+                        unknown
+                      >,
+                    ]
                   : []
               }
             />
@@ -319,7 +351,7 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
           render={({ field }) => (
             <AutocompleteInfiniteScroll
               label="Region *"
-              value={field.value || ''}
+              value={field.value || ""}
               onChange={(value) => field.onChange(value)}
               useInfiniteQuery={useGetRegionsForSelectInfiniteQuery}
               itemLabelKey="name_en"
@@ -330,7 +362,12 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
               emptyMessage="No regions found"
               initialSelectedItems={
                 isEdit && userData?.client?.region
-                  ? [userData.client.region as unknown as Record<string, unknown>]
+                  ? [
+                      userData.client.region as unknown as Record<
+                        string,
+                        unknown
+                      >,
+                    ]
                   : []
               }
             />
@@ -345,7 +382,7 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
           render={({ field }) => (
             <AutocompleteInfiniteScroll
               label="Residence Type *"
-              value={field.value || ''}
+              value={field.value || ""}
               onChange={(value) => field.onChange(value)}
               useInfiniteQuery={useGetResidenceTypesForSelectInfiniteQuery}
               itemLabelKey="name_en"
@@ -356,7 +393,12 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
               emptyMessage="No residence types found"
               initialSelectedItems={
                 isEdit && userData?.client?.residence_type
-                  ? [userData.client.residence_type as unknown as Record<string, unknown>]
+                  ? [
+                      userData.client.residence_type as unknown as Record<
+                        string,
+                        unknown
+                      >,
+                    ]
                   : []
               }
             />
@@ -377,7 +419,7 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
               error={!!errors.document_type}
               helperText={errors.document_type?.message}
               isEdit={isEdit}
-              value={field.value || ''}
+              value={field.value || ""}
             >
               <MenuItem value="visa">Visa</MenuItem>
               <MenuItem value="titre_sejour">Residence Permit</MenuItem>
@@ -390,7 +432,8 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
         <>
           <Grid size={12}>
             <Typography variant="h6" sx={{ mt: 3, mb: 1 }}>
-              Main Document – {documentType === 'visa' ? 'Visa' : 'Residence Permit'}
+              Main Document –{" "}
+              {documentType === "visa" ? "Visa" : "Residence Permit"}
             </Typography>
 
             {isEdit && existingDocumentMainUrl && (
@@ -399,7 +442,7 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
                   variant="outlined"
                   size="small"
                   startIcon={<DescriptionOutlinedIcon />}
-                  onClick={() => window.open(existingDocumentMainUrl, '_blank')}
+                  onClick={() => window.open(existingDocumentMainUrl, "_blank")}
                 >
                   View Current Document
                 </Button>
@@ -407,16 +450,19 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
             )}
 
             <Box>
-              <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
-                {isEdit ? 'Replace Main Document' : 'Main Document (PDF/Image)'}
+              <Typography
+                variant="body2"
+                sx={{ mb: 1, color: "text.secondary" }}
+              >
+                {isEdit ? "Replace Main Document" : "Main Document (PDF/Image)"}
               </Typography>
               <Button
                 component="label"
                 variant="outlined"
                 fullWidth
-                sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+                sx={{ justifyContent: "flex-start", textTransform: "none" }}
               >
-                {documentMainFile ? documentMainFile.name : 'Choose File'}
+                {documentMainFile ? documentMainFile.name : "Choose File"}
                 <input
                   type="file"
                   hidden
@@ -424,20 +470,20 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                     const file = e.target.files?.[0] || null;
                     setDocumentMainFile(file);
-                    setValue('document_main', file);
+                    setValue("document_main", file);
                   }}
                 />
               </Button>
               <Typography
                 variant="caption"
-                sx={{ display: 'block', mt: 0.5, color: 'text.secondary' }}
+                sx={{ display: "block", mt: 0.5, color: "text.secondary" }}
               >
-                {isEdit ? 'Leave empty to keep current document' : 'Required'}
+                {isEdit ? "Leave empty to keep current document" : "Required"}
               </Typography>
             </Box>
           </Grid>
 
-          {documentType === 'titre_sejour' && (
+          {documentType === "titre_sejour" && (
             <Grid size={12}>
               <Typography variant="h6" sx={{ mt: 3, mb: 1 }}>
                 Back of Residence Permit
@@ -449,7 +495,9 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
                     variant="outlined"
                     size="small"
                     startIcon={<DescriptionOutlinedIcon />}
-                    onClick={() => window.open(existingDocumentBackUrl, '_blank')}
+                    onClick={() =>
+                      window.open(existingDocumentBackUrl, "_blank")
+                    }
                   >
                     View Current Back
                   </Button>
@@ -457,16 +505,21 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
               )}
 
               <Box>
-                <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
-                  {isEdit ? 'Replace Back Document' : 'Back of Residence Permit'}
+                <Typography
+                  variant="body2"
+                  sx={{ mb: 1, color: "text.secondary" }}
+                >
+                  {isEdit
+                    ? "Replace Back Document"
+                    : "Back of Residence Permit"}
                 </Typography>
                 <Button
                   component="label"
                   variant="outlined"
                   fullWidth
-                  sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+                  sx={{ justifyContent: "flex-start", textTransform: "none" }}
                 >
-                  {documentBackFile ? documentBackFile.name : 'Choose File'}
+                  {documentBackFile ? documentBackFile.name : "Choose File"}
                   <input
                     type="file"
                     hidden
@@ -474,15 +527,17 @@ export default function ClientForm({ roleCode }: ClientFormProps) {
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                       const file = e.target.files?.[0] || null;
                       setDocumentBackFile(file);
-                      setValue('document_back', file);
+                      setValue("document_back", file);
                     }}
                   />
                 </Button>
                 <Typography
                   variant="caption"
-                  sx={{ display: 'block', mt: 0.5, color: 'text.secondary' }}
+                  sx={{ display: "block", mt: 0.5, color: "text.secondary" }}
                 >
-                  {isEdit ? 'Leave empty to keep current back document' : 'Required'}
+                  {isEdit
+                    ? "Leave empty to keep current back document"
+                    : "Required"}
                 </Typography>
               </Box>
             </Grid>

@@ -2,11 +2,11 @@ name: finora-client
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ main, dev, feat/devops ]
     paths:
       - "packages/client/**"
   pull_request:
-    branches: [ main, dev ]
+    branches: [ main, dev, feat/devops ]
     paths:
       - "packages/client/**"
 
@@ -18,13 +18,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ------------------------
-      # 🐳 Docker Setup
-      # ------------------------
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Login to DockerHub
+        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME_FRONT }}
@@ -35,23 +33,61 @@ jobs:
         run: echo "BRANCH=${GITHUB_REF_NAME}" >> $GITHUB_ENV
 
       - name: Define Docker image tags
+        if: github.event_name == 'push'
         shell: bash
         run: |
           IMAGE="${{ secrets.DOCKERHUB_USERNAME_FRONT }}/finora-front"
-          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
-
           echo "TAG1=$IMAGE:${GITHUB_REF_NAME}" >> $GITHUB_ENV
-
           SHORT_SHA="${GITHUB_SHA::7}"
           echo "TAG2=$IMAGE:${GITHUB_REF_NAME}-$SHORT_SHA" >> $GITHUB_ENV
 
-      - name: Build and Push Docker Image
+      - name: Build (PR) / Build+Push (push)
         uses: docker/build-push-action@v5
         with:
-          context: ./packages/client
-          push: true
+          context: .
+          file: packages/client/Dockerfile
+          push: ${{ github.event_name == 'push' }}
           tags: |
             ${{ env.TAG1 }}
             ${{ env.TAG2 }}
           build-args: |
             BRANCH=${{ env.BRANCH }}
+            VITE_API_URL=${{ secrets.VITE_API_URL }}
+
+  deploy:
+    if: github.event_name == 'push'
+    needs: security-and-build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy front to VM via SSH (password)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          port: ${{ secrets.VM_SSH_PORT }}
+          username: ${{ secrets.VM_USER }}
+          password: ${{ secrets.VM_PASSWORD }}
+          script: |
+            set -e
+
+            IMAGE="${{ secrets.DOCKERHUB_USERNAME_FRONT }}/finora-front"
+            TAG="${GITHUB_REF_NAME}"
+            CONTAINER="finora-front"
+
+            echo "DockerHub login..."
+            docker login -u "${{ secrets.DOCKERHUB_USERNAME_FRONT }}" -p "${{ secrets.DOCKERHUB_TOKEN_FRONT }}"
+
+            echo "Pulling image: $IMAGE:$TAG"
+            docker pull "$IMAGE:$TAG"
+
+            echo "Stopping old container (if exists)..."
+            docker rm -f "$CONTAINER" || true
+
+            echo "Starting new container..."
+            docker run -d --restart unless-stopped \
+              --name "$CONTAINER" \
+              -p 80:80 \
+              "$IMAGE:$TAG"
+
+            echo "Done. Running containers:"
+            docker ps | grep "$CONTAINER" || true

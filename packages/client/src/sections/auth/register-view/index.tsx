@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, Resolver, useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import {
   useRegisterAccountantMutation,
@@ -39,8 +39,7 @@ export function RegisterView() {
     setValue,
     formState: { errors },
   } = useForm<RegisterFormData>({
-    resolver: yupResolver(registerValidationSchema),
-    defaultValues: {
+resolver: yupResolver(registerValidationSchema) as unknown as Resolver<RegisterFormData>,    defaultValues: {
       email: "",
       phoneNumber: "",
       password: "",

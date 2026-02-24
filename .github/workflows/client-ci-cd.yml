@@ -5,10 +5,12 @@ on:
     branches: [ main, dev, feat/devops ]
     paths:
       - "packages/client/**"
+      - ".github/workflows/client-ci-cd.yml"
   pull_request:
     branches: [ main, dev, feat/devops ]
     paths:
       - "packages/client/**"
+      - ".github/workflows/client-ci-cd.yml"
 
 jobs:
   security-and-build:
@@ -37,9 +39,11 @@ jobs:
         shell: bash
         run: |
           IMAGE="${{ secrets.DOCKERHUB_USERNAME_FRONT }}/finora-front"
-          echo "TAG1=$IMAGE:${GITHUB_REF_NAME}" >> $GITHUB_ENV
-          SHORT_SHA="${GITHUB_SHA::7}"
-          echo "TAG2=$IMAGE:${GITHUB_REF_NAME}-$SHORT_SHA" >> $GITHUB_ENV
+          SAFE_BRANCH="${GITHUB_REF_NAME//\//-}"
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          echo "SAFE_BRANCH=$SAFE_BRANCH" >> $GITHUB_ENV
+          echo "TAG1=$IMAGE:$SAFE_BRANCH" >> $GITHUB_ENV
+          echo "TAG2=$IMAGE:$SAFE_BRANCH-${GITHUB_SHA::7}" >> $GITHUB_ENV
 
       - name: Build (PR) / Build+Push (push)
         uses: docker/build-push-action@v5

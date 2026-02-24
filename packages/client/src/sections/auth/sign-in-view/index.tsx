@@ -1,4 +1,4 @@
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { Navigate } from "react-router-dom";
 
@@ -28,7 +28,6 @@ import {
 } from "src/lib/services/authApi";
 import CustomInput from "src/components/common/CustomInput";
 import PasswordField from "src/components/common/PasswordField";
-import PhoneInput from "src/components/common/PhoneInput";
 
 export function SignInView() {
   const router = useRouter();
@@ -41,6 +40,7 @@ export function SignInView() {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm<SignInFormData>({
     resolver: yupResolver(signInValidationSchema),
@@ -121,13 +121,18 @@ export function SignInView() {
         placeholder="Entrer votre adresse email"
       />
 
-      <PasswordField mode="login" required />
-
-      <PhoneInput
-        label="Numéro de téléphone"
-        required
-        placeholder="Entrer votre numéro de téléphone"
-        helperText="Nous ne partagerons jamais votre numéro"
+      <Controller
+        name="password"
+        control={control}
+        render={({ field }) => (
+          <PasswordField
+            {...field}
+            mode="login"
+            error={!!errors.password}
+            helperText={errors.password?.message}
+            required
+          />
+        )}
       />
 
       <Box
@@ -168,6 +173,7 @@ export function SignInView() {
       <Button
         fullWidth
         type="submit"
+        onClick={handleSubmit(onSubmit)}
         disabled={isLoading}
         variant="contained"
         sx={{

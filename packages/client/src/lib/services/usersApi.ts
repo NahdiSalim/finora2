@@ -1,12 +1,12 @@
-import { createApi } from '@reduxjs/toolkit/query/react';
-import { baseQueryWithReauth } from './baseQueryWithReauth';
+import { createApi } from "@reduxjs/toolkit/query/react";
+import { baseQueryWithReauth } from "./baseQueryWithReauth";
 import type {
   User,
   UsersResponse,
   UserByIdResponse,
   CreateUserResponse,
   RoleType,
-} from 'src/types/user';
+} from "src/types/user";
 
 export interface Role {
   id: string;
@@ -77,61 +77,70 @@ type PageParam = {
 };
 
 export const usersApi = createApi({
-  reducerPath: 'usersApi',
+  reducerPath: "usersApi",
   baseQuery: baseQueryWithReauth,
-  tagTypes: ['Users', 'Roles'],
+  tagTypes: ["Users", "Roles"],
   endpoints: (builder) => ({
     getUsers: builder.query<UsersResponse, GetUsersQueryArg>({
-      query: ({ page = 1, limit = 5, search, clientVerificationStatus, isActiveStatus } = {}) => {
+      query: ({
+        page = 1,
+        limit = 5,
+        search,
+        clientVerificationStatus,
+        isActiveStatus,
+      } = {}) => {
         const params = new URLSearchParams();
-        params.append('page', page.toString());
-        params.append('limit', limit.toString());
+        params.append("page", page.toString());
+        params.append("limit", limit.toString());
         if (search && search.trim()) {
-          params.append('search', search.trim());
+          params.append("search", search.trim());
         }
         if (clientVerificationStatus) {
-          params.append('clientVerificationStatus', clientVerificationStatus);
+          params.append("clientVerificationStatus", clientVerificationStatus);
         }
         if (isActiveStatus) {
-          params.append('isActiveStatus', isActiveStatus);
+          params.append("isActiveStatus", isActiveStatus);
         }
 
         return {
           url: `/users/all?${params.toString()}`,
-          method: 'GET',
+          method: "GET",
         };
       },
       providesTags: (result) =>
         result
           ? [
-              ...result.data.map(({ id }) => ({ type: 'Users' as const, id })),
-              { type: 'Users', id: 'PARTIAL-LIST' },
+              ...result.data.map(({ id }) => ({ type: "Users" as const, id })),
+              { type: "Users", id: "PARTIAL-LIST" },
             ]
-          : [{ type: 'Users', id: 'PARTIAL-LIST' }],
+          : [{ type: "Users", id: "PARTIAL-LIST" }],
     }),
 
     createUser: builder.mutation<CreateUserResponse, FormData>({
       query: (formData) => ({
-        url: '/auth/create',
-        method: 'POST',
+        url: "/auth/create",
+        method: "POST",
         body: formData,
       }),
-      invalidatesTags: ['Users'],
+      invalidatesTags: ["Users"],
     }),
 
-    updateUser: builder.mutation<CreateUserResponse, { id: string; formData: FormData }>({
+    updateUser: builder.mutation<
+      CreateUserResponse,
+      { id: string; formData: FormData }
+    >({
       query: ({ id, formData }) => ({
         url: `/auth/update/${id}`,
-        method: 'PATCH',
+        method: "PATCH",
         body: formData,
       }),
-      invalidatesTags: ['Users'],
+      invalidatesTags: ["Users"],
     }),
 
     getUserById: builder.query<User, string>({
       query: (id) => `/auth/backoffice/${id}`,
       transformResponse: (response: UserByIdResponse) => response.user,
-      providesTags: ['Users'],
+      providesTags: ["Users"],
     }),
 
     manageUserStatus: builder.mutation<
@@ -140,19 +149,24 @@ export const usersApi = createApi({
     >({
       query: ({ userId, is_active, status }) => ({
         url: `/auth/${userId}/status`,
-        method: 'PATCH',
+        method: "PATCH",
         body: { is_active, status },
       }),
-      invalidatesTags: ['Users'],
+      invalidatesTags: ["Users"],
     }),
 
     updateDocumentStatus: builder.mutation<
       void,
-      { clientId: string; documentType: string; status: string; rejectionReason?: string }
+      {
+        clientId: string;
+        documentType: string;
+        status: string;
+        rejectionReason?: string;
+      }
     >({
       query: ({ clientId, documentType, status, rejectionReason }) => ({
         url: `/auth/update-status`,
-        method: 'POST',
+        method: "POST",
         body: {
           clientId,
           documentType,
@@ -160,7 +174,7 @@ export const usersApi = createApi({
           rejectionReason,
         },
       }),
-      invalidatesTags: ['Users'],
+      invalidatesTags: ["Users"],
     }),
 
     getResidenceTypesForSelect: builder.infiniteQuery<
@@ -194,15 +208,15 @@ export const usersApi = createApi({
       },
       query: ({ pageParam, queryArg }) => {
         const params = new URLSearchParams();
-        params.append('page', pageParam.page.toString());
-        params.append('limit', pageParam.limit.toString());
+        params.append("page", pageParam.page.toString());
+        params.append("limit", pageParam.limit.toString());
         if (queryArg?.search && queryArg.search.trim()) {
-          params.append('search', queryArg.search.trim());
+          params.append("search", queryArg.search.trim());
         }
 
         return {
           url: `/residence-types/paginated?${params.toString()}`,
-          method: 'GET',
+          method: "GET",
         };
       },
     }),
@@ -238,15 +252,15 @@ export const usersApi = createApi({
       },
       query: ({ pageParam, queryArg }) => {
         const params = new URLSearchParams();
-        params.append('page', pageParam.page.toString());
-        params.append('limit', pageParam.limit.toString());
+        params.append("page", pageParam.page.toString());
+        params.append("limit", pageParam.limit.toString());
         if (queryArg?.search && queryArg.search.trim()) {
-          params.append('search', queryArg.search.trim());
+          params.append("search", queryArg.search.trim());
         }
 
         return {
           url: `/countries/paginated?${params.toString()}`,
-          method: 'GET',
+          method: "GET",
         };
       },
     }),
@@ -282,15 +296,15 @@ export const usersApi = createApi({
       },
       query: ({ pageParam, queryArg }) => {
         const params = new URLSearchParams();
-        params.append('page', pageParam.page.toString());
-        params.append('limit', pageParam.limit.toString());
+        params.append("page", pageParam.page.toString());
+        params.append("limit", pageParam.limit.toString());
         if (queryArg?.search && queryArg.search.trim()) {
-          params.append('search', queryArg.search.trim());
+          params.append("search", queryArg.search.trim());
         }
 
         return {
           url: `/regions/paginated?${params.toString()}`,
-          method: 'GET',
+          method: "GET",
         };
       },
     }),
@@ -326,15 +340,15 @@ export const usersApi = createApi({
       },
       query: ({ pageParam, queryArg }) => {
         const params = new URLSearchParams();
-        params.append('page', pageParam.page.toString());
-        params.append('limit', pageParam.limit.toString());
+        params.append("page", pageParam.page.toString());
+        params.append("limit", pageParam.limit.toString());
         if (queryArg?.search && queryArg.search.trim()) {
-          params.append('search', queryArg.search.trim());
+          params.append("search", queryArg.search.trim());
         }
 
         return {
           url: `/auth/all?${params.toString()}`,
-          method: 'GET',
+          method: "GET",
         };
       },
       transformResponse: (response: UsersResponse): PaginatedResponse<User> => {

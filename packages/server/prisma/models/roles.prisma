@@ -1,5 +1,6 @@
 model Role {
     id            Int          @id @default(autoincrement())
+    code          String       @unique
     nameFr        String
     nameEn        String
     descriptionEn String
@@ -10,6 +11,7 @@ model Role {
     p_features    p_features[]
     p_tasks       p_tasks[]
     users         User[]
+    roleActions   RoleAction[]
 
     @@unique([nameFr, nameEn])
 }

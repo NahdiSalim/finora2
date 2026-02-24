@@ -17,6 +17,7 @@ import {
 
 import { useAlert } from "src/contexts/AlertContext";
 import { useForgotPasswordMutation } from "src/lib/services/authApi";
+import FileUpload from "src/components/common/FileUpload";
 
 export function ForgotPasswordView() {
   const router = useRouter();
@@ -144,6 +145,12 @@ export function ForgotPasswordView() {
         <Box sx={{ width: "100%" }} />
 
         <Grid size={{ xs: 12 }}>
+          <FileUpload
+            label="Upload document"
+            maxSize={5}
+            acceptedFiles={[".jpg", ".png", ".pdf"]}
+            helperText="Max size 5MB"
+          />
           <CustomInput
             {...register("email")}
             fullWidth

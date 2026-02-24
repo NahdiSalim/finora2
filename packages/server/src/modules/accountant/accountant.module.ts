@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
-import { AccountantController } from './accountant.controller';
+import {
+  AccountantController,
+  PublicAccountantsController,
+  AccountantProfileController,
+} from './accountant.controller';
 import { AccountantService } from './accountant.service';
 import { PrismaModule } from 'prisma/prisma.module';
 import { MailModule } from '../mail/mail.module';
@@ -8,7 +12,7 @@ import { CommonModule } from 'src/common/common.module';
 
 @Module({
   imports: [PrismaModule, MailModule, CommonModule],
-  controllers: [AccountantController],
+  controllers: [AccountantController, PublicAccountantsController, AccountantProfileController],
   providers: [AccountantService, AuthService],
   exports: [AccountantService],
 })

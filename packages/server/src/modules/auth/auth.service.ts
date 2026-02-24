@@ -347,6 +347,7 @@ export class AuthService {
           email: true,
           username: true,
           status: true,
+          companyId: true,
           role: {
             select: {
               id: true,
@@ -562,7 +563,7 @@ export class AuthService {
           password: hashedPassword,
           phone,
           id_role: clientRole.id,
-          status: UserStatus.PENDING,
+          status: UserStatus.ACTIVE,
         },
       });
 

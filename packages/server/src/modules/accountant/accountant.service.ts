@@ -452,4 +452,273 @@ export class AccountantService {
       throw error;
     }
   }
+
+  // PUBLIC: Browse all accountant profiles (for visitors)
+  async browseAccountants(filters: {
+    page?: number;
+    limit?: number;
+    location?: string;
+    specialty?: string;
+    search?: string;
+  }) {
+    const page = filters.page || 1;
+    const limit = Math.min(filters.limit || 20, 50); // Max 50 per page
+    const skip = (page - 1) * limit;
+
+    try {
+      // Find ACCOUNTANT role
+      const accountantRole = await this.prisma.role.findUnique({
+        where: { code: RoleCode.ACCOUNTANT },
+      });
+
+      if (!accountantRole) {
+        throw new ApiError('Accountant role not found', 500, 'ROLE_NOT_FOUND');
+      }
+
+      // Build where clause
+      const where: any = {
+        id_role: accountantRole.id,
+        status: UserStatus.ACTIVE,
+      };
+
+      // Filter by location (city)
+      if (filters.location) {
+        where.company = {
+          city: {
+            contains: filters.location,
+            mode: 'insensitive',
+          },
+        };
+      }
+
+      // Search by name, company name, or position
+      if (filters.search) {
+        where.OR = [
+          {
+            firstName: {
+              contains: filters.search,
+              mode: 'insensitive',
+            },
+          },
+          {
+            lastName: {
+              contains: filters.search,
+              mode: 'insensitive',
+            },
+          },
+          {
+            company: {
+              name: {
+                contains: filters.search,
+                mode: 'insensitive',
+              },
+            },
+          },
+          {
+            position: {
+              contains: filters.search,
+              mode: 'insensitive',
+            },
+          },
+        ];
+      }
+
+      // Filter by specialty (position field)
+      if (filters.specialty) {
+        where.position = {
+          contains: filters.specialty,
+          mode: 'insensitive',
+        };
+      }
+
+      const [total, data] = await Promise.all([
+        this.prisma.user.count({ where }),
+        this.prisma.user.findMany({
+          where,
+          skip,
+          take: limit,
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            photo: true,
+            position: true,
+            department: true,
+            company: {
+              select: {
+                id: true,
+                name: true,
+                city: true,
+                address: true,
+                postalCode: true,
+                phone: true,
+                email: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        }),
+      ]);
+
+      return {
+        data: data.map((accountant) => ({
+          id: accountant.id,
+          name: `${accountant.firstName} ${accountant.lastName}`,
+          firstName: accountant.firstName,
+          lastName: accountant.lastName,
+          email: accountant.email,
+          phone: accountant.phone,
+          photo: accountant.photo,
+          specialty: accountant.position,
+          department: accountant.department,
+          company: accountant.company,
+        })),
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      console.error('Browse accountants error:', error);
+      throw error;
+    }
+  }
+
+  // PUBLIC: Get accountant profile details by ID
+  async getAccountantProfile(accountantId: number) {
+    try {
+      // Find ACCOUNTANT role
+      const accountantRole = await this.prisma.role.findUnique({
+        where: { code: RoleCode.ACCOUNTANT },
+      });
+
+      if (!accountantRole) {
+        throw new ApiError('Accountant role not found', 500, 'ROLE_NOT_FOUND');
+      }
+
+      const accountant = await this.prisma.user.findFirst({
+        where: {
+          id: accountantId,
+          id_role: accountantRole.id,
+          status: UserStatus.ACTIVE,
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          photo: true,
+          position: true,
+          department: true,
+          diploma: true,
+          company: {
+            select: {
+              id: true,
+              name: true,
+              city: true,
+              address: true,
+              postalCode: true,
+              phone: true,
+              email: true,
+              siret: true,
+              vatNumber: true,
+              legalForm: true,
+            },
+          },
+        },
+      });
+
+      if (!accountant) {
+        throw new ApiError('Accountant profile not found', 404, 'PROFILE_NOT_FOUND');
+      }
+
+      return {
+        id: accountant.id,
+        name: `${accountant.firstName} ${accountant.lastName}`,
+        firstName: accountant.firstName,
+        lastName: accountant.lastName,
+        email: accountant.email,
+        phone: accountant.phone,
+        photo: accountant.photo,
+        specialty: accountant.position,
+        department: accountant.department,
+        diploma: accountant.diploma,
+        company: accountant.company,
+      };
+    } catch (error) {
+      console.error('Get accountant profile error:', error);
+      throw error;
+    }
+  }
+
+  // ACCOUNTANT: Update own public profile
+  async updateMyProfile(
+    accountantId: number,
+    data: {
+      position?: string;
+      department?: string;
+      phone?: string;
+      diploma?: string;
+    }
+  ) {
+    try {
+      // Verify user is accountant
+      const accountant = await this.prisma.user.findUnique({
+        where: { id: accountantId },
+        include: { role: true },
+      });
+
+      if (!accountant || accountant.role?.code !== RoleCode.ACCOUNTANT) {
+        throw new ApiError('Only accountants can update their profile', 403, 'FORBIDDEN');
+      }
+
+      const updated = await this.prisma.user.update({
+        where: { id: accountantId },
+        data: {
+          position: data.position,
+          department: data.department,
+          phone: data.phone,
+          diploma: data.diploma,
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          photo: true,
+          position: true,
+          department: true,
+          diploma: true,
+          company: {
+            select: {
+              id: true,
+              name: true,
+              city: true,
+              address: true,
+              postalCode: true,
+              phone: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Profile updated successfully',
+        data: updated,
+      };
+    } catch (error) {
+      console.error('Update profile error:', error);
+      throw error;
+    }
+  }
 }

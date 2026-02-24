@@ -31,6 +31,13 @@ model Company {
   socialInfo        String?
   status            String    @default("active")
   logo              String?
+  
+  // Storage quota management
+  storageQuotaBytes BigInt?   @default(10737418240) // Default 10GB in bytes
+  storageUsedBytes  BigInt?   @default(0)
+  storageAlertThreshold Float? @default(0.8) // Alert at 80%
+  lastStorageAlert  DateTime?
+  
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 

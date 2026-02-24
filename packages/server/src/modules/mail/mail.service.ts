@@ -97,12 +97,21 @@ export class MailService {
   }
 
   async sendPasswordResetEmail(to: string, resetLink: string): Promise<void> {
+    this.logger.log(`Sending password reset email to ${to} with link: ${resetLink}`);
     const html = this.getEmailTemplate(
       'Réinitialisation de votre mot de passe',
       `
       <p style="font-size: 15px; color: #666;">Vous avez demandé à réinitialiser votre mot de passe.</p>
       <p style="font-size: 15px; color: #666;">Cliquez sur le bouton ci-dessous pour en créer un nouveau :</p>
       <center><a href="${resetLink}" style="display: inline-block; margin: 25px 0; padding: 16px 48px; background: linear-gradient(135deg, #1976d2 0%, #2196f3 100%); color: #ffffff !important; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600;">Réinitialiser mon mot de passe</a></center>
+      <div style="background-color: #f8f9fa; border-left: 4px solid #ffc107; padding: 15px; margin: 25px 0; border-radius: 4px;">
+        <p style="font-size: 13px; color: #856404; margin: 5px 0;"><strong>⚠️ Important :</strong> Ce lien expire dans 2 heures</p>
+        <p style="font-size: 13px; color: #856404; margin: 5px 0;">Si vous n'avez pas demandé cette réinitialisation, ignorez cet email.</p>
+      </div>
+      <div style="background-color: #f8f9fa; padding: 15px; margin: 25px 0; border-radius: 4px;">
+        <p style="font-size: 12px; color: #666; margin: 5px 0;">Si le bouton ne fonctionne pas, copiez et collez ce lien dans votre navigateur :</p>
+        <p style="font-size: 12px; color: #1976d2; word-break: break-all; margin: 5px 0;">${resetLink}</p>
+      </div>
     `
     );
     await this.sendEmail(to, 'Réinitialisation de votre mot de passe', html);

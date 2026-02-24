@@ -11,6 +11,8 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AccountantModule } from './modules/accountant/accountant.module';
+import { DocumentModule } from './modules/document/document.module';
+import { StorageModule } from './modules/storage/storage.module';
 
 @Module({
   imports: [
@@ -41,6 +43,8 @@ import { AccountantModule } from './modules/accountant/accountant.module';
     AuthModule,
     AdminModule,
     AccountantModule,
+    DocumentModule,
+    StorageModule,
   ],
   controllers: [AppController],
   providers: [

@@ -7,10 +7,8 @@ import {
   useTheme,
   alpha,
 } from "@mui/material";
-import {
-  InsertDriveFile as FileIcon,
-  Close as CloseIcon,
-} from "@mui/icons-material";
+import { Close as CloseIcon } from "@mui/icons-material";
+import UploadIcon from "../../../public/assets/upload.svg";
 
 interface FileUploadProps {
   label: string;
@@ -159,14 +157,14 @@ export default function FileUpload({
           onDragLeave={handleDragLeave}
           onClick={handleClick}
           sx={{
-            border: 2,
+            border: 1.5,
             borderStyle: "dashed",
             borderColor: hasError
               ? theme.palette.error.main
               : dragActive
                 ? theme.palette.primary.main
                 : theme.palette.divider,
-            borderRadius: 2,
+            borderRadius: 4,
             backgroundColor: dragActive
               ? alpha(theme.palette.primary.main, 0.04)
               : theme.palette.background.default,
@@ -190,12 +188,7 @@ export default function FileUpload({
             }),
           }}
         >
-          <FileIcon
-            sx={{
-              fontSize: 40,
-              color: theme.palette.action.disabled,
-            }}
-          />
+          <Box component="img" src={UploadIcon} />
 
           <Typography
             variant="body2"
@@ -211,10 +204,12 @@ export default function FileUpload({
             variant="outlined"
             disabled={disabled}
             sx={{
-              borderRadius: 1.5,
+              borderRadius: 2.5,
               textTransform: "none",
-              px: 3,
+              px: 5,
               pointerEvents: "none", // Prevent button click, let parent handle it
+              borderColor: theme.palette.grey[300],
+              color: theme.palette.common.black,
             }}
           >
             Sélectionner un fichier
@@ -237,12 +232,12 @@ export default function FileUpload({
         /* Uploaded State - File Display */
         <Box
           sx={{
-            borderRadius: 2,
+            borderRadius: 3,
             backgroundColor: theme.palette.background.default,
-            border: 1,
-            borderColor: theme.palette.divider,
+            border: 2,
+            borderColor: theme.palette.primary.main,
             px: 2,
-            py: 1.5,
+            py: 1,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",

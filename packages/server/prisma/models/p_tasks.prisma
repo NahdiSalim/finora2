@@ -1,12 +1,11 @@
 model p_tasks {
-    role_id   Int
-    task_id   Int
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  id      Int  @id @default(autoincrement())
+  role_id Int
+  task_id Int
+  role    Role @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  task    Task @relation(fields: [task_id], references: [id], onDelete: Cascade)
 
-    role Role  @relation(fields: [role_id], references: [id], onDelete: Cascade)
-    task Tasks @relation(fields: [task_id], references: [id], onDelete: Cascade)
-
-    @@id([role_id, task_id])
-    @@index([task_id])
+  @@unique([role_id, task_id])
+  @@index([role_id])
+  @@index([task_id])
 }

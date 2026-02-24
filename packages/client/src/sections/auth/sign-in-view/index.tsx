@@ -1,19 +1,34 @@
-import { useForm } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
-import { Navigate } from 'react-router-dom';
+import { useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import { Navigate } from "react-router-dom";
 
-import { Box, Grid, Link, Button, Typography } from '@mui/material';
-import DotSpinner from 'src/components/common/DotSpinner';
+import {
+  Box,
+  Link,
+  Button,
+  Typography,
+  FormControlLabel,
+  Checkbox,
+} from "@mui/material";
+import DotSpinner from "src/components/common/DotSpinner";
 
-import { useRouter } from 'src/routes/hooks';
-import { RouterLink } from 'src/routes/components';
+import { useRouter } from "src/routes/hooks";
+import { RouterLink } from "src/routes/components";
 
-import { signInValidationSchema, type SignInFormData } from 'src/validations/Auth/auth-validation';
+import {
+  signInValidationSchema,
+  type SignInFormData,
+} from "src/validations/Auth/auth-validation";
 
-import { useAlert } from 'src/contexts/AlertContext';
-import { useAppSelector } from 'src/hooks/use-redux';
-import { useLoginInternalMutation, useVerifyUserQuery } from 'src/lib/services/authApi';
-import CustomInput from 'src/components/common/CustomInput';
+import { useAlert } from "src/contexts/AlertContext";
+import { useAppSelector } from "src/hooks/use-redux";
+import {
+  useLoginInternalMutation,
+  useVerifyUserQuery,
+} from "src/lib/services/authApi";
+import CustomInput from "src/components/common/CustomInput";
+import PasswordField from "src/components/common/PasswordField";
+import PhoneInput from "src/components/common/PhoneInput";
 
 export function SignInView() {
   const router = useRouter();
@@ -30,29 +45,30 @@ export function SignInView() {
   } = useForm<SignInFormData>({
     resolver: yupResolver(signInValidationSchema),
     defaultValues: {
-      email: '',
-      password: '',
+      email: "",
+      password: "",
     },
   });
 
   const onSubmit = async (data: SignInFormData) => {
     try {
+      console.log("data", data);
       const result = await login(data).unwrap();
+      console.log("result", result);
+      localStorage.setItem("token", result.data.accessToken);
+      localStorage.setItem("refresh_token", result.data.refreshToken);
 
-      localStorage.setItem('token', result.token.access_token);
-      localStorage.setItem('refresh_token', result.token.refresh_token);
-
-      const firstRoute = result.user.features?.[0]?.pages?.[0]?.route || '/';
+      const firstRoute = "/";
       router.push(firstRoute);
     } catch (error: unknown) {
       const message =
-        (typeof error === 'object' &&
+        (typeof error === "object" &&
           error !== null &&
-          'data' in error &&
+          "data" in error &&
           (error as { data?: { message?: string } })?.data?.message) ||
-        'Échec de la connexion. Vérifiez vos identifiants.';
+        "Échec de la connexion. Vérifiez vos identifiants.";
 
-      showAlert(message, 'error');
+      showAlert(message, "error");
     }
   };
 
@@ -60,10 +76,10 @@ export function SignInView() {
     return (
       <Box
         sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '60vh',
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "60vh",
         }}
       >
         <DotSpinner size={60} />
@@ -128,55 +144,24 @@ export function SignInView() {
           }
         />
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <FormControlLabel
-            control={<Checkbox />}
-            label={<Typography sx={{ fontSize: 13 }}>Se souvenir de moi</Typography>}
-          />
-
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
           <Link
             component={RouterLink}
             href="/forgot-password"
             sx={{
               fontSize: 13,
-              color: '#2563EB',
-              '&:hover': { textDecoration: 'underline' },
+              color: "#2563EB",
+              "&:hover": { textDecoration: "underline" },
             }}
           >
             Mot de passe oublié ?
           </Link>
-        </Box>
-
-        <Button
-          fullWidth
-          type="submit"
-          disabled={isLoading}
-          variant="contained"
-          sx={{
-            fontSize: 13,
-            color: "#2563EB",
-            "&:hover": { textDecoration: "underline" },
-          }}
-        >
-          {isLoading ? 'Connexion en cours…' : 'Se connecter'}
-        </Button>
-
-        <Box sx={{ mt: 4, textAlign: 'center' }}>
-          <Typography sx={{ fontSize: 14, color: '#6B7280' }}>
-            Vous n&apos;avez pas de compte ?
-            <Link
-              component={RouterLink}
-              href="/register"
-              sx={{
-                ml: 1,
-                fontWeight: 600,
-                color: '#2563EB',
-                '&:hover': { textDecoration: 'underline' },
-              }}
-            >
-              Inscrivez-vous
-            </Link>
-          </Typography>
         </Box>
       </Box>
 
@@ -201,6 +186,23 @@ export function SignInView() {
       >
         {isLoading ? "Connexion en cours…" : "Se connecter"}
       </Button>
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Typography sx={{ fontSize: 14, color: "#6B7280" }}>
+          Vous n&apos;avez pas de compte ?
+          <Link
+            component={RouterLink}
+            href="/register"
+            sx={{
+              ml: 1,
+              fontWeight: 600,
+              color: "#2563EB",
+              "&:hover": { textDecoration: "underline" },
+            }}
+          >
+            Inscrivez-vous
+          </Link>
+        </Typography>
+      </Box>
     </Box>
   );
 }

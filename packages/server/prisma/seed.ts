@@ -2,10 +2,9 @@ import { PrismaClient } from '@prisma/client';
 import { seedFeatures } from './seeds/features.seed';
 import { seedRoles } from './seeds/role.seed';
 import { seedPages } from './seeds/pages.seed';
-import { seedTasks } from './seeds/tasks.seed';
-import { seedFeaturePermission } from './seeds/p_features.seed';
-import { seedPagePermission } from './seeds/p_pages.seed';
-import { seedTasksPermission } from './seeds/p_tasks.seed';
+import { seedActions } from './seeds/actions.seed';
+import { seedUsers } from './seeds/users.seed';
+import { seedRolePermissions } from './seeds/role-permissions.seed';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 export const prisma = new PrismaClient({
@@ -16,16 +15,18 @@ export const prisma = new PrismaClient({
 
 async function main() {
   try {
+    console.log('🌱 Starting database seeding...\n');
+
     await seedRoles(prisma);
     await seedFeatures(prisma);
     await seedPages(prisma);
-    await seedTasks(prisma);
-    await seedFeaturePermission(prisma);
-    await seedPagePermission(prisma);
-    await seedTasksPermission(prisma);
+    await seedActions(prisma);
+    await seedUsers(prisma);
+    await seedRolePermissions(prisma);
+
     console.log('\n✅ Database seeding completed successfully!');
   } catch (error) {
-    console.error(' Error during seeding:', error);
+    console.error('❌ Error during seeding:', error);
     throw error;
   }
 }

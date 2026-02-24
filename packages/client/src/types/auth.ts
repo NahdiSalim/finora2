@@ -1,4 +1,4 @@
-import type { Organization, Document } from './user';
+import type { Organization, Document } from "./user";
 
 export interface Role {
   id: string;
@@ -30,7 +30,7 @@ export interface User {
 export interface Action {
   id: string;
   name: string;
-  code: 'READ' | 'CREATE' | 'UPDATE' | 'DELETE';
+  code: "READ" | "CREATE" | "UPDATE" | "DELETE";
 }
 
 export interface Page {
@@ -54,20 +54,21 @@ export interface LoginInternalRequest {
 }
 
 export interface LoginResponse {
-  message: string;
-  token: {
-    access_token: string;
-    refresh_token: string;
-  };
-  user: User & {
-    features: Feature[];
+  data: {
+    message: string;
+
+    accessToken: string;
+    refreshToken: string;
+    user: User & {
+      features: Feature[];
+    };
   };
 }
 export interface RegisterRequest {
   email: string;
   password: string;
   phoneNumber: string;
-  role: 'CLIENT' | 'COMPTABLE';
+  role: "CLIENT" | "COMPTABLE";
 }
 
 export interface RegisterResponse {

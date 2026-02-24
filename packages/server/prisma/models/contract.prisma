@@ -1,0 +1,16 @@
+model Contract {
+  id              Int       @id @default(autoincrement())
+  content         String?   @db.Text
+  variables       String?   @db.Text
+  status          String    @default("draft") // "draft" | "sent" | "signed" | "expired"
+  generatedAt     DateTime  @default(now())
+  sentAt          DateTime?
+  signedAt        DateTime?
+  expirationDate  DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  relationships   ClientAccountingFirmRelationship[]
+
+  @@index([status])
+}

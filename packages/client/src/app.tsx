@@ -1,10 +1,12 @@
-import 'src/global.css';
+import "src/global.css";
 
-import { useEffect } from 'react';
+import "flag-icons/css/flag-icons.min.css";
 
-import { usePathname } from 'src/routes/hooks';
+import { useEffect } from "react";
 
-import { ThemeProvider } from 'src/theme/theme-provider';
+import { usePathname } from "src/routes/hooks";
+
+import { ThemeProvider } from "src/theme/theme-provider";
 
 // ----------------------------------------------------------------------
 

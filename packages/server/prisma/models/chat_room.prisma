@@ -1,0 +1,26 @@
+model ChatRoom {
+  id              Int       @id @default(autoincrement())
+  name            String?
+  type            String    // "direct" | "group" | "request" | "ticket" | "meeting" | "company"
+  description     String?
+  participants    String[]  // Array of user IDs
+  createdById     Int
+  lastMessageId   Int?
+  lastActivity    DateTime  @default(now())
+  contextId       Int?      // ID of related entity (request, ticket, etc.)
+  contextType     String?   // "request" | "ticket" | "meeting" | "company"
+  pinnedMessages  String[]  // Array of message IDs
+  admins          String[]  // Array of user IDs who are admins
+  status          String    @default("active") // "active" | "archived"
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  createdBy       User      @relation("ChatRoomCreatedBy", fields: [createdById], references: [id])
+  
+  messages        ChatMessage[]
+
+  @@index([createdById])
+  @@index([contextId])
+  @@index([contextType])
+  @@index([status])
+}

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from './dto/login.dto';
@@ -11,21 +11,29 @@ import { MailService } from '../mail/mail.service';
 import { ConfigService } from '@nestjs/config';
 import { JwtPayload } from './types/jwt-payload.type';
 import { AuthRequest } from './types/user-type';
+import { RegisterClientDto } from './dto/register-client.dto';
+import { RegisterAccountantDto } from './dto/register-accountant.dto';
+import { FileUploadService, FileCategory } from 'src/common/services/file-upload.service';
+import { RoleCode } from 'src/common/enums/role.enum';
+import { UserStatus } from 'src/common/enums/user-status.enum';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private hashService: HashService,
     private jwtTokenService: JwtTokenService,
     private mailService: MailService,
     private configService: ConfigService,
+    private fileUploadService: FileUploadService
   ) {}
 
   // Login
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
-
+    console.log(loginDto, 'dto');
     try {
       const user = await this.prisma.user.findUnique({
         where: { email },
@@ -41,12 +49,13 @@ export class AuthService {
           },
         },
       });
+      console.log(user, 'user');
 
-      if (!user || !user.isActive) {
+      if (!user || user.status !== UserStatus.ACTIVE) {
         throw new ApiError(
           errors.BAD_CREDENTIEL.message,
           errors.BAD_CREDENTIEL.code,
-          errors.BAD_CREDENTIEL.errorCode,
+          errors.BAD_CREDENTIEL.errorCode
         );
       }
 
@@ -55,13 +64,12 @@ export class AuthService {
         throw new ApiError(
           errors.BAD_CREDENTIEL.message,
           errors.BAD_CREDENTIEL.code,
-          errors.BAD_CREDENTIEL.errorCode,
+          errors.BAD_CREDENTIEL.errorCode
         );
       }
 
       const payload = { sub: user.id, email: user.email };
-      const { accessToken, refreshToken } =
-        this.jwtTokenService.generateTokens(payload);
+      const { accessToken, refreshToken } = this.jwtTokenService.generateTokens(payload);
 
       await this.jwtTokenService.storeRefreshToken(user.id, refreshToken);
 
@@ -104,30 +112,27 @@ export class AuthService {
         throw new ApiError(
           errors.INVALID_TOKEN.message,
           errors.INVALID_TOKEN.code,
-          errors.INVALID_TOKEN.errorCode,
+          errors.INVALID_TOKEN.errorCode
         );
       }
 
       const { sub, email } = decoded as unknown as JwtPayload;
 
-      const storedRefreshToken =
-        await this.jwtTokenService.findValidRefreshToken(sub);
+      const storedRefreshToken = await this.jwtTokenService.findValidRefreshToken(sub);
 
       if (!storedRefreshToken) {
         console.log('No valid refresh token found for user:', sub);
         throw new ApiError(
           errors.INVALID_TOKEN.message,
           errors.INVALID_TOKEN.code,
-          errors.INVALID_TOKEN.errorCode,
+          errors.INVALID_TOKEN.errorCode
         );
       }
 
-      const { accessToken, refreshToken } = this.jwtTokenService.generateTokens(
-        {
-          sub,
-          email,
-        },
-      );
+      const { accessToken, refreshToken } = this.jwtTokenService.generateTokens({
+        sub,
+        email,
+      });
 
       await this.jwtTokenService.deleteOldRefreshToken(storedRefreshToken.id);
 
@@ -148,7 +153,7 @@ export class AuthService {
       throw new ApiError(
         errors.INVALID_TOKEN.message,
         errors.INVALID_TOKEN.code,
-        errors.INVALID_TOKEN.errorCode,
+        errors.INVALID_TOKEN.errorCode
       );
     }
   }
@@ -160,10 +165,7 @@ export class AuthService {
     const jwtSecret = this.configService.getOrThrow<string>('JWT_SECRET');
 
     try {
-      const decoded = jwt.verify(
-        accessToken,
-        jwtSecret,
-      ) as unknown as JwtPayload;
+      const decoded = jwt.verify(accessToken, jwtSecret) as unknown as JwtPayload;
       return { user: decoded };
     } catch (error) {
       if (error instanceof jwt.TokenExpiredError) {
@@ -174,7 +176,7 @@ export class AuthService {
       throw new ApiError(
         errors.INVALID_TOKEN.message,
         errors.INVALID_TOKEN.code,
-        errors.INVALID_TOKEN.errorCode,
+        errors.INVALID_TOKEN.errorCode
       );
     }
   }
@@ -188,20 +190,27 @@ export class AuthService {
           id: true,
           email: true,
           username: true,
-          isActive: true,
+          phone: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
           role: {
             select: {
               id: true,
               nameFr: true,
               nameEn: true,
+              descriptionFr: true,
+              descriptionEn: true,
 
-              p_tasks: {
+              roleActions: {
                 include: {
-                  task: {
+                  action: {
                     select: {
                       id: true,
-                      slug: true,
-                      id_page: true,
+                      name: true,
+                      code: true,
+                      category: true,
+                      pageId: true,
                     },
                   },
                 },
@@ -225,6 +234,7 @@ export class AuthService {
                       id: true,
                       slug: true,
                       PageUrl: true,
+                      featureId: true,
                     },
                   },
                 },
@@ -238,7 +248,7 @@ export class AuthService {
         throw new ApiError(
           errors.NOT_FOUND.message,
           errors.NOT_FOUND.code,
-          errors.NOT_FOUND.errorCode,
+          errors.NOT_FOUND.errorCode
         );
       }
 
@@ -246,36 +256,83 @@ export class AuthService {
         throw new ApiError(
           errors.NOT_FOUND.message,
           errors.NOT_FOUND.code,
-          errors.NOT_FOUND.errorCode,
+          errors.NOT_FOUND.errorCode
         );
       }
 
-      if (!user.isActive) {
+      if (user.status !== UserStatus.ACTIVE) {
         throw new ApiError(
           errors.BLOCKED_USER.message,
           errors.BLOCKED_USER.code,
-          errors.BLOCKED_USER.errorCode,
+          errors.BLOCKED_USER.errorCode
         );
       }
 
+      // Build features structure with pages and actions
+      const featuresMap = new Map();
+      const role = user.role; // TypeScript assertion
+
+      // First, create all features
+      role.p_features.forEach((pf) => {
+        if (!featuresMap.has(pf.feature.id)) {
+          featuresMap.set(pf.feature.id, {
+            id: String(pf.feature.id),
+            name: pf.feature.slug,
+            code: pf.feature.slug,
+            pages: [],
+          });
+        }
+      });
+
+      // Then, add pages to their respective features
+      role.p_pages.forEach((pp) => {
+        const feature = featuresMap.get(pp.page.featureId);
+        if (feature) {
+          // Get actions for this page
+          const pageActions = role.roleActions
+            .filter((ra) => ra.action.pageId === pp.page.id)
+            .map((ra) => ({
+              id: String(ra.action.id),
+              name: ra.action.name,
+              code: ra.action.category?.toUpperCase() || 'READ',
+            }));
+
+          feature.pages.push({
+            id: String(pp.page.id),
+            name: pp.page.slug,
+            code: pp.page.slug,
+            route: pp.page.PageUrl,
+            actions: pageActions,
+          });
+        }
+      });
+
+      const features = Array.from(featuresMap.values());
+
+      // Return structure matching frontend VerifyUserResponse
       return {
-        id: user?.id,
-        email: user?.email,
-        username: user?.username,
-        isActive: user?.isActive,
+        id: String(user.id),
+        email: user.email,
+        full_name: user.username,
+        sex: null,
+        dateOfBirth: null,
+        status: user.status,
+        address: null,
+        phone: user.phone || '',
+        is_active: user.status === UserStatus.ACTIVE,
+        created_at: user.createdAt.toISOString(),
+        updated_at: user.updatedAt.toISOString(),
         role: {
-          id: user?.role?.id,
-          nameEn: user?.role?.nameEn,
-          nameFr: user?.role?.nameFr,
+          id: String(role.id),
+          name: role.nameEn,
+          code: role.nameFr.toLowerCase().replace(/\s+/g, '_'),
+          description: role.descriptionEn,
         },
-        permissions: {
-          features: user.role.p_features.map((pf) => pf.feature),
-          pages: user.role.p_pages.map((pp) => pp.page),
-          tasks: user.role.p_tasks.map((pt) => pt.task),
-        },
+        features,
+        token: '', // Token is in the Authorization header
       };
     } catch (err) {
-      console.error('Login error:', err);
+      console.error('Get current user error:', err);
       throw err;
     }
   }
@@ -289,10 +346,11 @@ export class AuthService {
           id: true,
           email: true,
           username: true,
-          isActive: true,
+          status: true,
           role: {
             select: {
               id: true,
+              code: true,
               nameFr: true,
               nameEn: true,
             },
@@ -304,15 +362,15 @@ export class AuthService {
         throw new ApiError(
           errors.NOT_FOUND.message,
           errors.NOT_FOUND.code,
-          errors.NOT_FOUND.errorCode,
+          errors.NOT_FOUND.errorCode
         );
       }
 
-      if (!user.isActive) {
+      if (user.status !== UserStatus.ACTIVE) {
         throw new ApiError(
           errors.BLOCKED_USER.message,
           errors.BLOCKED_USER.code,
-          errors.BLOCKED_USER.errorCode,
+          errors.BLOCKED_USER.errorCode
         );
       }
 
@@ -324,88 +382,121 @@ export class AuthService {
   }
 
   // ForgotPassword
-  async forgotPassword(email: string): Promise<{ message: string }> {
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-    });
+  async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { email },
+      });
 
-    if (!user) {
+      if (!user) {
+        // Pour des raisons de sécurité, on retourne toujours un message de succès
+        // même si l'email n'existe pas (évite l'énumération d'emails)
+        return {
+          success: true,
+          message: 'Si cet email existe, un lien de réinitialisation a été envoyé.',
+        };
+      }
+
+      // Générer le token de réinitialisation
+      const resetToken = this.jwtTokenService.generateResetToken({
+        sub: user.id,
+        email: user.email,
+      });
+
+      const hashedToken = this.hashService.hashToken(resetToken);
+
+      // Sauvegarder le token hashé et la date d'expiration (2 heures)
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          resetPasswordToken: hashedToken,
+          resetPasswordExpires: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 heures
+        },
+      });
+
+      // Construire le lien de réinitialisation
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+      const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+
+      // Envoyer l'email
+      try {
+        await this.mailService.sendPasswordResetEmail(user.email, resetLink);
+        this.logger.log(`Password reset email sent to ${user.email}`);
+      } catch (emailError) {
+        this.logger.error(`Failed to send password reset email to ${user.email}:`, emailError);
+        throw new ApiError(
+          'Failed to send password reset email. Please try again later.',
+          500,
+          'EMAIL_SEND_FAILED'
+        );
+      }
+
+      return {
+        success: true,
+        message: 'Un email de réinitialisation a été envoyé à votre adresse.',
+      };
+    } catch (error) {
+      this.logger.error('Forgot password error:', error);
+      if (error instanceof ApiError) {
+        throw error;
+      }
       throw new ApiError(
-        errors.BAD_EMAIL_CREDENTIEL.message,
-        errors.BAD_EMAIL_CREDENTIEL.code,
-        errors.BAD_EMAIL_CREDENTIEL.errorCode,
+        'An error occurred while processing your request',
+        500,
+        'FORGOT_PASSWORD_ERROR'
       );
     }
-
-    const resetToken = this.jwtTokenService.generateResetToken({
-      sub: user.id,
-      email: user.email,
-    });
-
-    const hashedToken = this.hashService.hashToken(resetToken);
-
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        resetPasswordToken: hashedToken,
-        resetPasswordExpires: new Date(Date.now() + 2 * 60 * 60 * 1000),
-      },
-    });
-
-    // Build reset link
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
-    const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
-
-    await this.mailService.sendPasswordResetEmail(user.email, resetLink);
-
-    return { message: 'Password reset email sent successfully' };
   }
 
   // ResetPassword
   async resetPassword(
     token: string,
     password: string,
-    confirmepassword: string,
-  ): Promise<{ message: string }> {
+    confirmepassword: string
+  ): Promise<{ success: boolean; message: string }> {
     try {
-      const hashedToken = this.hashService.hashToken(token);
+      // Valider les mots de passe
+      if (!password || password.trim() === '') {
+        throw new ApiError('Le mot de passe est requis', 400, 'PASSWORD_REQUIRED');
+      }
 
-      if (!password || password === '') {
+      if (password.length < 8) {
         throw new ApiError(
-          errors.BAD_REQUEST.message,
-          errors.BAD_REQUEST.code,
-          errors.BAD_REQUEST.errorCode,
+          'Le mot de passe doit contenir au moins 8 caractères',
+          400,
+          'PASSWORD_TOO_SHORT'
         );
       }
 
       if (password !== confirmepassword) {
-        throw new ApiError(
-          errors.BAD_REQUEST.message,
-          errors.BAD_REQUEST.code,
-          errors.BAD_REQUEST.errorCode,
-        );
+        throw new ApiError('Les mots de passe ne correspondent pas', 400, 'PASSWORDS_DO_NOT_MATCH');
       }
 
+      // Hasher le token pour le comparer avec celui en base
+      const hashedToken = this.hashService.hashToken(token);
+
+      // Trouver l'utilisateur avec un token valide et non expiré
       const user = await this.prisma.user.findFirst({
         where: {
           resetPasswordToken: hashedToken,
           resetPasswordExpires: {
-            gt: new Date(),
+            gt: new Date(), // Token non expiré
           },
         },
       });
 
       if (!user) {
         throw new ApiError(
-          errors.INVALID_TOKEN.message,
-          errors.INVALID_TOKEN.code,
-          errors.INVALID_TOKEN.errorCode,
+          'Le lien de réinitialisation est invalide ou a expiré',
+          400,
+          'INVALID_OR_EXPIRED_TOKEN'
         );
       }
 
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
+      // Hasher le nouveau mot de passe
+      const hashedPassword = await bcrypt.hash(password, 10);
 
+      // Mettre à jour le mot de passe et supprimer le token
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
@@ -415,10 +506,210 @@ export class AuthService {
         },
       });
 
-      return { message: 'Password reset successfully' };
-    } catch (err) {
-      console.error('Login error:', err);
-      throw err;
+      this.logger.log(`Password successfully reset for user ${user.email}`);
+
+      return {
+        success: true,
+        message: 'Votre mot de passe a été réinitialisé avec succès',
+      };
+    } catch (error) {
+      this.logger.error('Reset password error:', error);
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError(
+        'Une erreur est survenue lors de la réinitialisation du mot de passe',
+        500,
+        'RESET_PASSWORD_ERROR'
+      );
+    }
+  }
+
+  // Register Client (external self-registration)
+  async registerClient(dto: RegisterClientDto) {
+    const { email, phone, password } = dto;
+
+    try {
+      // Check if email already exists
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (existingUser) {
+        throw new ApiError('Email already exists', 400, 'EMAIL_EXISTS');
+      }
+
+      // Find CLIENT role by code
+      const clientRole = await this.prisma.role.findUnique({
+        where: { code: RoleCode.CLIENT },
+      });
+
+      if (!clientRole) {
+        throw new ApiError('Client role not found', 500, 'ROLE_NOT_FOUND');
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Extract username from email
+      const username = email.split('@')[0];
+
+      // Create user with pending status
+      const user = await this.prisma.user.create({
+        data: {
+          username,
+          email,
+          password: hashedPassword,
+          phone,
+          id_role: clientRole.id,
+          status: UserStatus.PENDING,
+        },
+      });
+
+      // Send welcome email with password
+      try {
+        await this.mailService.sendAccountCreatedWithPasswordEmail(
+          email,
+          username,
+          password, // Send the plain password before hashing
+          'Client',
+          'Client'
+        );
+      } catch (error) {
+        console.error('Failed to send welcome email:', error);
+      }
+
+      return {
+        success: true,
+        message: 'Registration successful. Your account is pending approval.',
+        data: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          phone: user.phone,
+          status: user.status,
+        },
+      };
+    } catch (error) {
+      console.error('Register client error:', error);
+      throw error;
+    }
+  }
+
+  // Register Accountant (external self-registration)
+  async registerAccountant(
+    dto: RegisterAccountantDto,
+    files?: { patentFile?: Express.Multer.File[]; rneFile?: Express.Multer.File[] }
+  ) {
+    const { email, phone, firmName, password } = dto;
+
+    try {
+      // Check if email already exists
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (existingUser) {
+        throw new ApiError('Email already exists', 400, 'EMAIL_EXISTS');
+      }
+
+      // Find ACCOUNTANT role by code
+      const accountantRole = await this.prisma.role.findUnique({
+        where: { code: RoleCode.ACCOUNTANT },
+      });
+
+      if (!accountantRole) {
+        throw new ApiError('Accountant role not found', 500, 'ROLE_NOT_FOUND');
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Handle file uploads
+      let patentFilePath: string | undefined;
+      let rneFilePath: string | undefined;
+
+      if (files?.patentFile && files.patentFile[0]) {
+        patentFilePath = await this.fileUploadService.saveFile(
+          files.patentFile[0],
+          FileCategory.ACCOUNTANT_PATENT
+        );
+      }
+
+      if (files?.rneFile && files.rneFile[0]) {
+        rneFilePath = await this.fileUploadService.saveFile(
+          files.rneFile[0],
+          FileCategory.ACCOUNTANT_RNE
+        );
+      }
+
+      // Create accounting firm with pending status
+      const firm = await this.prisma.company.create({
+        data: {
+          name: firmName,
+          patentFile: patentFilePath,
+          rne: rneFilePath,
+          phone,
+          type: 'accounting_firm',
+          status: UserStatus.PENDING,
+        },
+      });
+
+      // Extract username from email
+      const username = email.split('@')[0];
+
+      // Create user with pending status
+      const user = await this.prisma.user.create({
+        data: {
+          username,
+          email,
+          password: hashedPassword,
+          phone,
+          companyId: firm.id,
+          id_role: accountantRole.id,
+          status: UserStatus.PENDING,
+        },
+      });
+
+      // Update company owner
+      await this.prisma.company.update({
+        where: { id: firm.id },
+        data: { ownerId: user.id },
+      });
+
+      // Send welcome email with password
+      try {
+        await this.mailService.sendAccountCreatedWithPasswordEmail(
+          email,
+          username,
+          password, // Send the plain password before hashing
+          firmName,
+          'Comptable'
+        );
+      } catch (error) {
+        console.error('Failed to send welcome email:', error);
+      }
+
+      return {
+        success: true,
+        message: 'Registration successful. Your account is pending approval.',
+        data: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          phone: user.phone,
+          status: user.status,
+          company: {
+            id: firm.id,
+            name: firm.name,
+            patentFile: firm.patentFile,
+            rne: firm.rne,
+          },
+        },
+      };
+    } catch (error) {
+      console.error('Register accountant error:', error);
+      throw error;
     }
   }
 }

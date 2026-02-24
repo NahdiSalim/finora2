@@ -1,0 +1,30 @@
+model Ticket {
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String?   @db.Text
+  state       String    @default("open") // "open" | "in_progress" | "resolved" | "closed"
+  priority    String    @default("medium") // "low" | "medium" | "high" | "urgent"
+  deadline    DateTime?
+  createdById Int
+  assigneeId  Int?
+  clientId    Int?
+  companyId   Int?
+  requestId   Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  createdBy   User      @relation("TicketCreatedBy", fields: [createdById], references: [id])
+  assignee    User?     @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  client      User?     @relation("TicketClient", fields: [clientId], references: [id])
+  company     Company?  @relation("TicketCompany", fields: [companyId], references: [id])
+  request     Request?  @relation(fields: [requestId], references: [id])
+  
+  tasks       Task[]
+
+  @@index([createdById])
+  @@index([assigneeId])
+  @@index([clientId])
+  @@index([companyId])
+  @@index([requestId])
+  @@index([state])
+}

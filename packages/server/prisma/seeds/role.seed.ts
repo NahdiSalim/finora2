@@ -3,32 +3,39 @@ import { PrismaClient } from '@prisma/client';
 export async function seedRoles(prisma: PrismaClient) {
   const roles = [
     {
-      id: 1,
-      nameFr: 'admin',
-      nameEn: 'administrator',
-      descriptionEn: 'role for admin',
-      descriptionFr: 'role pour administrateur',
+      code: 'ADMINISTRATOR',
+      nameFr: 'Administrateur',
+      nameEn: 'Administrator',
+      descriptionEn: 'System administrator with full access',
+      descriptionFr: 'Administrateur système avec accès complet',
     },
     {
-      id: 2,
-      nameFr: 'utilisateur',
-      nameEn: 'user',
-      descriptionEn: 'standard user role',
-      descriptionFr: 'rôle utilisateur standard',
+      code: 'ACCOUNTANT',
+      nameFr: 'Comptable',
+      nameEn: 'Accountant',
+      descriptionEn: 'Accounting firm manager',
+      descriptionFr: 'Gestionnaire de cabinet comptable',
     },
     {
-      id: 3,
-      nameFr: 'gestionnaire',
-      nameEn: 'manager',
-      descriptionEn: 'manager role',
-      descriptionFr: 'rôle gestionnaire',
+      code: 'COLLABORATOR',
+      nameFr: 'Collaborateur',
+      nameEn: 'Collaborator',
+      descriptionEn: 'Accounting firm collaborator',
+      descriptionFr: 'Collaborateur de cabinet comptable',
+    },
+    {
+      code: 'CLIENT',
+      nameFr: 'Client',
+      nameEn: 'Client',
+      descriptionEn: 'Client of accounting firm',
+      descriptionFr: 'Client du cabinet comptable',
     },
   ];
 
   for (const role of roles) {
     await prisma.role.upsert({
-      where: { id: role.id },
-      update: {},
+      where: { code: role.code },
+      update: role,
       create: role,
     });
   }

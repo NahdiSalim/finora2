@@ -1,104 +1,85 @@
 import { PrismaClient } from '@prisma/client';
 
 export async function seedPages(prisma: PrismaClient) {
+  // Get features
+  const dashboard = await prisma.feature.findUnique({ where: { slug: 'dashboard' } });
+  const gestionComptables = await prisma.feature.findUnique({
+    where: { slug: 'gestion-comptes-comptables' },
+  });
+  const archive = await prisma.feature.findUnique({ where: { slug: 'archive' } });
+  const gestionDocuments = await prisma.feature.findUnique({
+    where: { slug: 'gestion-documents' },
+  });
+  const gestionRendezVous = await prisma.feature.findUnique({
+    where: { slug: 'gestion-rendez-vous' },
+  });
+  const gestionDemandes = await prisma.feature.findUnique({ where: { slug: 'gestion-demandes' } });
+  const messagerie = await prisma.feature.findUnique({ where: { slug: 'messagerie' } });
+  const mesBanques = await prisma.feature.findUnique({ where: { slug: 'mes-banques' } });
+  const reseautage = await prisma.feature.findUnique({ where: { slug: 'reseautage' } });
+  const profil = await prisma.feature.findUnique({ where: { slug: 'profil' } });
+  const gestionCollaborateurs = await prisma.feature.findUnique({
+    where: { slug: 'gestion-collaborateurs' },
+  });
+  const gestionTaches = await prisma.feature.findUnique({ where: { slug: 'gestion-taches' } });
+
   const pages = [
+    // Dashboard
+    { PageUrl: '/dashboard', slug: 'dashboard-view', featureId: dashboard!.id },
+
+    // Gestion des comptes comptables (Admin)
+    { PageUrl: '/admin/accountants', slug: 'accountants-list', featureId: gestionComptables!.id },
     {
-      PageUrl: '/user',
-      slug: 'view_all_users',
-      featureId: 4,
+      PageUrl: '/admin/accountants/pending',
+      slug: 'accountants-pending',
+      featureId: gestionComptables!.id,
     },
     {
-      PageUrl: '/guide',
-      slug: 'guide',
-      featureId: 1,
-    },
-    {
-      PageUrl: '/role',
-      slug: 'Roles',
-      featureId: 3,
-    },
-    {
-      PageUrl: '/programme',
-      slug: 'view_all_programs',
-      featureId: 5,
-    },
-    {
-      PageUrl: '/programme/add/:type',
-      slug: 'view_all_programs/add_program',
-      featureId: 5,
-    },
-    {
-      PageUrl: '/programme/view-detail-program/:id',
-      slug: 'view_detail_program',
-      featureId: 5,
-    },
-    {
-      PageUrl: '/programme/edit/:id',
-      slug: 'edit_program',
-      featureId: 5,
-    },
-    {
-      PageUrl: '/comparaisons',
-      slug: 'Comparisons',
-      featureId: 6,
-    },
-    {
-      PageUrl: '/comparaisons/view-detail-comparison/:id',
-      slug: 'view_detail_comparison',
-      featureId: 6,
-    },
-    {
-      PageUrl: '/comparaisons/PreComparaison',
-      slug: 'add_comparisons',
-      featureId: 6,
-    },
-    {
-      PageUrl: '/comparaisons/edit-comparison/:id',
-      slug: 'edit_comparison',
-      featureId: 6,
+      PageUrl: '/admin/accountants/:id',
+      slug: 'accountant-detail',
+      featureId: gestionComptables!.id,
     },
 
+    // Archive
+    { PageUrl: '/archive', slug: 'archive-view', featureId: archive!.id },
+
+    // Gestion des documents
+    { PageUrl: '/documents', slug: 'documents-list', featureId: gestionDocuments!.id },
+    { PageUrl: '/documents/:id', slug: 'document-detail', featureId: gestionDocuments!.id },
+
+    // Gestion des rendez-vous
+    { PageUrl: '/meetings', slug: 'meetings-list', featureId: gestionRendezVous!.id },
+    { PageUrl: '/meetings/:id', slug: 'meeting-detail', featureId: gestionRendezVous!.id },
+
+    // Gestion des demandes
+    { PageUrl: '/requests', slug: 'requests-list', featureId: gestionDemandes!.id },
+    { PageUrl: '/requests/:id', slug: 'request-detail', featureId: gestionDemandes!.id },
+
+    // Messagerie
+    { PageUrl: '/messages', slug: 'messages-list', featureId: messagerie!.id },
+    { PageUrl: '/messages/:id', slug: 'message-detail', featureId: messagerie!.id },
+
+    // Mes banques
+    { PageUrl: '/banks', slug: 'banks-list', featureId: mesBanques!.id },
+
+    // Réseautage
+    { PageUrl: '/network', slug: 'network-view', featureId: reseautage!.id },
+
+    // Profil
+    { PageUrl: '/profile', slug: 'profile-view', featureId: profil!.id },
+    { PageUrl: '/profile/edit', slug: 'profile-edit', featureId: profil!.id },
+
+    // Gestion des collaborateurs
+    { PageUrl: '/collaborators', slug: 'collaborators-list', featureId: gestionCollaborateurs!.id },
     {
-      PageUrl: '/comparaisons/profils',
-      slug: 'view__Profile_comparison',
-      featureId: 7,
+      PageUrl: '/collaborators/:id',
+      slug: 'collaborator-detail',
+      featureId: gestionCollaborateurs!.id,
     },
-    {
-      PageUrl: '/comparaisons/profils/add',
-      slug: 'add_Profile_comparisons',
-      featureId: 7,
-    },
-    {
-      PageUrl: '/comparaisons/profils/show/:id',
-      slug: 'view_detail_Profile_comparison',
-      featureId: 7,
-    },
-    {
-      PageUrl: '/comparaisons/multidimensionnelles',
-      slug: 'view_all_Multi_comparisons',
-      featureId: 8,
-    },
-    {
-      PageUrl: '/comparaisons/multidimensionnelles/PreMultiComparaison',
-      slug: 'add_Multi_comparisons',
-      featureId: 8,
-    },
-    {
-      PageUrl:
-        '/comparaisons/multidimensionnelles/view-detail-MultiComparison/:id',
-      slug: 'view_detail_Multi_comparison',
-      featureId: 8,
-    },
-    {
-      PageUrl: '/comparaisons/multidimensionnelles/edit-multicomparison/:id',
-      slug: 'edit_multicomparison',
-      featureId: 8,
-    },
-    {
-      PageUrl: '/dashboard',
-      slug: 'dashboard',
-      featureId: 2,
-    },
+
+    // Gestion des tâches
+    { PageUrl: '/tasks', slug: 'tasks-list', featureId: gestionTaches!.id },
+    { PageUrl: '/tasks/:id', slug: 'task-detail', featureId: gestionTaches!.id },
   ];
 
   for (const page of pages) {
@@ -115,4 +96,6 @@ export async function seedPages(prisma: PrismaClient) {
       },
     });
   }
+
+  console.log('✅ Pages seeded successfully');
 }

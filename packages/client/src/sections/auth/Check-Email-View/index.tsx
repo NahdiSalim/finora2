@@ -1,21 +1,21 @@
-import { useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Box, Typography, Button, Link } from '@mui/material';
-import Lottie from 'lottie-react';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Box, Typography, Button, Link } from "@mui/material";
+import Lottie from "lottie-react";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
-import emailAnimation from '../../../../public/assets/Animations/email-successfully-sent.json';
-import { useRouter } from 'src/routes/hooks';
-import { useForgotPasswordMutation } from 'src/lib/services/authApi';
-import { useAlert } from 'src/contexts/AlertContext';
-import DotSpinner from 'src/components/common/DotSpinner';
+import emailAnimation from "../../../../public/assets/Animations/email-successfully-sent.json";
+import { useRouter } from "src/routes/hooks";
+import { useForgotPasswordMutation } from "src/lib/services/authApi";
+import { useAlert } from "src/contexts/AlertContext";
+import DotSpinner from "src/components/common/DotSpinner";
 
 export function CheckEmailView() {
   const router = useRouter();
   const { showAlert } = useAlert();
   const [searchParams] = useSearchParams();
-  const email = searchParams.get('email');
+  const email = searchParams.get("email");
 
   const [resendEmail, { isLoading }] = useForgotPasswordMutation();
 
@@ -23,28 +23,28 @@ export function CheckEmailView() {
   const provider = useMemo(() => {
     if (!email) return null;
 
-    const domain = email.split('@')[1];
+    const domain = email.split("@")[1];
 
     const providers: Record<string, { name: string; url: string }> = {
-      'gmail.com': {
-        name: 'Gmail',
-        url: 'https://mail.google.com',
+      "gmail.com": {
+        name: "Gmail",
+        url: "https://mail.google.com",
       },
-      'yahoo.com': {
-        name: 'Yahoo Mail',
-        url: 'https://mail.yahoo.com',
+      "yahoo.com": {
+        name: "Yahoo Mail",
+        url: "https://mail.yahoo.com",
       },
-      'outlook.com': {
-        name: 'Outlook',
-        url: 'https://outlook.live.com',
+      "outlook.com": {
+        name: "Outlook",
+        url: "https://outlook.live.com",
       },
-      'hotmail.com': {
-        name: 'Outlook',
-        url: 'https://outlook.live.com',
+      "hotmail.com": {
+        name: "Outlook",
+        url: "https://outlook.live.com",
       },
-      'live.com': {
-        name: 'Outlook',
-        url: 'https://outlook.live.com',
+      "live.com": {
+        name: "Outlook",
+        url: "https://outlook.live.com",
       },
     };
 
@@ -56,7 +56,7 @@ export function CheckEmailView() {
 
     try {
       await resendEmail({ email }).unwrap();
-      showAlert('Email renvoyé avec succès', 'success');
+      showAlert("Email renvoyé avec succès", "success");
     } catch {
       showAlert(`Erreur lors de l'envoi`);
     }
@@ -72,13 +72,17 @@ export function CheckEmailView() {
     <Box
       sx={{
         maxWidth: 400,
-        mx: 'auto',
-        textAlign: 'center',
+        mx: "auto",
+        textAlign: "center",
       }}
     >
       {/* LOTTIE */}
-      <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-        <Lottie animationData={emailAnimation} loop={false} style={{ width: 200, height: 200 }} />
+      <Box sx={{ display: "flex", justifyContent: "center" }}>
+        <Lottie
+          animationData={emailAnimation}
+          loop={false}
+          style={{ width: 200, height: 200 }}
+        />
       </Box>
 
       {/* TITLE */}
@@ -94,7 +98,7 @@ export function CheckEmailView() {
 
       <Typography
         sx={{
-          color: '#6B7280',
+          color: "#6B7280",
           fontSize: 14,
           mt: 1,
         }}
@@ -113,7 +117,7 @@ export function CheckEmailView() {
       </Typography>
 
       {/* BUTTONS */}
-      <Box sx={{ mt: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box sx={{ mt: 4, display: "flex", flexDirection: "column", gap: 2 }}>
         {provider ? (
           <Button
             fullWidth
@@ -124,7 +128,7 @@ export function CheckEmailView() {
             sx={{
               height: 48,
               borderRadius: 3,
-              textTransform: 'none',
+              textTransform: "none",
             }}
           >
             Aller à {provider.name}
@@ -138,7 +142,7 @@ export function CheckEmailView() {
             sx={{
               height: 48,
               borderRadius: 3,
-              textTransform: 'none',
+              textTransform: "none",
             }}
           >
             Ouvrir l&apos;application de messagerie
@@ -147,16 +151,16 @@ export function CheckEmailView() {
 
         {/* RESEND */}
         <Typography sx={{ fontSize: 13 }}>
-          Vous n&apos;avez pas reçu l&apos;email ?{' '}
+          Vous n&apos;avez pas reçu l&apos;email ?{" "}
           <Link
             onClick={handleResend}
             sx={{
-              cursor: 'pointer',
-              color: '#2563EB',
+              cursor: "pointer",
+              color: "#2563EB",
               fontWeight: 500,
             }}
           >
-            {isLoading ? <DotSpinner size={16} /> : 'Cliquez pour le renvoyer'}
+            {isLoading ? <DotSpinner size={16} /> : "Cliquez pour le renvoyer"}
           </Link>
         </Typography>
 
@@ -165,11 +169,11 @@ export function CheckEmailView() {
           fullWidth
           variant="outlined"
           startIcon={<ArrowBackIcon />}
-          onClick={() => router.push('/sign-in')}
+          onClick={() => router.push("/sign-in")}
           sx={{
             height: 48,
             borderRadius: 3,
-            textTransform: 'none',
+            textTransform: "none",
           }}
         >
           Retour à la connexion

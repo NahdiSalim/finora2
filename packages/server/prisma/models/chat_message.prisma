@@ -1,0 +1,29 @@
+model ChatMessage {
+  id              Int       @id @default(autoincrement())
+  roomId          Int?
+  threadId        Int?
+  documentId      Int?
+  senderId        Int
+  content         String    @db.Text
+  type            String    @default("text") // "text" | "file" | "image" | "system"
+  attachmentId    Int?
+  readBy          String[]  // Array of user IDs who read the message
+  reactions       String[]  // JSON array of reaction objects
+  mentions        String[]  // Array of mentioned user IDs
+  annotationData  String?   @db.Text // JSON with annotation coordinates
+  edited          Boolean   @default(false)
+  editedAt        DateTime?
+  deleted         Boolean   @default(false)
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  room            ChatRoom?   @relation(fields: [roomId], references: [id])
+  thread          ChatThread? @relation(fields: [threadId], references: [id])
+  sender          User        @relation("ChatMessageSender", fields: [senderId], references: [id])
+
+  @@index([roomId])
+  @@index([threadId])
+  @@index([senderId])
+  @@index([createdAt])
+}

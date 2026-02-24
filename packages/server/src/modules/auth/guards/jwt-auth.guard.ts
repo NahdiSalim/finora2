@@ -55,6 +55,7 @@ export class JwtAuthGuard implements CanActivate {
         id: fullUser.id,
         email: fullUser.email,
         roleId: fullUser.role?.id,
+        role: fullUser.role || undefined,
       };
 
       if (newTokens) {

@@ -38,6 +38,10 @@ export function RegisterView() {
       phoneNumber: "",
       password: "",
       role: "CLIENT",
+      email: "",
+      phoneNumber: "",
+      password: "",
+      role: "CLIENT",
       agreeToTerms: false,
     },
   });

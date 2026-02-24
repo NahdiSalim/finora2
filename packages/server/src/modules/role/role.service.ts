@@ -13,7 +13,7 @@ export class RoleService {
   async findAll(
     page = 1,
     limit = 10,
-    search?: string,
+    search?: string
   ): Promise<{
     status: string;
     code: string;
@@ -64,38 +64,24 @@ export class RoleService {
     const role = await this.prisma.role.findUnique({
       where: { id },
       include: {
-        p_tasks: {
-          include: {
-            task: {
-              select: {
-                id: true,
-                slug: true,
-                id_page: true,
-              },
-            },
-          },
-        },
-
         p_features: {
           include: {
-            feature: {
-              select: {
-                id: true,
-                slug: true,
-              },
-            },
+            feature: true,
           },
         },
-
         p_pages: {
           include: {
-            page: {
-              select: {
-                id: true,
-                slug: true,
-                PageUrl: true,
-              },
-            },
+            page: true,
+          },
+        },
+        p_tasks: {
+          include: {
+            task: true,
+          },
+        },
+        roleActions: {
+          include: {
+            action: true,
           },
         },
       },
@@ -105,27 +91,14 @@ export class RoleService {
       throw new ApiError(
         errors.NOT_FOUND.message,
         errors.NOT_FOUND.code,
-        errors.NOT_FOUND.errorCode,
+        errors.NOT_FOUND.errorCode
       );
     }
-
-    const transformedRole = {
-      id: role.id,
-      nameFr: role.nameFr,
-      nameEn: role.nameEn,
-      descriptionFr: role.descriptionFr,
-      descriptionEn: role.descriptionEn,
-      createdAt: role.createdAt,
-      updatedAt: role.updatedAt,
-      Features: role.p_features.map((pf) => pf.feature),
-      Pages: role.p_pages.map((pp) => pp.page),
-      Tasks: role.p_tasks.map((pt) => pt.task),
-    };
 
     return {
       status: 'success',
       code: '200',
-      data: transformedRole,
+      data: role,
     };
   }
 
@@ -145,16 +118,20 @@ export class RoleService {
       throw new ApiError(
         errors.ERR_ROLE_EXISTS.message,
         errors.ERR_ROLE_EXISTS.code,
-        errors.ERR_ROLE_EXISTS.errorCode,
+        errors.ERR_ROLE_EXISTS.errorCode
       );
     }
 
+    const code = roleInfos.nameEn.toUpperCase().replace(/\s+/g, '_');
+
     const result = await this.prisma.$transaction(async (prisma) => {
       const role = await prisma.role.create({
-        data: roleInfos,
+        data: {
+          ...roleInfos,
+          code,
+        },
       });
 
-      // Create p_features associations
       if (Features && Features.length > 0) {
         await prisma.p_features.createMany({
           data: Features.map((feature_id) => ({
@@ -165,7 +142,6 @@ export class RoleService {
         });
       }
 
-      // Create p_pages associations
       if (Pages && Pages.length > 0) {
         await prisma.p_pages.createMany({
           data: Pages.map((page_id) => ({
@@ -176,7 +152,6 @@ export class RoleService {
         });
       }
 
-      // Create p_tasks associations
       if (Tasks && Tasks.length > 0) {
         await prisma.p_tasks.createMany({
           data: Tasks.map((task_id) => ({
@@ -194,37 +169,38 @@ export class RoleService {
       status: 'success',
       code: '201',
       data: result,
-      message: 'Role and associations added successfully',
+      message: 'Role created successfully',
     };
   }
 
   async updateRole(id: number, updateRoleDto: CreateRoleDto) {
     const { Features, Pages, Tasks, ...roleInfos } = updateRoleDto;
 
+    const existingRole = await this.prisma.role.findUnique({
+      where: { id },
+    });
+
+    if (!existingRole) {
+      throw new ApiError(
+        errors.ROLE_NOT_FOUND.message,
+        errors.ROLE_NOT_FOUND.code,
+        errors.ROLE_NOT_FOUND.errorCode
+      );
+    }
+
+    if (existingRole.id === 1) {
+      throw new ApiError(
+        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.message,
+        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.code,
+        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.errorCode
+      );
+    }
+
     const result = await this.prisma.$transaction(async (prisma) => {
       const role = await prisma.role.update({
         where: { id },
         data: roleInfos,
       });
-      const existingRole = await this.prisma.role.findUnique({
-        where: { id },
-      });
-
-      if (!existingRole) {
-        throw new ApiError(
-          errors.ROLE_NOT_FOUND.message,
-          errors.ROLE_NOT_FOUND.code,
-          errors.ROLE_NOT_FOUND.errorCode,
-        );
-      }
-
-      if (existingRole.id === 1) {
-        throw new ApiError(
-          errors.ADMIN_ROLE_UPDATE_FORBIDDEN.message,
-          errors.ADMIN_ROLE_UPDATE_FORBIDDEN.code,
-          errors.ADMIN_ROLE_UPDATE_FORBIDDEN.errorCode,
-        );
-      }
 
       await prisma.p_features.deleteMany({ where: { role_id: id } });
       await prisma.p_pages.deleteMany({ where: { role_id: id } });
@@ -258,16 +234,11 @@ export class RoleService {
       status: 'success',
       code: 200,
       data: result,
-      message: 'Role and associations updated successfully',
+      message: 'Role updated successfully',
     };
   }
 
-  async deleteRole(id: number): Promise<{
-    status: string;
-    code: string;
-    message: string;
-  }> {
-    // Check if role exists
+  async deleteRole(id: number) {
     const role = await this.prisma.role.findUnique({
       where: { id },
       select: {
@@ -282,7 +253,7 @@ export class RoleService {
       throw new ApiError(
         errors.NOT_FOUND.message,
         errors.NOT_FOUND.code,
-        errors.NOT_FOUND.errorCode,
+        errors.NOT_FOUND.errorCode
       );
     }
 
@@ -290,7 +261,7 @@ export class RoleService {
       throw new ApiError(
         errors.FORBIDDEN_DELETE_ADMIN.message,
         errors.FORBIDDEN_DELETE_ADMIN.code,
-        errors.FORBIDDEN_DELETE_ADMIN.errorCode,
+        errors.FORBIDDEN_DELETE_ADMIN.errorCode
       );
     }
 
@@ -298,7 +269,7 @@ export class RoleService {
       throw new ApiError(
         errors.USER_CONFLICT.message,
         errors.USER_CONFLICT.code,
-        errors.USER_CONFLICT.errorCode,
+        errors.USER_CONFLICT.errorCode
       );
     }
 
@@ -307,27 +278,7 @@ export class RoleService {
     return {
       status: 'success',
       code: '200',
-      message: `Role with id ${id} deleted successfully`,
-    };
-  }
-
-  async findAllTasks() {
-    const tasks = await this.prisma.tasks.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!tasks.length) {
-      throw new ApiError(
-        errors.NOT_FOUND.message,
-        errors.NOT_FOUND.code,
-        errors.NOT_FOUND.errorCode,
-      );
-    }
-
-    return {
-      status: 'success',
-      code: '200',
-      data: tasks,
+      message: `Role deleted successfully`,
     };
   }
 
@@ -363,6 +314,7 @@ export class RoleService {
       [L.CREATED_AT]: role.createdAt.toISOString().split('T')[0],
       [L.UPDATED_AT]: role.updatedAt.toISOString().split('T')[0],
     }));
+
     const csv = stringify(data, {
       header: true,
       delimiter: ';',
@@ -370,5 +322,340 @@ export class RoleService {
 
     const bom = Buffer.from('\uFEFF', 'utf-8');
     return Buffer.concat([bom, Buffer.from(csv, 'utf-8')]);
+  }
+
+  // ==================== PERMISSION MANAGEMENT ====================
+
+  async getAllActions() {
+    const actions = await this.prisma.action.findMany({
+      include: {
+        page: {
+          include: {
+            feature: true,
+          },
+        },
+      },
+      orderBy: [{ page: { feature: { slug: 'asc' } } }, { page: { slug: 'asc' } }, { code: 'asc' }],
+    });
+
+    return {
+      status: 'success',
+      code: '200',
+      data: actions,
+    };
+  }
+
+  async getRolePermissions(roleId: number) {
+    const role = await this.prisma.role.findUnique({
+      where: { id: roleId },
+      include: {
+        roleActions: {
+          include: {
+            action: {
+              include: {
+                page: {
+                  include: {
+                    feature: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!role) {
+      throw new ApiError(
+        errors.NOT_FOUND.message,
+        errors.NOT_FOUND.code,
+        errors.NOT_FOUND.errorCode
+      );
+    }
+
+    const permissionTree: any = {};
+
+    role.roleActions.forEach((ra) => {
+      const action = ra.action;
+      const page = action.page;
+      const feature = page.feature;
+
+      if (!permissionTree[feature.id]) {
+        permissionTree[feature.id] = {
+          id: feature.id,
+          slug: feature.slug,
+          pages: {},
+        };
+      }
+
+      if (!permissionTree[feature.id].pages[page.id]) {
+        permissionTree[feature.id].pages[page.id] = {
+          id: page.id,
+          slug: page.slug,
+          url: page.PageUrl,
+          actions: [],
+        };
+      }
+
+      permissionTree[feature.id].pages[page.id].actions.push({
+        id: action.id,
+        name: action.name,
+        code: action.code,
+        category: action.category,
+        grantedAt: ra.grantedAt,
+      });
+    });
+
+    const features = Object.values(permissionTree).map((feature: any) => ({
+      ...feature,
+      pages: Object.values(feature.pages),
+    }));
+
+    return {
+      status: 'success',
+      code: '200',
+      data: {
+        role: {
+          id: role.id,
+          code: role.code,
+          nameFr: role.nameFr,
+          nameEn: role.nameEn,
+        },
+        permissions: features,
+      },
+    };
+  }
+
+  async updateRolePermissions(roleId: number, actionIds: number[], grantedById?: number) {
+    const role = await this.prisma.role.findUnique({
+      where: { id: roleId },
+    });
+
+    if (!role) {
+      throw new ApiError(
+        errors.NOT_FOUND.message,
+        errors.NOT_FOUND.code,
+        errors.NOT_FOUND.errorCode
+      );
+    }
+
+    if (role.id === 1) {
+      throw new ApiError(
+        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.message,
+        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.code,
+        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.errorCode
+      );
+    }
+
+    const actions = await this.prisma.action.findMany({
+      where: {
+        id: { in: actionIds },
+      },
+      include: {
+        page: {
+          include: {
+            feature: true,
+          },
+        },
+      },
+    });
+
+    if (actions.length !== actionIds.length) {
+      throw new ApiError('Some action IDs are invalid', 400, 'INVALID_ACTION_IDS');
+    }
+
+    const pageIds = [...new Set(actions.map((a) => a.page.id))];
+    const featureIds = [...new Set(actions.map((a) => a.page.feature.id))];
+
+    const result = await this.prisma.$transaction(async (prisma) => {
+      await prisma.roleAction.deleteMany({
+        where: { roleId },
+      });
+
+      await prisma.p_pages.deleteMany({
+        where: { role_id: roleId },
+      });
+
+      await prisma.p_features.deleteMany({
+        where: { role_id: roleId },
+      });
+
+      if (actionIds.length > 0) {
+        await prisma.roleAction.createMany({
+          data: actionIds.map((actionId) => ({
+            roleId,
+            actionId,
+            grantedById,
+          })),
+        });
+      }
+
+      if (pageIds.length > 0) {
+        await prisma.p_pages.createMany({
+          data: pageIds.map((pageId) => ({
+            role_id: roleId,
+            page_id: pageId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      if (featureIds.length > 0) {
+        await prisma.p_features.createMany({
+          data: featureIds.map((featureId) => ({
+            role_id: roleId,
+            feature_id: featureId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return {
+        actionsAdded: actionIds.length,
+        pagesAdded: pageIds.length,
+        featuresAdded: featureIds.length,
+      };
+    });
+
+    return {
+      status: 'success',
+      code: '200',
+      message: 'Role permissions updated successfully',
+      data: result,
+    };
+  }
+
+  async addActionsToRole(roleId: number, actionIds: number[], grantedById?: number) {
+    const role = await this.prisma.role.findUnique({
+      where: { id: roleId },
+    });
+
+    if (!role) {
+      throw new ApiError(
+        errors.NOT_FOUND.message,
+        errors.NOT_FOUND.code,
+        errors.NOT_FOUND.errorCode
+      );
+    }
+
+    if (role.id === 1) {
+      throw new ApiError(
+        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.message,
+        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.code,
+        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.errorCode
+      );
+    }
+
+    const actions = await this.prisma.action.findMany({
+      where: {
+        id: { in: actionIds },
+      },
+      include: {
+        page: {
+          include: {
+            feature: true,
+          },
+        },
+      },
+    });
+
+    if (actions.length !== actionIds.length) {
+      throw new ApiError('Some action IDs are invalid', 400, 'INVALID_ACTION_IDS');
+    }
+
+    const pageIds = [...new Set(actions.map((a) => a.page.id))];
+    const featureIds = [...new Set(actions.map((a) => a.page.feature.id))];
+
+    const result = await this.prisma.$transaction(async (prisma) => {
+      const createdActions = await Promise.all(
+        actionIds.map((actionId) =>
+          prisma.roleAction.upsert({
+            where: {
+              roleId_actionId: {
+                roleId,
+                actionId,
+              },
+            },
+            create: {
+              roleId,
+              actionId,
+              grantedById,
+            },
+            update: {},
+          })
+        )
+      );
+
+      if (pageIds.length > 0) {
+        await prisma.p_pages.createMany({
+          data: pageIds.map((pageId) => ({
+            role_id: roleId,
+            page_id: pageId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      if (featureIds.length > 0) {
+        await prisma.p_features.createMany({
+          data: featureIds.map((featureId) => ({
+            role_id: roleId,
+            feature_id: featureId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return {
+        actionsAdded: createdActions.length,
+        pagesAdded: pageIds.length,
+        featuresAdded: featureIds.length,
+      };
+    });
+
+    return {
+      status: 'success',
+      code: '200',
+      message: 'Actions added to role successfully',
+      data: result,
+    };
+  }
+
+  async removeActionsFromRole(roleId: number, actionIds: number[]) {
+    const role = await this.prisma.role.findUnique({
+      where: { id: roleId },
+    });
+
+    if (!role) {
+      throw new ApiError(
+        errors.NOT_FOUND.message,
+        errors.NOT_FOUND.code,
+        errors.NOT_FOUND.errorCode
+      );
+    }
+
+    if (role.id === 1) {
+      throw new ApiError(
+        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.message,
+        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.code,
+        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.errorCode
+      );
+    }
+
+    await this.prisma.roleAction.deleteMany({
+      where: {
+        roleId,
+        actionId: { in: actionIds },
+      },
+    });
+
+    return {
+      status: 'success',
+      code: '200',
+      message: 'Actions removed from role successfully',
+      data: {
+        actionsRemoved: actionIds.length,
+      },
+    };
   }
 }

@@ -4,9 +4,13 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { ApiError } from 'src/common/errors/api-error';
 import { errors } from 'src/common/errors/errors';
 import { UpdateUserDto } from './update-user.dto';
+import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
+import { UpdateCompanyDto } from './dto/update-company.dto';
 import { Prisma } from '@prisma/client';
 import { HashService } from 'src/common/crypto/hash.service';
 import { JwtTokenService } from 'src/common/jwt/jwt-token.service';
+import { FileUploadService, FileCategory } from 'src/common/services/file-upload.service';
+import { UserStatus } from 'src/common/enums/user-status.enum';
 import * as bcrypt from 'bcrypt';
 import { stringify } from 'csv-stringify/sync';
 
@@ -15,7 +19,8 @@ export class UserService {
   constructor(
     private prisma: PrismaService,
     private hashService: HashService,
-    private jwtTokenService: JwtTokenService
+    private jwtTokenService: JwtTokenService,
+    private fileUploadService: FileUploadService
   ) {}
 
   async getAll(page: number = 1, limit: number = 10, search?: string) {
@@ -168,7 +173,7 @@ export class UserService {
       where: { id: currentUserId },
     });
 
-    if (!currentUser || !currentUser.isActive) {
+    if (!currentUser || currentUser.status !== UserStatus.ACTIVE) {
       throw new ApiError(
         errors.ERR_ANOTHORIZED.message,
         errors.ERR_ANOTHORIZED.code,
@@ -178,7 +183,7 @@ export class UserService {
 
     // Find user to update
     const userToUpdate = await this.prisma.user.findUnique({
-      where: { id: targetUserId, isActive: true },
+      where: { id: targetUserId, status: UserStatus.ACTIVE },
       include: { role: true },
     });
 
@@ -281,13 +286,18 @@ export class UserService {
       );
     }
 
+    const newStatus = user.status === UserStatus.ACTIVE ? UserStatus.SUSPENDED : UserStatus.ACTIVE;
+
     const updatedUser = await this.prisma.user.update({
       where: { id: targetUserId },
-      data: { isActive: !user.isActive },
+      data: { status: newStatus },
     });
 
     return {
-      message: updatedUser.isActive ? 'User has been activated!' : 'User has been deactivated!',
+      message:
+        updatedUser.status === UserStatus.ACTIVE
+          ? 'User has been activated!'
+          : 'User has been deactivated!',
       user: updatedUser,
     };
   }
@@ -349,5 +359,179 @@ export class UserService {
     // ✨ UTF-8 BOM pour Excel (accents)
     const bom = Buffer.from('\uFEFF', 'utf-8');
     return Buffer.concat([bom, Buffer.from(csv, 'utf-8')]);
+  }
+
+  // Update user profile with photo
+  async updateProfile(userId: number, dto: UpdateUserProfileDto, photoFile?: Express.Multer.File) {
+    try {
+      // Get current user
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        throw new ApiError('User not found', 404, 'USER_NOT_FOUND');
+      }
+
+      // Check email uniqueness if email is being updated
+      if (dto.email && dto.email !== user.email) {
+        const emailExists = await this.prisma.user.findUnique({
+          where: { email: dto.email },
+        });
+
+        if (emailExists) {
+          throw new ApiError('Email already exists', 400, 'EMAIL_EXISTS');
+        }
+      }
+
+      // Handle photo upload
+      let photoPath: string | undefined;
+      if (photoFile) {
+        // Delete old photo if exists
+        if (user.photo) {
+          await this.fileUploadService.deleteFile(user.photo);
+        }
+
+        // Save new photo
+        photoPath = await this.fileUploadService.saveFile(
+          photoFile,
+          FileCategory.USER_PHOTO,
+          `user_${userId}`
+        );
+      }
+
+      // Update user
+      const updatedUser = await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          email: dto.email,
+          phone: dto.phone,
+          position: dto.position,
+          department: dto.department,
+          cin: dto.cin,
+          diploma: dto.diploma,
+          ...(photoPath && { photo: photoPath }),
+          updatedById: userId,
+        },
+        include: {
+          role: {
+            select: {
+              id: true,
+              code: true,
+              nameFr: true,
+              nameEn: true,
+            },
+          },
+          company: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+            },
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Profile updated successfully',
+        data: {
+          id: updatedUser.id,
+          username: updatedUser.username,
+          firstName: updatedUser.firstName,
+          lastName: updatedUser.lastName,
+          email: updatedUser.email,
+          phone: updatedUser.phone,
+          position: updatedUser.position,
+          department: updatedUser.department,
+          cin: updatedUser.cin,
+          diploma: updatedUser.diploma,
+          photo: updatedUser.photo,
+          role: updatedUser.role,
+          company: updatedUser.company,
+        },
+      };
+    } catch (error) {
+      console.error('Update profile error:', error);
+      throw error;
+    }
+  }
+
+  // Update company (for accountant and client)
+  async updateCompany(userId: number, dto: UpdateCompanyDto, logoFile?: Express.Multer.File) {
+    try {
+      // Get user with company
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          role: true,
+          company: true,
+        },
+      });
+
+      if (!user) {
+        throw new ApiError('User not found', 404, 'USER_NOT_FOUND');
+      }
+
+      if (!user.companyId) {
+        throw new ApiError('User is not associated with a company', 400, 'NO_COMPANY');
+      }
+
+      // Verify user is accountant or client
+      if (user.role?.code !== 'ACCOUNTANT' && user.role?.code !== 'CLIENT') {
+        throw new ApiError('Only accountants and clients can update company', 403, 'FORBIDDEN');
+      }
+
+      // Handle logo upload
+      let logoPath: string | undefined;
+      if (logoFile) {
+        // Delete old logo if exists
+        if (user.company?.logo) {
+          await this.fileUploadService.deleteFile(user.company.logo);
+        }
+
+        // Save new logo
+        logoPath = await this.fileUploadService.saveFile(
+          logoFile,
+          FileCategory.COMPANY_LOGO,
+          `company_${user.companyId}`
+        );
+      }
+
+      // Update company
+      const updatedCompany = await this.prisma.company.update({
+        where: { id: user.companyId },
+        data: {
+          name: dto.name,
+          legalName: dto.legalName,
+          siret: dto.siret,
+          vatNumber: dto.vatNumber,
+          legalForm: dto.legalForm,
+          address: dto.address,
+          city: dto.city,
+          postalCode: dto.postalCode,
+          country: dto.country,
+          phone: dto.phone,
+          email: dto.email,
+          website: dto.website,
+          activityCode: dto.activityCode,
+          sector: dto.sector,
+          employeeCount: dto.employeeCount,
+          description: dto.description,
+          ...(logoPath && { logo: logoPath }),
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Company updated successfully',
+        data: updatedCompany,
+      };
+    } catch (error) {
+      console.error('Update company error:', error);
+      throw error;
+    }
   }
 }

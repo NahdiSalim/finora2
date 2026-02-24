@@ -9,6 +9,8 @@ import { UserModule } from './modules/user/user.module';
 import { CommonModule } from './common/common.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { AccountantModule } from './modules/accountant/accountant.module';
 
 @Module({
   imports: [
@@ -37,7 +39,8 @@ import { AuthModule } from './modules/auth/auth.module';
     UserModule,
     CommonModule,
     AuthModule,
-  
+    AdminModule,
+    AccountantModule,
   ],
   controllers: [AppController],
   providers: [
@@ -47,4 +50,4 @@ import { AuthModule } from './modules/auth/auth.module';
     },
   ],
 })
-export class AppModule { }
+export class AppModule {}

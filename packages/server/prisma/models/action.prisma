@@ -1,0 +1,16 @@
+model Action {
+  id          Int       @id @default(autoincrement())
+  name        String
+  code        String    @unique
+  description String?
+  category    String?   // "read" | "create" | "update" | "delete"
+  pageId      Int
+  createdAt   DateTime  @default(now())
+
+  page        Pages     @relation(fields: [pageId], references: [id])
+  
+  roleActions RoleAction[]
+
+  @@index([pageId])
+  @@index([code])
+}

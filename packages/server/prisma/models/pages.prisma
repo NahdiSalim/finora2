@@ -6,6 +6,6 @@ model Pages {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
     feature   Feature  @relation(fields: [featureId], references: [id], onDelete: Cascade)
-    tasks     Tasks[]
     p_pages   p_pages[]
+    actions   Action[]
 }

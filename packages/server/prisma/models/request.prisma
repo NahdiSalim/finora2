@@ -1,0 +1,29 @@
+model Request {
+  id                    Int       @id @default(autoincrement())
+  clientId              Int
+  companyId             Int
+  accountantId          Int?
+  assignedCollaboratorId Int?
+  subject               String
+  description           String?   @db.Text
+  type                  String    // "accounting" | "legal" | "tax" | "other"
+  priority              String    @default("medium") // "low" | "medium" | "high" | "urgent"
+  deadline              DateTime?
+  status                String    @default("pending") // "pending" | "in_progress" | "completed" | "cancelled"
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  client                User      @relation("RequestClient", fields: [clientId], references: [id])
+  company               Company   @relation("RequestCompany", fields: [companyId], references: [id])
+  accountant            User?     @relation("RequestAccountant", fields: [accountantId], references: [id])
+  assignedCollaborator  User?     @relation("RequestCollaborator", fields: [assignedCollaboratorId], references: [id])
+  
+  tickets               Ticket[]
+  tasks                 Task[]
+
+  @@index([clientId])
+  @@index([companyId])
+  @@index([accountantId])
+  @@index([status])
+  @@index([priority])
+}

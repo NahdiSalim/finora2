@@ -1,0 +1,36 @@
+model Task {
+  id            Int       @id @default(autoincrement())
+  title         String
+  description   String?   @db.Text
+  type          String    // "accounting" | "review" | "meeting" | "document" | "other"
+  priority      String    @default("medium") // "low" | "medium" | "high" | "urgent"
+  status        String    @default("todo") // "todo" | "in_progress" | "completed" | "cancelled"
+  dueDate       DateTime?
+  assigneeId    Int?
+  createdById   Int
+  requestId     Int?
+  ticketId      Int?
+  clientId      Int?
+  companyId     Int?
+  subtasks      String[]  // JSON array of subtask objects
+  attachments   String[]  // JSON array of attachment URLs
+  progress      Int       @default(0) // 0-100
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  assignee      User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdBy     User      @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  request       Request?  @relation(fields: [requestId], references: [id])
+  ticket        Ticket?   @relation(fields: [ticketId], references: [id])
+  client        User?     @relation("TaskClient", fields: [clientId], references: [id])
+  company       Company?  @relation("TaskCompany", fields: [companyId], references: [id])
+  p_tasks       p_tasks[]
+
+  @@index([assigneeId])
+  @@index([createdById])
+  @@index([requestId])
+  @@index([ticketId])
+  @@index([status])
+  @@index([priority])
+}

@@ -1,44 +1,48 @@
-import type { RouteObject } from 'react-router';
-import { Outlet } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
-import Box from '@mui/material/Box';
+import type { RouteObject } from "react-router";
+import { Outlet } from "react-router-dom";
+import { lazy, Suspense } from "react";
+import Box from "@mui/material/Box";
 
-import DotSpinner from 'src/components/common/DotSpinner';
+import DotSpinner from "src/components/common/DotSpinner";
 
-import { DashboardLayout } from 'src/layouts/dashboard';
+import { DashboardLayout } from "src/layouts/dashboard";
 
-import AuthGuard from 'src/guard/AuthGuard';
-import PermissionGuard from 'src/guard/PermissionGuard';
-import DefaultRedirect from 'src/components/default-redirect';
-import RoleView from 'src/sections/roles';
-import RoleFormRouter from 'src/sections/roles/RoleFormRouter';
-import AuthLayout from 'src/sections/auth/sign-in-view/Auth-Layout';
+import AuthGuard from "src/guard/AuthGuard";
+import PermissionGuard from "src/guard/PermissionGuard";
+import DefaultRedirect from "src/components/default-redirect";
+import RoleView from "src/sections/roles";
+import RoleFormRouter from "src/sections/roles/RoleFormRouter";
+import AuthLayout from "src/sections/auth/sign-in-view/Auth-Layout";
 
 // ----------------------------------------------------------------------
 
-export const UserPage = lazy(() => import('src/pages/users'));
-export const UserFormPage = lazy(() => import('src/sections/user/user-forms/index'));
-export const DocumentValidationPage = lazy(
-  () => import('src/sections/user/document-validation/index')
+export const UserPage = lazy(() => import("src/pages/users"));
+export const UserFormPage = lazy(
+  () => import("src/sections/user/user-forms/index"),
 );
-export const SignInPage = lazy(() => import('src/pages/sign-in'));
-export const RegisterPage = lazy(() => import('src/pages/register'));
+export const DocumentValidationPage = lazy(
+  () => import("src/sections/user/document-validation/index"),
+);
+export const SignInPage = lazy(() => import("src/pages/sign-in"));
+export const RegisterPage = lazy(() => import("src/pages/register"));
 
-export const ForgotPasswordPage = lazy(() => import('src/pages/forgot-password'));
-export const ResetPasswordPage = lazy(() => import('src/pages/reset-password'));
-export const Page404 = lazy(() => import('src/pages/page-not-found'));
-export const PageForbidden = lazy(() => import('src/pages/page-forbidden'));
-export const CheckEmailPage = lazy(() => import('src/pages/check-email'));
+export const ForgotPasswordPage = lazy(
+  () => import("src/pages/forgot-password"),
+);
+export const ResetPasswordPage = lazy(() => import("src/pages/reset-password"));
+export const Page404 = lazy(() => import("src/pages/page-not-found"));
+export const PageForbidden = lazy(() => import("src/pages/page-forbidden"));
+export const CheckEmailPage = lazy(() => import("src/pages/check-email"));
 
 // ----------------------------------------------------------------------
 
 const renderFallback = () => (
   <Box
     sx={{
-      display: 'flex',
-      flex: '1 1 auto',
-      alignItems: 'center',
-      justifyContent: 'center',
+      display: "flex",
+      flex: "1 1 auto",
+      alignItems: "center",
+      justifyContent: "center",
     }}
   >
     <DotSpinner size={40} />
@@ -61,7 +65,7 @@ function DashboardWrapper() {
 
 export const routesSection: RouteObject[] = [
   {
-    path: '/',
+    path: "/",
     Component: DashboardWrapper,
     children: [
       {
@@ -69,7 +73,7 @@ export const routesSection: RouteObject[] = [
         element: <DefaultRedirect />,
       },
       {
-        path: 'users',
+        path: "users",
         element: (
           <PermissionGuard requiredPath="/users">
             <UserPage />
@@ -77,7 +81,7 @@ export const routesSection: RouteObject[] = [
         ),
       },
       {
-        path: 'user/new',
+        path: "user/new",
         element: (
           <PermissionGuard requiredPath="/users">
             <UserFormPage />
@@ -85,7 +89,7 @@ export const routesSection: RouteObject[] = [
         ),
       },
       {
-        path: 'user/edit/:id',
+        path: "user/edit/:id",
         element: (
           <PermissionGuard requiredPath="/users">
             <UserFormPage />
@@ -93,7 +97,7 @@ export const routesSection: RouteObject[] = [
         ),
       },
       {
-        path: 'user/:id/documents',
+        path: "user/:id/documents",
         element: (
           <PermissionGuard requiredPath="/users">
             <DocumentValidationPage />
@@ -101,7 +105,7 @@ export const routesSection: RouteObject[] = [
         ),
       },
       {
-        path: 'roles',
+        path: "roles",
         element: (
           <PermissionGuard requiredPath="/roles">
             <RoleView />
@@ -109,7 +113,7 @@ export const routesSection: RouteObject[] = [
         ),
       },
       {
-        path: 'role/new',
+        path: "role/new",
         element: (
           <PermissionGuard requiredPath="/roles">
             <RoleFormRouter />
@@ -117,7 +121,7 @@ export const routesSection: RouteObject[] = [
         ),
       },
       {
-        path: 'role/edit/:id',
+        path: "role/edit/:id",
         element: (
           <PermissionGuard requiredPath="/roles">
             <RoleFormRouter />
@@ -129,7 +133,7 @@ export const routesSection: RouteObject[] = [
 
   // Auth routes (sans protection)
   {
-    path: 'sign-in',
+    path: "sign-in",
     element: <AuthLayout />,
     children: [
       {
@@ -139,7 +143,7 @@ export const routesSection: RouteObject[] = [
     ],
   },
   {
-    path: 'register',
+    path: "register",
     element: <AuthLayout />,
     children: [
       {
@@ -149,7 +153,7 @@ export const routesSection: RouteObject[] = [
     ],
   },
   {
-    path: 'check-email',
+    path: "check-email",
     element: <AuthLayout />,
     children: [
       {
@@ -160,7 +164,7 @@ export const routesSection: RouteObject[] = [
   },
 
   {
-    path: 'forgot-password',
+    path: "forgot-password",
     element: <AuthLayout />,
     children: [
       {
@@ -170,7 +174,7 @@ export const routesSection: RouteObject[] = [
     ],
   },
   {
-    path: 'reset-password',
+    path: "reset-password",
     element: <AuthLayout />,
     children: [
       {
@@ -180,7 +184,7 @@ export const routesSection: RouteObject[] = [
     ],
   },
   // Error pages
-  { path: '403', element: <PageForbidden /> },
-  { path: '404', element: <Page404 /> },
-  { path: '*', element: <Page404 /> },
+  { path: "403", element: <PageForbidden /> },
+  { path: "404", element: <Page404 /> },
+  { path: "*", element: <Page404 /> },
 ];

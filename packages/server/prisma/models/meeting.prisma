@@ -1,0 +1,28 @@
+model Meeting {
+  id                Int       @id @default(autoincrement())
+  clientId          Int?
+  companyId         Int?
+  accountantId      Int?
+  participants      String[]  // Array of user IDs
+  type              String    // "online" | "in_person" | "phone"
+  title             String
+  notes             String?   @db.Text
+  startAt           DateTime
+  endAt             DateTime
+  locationAddress   String?
+  locationMapUrl    String?
+  videoLink         String?
+  status            String    @default("scheduled") // "scheduled" | "in_progress" | "completed" | "cancelled"
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  client            User?     @relation("MeetingClient", fields: [clientId], references: [id])
+  company           Company?  @relation("MeetingCompany", fields: [companyId], references: [id])
+  accountant        User?     @relation("MeetingAccountant", fields: [accountantId], references: [id])
+
+  @@index([clientId])
+  @@index([companyId])
+  @@index([accountantId])
+  @@index([status])
+  @@index([startAt])
+}

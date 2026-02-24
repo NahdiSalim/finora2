@@ -8,6 +8,8 @@ import {
   Get,
   Req,
   Param,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
 import {
   ApiBody,
@@ -16,7 +18,9 @@ import {
   ApiResponse,
   ApiTags,
   ApiBearerAuth,
+  ApiConsumes,
 } from '@nestjs/swagger';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { LoginDto, LoginResponseDto } from './dto/login.dto';
 import { AuthService } from './auth.service';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -24,7 +28,8 @@ import { LogoutResponseDto } from './dto/logout.dto';
 import { JwtAuthGuard } from './guards';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
-import { Public } from './decorators/public.decorator';
+import { RegisterClientDto } from './dto/register-client.dto';
+import { RegisterAccountantDto } from './dto/register-accountant.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -77,15 +82,6 @@ export class AuthController {
     return await this.authService.getCurrentUser(req);
   }
 
-  // ⚠️ ENDPOINT DE TEST - À SUPPRIMER EN PRODUCTION
-  @Public()
-  @Get('test-me/:userId')
-  @ApiOperation({ summary: '⚠️ TEST ONLY - Get user without auth' })
-  async testGetMe(@Param('userId') userId: string) {
-    const fakeReq = { user: { id: parseInt(userId) } } as any;
-    return await this.authService.getCurrentUser(fakeReq);
-  }
-
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send password reset email' })
@@ -100,6 +96,52 @@ export class AuthController {
   })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     return await this.authService.forgotPassword(dto.email);
+  }
+
+  @Post('register/client')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Client self-registration (external)' })
+  @ApiBody({ type: RegisterClientDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Client registered successfully. Account pending approval.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Email already exists or validation error',
+  })
+  async registerClient(@Body() dto: RegisterClientDto) {
+    return await this.authService.registerClient(dto);
+  }
+
+  @Post('register/accountant')
+  @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'patentFile', maxCount: 1 },
+      { name: 'rneFile', maxCount: 1 },
+    ])
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Accountant self-registration (external)' })
+  @ApiBody({ type: RegisterAccountantDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Accountant registered successfully. Account pending approval.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Email already exists or validation error',
+  })
+  async registerAccountant(
+    @Body() dto: RegisterAccountantDto,
+    @UploadedFiles()
+    files?: {
+      patentFile?: Express.Multer.File[];
+      rneFile?: Express.Multer.File[];
+    }
+  ) {
+    return await this.authService.registerAccountant(dto, files);
   }
 
   @Post('reset-password/:token')

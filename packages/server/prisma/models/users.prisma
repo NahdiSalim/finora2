@@ -2,16 +2,69 @@ model User {
   id                   Int       @id @default(autoincrement())
   id_role              Int?
   username             String
+  firstName            String?
+  lastName             String?
   password             String    @db.Text
   email                String    @unique
   phone                String?
+  companyId            Int?
+  position             String?
+  department           String?
+  cin                  String?
+  diploma              String?
+  photo                String?
+  lastLogin            DateTime?
   isActive             Boolean   @default(true)
+  status               String    @default("pending") // "pending" | "active" | "suspended"
   resetPasswordToken   String?   @unique
   resetPasswordExpires DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   createdById          Int?
   updatedById          Int?
+  
   role                 Role?     @relation(fields: [id_role], references: [id])
-  refreshTokens RefreshToken[]
+  company              Company?  @relation("CompanyEmployees", fields: [companyId], references: [id])
+  refreshTokens        RefreshToken[]
+  
+  ownedCompanies       Company[] @relation("CompanyOwner")
+  primaryContactCompanies Company[] @relation("CompanyPrimaryContact")
+  
+  // Documents
+  documents            Document[] @relation("DocumentOwner")
+  
+  // Notifications
+  notifications        Notification[] @relation("NotificationRecipient")
+  
+  // Tasks
+  assignedTasks        Task[] @relation("TaskAssignee")
+  createdTasks         Task[] @relation("TaskCreatedBy")
+  clientTasks          Task[] @relation("TaskClient")
+  
+  // Requests
+  clientRequests       Request[] @relation("RequestClient")
+  accountantRequests   Request[] @relation("RequestAccountant")
+  collaboratorRequests Request[] @relation("RequestCollaborator")
+  
+  // Tickets
+  createdTickets       Ticket[] @relation("TicketCreatedBy")
+  assignedTickets      Ticket[] @relation("TicketAssignee")
+  clientTickets        Ticket[] @relation("TicketClient")
+  
+  // Meetings
+  clientMeetings       Meeting[] @relation("MeetingClient")
+  accountantMeetings   Meeting[] @relation("MeetingAccountant")
+  
+  // Chat
+  createdChatRooms     ChatRoom[] @relation("ChatRoomCreatedBy")
+  sentMessages         ChatMessage[] @relation("ChatMessageSender")
+  createdThreads       ChatThread[] @relation("ChatThreadCreatedBy")
+  resolvedThreads      ChatThread[] @relation("ChatThreadResolvedBy")
+  
+  // Role Actions
+  grantedRoleActions   RoleAction[] @relation("RoleActionGrantedBy")
+
+  @@index([email])
+  @@index([companyId])
+  @@index([status])
 }

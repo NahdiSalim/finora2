@@ -23,6 +23,10 @@ import CustomButton from "src/components/common/CustomButton";
 import CustomSelect from "src/components/common/CustomSelect";
 import CustomInput from "src/components/common/CustomInput";
 import { useGetPublicAccountantsQuery } from "src/lib/services/publicAccountantsApi";
+import {
+  ALL_SPECIALTIES_FOR_FILTER,
+  RATING_FILTER_OPTIONS,
+} from "src/lib/constants/specialties";
 
 export function VisitorView() {
   const theme = useTheme();
@@ -30,10 +34,19 @@ export function VisitorView() {
   const [search, setSearch] = useState<string | undefined>(undefined);
   const [specialty, setSpecialty] = useState<string | undefined>(undefined);
   const [location, setLocation] = useState<string | undefined>(undefined);
+  const [ratingRange, setRatingRange] = useState<string | undefined>(undefined);
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [contactAccountantId, setContactAccountantId] = useState<number | null>(
     null,
   );
+
+  const ratingOption = RATING_FILTER_OPTIONS.find(
+    (o) => o.value === ratingRange,
+  );
+  const reviewMin =
+    ratingOption && "min" in ratingOption ? ratingOption.min : undefined;
+  const reviewMax =
+    ratingOption && "max" in ratingOption ? ratingOption.max : undefined;
 
   const { data, isLoading } = useGetPublicAccountantsQuery({
     page: 1,
@@ -41,6 +54,8 @@ export function VisitorView() {
     search,
     specialty,
     location,
+    reviewMin,
+    reviewMax,
   });
 
   const accountants: Accountant[] =
@@ -205,7 +220,7 @@ export function VisitorView() {
               </Stack>
 
               <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                <Box sx={{ flex: 1 }}>
+                <Box sx={{ flex: 1, mx: { xs: 0, sm: 1 } }}>
                   <CustomSelect
                     value={specialty ?? ""}
                     onChange={(e) =>
@@ -216,15 +231,15 @@ export function VisitorView() {
                     displayEmpty
                   >
                     <MenuItem value="">Spécialité</MenuItem>
-                    <MenuItem value="Expert Comptable">
-                      Expert Comptable
-                    </MenuItem>
-                    <MenuItem value="Comptable">Comptable</MenuItem>
-                    <MenuItem value="Fiscaliste">Fiscaliste</MenuItem>
+                    {ALL_SPECIALTIES_FOR_FILTER.map((s) => (
+                      <MenuItem key={s} value={s}>
+                        {s}
+                      </MenuItem>
+                    ))}
                   </CustomSelect>
                 </Box>
 
-                <Box sx={{ flex: 1 }}>
+                <Box sx={{ flex: 1, mx: { xs: 0, sm: 1 } }}>
                   <CustomSelect
                     value={location ?? ""}
                     onChange={(e) =>
@@ -238,6 +253,24 @@ export function VisitorView() {
                     <MenuItem value="Tunis">Tunis</MenuItem>
                     <MenuItem value="Ariana">Ariana</MenuItem>
                     <MenuItem value="Sousse">Sousse</MenuItem>
+                  </CustomSelect>
+                </Box>
+
+                <Box sx={{ flex: 1, mx: { xs: 0, sm: 1 } }}>
+                  <CustomSelect
+                    value={ratingRange ?? ""}
+                    onChange={(e) =>
+                      setRatingRange((e.target.value as string) || undefined)
+                    }
+                    size="small"
+                    IconComponent={KeyboardArrowDownIcon}
+                    displayEmpty
+                  >
+                    {RATING_FILTER_OPTIONS.map((opt) => (
+                      <MenuItem key={opt.value || "note"} value={opt.value}>
+                        {opt.label}
+                      </MenuItem>
+                    ))}
                   </CustomSelect>
                 </Box>
               </Stack>
@@ -295,6 +328,7 @@ export function VisitorView() {
                   setSearchDraft("");
                   setSpecialty(undefined);
                   setLocation(undefined);
+                  setRatingRange(undefined);
                 }}
               >
                 Réinitialiser les filtres

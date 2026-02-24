@@ -1,7 +1,11 @@
-import PeopleIcon from '@mui/icons-material/People';
-import SecurityIcon from '@mui/icons-material/Security';
-
-// ----------------------------------------------------------------------
+import ArchiveIcon from "@mui/icons-material/Archive";
+import DescriptionIcon from "@mui/icons-material/Description";
+import EventIcon from "@mui/icons-material/Event";
+import AssignmentIcon from "@mui/icons-material/Assignment";
+import MessageIcon from "@mui/icons-material/Message";
+import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
+import HubIcon from "@mui/icons-material/Hub";
+import PersonIcon from "@mui/icons-material/Person";
 
 export type NavItem = {
   title: string;
@@ -10,13 +14,47 @@ export type NavItem = {
   info?: React.ReactNode;
 };
 
-export const NAV_CONFIG: Record<string, { title: string; icon: React.ReactNode }> = {
-  '/users': {
-    title: 'Users Management',
-    icon: <PeopleIcon />,
+export const NAV_CONFIG: Record<
+  string,
+  { title: string; icon: React.ReactNode }
+> = {
+  "/archive": {
+    title: "Archive",
+    icon: <ArchiveIcon />,
   },
-  '/roles': {
-    title: 'Roles & Permissions',
-    icon: <SecurityIcon />,
+
+  "/documents": {
+    title: "Documents",
+    icon: <DescriptionIcon />,
+  },
+
+  "/meetings": {
+    title: "Rendez-vous",
+    icon: <EventIcon />,
+  },
+
+  "/requests": {
+    title: "Demandes",
+    icon: <AssignmentIcon />,
+  },
+
+  "/messages": {
+    title: "Messagerie",
+    icon: <MessageIcon />,
+  },
+
+  "/banks": {
+    title: "Mes banques",
+    icon: <AccountBalanceIcon />,
+  },
+
+  "/network": {
+    title: "Réseautage",
+    icon: <HubIcon />,
+  },
+
+  "/profile": {
+    title: "Mon profil",
+    icon: <PersonIcon />,
   },
 };

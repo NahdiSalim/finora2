@@ -46,7 +46,7 @@ export class TaskService {
         });
 
         // Verify client belongs to same company
-        if (client?.companyId !== createdBy.companyId) {
+        if (client?.companyId !== creator.companyId) {
           throw new ApiError('Client must belong to the same company', 400, 'INVALID_CLIENT');
         }
       }
@@ -256,7 +256,7 @@ export class TaskService {
         }
       }
       const taskData = { ...task };
-      delete taskData.subtasks;
+      delete (taskData as any).subtasks;
       return {
         ...taskData,
         comments,
@@ -352,7 +352,7 @@ export class TaskService {
         }
       }
       const taskData = { ...task };
-      delete taskData.subtasks;
+      delete (taskData as any).subtasks;
       return {
         ...taskData,
         comments,
@@ -434,7 +434,7 @@ export class TaskService {
 
     // Remove subtasks and add comments
     const taskData = { ...task };
-    delete taskData.subtasks;
+    delete (taskData as any).subtasks;
 
     return {
       success: true,
@@ -817,7 +817,7 @@ export class TaskService {
         }
       }
       const taskData = { ...task };
-      delete taskData.subtasks;
+      delete (taskData as any).subtasks;
       return {
         ...taskData,
         comments,

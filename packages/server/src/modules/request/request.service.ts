@@ -50,8 +50,6 @@ export class RequestService {
           }
         }
       }
-
-      // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
       const request = await this.prisma.request.create({
         data: {
           subject: dto.subject.trim(),
@@ -59,9 +57,7 @@ export class RequestService {
           type: dto.type,
           urgency: dto.urgency || 'normal',
           clientId,
-          // @ts-expect-error - Prisma types not yet generated
           companyId: client?.companyId,
-          // @ts-expect-error - Prisma types not yet generated
           attachments: attachmentUrls,
         },
         include: {
@@ -104,12 +100,8 @@ export class RequestService {
     if (status) {
       where.status = status;
     }
-
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     const [total, requests] = await Promise.all([
-      // @ts-expect-error - Prisma types not yet generated
       this.prisma.request.count({ where }),
-      // @ts-expect-error - Prisma types not yet generated
       this.prisma.request.findMany({
         where,
         skip,
@@ -118,7 +110,6 @@ export class RequestService {
           createdAt: 'desc',
         },
         include: {
-          // @ts-expect-error - Prisma types not yet generated
           assignedTo: {
             select: {
               id: true,
@@ -207,7 +198,6 @@ export class RequestService {
               lastName: true,
             },
           },
-          // @ts-expect-error - Prisma types not yet generated
           assignedTo: {
             select: {
               id: true,
@@ -276,7 +266,6 @@ export class RequestService {
             lastName: true,
           },
         },
-        // @ts-expect-error - Prisma types not yet generated
         assignedTo: {
           select: {
             id: true,
@@ -292,7 +281,6 @@ export class RequestService {
             name: true,
           },
         },
-        // @ts-expect-error - Prisma types not yet generated
         assignedTo: {
           select: {
             id: true,
@@ -329,8 +317,6 @@ export class RequestService {
       where: { id: userId },
       select: { companyId: true },
     });
-
-    // @ts-expect-error - Handle both old and new field names
     const assignedToId = request.assignedToId || request.accountantId;
 
     if (
@@ -360,7 +346,6 @@ export class RequestService {
     }
 
     // Check access rights
-    // @ts-expect-error - Prisma types not yet generated
     if (request.clientId !== userId && request.assignedToId !== userId) {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
     }
@@ -383,7 +368,6 @@ export class RequestService {
             email: true,
           },
         },
-        // @ts-expect-error - Prisma types not yet generated
         assignedTo: {
           select: {
             id: true,
@@ -429,7 +413,6 @@ export class RequestService {
             email: true,
           },
         },
-        // @ts-expect-error - Prisma types not yet generated
         assignedTo: {
           select: {
             id: true,
@@ -461,8 +444,6 @@ export class RequestService {
     if (!request) {
       throw new ApiError('Request not found', 404, 'REQUEST_NOT_FOUND');
     }
-
-    // @ts-expect-error - Prisma types not yet generated
     if (request.convertedToTaskId) {
       throw new ApiError('Request already converted to task', 400, 'ALREADY_CONVERTED');
     }
@@ -478,13 +459,9 @@ export class RequestService {
     // Create task
     const task = await this.prisma.task.create({
       data: {
-        // @ts-expect-error - Prisma types not yet generated
         title: request.subject,
-        // @ts-expect-error - Prisma types not yet generated
         description: request.description || '',
-        // @ts-expect-error - Prisma types not yet generated
         type: request.type,
-        // @ts-expect-error - Prisma types not yet generated
         priority: dto.priority || priorityMap[request.urgency] || 'medium',
         dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
         assigneeId: dto.assigneeId,
@@ -507,17 +484,12 @@ export class RequestService {
     });
 
     // Update request with task reference
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     await this.prisma.request.update({
       where: { id: requestId },
       data: {
-        // @ts-expect-error - Prisma types not yet generated
         convertedToTaskId: task.id,
-        // @ts-expect-error - Prisma types not yet generated
         convertedAt: new Date(),
-        // @ts-expect-error - Prisma types not yet generated
         status: 'in_progress',
-        // @ts-expect-error - Prisma types not yet generated
         assignedToId: accountantId,
       },
     });
@@ -528,7 +500,6 @@ export class RequestService {
       data: {
         request: {
           id: request.id,
-          // @ts-expect-error - Prisma types not yet generated
           subject: request.subject,
           status: 'in_progress',
         },
@@ -541,7 +512,6 @@ export class RequestService {
    * Delete request
    */
   async deleteRequest(requestId: number, userId: number) {
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     const request = await this.prisma.request.findUnique({
       where: { id: requestId },
     });
@@ -554,8 +524,6 @@ export class RequestService {
     if (request.clientId !== userId) {
       throw new ApiError('Only request creator can delete', 403, 'ACCESS_DENIED');
     }
-
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     await this.prisma.request.delete({
       where: { id: requestId },
     });

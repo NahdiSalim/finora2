@@ -1,10 +1,10 @@
-import { useCallback, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-import Add from '@mui/icons-material/Add';
-import BorderColorIcon from '@mui/icons-material/BorderColor';
-import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
-import type { SelectChangeEvent } from '@mui/material';
+import Add from "@mui/icons-material/Add";
+import BorderColorIcon from "@mui/icons-material/BorderColor";
+import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
+import type { SelectChangeEvent } from "@mui/material";
 import {
   Box,
   Button,
@@ -20,47 +20,55 @@ import {
   TableContainer,
   TablePagination,
   Typography,
-} from '@mui/material';
-import DotSpinner from 'src/components/common/DotSpinner';
+} from "@mui/material";
+import DotSpinner from "src/components/common/DotSpinner";
 
-import { useTable } from 'src/hooks/use-table';
-import { useTableNavigation } from 'src/hooks/useTableNavigation';
-import { buildEditUrl } from 'src/utils/navigationHelpers';
-import { useGetUsersQuery, useManageUserStatusMutation } from 'src/lib/services/usersApi';
-import { useAlert } from 'src/contexts/AlertContext';
-import { usePermissions } from 'src/hooks/usePermissions';
+import { useTable } from "src/hooks/use-table";
+import { useTableNavigation } from "src/hooks/useTableNavigation";
+import { buildEditUrl } from "src/utils/navigationHelpers";
+import {
+  useGetUsersQuery,
+  useManageUserStatusMutation,
+} from "src/lib/services/usersApi";
+import { useAlert } from "src/contexts/AlertContext";
+import { usePermissions } from "src/hooks/usePermissions";
 
-import { DashboardContent } from 'src/layouts/dashboard';
+import { DashboardContent } from "src/layouts/dashboard";
 
-import { Label } from 'src/components/label';
-import { Scrollbar } from 'src/components/scrollbar';
-import { DataTableRow } from 'src/components/table/table-row';
+import { Label } from "src/components/label";
+import { Scrollbar } from "src/components/scrollbar";
+import { DataTableRow } from "src/components/table/table-row";
 
-import { DataTableHead } from 'src/components/table/table-head';
-import { TableNoData } from 'src/components/table/table-no-data';
-import { DataTableToolbar } from 'src/components/table/table-toolbar';
-import { TableEmptyRows } from 'src/components/table/table-empty-rows';
+import { DataTableHead } from "src/components/table/table-head";
+import { TableNoData } from "src/components/table/table-no-data";
+import { DataTableToolbar } from "src/components/table/table-toolbar";
+import { TableEmptyRows } from "src/components/table/table-empty-rows";
 
 const getStatusLabel = (status: string): string => {
   const statusLabels: Record<string, string> = {
-    ACTIVE: 'Active',
-    PENDING: 'Pending',
-    BLOCKED: 'Blocked',
-    DELETED: 'Deleted',
+    ACTIVE: "Active",
+    PENDING: "Pending",
+    BLOCKED: "Blocked",
+    DELETED: "Deleted",
   };
   return statusLabels[status] || status;
 };
 
-const getStatusColor = (status: string): 'success' | 'warning' | 'error' | 'default' => {
-  const statusColors: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
-    ACTIVE: 'success',
-    PENDING: 'warning',
-    BLOCKED: 'error',
-    DELETED: 'default',
-    VERIFIED: 'success',
-    REJECTED: 'error',
+const getStatusColor = (
+  status: string,
+): "success" | "warning" | "error" | "default" => {
+  const statusColors: Record<
+    string,
+    "success" | "warning" | "error" | "default"
+  > = {
+    ACTIVE: "success",
+    PENDING: "warning",
+    BLOCKED: "error",
+    DELETED: "default",
+    VERIFIED: "success",
+    REJECTED: "error",
   };
-  return statusColors[status] || 'default';
+  return statusColors[status] || "default";
 };
 
 export default function UserView() {
@@ -70,13 +78,13 @@ export default function UserView() {
   const { showConfirm, showAlert } = useAlert();
   const { hasAction } = usePermissions();
 
-  const [filterName, setFilterName] = useState('');
-  const [verificationStatusFilter, setVerificationStatusFilter] = useState('');
-  const [activeStatusFilter, setActiveStatusFilter] = useState('');
+  const [filterName, setFilterName] = useState("");
+  const [verificationStatusFilter, setVerificationStatusFilter] = useState("");
+  const [activeStatusFilter, setActiveStatusFilter] = useState("");
 
-  const canCreate = hasAction('/users', 'CREATE');
-  const canUpdate = hasAction('/users', 'UPDATE');
-  const canDelete = hasAction('/users', 'DELETE');
+  const canCreate = hasAction("/users", "WRITE");
+  const canUpdate = hasAction("/users", "UPDATE");
+  const canDelete = hasAction("/users", "DELETE");
 
   const { data, isLoading, isError } = useGetUsersQuery({
     page: table.page + 1,
@@ -94,21 +102,23 @@ export default function UserView() {
   const notFound = !users.length && !!filterName;
 
   const handleNewUser = () => {
-    navigate('/user/new');
+    navigate("/user/new");
   };
 
   const handleDeleteClick = useCallback(() => {
-    showConfirm('Are you sure you want to delete this user?', async () => {
+    showConfirm("Are you sure you want to delete this user?", async () => {
       try {
         await Promise.all(
-          table.selected.map((userId) => manageUserStatus({ userId, status: 'DELETED' }).unwrap())
+          table.selected.map((userId) =>
+            manageUserStatus({ userId, status: "DELETED" }).unwrap(),
+          ),
         );
 
         table.onSelectAllRows(false, []);
-        showAlert('Users deleted successfully', 'success');
+        showAlert("Users deleted successfully", "success");
       } catch (error) {
-        console.error('Error deleting users:', error);
-        showAlert('Error deleting users', 'error');
+        console.error("Error deleting users:", error);
+        showAlert("Error deleting users", "error");
       }
     });
   }, [table, manageUserStatus, showConfirm, showAlert]);
@@ -118,15 +128,20 @@ export default function UserView() {
       <Box
         sx={{
           mb: 5,
-          display: 'flex',
-          alignItems: 'center',
+          display: "flex",
+          alignItems: "center",
         }}
       >
         <Typography variant="h5" sx={{ flexGrow: 1 }}>
           Users List
         </Typography>
         {canCreate && (
-          <Button variant="contained" color="primary" startIcon={<Add />} onClick={handleNewUser}>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<Add />}
+            onClick={handleNewUser}
+          >
             Add New User
           </Button>
         )}
@@ -182,7 +197,7 @@ export default function UserView() {
         />
 
         <Scrollbar>
-          <TableContainer sx={{ overflow: 'unset' }}>
+          <TableContainer sx={{ overflow: "unset" }}>
             <Table sx={{ minWidth: 800 }}>
               <DataTableHead
                 rowCount={totalCount}
@@ -191,23 +206,23 @@ export default function UserView() {
                 onSelectAllRows={(checked: boolean) =>
                   table.onSelectAllRows(
                     checked,
-                    users.map((user) => user.id)
+                    users.map((user) => user.id),
                   )
                 }
                 headLabel={[
-                  { id: 'full_name', label: 'Full Name' },
-                  { id: 'email', label: 'Email' },
-                  { id: 'role', label: 'Role' },
-                  { id: 'verification_status', label: 'Verification Status' },
-                  { id: 'status', label: 'Status' },
-                  { id: 'actions', label: 'Actions', align: 'center' },
+                  { id: "full_name", label: "Full Name" },
+                  { id: "email", label: "Email" },
+                  { id: "role", label: "Role" },
+                  { id: "verification_status", label: "Verification Status" },
+                  { id: "status", label: "Status" },
+                  { id: "actions", label: "Actions", align: "center" },
                 ]}
               />
               <TableBody>
                 {isLoading ? (
                   <DataTableRow selected={false} onSelectRow={() => {}}>
                     <TableCell colSpan={6} align="center" sx={{ py: 10 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                      <Box sx={{ display: "flex", justifyContent: "center" }}>
                         <DotSpinner />
                       </Box>
                     </TableCell>
@@ -230,8 +245,8 @@ export default function UserView() {
                           <Box
                             sx={{
                               gap: 2,
-                              display: 'flex',
-                              alignItems: 'center',
+                              display: "flex",
+                              alignItems: "center",
                             }}
                           >
                             {/* <Avatar alt={row.full_name}>
@@ -241,35 +256,45 @@ export default function UserView() {
                           </Box>
                         </TableCell>
 
-                        <TableCell>{row.email || '-'}</TableCell>
+                        <TableCell>{row.email || "-"}</TableCell>
 
                         <TableCell>
-                          {typeof row.role === 'string' ? row.role : row.role.code}
+                          {typeof row.role === "string"
+                            ? row.role
+                            : row.role.code}
                         </TableCell>
 
                         <TableCell>
-                          {typeof row.role === 'object' &&
-                          row.role.code === 'CLIENT' &&
+                          {typeof row.role === "object" &&
+                          row.role.code === "CLIENT" &&
                           row.client?.residencyDocuments?.[0] ? (
                             <Label
                               color={getStatusColor(
-                                row.client.residencyDocuments[0].verification_status
+                                row.client.residencyDocuments[0]
+                                  .verification_status,
                               )}
                             >
-                              {row.client.residencyDocuments[0].verification_status}
+                              {
+                                row.client.residencyDocuments[0]
+                                  .verification_status
+                              }
                             </Label>
                           ) : (
-                            '-'
+                            "-"
                           )}
                         </TableCell>
 
                         <TableCell>
                           <Label
                             color={getStatusColor(
-                              row.status || (row.is_active ? 'ACTIVE' : 'BLOCKED')
+                              row.status ||
+                                (row.is_active ? "ACTIVE" : "BLOCKED"),
                             )}
                           >
-                            {getStatusLabel(row.status || (row.is_active ? 'ACTIVE' : 'BLOCKED'))}
+                            {getStatusLabel(
+                              row.status ||
+                                (row.is_active ? "ACTIVE" : "BLOCKED"),
+                            )}
                           </Label>
                         </TableCell>
 
@@ -278,21 +303,30 @@ export default function UserView() {
                             <>
                               <IconButton
                                 onClick={() =>
-                                  navigate(buildEditUrl('/user/edit', row.id, currentPage))
+                                  navigate(
+                                    buildEditUrl(
+                                      "/user/edit",
+                                      row.id,
+                                      currentPage,
+                                    ),
+                                  )
                                 }
-                                sx={{ color: 'rgba(157, 179, 198, 1)' }}
+                                sx={{ color: "rgba(157, 179, 198, 1)" }}
                               >
                                 <BorderColorIcon />
                               </IconButton>
-                              {typeof row.role === 'object' && row.role.code === 'CLIENT' && (
-                                <IconButton
-                                  onClick={() => navigate(`/user/${row.id}/documents`)}
-                                  sx={{ color: 'rgba(76, 175, 80, 1)' }}
-                                  title="Validate Documents"
-                                >
-                                  <VerifiedUserIcon />
-                                </IconButton>
-                              )}
+                              {typeof row.role === "object" &&
+                                row.role.code === "CLIENT" && (
+                                  <IconButton
+                                    onClick={() =>
+                                      navigate(`/user/${row.id}/documents`)
+                                    }
+                                    sx={{ color: "rgba(76, 175, 80, 1)" }}
+                                    title="Validate Documents"
+                                  >
+                                    <VerifiedUserIcon />
+                                  </IconButton>
+                                )}
                             </>
                           )}
                         </TableCell>
@@ -303,7 +337,10 @@ export default function UserView() {
                       height={68}
                       emptyRows={
                         table.page > 0
-                          ? Math.max(0, (1 + table.page) * table.rowsPerPage - totalCount)
+                          ? Math.max(
+                              0,
+                              (1 + table.page) * table.rowsPerPage - totalCount,
+                            )
                           : 0
                       }
                     />
@@ -325,7 +362,9 @@ export default function UserView() {
           rowsPerPageOptions={[5, 10, 25]}
           onRowsPerPageChange={table.onChangeRowsPerPage}
           labelRowsPerPage="Rows per page:"
-          labelDisplayedRows={({ from, to, count }) => `${from}-${to} of ${count}`}
+          labelDisplayedRows={({ from, to, count }) =>
+            `${from}-${to} of ${count}`
+          }
         />
       </Card>
     </DashboardContent>

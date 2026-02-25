@@ -17,6 +17,8 @@ import AuthLayout from "src/sections/auth/sign-in-view/Auth-Layout";
 // ----------------------------------------------------------------------
 
 export const UserPage = lazy(() => import("src/pages/users"));
+export const CollaboratorPage = lazy(() => import("src/pages/collaborators"));
+
 export const UserFormPage = lazy(
   () => import("src/sections/user/user-forms/index"),
 );
@@ -76,6 +78,22 @@ export const routesSection: RouteObject[] = [
         path: "archive",
         element: (
           <PermissionGuard requiredPath="/archive">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "collaborators",
+        element: (
+          <PermissionGuard requiredPath="/collaborators">
+            <CollaboratorPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "dashboard",
+        element: (
+          <PermissionGuard requiredPath="/dashboard">
             <UserPage />
           </PermissionGuard>
         ),

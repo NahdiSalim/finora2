@@ -13,6 +13,9 @@ import { AdminModule } from './modules/admin/admin.module';
 import { AccountantModule } from './modules/accountant/accountant.module';
 import { DocumentModule } from './modules/document/document.module';
 import { StorageModule } from './modules/storage/storage.module';
+import { TaskModule } from './modules/task/task.module';
+import { RequestModule } from './modules/request/request.module';
+import { AppointmentModule } from './modules/appointment/appointment.module';
 
 @Module({
   imports: [
@@ -45,6 +48,9 @@ import { StorageModule } from './modules/storage/storage.module';
     AccountantModule,
     DocumentModule,
     StorageModule,
+    TaskModule,
+    RequestModule,
+    AppointmentModule,
   ],
   controllers: [AppController],
   providers: [

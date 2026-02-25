@@ -49,9 +49,11 @@ export class StorageController {
   @Get('companies')
   @UseGuards(RolesGuard)
   @Roles('ADMINISTRATOR')
-  @ApiOperation({ summary: '[Admin] Get all companies storage usage' })
-  async getAllCompaniesUsage() {
-    return this.storageService.getAllCompaniesUsage();
+  @ApiOperation({ summary: '[Admin] Get all companies storage usage with pagination' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+  async getAllCompaniesUsage(@Query('page') page?: number, @Query('limit') limit?: number) {
+    return this.storageService.getAllCompaniesUsage(page || 1, limit || 10);
   }
 
   /**

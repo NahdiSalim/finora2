@@ -1,0 +1,19 @@
+===========================================
+COMMANDES DE MIGRATION - COPIER-COLLER
+===========================================
+
+# 1. BACKUP (IMPORTANT!)
+pg_dump -U postgres -d finora_db > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# 2. ARRÊTER LE SERVEUR
+pm2 stop finora-api
+
+# 3. MIGRATION
+cd packages/server
+node scripts/merge-prisma-models.js
+npx prisma db push
+npx prisma generate
+
+# 4. SEED (Optionnel - uniquement si base vide)
+npx prisma db seed
+

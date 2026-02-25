@@ -9,6 +9,7 @@ export enum FileCategory {
   USER_PHOTO = 'users/photos',
   COMPANY_LOGO = 'companies/logos',
   DOCUMENT = 'documents',
+  TASK_ATTACHMENT = 'tasks/attachments',
 }
 
 @Injectable()

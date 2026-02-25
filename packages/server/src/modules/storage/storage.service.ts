@@ -51,10 +51,13 @@ export class StorageService {
         companyName: company.name,
         quotaBytes: quotaBytes.toString(),
         quotaGB: (quotaBytes / 1073741824).toFixed(2),
+        quotaMB: (quotaBytes / 1048576).toFixed(2),
         usedBytes: usedBytes.toString(),
         usedGB: (usedBytes / 1073741824).toFixed(2),
+        usedMB: (usedBytes / 1048576).toFixed(2),
         availableBytes: (quotaBytes - usedBytes).toString(),
         availableGB: ((quotaBytes - usedBytes) / 1073741824).toFixed(2),
+        availableMB: ((quotaBytes - usedBytes) / 1048576).toFixed(2),
         usagePercent: (usagePercent * 100).toFixed(2),
         alertThreshold: (alertThreshold * 100).toFixed(0),
         isNearLimit: usagePercent >= alertThreshold,
@@ -65,9 +68,19 @@ export class StorageService {
   }
 
   /**
-   * Get all companies with their storage usage
+   * Get all companies with their storage usage (with pagination)
    */
-  async getAllCompaniesUsage() {
+  async getAllCompaniesUsage(page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+
+    // Get total count
+    const totalCompanies = await this.prisma.company.count({
+      where: {
+        status: 'active',
+      },
+    });
+
+    // Get paginated companies
     const companies = await this.prisma.company.findMany({
       where: {
         status: 'active',
@@ -75,6 +88,11 @@ export class StorageService {
       select: {
         id: true,
         name: true,
+      },
+      skip,
+      take: limit,
+      orderBy: {
+        name: 'asc',
       },
     });
 
@@ -99,7 +117,9 @@ export class StorageService {
           companyId: company.id,
           companyName: company.name,
           usedGB: (usedBytes / 1073741824).toFixed(2),
+          usedMB: (usedBytes / 1048576).toFixed(2),
           quotaGB: (quotaBytes / 1073741824).toFixed(2),
+          quotaMB: (quotaBytes / 1048576).toFixed(2),
           usagePercent: (usagePercent * 100).toFixed(2),
           isNearLimit: usagePercent >= 0.8,
           isOverLimit: usagePercent >= 1,
@@ -112,7 +132,12 @@ export class StorageService {
       status: 'success',
       code: '200',
       data: usageData,
-      count: usageData.length,
+      pagination: {
+        page,
+        limit,
+        total: totalCompanies,
+        totalPages: Math.ceil(totalCompanies / limit),
+      },
     };
   }
 
@@ -180,6 +205,7 @@ export class StorageService {
         documentsDeleted: deletedIds.length,
         bytesFreed: totalBytesFreed.toString(),
         gbFreed: (totalBytesFreed / 1073741824).toFixed(2),
+        mbFreed: (totalBytesFreed / 1048576).toFixed(2),
         cutoffDate,
       },
       message: `Purged ${deletedIds.length} archived documents older than ${olderThanDays} days`,

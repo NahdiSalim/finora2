@@ -52,7 +52,10 @@ model Company {
   documents         Document[] @relation("DocumentCompany")
   
   // Requests
-  requests          Request[] @relation("RequestCompany")
+  requests          Request[] @relation("CompanyRequests")
+  
+  // Appointments
+  appointments      Appointment[] @relation("CompanyAppointments")
   
   // Tasks
   tasks             Task[] @relation("TaskCompany")

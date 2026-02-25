@@ -1,63 +1,55 @@
 # syntax=docker/dockerfile:1.7
+ARG PNPM_VERSION=10.13.1
 
 # 1) deps
 FROM node:lts-alpine AS deps
 WORKDIR /repo
-
-RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
+RUN npm i -g pnpm@${PNPM_VERSION}
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/server/package.json packages/server/package.json
-
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-    pnpm config set store-dir /pnpm/store && \
-    pnpm install --frozen-lockfile
-
+RUN pnpm install --frozen-lockfile
 
 # 2) build
 FROM node:lts-alpine AS build
 WORKDIR /repo
-
-RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
+RUN npm i -g pnpm@${PNPM_VERSION}
 
 COPY --from=deps /repo /repo
-
 COPY . .
 
-RUN pnpm --filter server exec prisma generate
+RUN pnpm --filter "./packages/server" exec prisma generate
+RUN pnpm --filter "./packages/server" build
 
-RUN pnpm --filter server build
+# 3) prod deps (server only)
+FROM node:lts-alpine AS prod_deps
+WORKDIR /repo
+ENV NODE_ENV=production
+RUN npm i -g pnpm@${PNPM_VERSION}
 
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY packages/server/package.json packages/server/package.json
+COPY packages/server/prisma packages/server/prisma
 
-# 3) runtime
+RUN pnpm --filter "./packages/server..."  install --frozen-lockfile --ignore-scripts
+RUN pnpm --filter "./packages/server" exec prisma generate
+
+# 4) runtime (run from package root)
 FROM node:lts-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=test
+ENV NODE_ENV=production
 
-RUN addgroup -S nodegrp && adduser -S nodeusr -G nodegrp
-USER nodeusr
+
+WORKDIR /app/packages/server
+
+COPY --from=prod_deps /repo/packages/server/node_modules ./node_modules
+COPY --from=prod_deps /repo/node_modules/.pnpm /app/node_modules/.pnpm
+COPY --from=prod_deps /repo/node_modules/.modules.yaml /app/node_modules/.modules.yaml
+COPY --from=prod_deps /repo/node_modules/.pnpm-workspace-state-v1.json /app/node_modules/.pnpm-workspace-state-v1.json
 
 COPY --from=build /repo/packages/server/dist ./dist
-COPY --from=build /repo/packages/server/package.json ./package.json
 COPY --from=build /repo/packages/server/prisma ./prisma
+COPY --from=build /repo/packages/server/package.json ./package.json
 
-USER root
-RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
 
-WORKDIR /tmp/install
-COPY --from=build /repo/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=build /repo/pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY --from=build /repo/package.json ./package.json
-RUN mkdir -p ./packages/server
-COPY --from=build /repo/packages/server/package.json ./packages/server/package.json
-
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-    pnpm config set store-dir /pnpm/store && \
-    pnpm --filter server --prod install --frozen-lockfile --ignore-scripts
-
-WORKDIR /app
-RUN cp -r /tmp/install/node_modules ./node_modules
-
-USER nodeusr
 EXPOSE 3000
 CMD ["node", "dist/src/main.js"]

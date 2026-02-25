@@ -21,4 +21,6 @@ export function setupSwagger(app: INestApplication) {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
+
+  console.log('📚 Swagger documentation available at /docs');
 }

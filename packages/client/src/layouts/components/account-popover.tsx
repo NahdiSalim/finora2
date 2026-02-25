@@ -1,25 +1,25 @@
-import type { IconButtonProps } from '@mui/material/IconButton';
+import type { ButtonProps } from "@mui/material/Button";
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback } from "react";
 
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Popover from '@mui/material/Popover';
-import Divider from '@mui/material/Divider';
-import MenuList from '@mui/material/MenuList';
-import Typography from '@mui/material/Typography';
-import IconButton from '@mui/material/IconButton';
-import MenuItem, { menuItemClasses } from '@mui/material/MenuItem';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Popover from "@mui/material/Popover";
+import Divider from "@mui/material/Divider";
+import MenuList from "@mui/material/MenuList";
+import Typography from "@mui/material/Typography";
+import Avatar from "@mui/material/Avatar";
+import MenuItem, { menuItemClasses } from "@mui/material/MenuItem";
+import { useTheme, alpha } from "@mui/material/styles";
 
-import { useRouter, usePathname } from 'src/routes/hooks';
+import { useRouter, usePathname } from "src/routes/hooks";
 
-import { useVerifyUserQuery } from 'src/lib/services/authApi';
-import { store } from 'src/lib/store';
+import { useVerifyUserQuery } from "src/lib/services/authApi";
+import { store } from "src/lib/store";
 
 // ----------------------------------------------------------------------
 
-export type AccountPopoverProps = IconButtonProps & {
+export type AccountPopoverProps = ButtonProps & {
   data?: {
     label: string;
     href: string;
@@ -28,17 +28,27 @@ export type AccountPopoverProps = IconButtonProps & {
   }[];
 };
 
-export function AccountPopover({ data = [], sx, ...other }: AccountPopoverProps) {
+export function AccountPopover({
+  data = [],
+  sx,
+  ...other
+}: AccountPopoverProps) {
+  const theme = useTheme();
   const router = useRouter();
   const { data: userData } = useVerifyUserQuery();
 
   const pathname = usePathname();
 
-  const [openPopover, setOpenPopover] = useState<HTMLButtonElement | null>(null);
+  const [openPopover, setOpenPopover] = useState<HTMLButtonElement | null>(
+    null,
+  );
 
-  const handleOpenPopover = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-    setOpenPopover(event.currentTarget);
-  }, []);
+  const handleOpenPopover = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      setOpenPopover(event.currentTarget);
+    },
+    [],
+  );
 
   const handleClosePopover = useCallback(() => {
     setOpenPopover(null);
@@ -49,92 +59,239 @@ export function AccountPopover({ data = [], sx, ...other }: AccountPopoverProps)
       handleClosePopover();
       router.push(path);
     },
-    [handleClosePopover, router]
+    [handleClosePopover, router],
   );
 
   const handleLogout = useCallback(() => {
     store.resetApp();
     handleClosePopover();
-    router.push('/sign-in');
+    router.push("/sign-in");
   }, [handleClosePopover, router]);
+
+  // Get initials from full name
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const fullName = userData?.full_name || "User";
+  const position = userData?.role || "Member";
+  const email = userData?.email || "";
 
   return (
     <>
-      <IconButton
+      <Button
         onClick={handleOpenPopover}
         sx={{
-          p: 0,
-          width: 40,
-          height: 40,
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+          px: 2,
+          py: 1,
+          borderRadius: 2,
+          backgroundColor: "transparent",
+          transition: theme.transitions.create(["background-color"]),
+          "&:hover": {
+            backgroundColor: alpha(theme.palette.primary.main, 0.08),
+          },
+          textTransform: "none",
           ...sx,
         }}
         {...other}
       >
-        <AccountCircleIcon sx={{ width: 42, height: 42, color: 'primary.main' }} />
-      </IconButton>
+        {/* Avatar - Left */}
+        <Avatar
+          sx={{
+            width: 40,
+            height: 40,
+            backgroundColor: theme.palette.primary.main,
+            color: theme.palette.primary.contrastText,
+            fontSize: 14,
+            fontWeight: 600,
+          }}
+        >
+          {getInitials(fullName)}
+        </Avatar>
+
+        {/* Name and Position - Right */}
+        <Box
+          sx={{
+            display: { xs: "none", sm: "flex" },
+            flexDirection: "column",
+            alignItems: "flex-start",
+            minWidth: 0,
+          }}
+        >
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 600,
+              color: theme.palette.text.primary,
+              lineHeight: 1.4,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              maxWidth: 150,
+            }}
+          >
+            {fullName}
+          </Typography>
+          <Typography
+            variant="caption"
+            sx={{
+              color: theme.palette.text.secondary,
+              lineHeight: 1.2,
+            }}
+          >
+            CEO
+          </Typography>
+        </Box>
+      </Button>
 
       <Popover
         open={!!openPopover}
         anchorEl={openPopover}
         onClose={handleClosePopover}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
         slotProps={{
           paper: {
-            sx: { width: 200 },
+            sx: {
+              width: 280,
+              mt: 1,
+              boxShadow: theme.shadows[8],
+            },
           },
         }}
       >
-        <Box sx={{ p: 2, pb: 1.5 }}>
-          <Typography variant="subtitle2" noWrap>
-            {userData?.full_name || 'User'}
-          </Typography>
-
-          <Typography variant="body2" sx={{ color: 'text.secondary' }} noWrap>
-            {userData?.email || ''}
-          </Typography>
-        </Box>
-
-        <Divider sx={{ borderStyle: 'dashed' }} />
-
-        <MenuList
-          disablePadding
+        {/* Profile Header */}
+        <Box
           sx={{
-            p: 1,
-            gap: 0.5,
-            display: 'flex',
-            flexDirection: 'column',
-            [`& .${menuItemClasses.root}`]: {
-              px: 1,
-              gap: 2,
-              borderRadius: 0.75,
-              color: 'text.secondary',
-              '&:hover': { color: 'primary.main' },
-              [`&.${menuItemClasses.selected}`]: {
-                color: 'primary.main',
-                bgcolor: 'action.selected',
-                fontWeight: 'fontWeightSemiBold',
-              },
-            },
+            p: 2.5,
+            display: "flex",
+            alignItems: "center",
+            gap: 2,
           }}
         >
-          {data.map((option) => (
-            <MenuItem
-              key={option.label}
-              selected={option.href === pathname}
-              onClick={() => handleClickItem(option.href)}
+          <Avatar
+            sx={{
+              width: 48,
+              height: 48,
+              backgroundColor: theme.palette.primary.main,
+              color: theme.palette.primary.contrastText,
+              fontSize: 16,
+              fontWeight: 600,
+            }}
+          >
+            {getInitials(fullName)}
+          </Avatar>
+
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{
+                fontWeight: 600,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
             >
-              {option.icon}
-              {option.label}
-            </MenuItem>
-          ))}
-        </MenuList>
+              {fullName}
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{
+                color: theme.palette.text.secondary,
+                display: "block",
+                mb: 0.5,
+              }}
+            >
+              CEO
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{
+                color: theme.palette.text.disabled,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                display: "block",
+              }}
+            >
+              {email}
+            </Typography>
+          </Box>
+        </Box>
 
-        <Divider sx={{ borderStyle: 'dashed' }} />
+        <Divider sx={{ borderStyle: "dashed" }} />
 
-        <Box sx={{ p: 1 }}>
-          <Button fullWidth color="secondary" size="medium" variant="text" onClick={handleLogout}>
-            Logout
+        {/* Menu Items */}
+        {data.length > 0 && (
+          <>
+            <MenuList
+              disablePadding
+              sx={{
+                p: 1,
+                gap: 0.5,
+                display: "flex",
+                flexDirection: "column",
+                [`& .${menuItemClasses.root}`]: {
+                  px: 1.5,
+                  py: 1,
+                  gap: 2,
+                  borderRadius: 1,
+                  color: theme.palette.text.secondary,
+                  transition: theme.transitions.create([
+                    "background-color",
+                    "color",
+                  ]),
+                  "&:hover": {
+                    color: theme.palette.primary.main,
+                    backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                  },
+                  [`&.${menuItemClasses.selected}`]: {
+                    color: theme.palette.primary.main,
+                    backgroundColor: alpha(theme.palette.primary.main, 0.12),
+                    fontWeight: 600,
+                  },
+                },
+              }}
+            >
+              {data.map((option) => (
+                <MenuItem
+                  key={option.label}
+                  selected={option.href === pathname}
+                  onClick={() => handleClickItem(option.href)}
+                >
+                  {option.icon}
+                  {option.label}
+                </MenuItem>
+              ))}
+            </MenuList>
+
+            <Divider sx={{ borderStyle: "dashed" }} />
+          </>
+        )}
+
+        {/* Logout Button */}
+        <Box sx={{ p: 1.5 }}>
+          <Button
+            fullWidth
+            variant="outlined"
+            color="error"
+            size="medium"
+            onClick={handleLogout}
+            sx={{
+              borderRadius: 1,
+              textTransform: "none",
+              fontWeight: 600,
+            }}
+          >
+            Se déconnecter
           </Button>
         </Box>
       </Popover>

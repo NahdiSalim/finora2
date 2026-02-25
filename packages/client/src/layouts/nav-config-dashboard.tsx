@@ -22,6 +22,14 @@ export const NAV_CONFIG: Record<
     title: "Archive",
     icon: <ArchiveIcon />,
   },
+  "/dashboard": {
+    title: "Dashboard",
+    icon: <PersonIcon />,
+  },
+  "/collaborators": {
+    title: "Collaborateurs",
+    icon: <PersonIcon />,
+  },
 
   "/documents": {
     title: "Documents",

@@ -7,9 +7,8 @@ import DotSpinner from "src/components/common/DotSpinner";
 
 import { DashboardLayout } from "src/layouts/dashboard";
 
-// ⚠️ PROTECTION TEMPORAIREMENT DÉSACTIVÉE POUR TESTS UI
-// import AuthGuard from 'src/guard/AuthGuard';
-// import PermissionGuard from 'src/guard/PermissionGuard';
+import AuthGuard from "src/guard/AuthGuard";
+import PermissionGuard from "src/guard/PermissionGuard";
 import DefaultRedirect from "src/components/default-redirect";
 import RoleView from "src/sections/roles";
 import RoleFormRouter from "src/sections/roles/RoleFormRouter";
@@ -52,14 +51,13 @@ const renderFallback = () => (
 
 function DashboardWrapper() {
   return (
-    // ⚠️ AuthGuard temporairement désactivé
-    // <AuthGuard>
-    <DashboardLayout>
-      <Suspense fallback={renderFallback()}>
-        <Outlet />
-      </Suspense>
-    </DashboardLayout>
-    // </AuthGuard>
+    <AuthGuard>
+      <DashboardLayout>
+        <Suspense fallback={renderFallback()}>
+          <Outlet />
+        </Suspense>
+      </DashboardLayout>
+    </AuthGuard>
   );
 }
 
@@ -76,73 +74,60 @@ export const routesSection: RouteObject[] = [
       },
       {
         path: "users",
-        // ⚠️ PermissionGuard temporairement désactivé
-        element: <UserPage />,
-        // element: (
-        //   <PermissionGuard requiredPath="/users">
-        //     <UserPage />
-        //   </PermissionGuard>
-        // ),
+        element: (
+          <PermissionGuard requiredPath="/users">
+            <UserPage />
+          </PermissionGuard>
+        ),
       },
       {
         path: "user/new",
-        // ⚠️ PermissionGuard temporairement désactivé
-        element: <UserFormPage />,
-        // element: (
-        //   <PermissionGuard requiredPath="/users">
-        //     <UserFormPage />
-        //   </PermissionGuard>
-        // ),
+        element: (
+          <PermissionGuard requiredPath="/users">
+            <UserFormPage />
+          </PermissionGuard>
+        ),
       },
       {
         path: "user/edit/:id",
-        // ⚠️ PermissionGuard temporairement désactivé
-        element: <UserFormPage />,
-        // element: (
-        //   <PermissionGuard requiredPath="/users">
-        //     <UserFormPage />
-        //   </PermissionGuard>
-        // ),
+        element: (
+          <PermissionGuard requiredPath="/users">
+            <UserFormPage />
+          </PermissionGuard>
+        ),
       },
       {
         path: "user/:id/documents",
-        // ⚠️ PermissionGuard temporairement désactivé
-        element: <DocumentValidationPage />,
-        // element: (
-        //   <PermissionGuard requiredPath="/users">
-        //     <DocumentValidationPage />
-        //   </PermissionGuard>
-        // ),
+
+        element: (
+          <PermissionGuard requiredPath="/users">
+            <DocumentValidationPage />
+          </PermissionGuard>
+        ),
       },
       {
         path: "roles",
-        // ⚠️ PermissionGuard temporairement désactivé
-        element: <RoleView />,
-        // element: (
-        //   <PermissionGuard requiredPath="/roles">
-        //     <RoleView />
-        //   </PermissionGuard>
-        // ),
+        element: (
+          <PermissionGuard requiredPath="/roles">
+            <RoleView />
+          </PermissionGuard>
+        ),
       },
       {
         path: "role/new",
-        // ⚠️ PermissionGuard temporairement désactivé
-        element: <RoleFormRouter />,
-        // element: (
-        //   <PermissionGuard requiredPath="/roles">
-        //     <RoleFormRouter />
-        //   </PermissionGuard>
-        // ),
+        element: (
+          <PermissionGuard requiredPath="/roles">
+            <RoleFormRouter />
+          </PermissionGuard>
+        ),
       },
       {
         path: "role/edit/:id",
-        // ⚠️ PermissionGuard temporairement désactivé
-        element: <RoleFormRouter />,
-        // element: (
-        //   <PermissionGuard requiredPath="/roles">
-        //     <RoleFormRouter />
-        //   </PermissionGuard>
-        // ),
+        element: (
+          <PermissionGuard requiredPath="/roles">
+            <RoleFormRouter />
+          </PermissionGuard>
+        ),
       },
     ],
   },

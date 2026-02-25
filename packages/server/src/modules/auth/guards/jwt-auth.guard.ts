@@ -32,10 +32,6 @@ export class JwtAuthGuard implements CanActivate {
 
     const originalToken = this.extractTokenFromHeader(request);
 
-    console.log('🔍 JWT Guard Debug:');
-    console.log('Authorization header:', request.headers.authorization);
-    console.log('Extracted token:', originalToken ? 'Token found' : 'NO TOKEN');
-
     if (!originalToken) {
       throw new ApiError(
         errors.NEED_AUTH.message,
@@ -55,6 +51,7 @@ export class JwtAuthGuard implements CanActivate {
         id: fullUser.id,
         email: fullUser.email,
         roleId: fullUser.role?.id,
+        companyId: fullUser.companyId,
         role: fullUser.role || undefined,
       };
 

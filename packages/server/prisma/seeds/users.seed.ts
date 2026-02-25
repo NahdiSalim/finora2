@@ -10,6 +10,10 @@ export async function seedUsers(prisma: PrismaClient) {
   const collaboratorRole = await prisma.role.findUnique({ where: { code: 'COLLABORATOR' } });
   const clientRole = await prisma.role.findUnique({ where: { code: 'CLIENT' } });
 
+  // Delete existing users and companies to avoid unique constraint errors
+  await prisma.user.deleteMany({});
+  await prisma.company.deleteMany({});
+
   // Create companies
   const accountingFirm = await prisma.company.create({
     data: {
@@ -42,7 +46,7 @@ export async function seedUsers(prisma: PrismaClient) {
       firstName: 'Admin',
       lastName: 'FINORA',
       phone: '+216 20 111 111',
-      status: 'ACTIVE',
+      status: 'active',
       role: {
         connect: { id: adminRole!.id },
       },
@@ -122,6 +126,13 @@ export async function seedUsers(prisma: PrismaClient) {
   const clientUser = await prisma.user.findUnique({ where: { email: 'client@finora.com' } });
 
   if (clientUser && clientUser.companyId) {
+    // Delete existing relationships first
+    await prisma.clientAccountingFirmRelationship.deleteMany({
+      where: {
+        OR: [{ clientCompanyId: clientUser.companyId }, { accountingFirmId: accountingFirm.id }],
+      },
+    });
+
     await prisma.clientAccountingFirmRelationship.create({
       data: {
         clientCompanyId: clientUser.companyId,

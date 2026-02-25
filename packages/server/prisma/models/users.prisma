@@ -39,12 +39,17 @@ model User {
   // Tasks
   assignedTasks        Task[] @relation("TaskAssignee")
   createdTasks         Task[] @relation("TaskCreatedBy")
+  validatedTasks       Task[] @relation("TaskValidator")
   clientTasks          Task[] @relation("TaskClient")
+  taskComments         TaskComment[]
   
   // Requests
-  clientRequests       Request[] @relation("RequestClient")
-  accountantRequests   Request[] @relation("RequestAccountant")
-  collaboratorRequests Request[] @relation("RequestCollaborator")
+  clientRequests       Request[] @relation("ClientRequests")
+  assignedRequests     Request[] @relation("AssignedRequests")
+  
+  // Appointments
+  clientAppointments     Appointment[] @relation("ClientAppointments")
+  accountantAppointments Appointment[] @relation("AccountantAppointments")
   
   // Tickets
   createdTickets       Ticket[] @relation("TicketCreatedBy")

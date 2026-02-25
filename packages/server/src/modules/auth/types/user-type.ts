@@ -14,6 +14,7 @@ export type CurrentUser = {
   id: number;
   email: string;
   roleId?: number;
+  companyId?: number | null;
   role?: {
     id: number;
     code: string;

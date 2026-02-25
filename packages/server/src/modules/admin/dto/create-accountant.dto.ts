@@ -19,6 +19,14 @@ export class CreateAccountantDto {
   firmName: string;
 
   @ApiProperty({
+    example: 'Comptabilité générale,Audit,Conseil fiscal',
+    description: 'Specialties / Sectors of activity (comma-separated)',
+    required: false,
+  })
+  @IsOptional()
+  specialties?: any;
+
+  @ApiProperty({
     type: 'string',
     format: 'binary',
     description: 'Patent file (Patente)',

@@ -113,3 +113,106 @@ export class AccountantController {
     );
   }
 }
+
+// Public Controller for browsing accountant profiles
+@ApiTags('Public - Accountants')
+@Controller('public/accountants')
+export class PublicAccountantsController {
+  constructor(private accountantService: AccountantService) {}
+
+  @Get()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Browse accountant profiles (public, no auth required)' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({ name: 'location', required: false, type: String, description: 'Filter by city' })
+  @ApiQuery({
+    name: 'specialty',
+    required: false,
+    type: String,
+    description: 'Filter by specialty/position',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by name or company',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of accountant profiles retrieved successfully',
+  })
+  async browseAccountants(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('location') location?: string,
+    @Query('specialty') specialty?: string,
+    @Query('search') search?: string
+  ) {
+    return await this.accountantService.browseAccountants({
+      page: page ? parseInt(page) : 1,
+      limit: limit ? parseInt(limit) : 20,
+      location,
+      specialty,
+      search,
+    });
+  }
+
+  @Get(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get accountant profile details (public, no auth required)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Accountant profile retrieved successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Accountant profile not found',
+  })
+  async getAccountantProfile(@Query('id') id: string) {
+    return await this.accountantService.getAccountantProfile(parseInt(id));
+  }
+}
+
+// Accountant Profile Management Controller
+@ApiTags('Accountant - Profile')
+@Controller('accountant/profile')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@ApiBearerAuth('JWT-auth')
+export class AccountantProfileController {
+  constructor(private accountantService: AccountantService) {}
+
+  @Get('me')
+  @Roles(RoleCode.ACCOUNTANT)
+  @ApiOperation({ summary: 'Get my public profile (accountant only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile retrieved successfully',
+  })
+  async getMyProfile(@Req() req: AuthRequest) {
+    const accountantId = req.user!.id;
+    return await this.accountantService.getAccountantProfile(accountantId);
+  }
+
+  @Post('update')
+  @Roles(RoleCode.ACCOUNTANT)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update my public profile (accountant only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile updated successfully',
+  })
+  async updateMyProfile(
+    @Req() req: AuthRequest,
+    @Body()
+    data: {
+      position?: string;
+      department?: string;
+      phone?: string;
+      diploma?: string;
+    }
+  ) {
+    const accountantId = req.user!.id;
+    return await this.accountantService.updateMyProfile(accountantId, data);
+  }
+}

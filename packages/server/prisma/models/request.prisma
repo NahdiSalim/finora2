@@ -1,29 +1,42 @@
 model Request {
-  id                    Int       @id @default(autoincrement())
-  clientId              Int
-  companyId             Int
-  accountantId          Int?
-  assignedCollaboratorId Int?
-  subject               String
-  description           String?   @db.Text
-  type                  String    // "accounting" | "legal" | "tax" | "other"
-  priority              String    @default("medium") // "low" | "medium" | "high" | "urgent"
-  deadline              DateTime?
-  status                String    @default("pending") // "pending" | "in_progress" | "completed" | "cancelled"
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-
-  client                User      @relation("RequestClient", fields: [clientId], references: [id])
-  company               Company   @relation("RequestCompany", fields: [companyId], references: [id])
-  accountant            User?     @relation("RequestAccountant", fields: [accountantId], references: [id])
-  assignedCollaborator  User?     @relation("RequestCollaborator", fields: [assignedCollaboratorId], references: [id])
+  id          Int      @id @default(autoincrement())
+  subject     String   // Titre de la demande
+  description String?  @db.Text
+  type        String   // 'accounting', 'tax', 'consultation', 'document', 'other'
+  urgency     String   @default("normal") // 'low', 'normal', 'high', 'urgent'
+  status      String   @default("pending") // 'pending', 'in_progress', 'resolved', 'rejected', 'cancelled'
+  response    String?  @db.Text
+  attachments String[] @default([]) // Array of file paths in MinIO
   
-  tickets               Ticket[]
-  tasks                 Task[]
+  // Relations
+  clientId    Int
+  client      User     @relation("ClientRequests", fields: [clientId], references: [id], onDelete: Cascade)
+  
+  assignedToId Int?
+  assignedTo   User?   @relation("AssignedRequests", fields: [assignedToId], references: [id], onDelete: SetNull)
+  
+  companyId   Int?
+  company     Company? @relation("CompanyRequests", fields: [companyId], references: [id], onDelete: Cascade)
+  
+  // Task conversion
+  convertedToTaskId Int?     @unique
+  convertedToTask   Task? @relation("RequestToTask", fields: [convertedToTaskId], references: [id], onDelete: SetNull)
+  taskFromRequest   Task? @relation("TaskFromRequest")
+  
+  // Ticket relation
+  tickets     Ticket[]
+  
+  // Timestamps
+  respondedAt DateTime?
+  resolvedAt  DateTime?
+  convertedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([clientId])
+  @@index([assignedToId])
   @@index([companyId])
-  @@index([accountantId])
   @@index([status])
-  @@index([priority])
+  @@index([convertedToTaskId])
+  @@map("requests")
 }

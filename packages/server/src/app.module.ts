@@ -11,6 +11,11 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AccountantModule } from './modules/accountant/accountant.module';
+import { DocumentModule } from './modules/document/document.module';
+import { StorageModule } from './modules/storage/storage.module';
+import { TaskModule } from './modules/task/task.module';
+import { RequestModule } from './modules/request/request.module';
+import { AppointmentModule } from './modules/appointment/appointment.module';
 
 @Module({
   imports: [
@@ -32,7 +37,7 @@ import { AccountantModule } from './modules/accountant/accountant.module';
     }),
     LoggerModule.forRoot({
       pinoHttp: {
-        level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+        level: process.env.NODE_ENV === 'production' ? 'info' : 'silent',
       },
     }),
     RoleModule,
@@ -41,6 +46,11 @@ import { AccountantModule } from './modules/accountant/accountant.module';
     AuthModule,
     AdminModule,
     AccountantModule,
+    DocumentModule,
+    StorageModule,
+    TaskModule,
+    RequestModule,
+    AppointmentModule,
   ],
   controllers: [AppController],
   providers: [

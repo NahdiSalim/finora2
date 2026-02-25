@@ -6,12 +6,14 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   Res,
   UseGuards,
   UseInterceptors,
   UploadedFile,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { User } from '@prisma/client';
@@ -31,8 +33,11 @@ import { UpdateUserDto } from './update-user.dto';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { CreateUserDto } from './dto/create-user.dto';
+import { SuspendUserDto } from './dto/suspend-user.dto';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/types/user-type';
 import type { Response } from 'express';
 import type { AuthRequest } from '../auth/types/user-type';
@@ -88,6 +93,22 @@ export class UserController {
   @ApiNotFoundResponse({ description: 'User not found' })
   async toggleActive(@Param('id') id: number) {
     return this.userService.toggleActive(id);
+  }
+
+  @Put(':id/suspend')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMINISTRATOR')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Suspend any user account (admin only, except administrators)' })
+  @ApiOkResponse({ description: 'User account suspended successfully' })
+  @ApiBadRequestResponse({ description: 'Cannot suspend administrator accounts' })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only administrators can suspend users',
+  })
+  async suspendUser(@Param('id', ParseIntPipe) id: number, @Body() dto: SuspendUserDto) {
+    return this.userService.suspendUser(id, dto.reason);
   }
 
   @Patch(':id')

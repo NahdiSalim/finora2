@@ -29,9 +29,9 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 
-@ApiTags('Admin - Accountant Management')
+@ApiTags('Admin - User Management')
 @ApiBearerAuth('JWT-auth')
-@Controller('admin/accountants')
+@Controller('admin/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMINISTRATOR')
 export class AdminController {
@@ -68,7 +68,7 @@ export class AdminController {
     return this.adminService.getAccountantById(id);
   }
 
-  @Post()
+  @Post('accountants')
   @ApiOperation({ summary: 'Create a new accountant account' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Accountant created successfully' })
@@ -95,17 +95,19 @@ export class AdminController {
   }
 
   @Put(':id/activate')
-  @ApiOperation({ summary: 'Activate a pending accountant account' })
-  @ApiResponse({ status: 200, description: 'Accountant activated successfully' })
-  @ApiResponse({ status: 404, description: 'Accountant not found' })
+  @ApiOperation({ summary: 'Activate any user account (except administrators)' })
+  @ApiResponse({ status: 200, description: 'User account activated successfully' })
+  @ApiResponse({ status: 400, description: 'Administrator accounts are always active' })
+  @ApiResponse({ status: 404, description: 'User not found' })
   async activateAccountant(@Param('id', ParseIntPipe) id: number) {
     return this.adminService.activateAccountant(id);
   }
 
   @Put(':id/suspend')
-  @ApiOperation({ summary: 'Suspend an accountant account' })
-  @ApiResponse({ status: 200, description: 'Accountant suspended successfully' })
-  @ApiResponse({ status: 404, description: 'Accountant not found' })
+  @ApiOperation({ summary: 'Suspend any user account (except administrators)' })
+  @ApiResponse({ status: 200, description: 'User account suspended successfully' })
+  @ApiResponse({ status: 403, description: 'Cannot suspend administrator accounts' })
+  @ApiResponse({ status: 404, description: 'User not found' })
   async suspendAccountant(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: SuspendAccountantDto

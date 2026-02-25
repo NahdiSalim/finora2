@@ -34,7 +34,7 @@ import { StorageModule } from './modules/storage/storage.module';
     }),
     LoggerModule.forRoot({
       pinoHttp: {
-        level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+        level: process.env.NODE_ENV === 'production' ? 'info' : 'silent',
       },
     }),
     RoleModule,

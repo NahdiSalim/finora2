@@ -162,7 +162,7 @@ export class AdminService {
     };
   }
 
-  // Activate accountant
+  // Activate any user account (admin can activate all accounts)
   async activateAccountant(id: number) {
     const user = await this.prisma.user.findUnique({
       where: { id },
@@ -177,9 +177,9 @@ export class AdminService {
       );
     }
 
-    // Check if user is accountant by role code
-    if (user.role?.code !== RoleCode.ACCOUNTANT) {
-      throw new ApiError('User is not an accountant', 400, 'INVALID_ROLE');
+    // Prevent activating admin accounts (they should always be active)
+    if (user.role?.code === RoleCode.ADMIN) {
+      throw new ApiError('Administrator accounts are always active', 400, 'ADMIN_ALWAYS_ACTIVE');
     }
 
     // Update user status
@@ -190,7 +190,7 @@ export class AdminService {
       },
     });
 
-    // Update company status
+    // Update company status if user has a company
     if (user.companyId) {
       await this.prisma.company.update({
         where: { id: user.companyId },
@@ -209,12 +209,12 @@ export class AdminService {
 
     return {
       success: true,
-      message: 'Accountant activated successfully',
+      message: 'User account activated successfully',
       data: updatedUser,
     };
   }
 
-  // Suspend accountant
+  // Suspend any user account (admin can suspend all accounts)
   async suspendAccountant(id: number, reason?: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
@@ -229,9 +229,9 @@ export class AdminService {
       );
     }
 
-    // Check if user is accountant by role code
-    if (user.role?.code !== RoleCode.ACCOUNTANT) {
-      throw new ApiError('User is not an accountant', 400, 'INVALID_ROLE');
+    // Prevent suspending admin accounts
+    if (user.role?.code === RoleCode.ADMIN) {
+      throw new ApiError('Cannot suspend administrator accounts', 403, 'FORBIDDEN_SUSPEND_ADMIN');
     }
 
     const updatedUser = await this.prisma.user.update({
@@ -252,7 +252,7 @@ export class AdminService {
 
     return {
       success: true,
-      message: 'Accountant suspended successfully',
+      message: 'User account suspended successfully',
       data: updatedUser,
     };
   }
@@ -262,7 +262,7 @@ export class AdminService {
     dto: CreateAccountantDto,
     files?: { patentFile?: Express.Multer.File[]; rneFile?: Express.Multer.File[] }
   ) {
-    const { email, phone, firmName, password, status = UserStatus.ACTIVE } = dto;
+    const { email, phone, firmName, password, status = UserStatus.ACTIVE, specialties } = dto;
 
     try {
       // Check if email already exists
@@ -304,6 +304,16 @@ export class AdminService {
         );
       }
 
+      // Convert specialties to array if it's a string
+      let specialtiesArray: string[] = [];
+      if (specialties) {
+        if (Array.isArray(specialties)) {
+          specialtiesArray = specialties;
+        } else if (typeof specialties === 'string') {
+          specialtiesArray = [specialties];
+        }
+      }
+
       // Create accounting firm
       const firm = await this.prisma.company.create({
         data: {
@@ -313,6 +323,7 @@ export class AdminService {
           phone,
           type: 'accounting_firm',
           status: status === UserStatus.ACTIVE ? UserStatus.ACTIVE : UserStatus.PENDING,
+          specialties: specialtiesArray,
         },
       });
 
@@ -365,6 +376,7 @@ export class AdminService {
             name: firm.name,
             patentFile: firm.patentFile,
             rne: firm.rne,
+            specialties: firm.specialties,
           },
         },
       };

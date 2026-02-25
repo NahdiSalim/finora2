@@ -602,7 +602,7 @@ export class AuthService {
     dto: RegisterAccountantDto,
     files?: { patentFile?: Express.Multer.File[]; rneFile?: Express.Multer.File[] }
   ) {
-    const { email, phone, firmName, password } = dto;
+    const { email, phone, firmName, password, specialties } = dto;
 
     try {
       // Check if email already exists
@@ -644,6 +644,16 @@ export class AuthService {
         );
       }
 
+      // Convert specialties to array if it's a string
+      let specialtiesArray: string[] = [];
+      if (specialties) {
+        if (Array.isArray(specialties)) {
+          specialtiesArray = specialties;
+        } else if (typeof specialties === 'string') {
+          specialtiesArray = [specialties];
+        }
+      }
+
       // Create accounting firm with pending status
       const firm = await this.prisma.company.create({
         data: {
@@ -653,6 +663,7 @@ export class AuthService {
           phone,
           type: 'accounting_firm',
           status: UserStatus.PENDING,
+          specialties: specialtiesArray,
         },
       });
 
@@ -705,6 +716,7 @@ export class AuthService {
             name: firm.name,
             patentFile: firm.patentFile,
             rne: firm.rne,
+            specialties: firm.specialties,
           },
         },
       };

@@ -302,6 +302,37 @@ export class UserService {
     };
   }
 
+  async suspendUser(targetUserId: number, reason?: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: { role: true },
+    });
+
+    if (!user) {
+      throw new ApiError(
+        errors.NOT_FOUND.message,
+        errors.NOT_FOUND.code,
+        errors.NOT_FOUND.errorCode
+      );
+    }
+
+    // Prevent suspending admin accounts
+    if (user.role?.id === 1) {
+      throw new ApiError('Cannot suspend administrator accounts', 403, 'FORBIDDEN_SUSPEND_ADMIN');
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: { status: UserStatus.SUSPENDED },
+    });
+
+    return {
+      success: true,
+      message: 'User account suspended successfully',
+      user: updatedUser,
+    };
+  }
+
   async exportUsersCSV(lang: 'fr' | 'en' = 'fr'): Promise<Buffer> {
     const useEnglish = lang === 'en';
 

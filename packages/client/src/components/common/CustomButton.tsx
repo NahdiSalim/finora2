@@ -54,22 +54,22 @@ const CustomButton = memo(
       // Size configurations
       const sizeConfig = {
         small: {
-          height: 36,
-          px: 2,
-          fontSize: theme.typography.body2.fontSize,
-          iconSize: 18,
+          height: 28, // Extra compact
+          px: 1.25,
+          fontSize: 13,
+          iconSize: 14,
         },
         medium: {
-          height: 44,
-          px: 3,
-          fontSize: theme.typography.body1.fontSize,
-          iconSize: 20,
+          height: 36, // Compact
+          px: 2,
+          fontSize: 14,
+          iconSize: 16,
         },
         large: {
-          height: 52,
-          px: 4,
-          fontSize: theme.typography.h6.fontSize,
-          iconSize: 24,
+          height: 44, // Standard
+          px: 3,
+          fontSize: 15,
+          iconSize: 20,
         },
       };
 
@@ -94,7 +94,7 @@ const CustomButton = memo(
         outlined: {
           backgroundColor: "transparent",
           color: paletteColor.main,
-          border: 2,
+          border: 1.5,
           borderColor: paletteColor.main,
           "&:hover": {
             backgroundColor: alpha(paletteColor.main, 0.08),

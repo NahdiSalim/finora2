@@ -281,15 +281,7 @@ export class RequestService {
             name: true,
           },
         },
-        assignedTo: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
+
         convertedToTask: {
           select: {
             id: true,
@@ -317,8 +309,7 @@ export class RequestService {
       where: { id: userId },
       select: { companyId: true },
     });
-    const assignedToId = request.assignedToId || request.accountantId;
-
+    const assignedToId = request.assignedToId;
     if (
       request.clientId !== userId &&
       assignedToId !== userId &&

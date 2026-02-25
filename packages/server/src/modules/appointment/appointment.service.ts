@@ -30,7 +30,6 @@ export class AppointmentService {
         throw new ApiError('End time must be after start time', 400, 'INVALID_TIME');
       }
 
-      // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
       const appointment = await this.prisma.appointment.create({
         data: {
           title: dto.title,
@@ -96,9 +95,8 @@ export class AppointmentService {
       where.status = status;
     }
     const [total, appointments] = await Promise.all([
-      // @ts-expect-error - Prisma types not yet generated
       this.prisma.appointment.count({ where }),
-      // @ts-expect-error - Prisma types not yet generated
+
       this.prisma.appointment.findMany({
         where,
         skip,
@@ -158,9 +156,8 @@ export class AppointmentService {
       where.status = status;
     }
     const [total, appointments] = await Promise.all([
-      // @ts-expect-error - Prisma types not yet generated
       this.prisma.appointment.count({ where }),
-      // @ts-expect-error - Prisma types not yet generated
+
       this.prisma.appointment.findMany({
         where,
         skip,
@@ -192,7 +189,6 @@ export class AppointmentService {
     ]);
 
     // Count by status
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     const statusCounts = await this.prisma.appointment.groupBy({
       by: ['status'],
       where: { companyId: accountant.companyId },
@@ -229,7 +225,6 @@ export class AppointmentService {
    * Get appointment by ID
    */
   async getAppointmentById(appointmentId: number, userId: number) {
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
       include: {
@@ -288,7 +283,6 @@ export class AppointmentService {
    * Update appointment
    */
   async updateAppointment(appointmentId: number, dto: UpdateAppointmentDto, userId: number) {
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
     });
@@ -314,7 +308,6 @@ export class AppointmentService {
       }
     }
 
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     const updatedAppointment = await this.prisma.appointment.update({
       where: { id: appointmentId },
       data: {
@@ -364,7 +357,6 @@ export class AppointmentService {
     dto: RespondAppointmentDto,
     accountantId: number
   ) {
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
     });
@@ -379,7 +371,6 @@ export class AppointmentService {
 
     const isConfirmed = dto.action === AppointmentAction.CONFIRM;
 
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     const updatedAppointment = await this.prisma.appointment.update({
       where: { id: appointmentId },
       data: {
@@ -422,7 +413,6 @@ export class AppointmentService {
     dto: RescheduleAppointmentDto,
     userId: number
   ) {
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
     });
@@ -446,7 +436,6 @@ export class AppointmentService {
     }
 
     // Create new appointment with rescheduled status
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     const newAppointment = await this.prisma.appointment.create({
       data: {
         title: appointment.title,
@@ -484,7 +473,6 @@ export class AppointmentService {
     });
 
     // Update original appointment status
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     await this.prisma.appointment.update({
       where: { id: appointmentId },
       data: {
@@ -509,7 +497,6 @@ export class AppointmentService {
    * Cancel appointment
    */
   async cancelAppointment(appointmentId: number, userId: number) {
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
     });
@@ -523,7 +510,6 @@ export class AppointmentService {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
     }
 
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     const updatedAppointment = await this.prisma.appointment.update({
       where: { id: appointmentId },
       data: {
@@ -543,7 +529,6 @@ export class AppointmentService {
    * Delete appointment
    */
   async deleteAppointment(appointmentId: number, userId: number) {
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
     });
@@ -557,7 +542,6 @@ export class AppointmentService {
       throw new ApiError('Only appointment creator can delete', 403, 'ACCESS_DENIED');
     }
 
-    // @ts-expect-error - Prisma types will be generated after running 'npx prisma generate'
     await this.prisma.appointment.delete({
       where: { id: appointmentId },
     });

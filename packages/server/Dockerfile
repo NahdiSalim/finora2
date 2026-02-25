@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-# 1) deps (install)
+# 1) deps
 FROM node:lts-alpine AS deps
 WORKDIR /repo
 
@@ -20,20 +20,19 @@ WORKDIR /repo
 
 RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
 
-COPY --from=deps /repo/node_modules /repo/node_modules
+COPY --from=deps /repo /repo
+
 COPY . .
 
-
-RUN pnpm --filter server prisma generate
+RUN pnpm --filter server exec prisma generate
 
 RUN pnpm --filter server build
 
 
-# 3) runtime (prod)
+# 3) runtime
 FROM node:lts-alpine AS runner
 WORKDIR /app
-
-ENV NODE_ENV=production
+ENV NODE_ENV=test
 
 RUN addgroup -S nodegrp && adduser -S nodeusr -G nodegrp
 USER nodeusr
@@ -44,16 +43,21 @@ COPY --from=build /repo/packages/server/prisma ./prisma
 
 USER root
 RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
-RUN pnpm add -g pnpm@10.13.1 >/dev/null 2>&1 || true
+
 WORKDIR /tmp/install
-COPY --from=build /repo/pnpm-lock.yaml /tmp/install/pnpm-lock.yaml
-COPY --from=build /repo/pnpm-workspace.yaml /tmp/install/pnpm-workspace.yaml
-COPY --from=build /repo/package.json /tmp/install/package.json
-COPY --from=build /repo/packages/server/package.json /tmp/install/packages/server/package.json
-RUN pnpm --filter server --prod install --frozen-lockfile
+COPY --from=build /repo/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=build /repo/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=build /repo/package.json ./package.json
+RUN mkdir -p ./packages/server
+COPY --from=build /repo/packages/server/package.json ./packages/server/package.json
+
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm config set store-dir /pnpm/store && \
+    pnpm --filter server --prod install --frozen-lockfile --ignore-scripts
+
 WORKDIR /app
 RUN cp -r /tmp/install/node_modules ./node_modules
-USER nodeusr
 
+USER nodeusr
 EXPOSE 3000
 CMD ["node", "dist/main"]

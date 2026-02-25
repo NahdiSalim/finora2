@@ -5,7 +5,6 @@ FROM node:lts-alpine AS builder
 WORKDIR /repo
 
 RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
-
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 

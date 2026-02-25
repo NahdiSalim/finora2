@@ -64,22 +64,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Compute SAFE_BRANCH
+        shell: bash
+        run: echo "SAFE_BRANCH=${GITHUB_REF_NAME//\//-}" >> $GITHUB_ENV
+
       - name: Deploy front to VM via SSH (password)
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          IMAGE: ${{ secrets.DOCKERHUB_USERNAME_FRONT }}/finora-front
+          TAG: ${{ env.SAFE_BRANCH }}
+          CONTAINER: finora-front
+          DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME_FRONT }}
+          DOCKER_TOKEN: ${{ secrets.DOCKERHUB_TOKEN_FRONT }}
         with:
           host: ${{ secrets.VM_HOST }}
           port: ${{ secrets.VM_SSH_PORT }}
           username: ${{ secrets.VM_USER }}
           password: ${{ secrets.VM_PASSWORD }}
+          envs: IMAGE,TAG,CONTAINER,DOCKER_USER,DOCKER_TOKEN
           script: |
             set -e
 
-            IMAGE="${{ secrets.DOCKERHUB_USERNAME_FRONT }}/finora-front"
-            TAG="${GITHUB_REF_NAME}"
-            CONTAINER="finora-front"
-
             echo "DockerHub login..."
-            docker login -u "${{ secrets.DOCKERHUB_USERNAME_FRONT }}" -p "${{ secrets.DOCKERHUB_TOKEN_FRONT }}"
+            echo "$DOCKER_TOKEN" | docker login -u "$DOCKER_USER" --password-stdin
 
             echo "Pulling image: $IMAGE:$TAG"
             docker pull "$IMAGE:$TAG"

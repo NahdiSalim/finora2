@@ -57,22 +57,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Compute SAFE_BRANCH
+        shell: bash
+        run: echo "SAFE_BRANCH=${GITHUB_REF_NAME//\//-}" >> $GITHUB_ENV
+
       - name: Deploy to VM via SSH (password)
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          IMAGE: ${{ secrets.DOCKERHUB_USERNAME_BACK }}/finora-server
+          TAG: ${{ env.SAFE_BRANCH }}
+          CONTAINER: finora-server
+          DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME_BACK }}
+          DOCKER_TOKEN: ${{ secrets.DOCKERHUB_TOKEN_BACK }}
+          SERVER_ENV_FILE: ${{ secrets.SERVER_ENV_FILE }}
         with:
           host: ${{ secrets.VM_HOST }}
           port: ${{ secrets.VM_SSH_PORT }}
           username: ${{ secrets.VM_USER }}
           password: ${{ secrets.VM_PASSWORD }}
+          envs: IMAGE,TAG,CONTAINER,DOCKER_USER,DOCKER_TOKEN,SERVER_ENV_FILE
           script: |
             set -e
 
-            IMAGE="${{ secrets.DOCKERHUB_USERNAME_BACK }}/finora-server"
-            TAG="${GITHUB_REF_NAME}"
-            CONTAINER="finora-server"
-
             echo "Logging into DockerHub..."
-            docker login -u "${{ secrets.DOCKERHUB_USERNAME_BACK }}" -p "${{ secrets.DOCKERHUB_TOKEN_BACK }}"
+            echo "$DOCKER_TOKEN" | docker login -u "$DOCKER_USER" --password-stdin
 
             echo "Pulling image: $IMAGE:$TAG"
             docker pull "$IMAGE:$TAG"
@@ -80,15 +88,17 @@ jobs:
             echo "Stopping old container (if exists)..."
             docker rm -f "$CONTAINER" || true
 
-            echo "${{ secrets.SERVER_ENV_FILE }}" > /tmp/server.env
-            ENV_FILE="/tmp/server.env"
+            echo "$SERVER_ENV_FILE" > /tmp/server.env
 
             echo "Starting new container..."
             docker run -d --restart unless-stopped \
               --name "$CONTAINER" \
+              --env-file /tmp/server.env \
               -p 3000:3000 \
-              -e NODE_ENV=test \
+              -e NODE_ENV=production \
               "$IMAGE:$TAG"
+
+            rm -f /tmp/server.env
 
             echo "Done. Running containers:"
             docker ps | grep "$CONTAINER" || true

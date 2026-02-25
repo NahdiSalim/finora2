@@ -73,9 +73,105 @@ export const routesSection: RouteObject[] = [
         element: <DefaultRedirect />,
       },
       {
-        path: "users",
+        path: "archive",
         element: (
-          <PermissionGuard requiredPath="/users">
+          <PermissionGuard requiredPath="/archive">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "documents",
+        element: (
+          <PermissionGuard requiredPath="/documents">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "documents/:id",
+        element: (
+          <PermissionGuard requiredPath="/documents/:id">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "meetings",
+        element: (
+          <PermissionGuard requiredPath="/meetings">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "meetings/:id",
+        element: (
+          <PermissionGuard requiredPath="/meetings/:id">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "requests",
+        element: (
+          <PermissionGuard requiredPath="/requests">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "requests/:id",
+        element: (
+          <PermissionGuard requiredPath="/requests/:id">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "messages",
+        element: (
+          <PermissionGuard requiredPath="/messages">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "messages/:id",
+        element: (
+          <PermissionGuard requiredPath="/messages/:id">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "banks",
+        element: (
+          <PermissionGuard requiredPath="/banks">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "network",
+        element: (
+          <PermissionGuard requiredPath="/network">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "profile",
+        element: (
+          <PermissionGuard requiredPath="/profile">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "profile/edit",
+        element: (
+          <PermissionGuard requiredPath="/profile/edit">
             <UserPage />
           </PermissionGuard>
         ),

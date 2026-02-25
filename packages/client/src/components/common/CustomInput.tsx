@@ -1,4 +1,4 @@
-import { TextField, IconButton, InputAdornment, useTheme } from "@mui/material";
+import { TextField, IconButton, InputAdornment, useTheme, Box } from "@mui/material";
 import type { TextFieldProps } from "@mui/material";
 import type { InputLabelProps } from "@mui/material/InputLabel";
 import { forwardRef, useState } from "react";
@@ -61,9 +61,14 @@ const CustomInput = forwardRef<HTMLDivElement, CustomInputProps>(
           }}
         >
           {showPassword ? (
-            <Icon icon="solar:eye-bold" sx={{ size: 20 }} />
+            <Box sx={{ fontSize: 20 }}>
+              <Icon icon="solar:eye-bold"  />
+            </Box>
+
           ) : (
-            <Icon icon="solar:eye-closed-bold" sx={{ size: 20 }} />
+            <Box sx={{ fontSize: 20 }}>
+              <Icon icon="solar:eye-closed-bold" />
+            </Box>
           )}
         </IconButton>
       </InputAdornment>

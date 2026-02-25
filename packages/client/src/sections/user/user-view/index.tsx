@@ -1,13 +1,11 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import Add from "@mui/icons-material/Add";
 import BorderColorIcon from "@mui/icons-material/BorderColor";
 import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 import type { SelectChangeEvent } from "@mui/material";
 import {
   Box,
-  Button,
   Card,
   FormControl,
   IconButton,
@@ -21,7 +19,9 @@ import {
   TablePagination,
   Typography,
 } from "@mui/material";
+import { Plus, FolderDown } from "lucide-react";
 import DotSpinner from "src/components/common/DotSpinner";
+import { PageTitleHeader } from "src/layouts/components/page-title-header";
 
 import { useTable } from "src/hooks/use-table";
 import { useTableNavigation } from "src/hooks/useTableNavigation";
@@ -77,6 +77,7 @@ export default function UserView() {
   const navigate = useNavigate();
   const { showConfirm, showAlert } = useAlert();
   const { hasAction } = usePermissions();
+  const [searchValue, setSearchValue] = useState("");
 
   const [filterName, setFilterName] = useState("");
   const [verificationStatusFilter, setVerificationStatusFilter] = useState("");
@@ -125,27 +126,36 @@ export default function UserView() {
 
   return (
     <DashboardContent>
-      <Box
-        sx={{
-          mb: 5,
-          display: "flex",
-          alignItems: "center",
+      <PageTitleHeader
+        title="Users List"
+        caption="Manage user information and permissions"
+        // breadcrumbs={[
+        //   { label: 'Home', path: '/' },
+        //   { label: 'Users', path: '/users' }
+        // ]}
+        documentsProcessed={{
+          processed: 45,
+          total: 120,
         }}
-      >
-        <Typography variant="h5" sx={{ flexGrow: 1 }}>
-          Users List
-        </Typography>
-        {canCreate && (
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<Add />}
-            onClick={handleNewUser}
-          >
-            Add New User
-          </Button>
-        )}
-      </Box>
+        // searchbar={{
+        //   value: searchValue,
+        //   onChange: setSearchValue,
+        //   placeholder: 'Search users...',
+        // }}
+        actions={[
+          {
+            label: "Export",
+            icon: <FolderDown />,
+            onClick: () => console.log("Export"),
+            variant: "outlined",
+          },
+          {
+            label: "Add User",
+            icon: <Plus />,
+            onClick: () => console.log("Add"),
+          },
+        ]}
+      />
 
       <Card>
         <DataTableToolbar

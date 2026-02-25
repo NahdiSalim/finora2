@@ -75,7 +75,7 @@ export const routesSection: RouteObject[] = [
         element: <DefaultRedirect />,
       },
       {
-        path: "archive",
+        path: "users",
         element: (
           <PermissionGuard requiredPath="/archive">
             <UserPage />
@@ -212,6 +212,7 @@ export const routesSection: RouteObject[] = [
       },
       {
         path: "user/:id/documents",
+
         element: (
           <PermissionGuard requiredPath="/users">
             <DocumentValidationPage />

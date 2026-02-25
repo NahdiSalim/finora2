@@ -32,7 +32,7 @@ export const authApi = createApi({
       ForgotPasswordRequest
     >({
       query: (data) => ({
-        url: "/auth/forgot-password",
+        url: "/auth/request-reset-password",
         method: "POST",
         body: data,
       }),
@@ -42,25 +42,19 @@ export const authApi = createApi({
       ResetPasswordRequest
     >({
       query: (data) => ({
-        url: `/auth/reset-password/${data.token}`,
+        url: "/auth/reset-password",
         method: "POST",
         body: data,
       }),
     }),
     register: builder.mutation<RegisterResponse, RegisterRequest>({
       query: (data) => ({
-        url: "/auth/register/client",
+        url: "/auth/register",
         method: "POST",
         body: data,
       }),
     }),
-    registerAccountant: builder.mutation({
-      query: (formData: FormData) => ({
-        url: "/auth/register/accountant",
-        method: "POST",
-        body: formData,
-      }),
-    }),
+
     verifyUser: builder.query<VerifyUserResponse, void>({
       query: () => ({
         url: "/auth/me",
@@ -87,6 +81,5 @@ export const {
   useResetPasswordMutation,
   useVerifyUserQuery,
   useRegisterMutation,
-  useRegisterAccountantMutation,
   useRefreshTokenMutation,
 } = authApi;

@@ -28,27 +28,15 @@ export const registerValidationSchema = yup.object({
   email: yup
     .string()
     .required("L'adresse email est obligatoire")
-    .email("Email invalide")
-    .max(100, "Email trop long"),
+    .email("Email invalide"),
 
-  phoneNumber: yup
-    .string()
-    .required("Le numéro de téléphone est obligatoire")
-    .matches(/^[0-9+\s]+$/, "Numéro invalide"),
+  phoneNumber: yup.string().required("Le numéro de téléphone est obligatoire"),
 
   password: yup
     .string()
     .required("Le mot de passe est obligatoire")
-    .min(8, "Minimum 8 caractères")
-    .max(100, "Mot de passe trop long")
-    .matches(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-      "Doit contenir majuscule, minuscule et chiffre",
-    ),
-  confirmPassword: yup
-    .string()
-    .required("La confirmation est obligatoire")
-    .oneOf([yup.ref("password")], "Les mots de passe ne correspondent pas"),
+    .min(6, "Le mot de passe doit contenir au moins 6 caractères"),
+
   role: yup
     .string()
     .oneOf(["CLIENT", "COMPTABLE"])
@@ -56,39 +44,10 @@ export const registerValidationSchema = yup.object({
 
   agreeToTerms: yup
     .boolean()
-    .required("Vous devez accepter les termes et conditions")
     .oneOf([true], "Vous devez accepter les termes et conditions"),
-  // ✅ Champs spécifiques COMPTABLE
-  firmName: yup.string().when("role", {
-    is: "COMPTABLE",
-    then: (schema) => schema.required("Le nom du cabinet est obligatoire"),
-    otherwise: (schema) => schema.optional(),
-  }),
-
-  patentFile: yup
-    .mixed<File>()
-    .nullable()
-    .when("role", {
-      is: "COMPTABLE",
-      then: (schema) => schema.required("La patente est obligatoire"),
-      otherwise: (schema) => schema.notRequired(),
-    }),
-
-  rneFile: yup
-    .mixed<File>()
-    .nullable()
-    .when("role", {
-      is: "COMPTABLE",
-      then: (schema) => schema.required("Le RNE est obligatoire"),
-      otherwise: (schema) => schema.notRequired(),
-    }),
-  sector: yup.string().when("role", {
-    is: "COMPTABLE",
-    then: (schema) => schema.required("Le secteur d'activité est obligatoire"),
-    otherwise: (schema) => schema.optional(),
-  }),
 });
 export type RegisterFormData = yup.InferType<typeof registerValidationSchema>;
+
 export type ForgotPasswordFormData = yup.InferType<
   typeof forgotPasswordValidationSchema
 >;

@@ -52,7 +52,7 @@ async function runSeeds() {
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-
+app.set('trust proxy', 1);
   // CORS configuration - doit être avant tout
   app.enableCors({
     origin: true, // Permet toutes les origines en dev, à configurer en prod

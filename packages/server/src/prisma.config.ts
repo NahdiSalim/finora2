@@ -1,4 +1,3 @@
-// prisma/prisma.config.ts
 import { join } from 'path';
 
 export default {

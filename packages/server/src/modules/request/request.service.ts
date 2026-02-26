@@ -281,7 +281,6 @@ export class RequestService {
             name: true,
           },
         },
-
         convertedToTask: {
           select: {
             id: true,
@@ -309,10 +308,10 @@ export class RequestService {
       where: { id: userId },
       select: { companyId: true },
     });
-    const assignedToId = request.assignedToId;
+
     if (
       request.clientId !== userId &&
-      assignedToId !== userId &&
+      request.assignedToId !== userId &&
       request.companyId !== user?.companyId
     ) {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');

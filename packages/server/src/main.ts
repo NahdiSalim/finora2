@@ -67,14 +67,20 @@ async function bootstrap() {
   app.use(
     helmet({
       contentSecurityPolicy: {
+        useDefaults: true,
         directives: {
           defaultSrc: ["'self'", 'http:'],
           styleSrc: ["'self'", "'unsafe-inline'", 'http:'],
           scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'http:'],
-          imgSrc: ["'self'", 'data:', 'https:', 'http:'],
+          imgSrc: ["'self'", 'data:', 'http:', 'https:'],
         },
       },
+
       crossOriginEmbedderPolicy: false,
+
+      strictTransportSecurity: false,
+      crossOriginOpenerPolicy: false,
+      originAgentCluster: false,
     })
   );
 

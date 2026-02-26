@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { Box, Card, IconButton, useTheme } from "@mui/material";
+import {
+  Avatar,
+  Box,
+  Card,
+  IconButton,
+  Typography,
+  useTheme,
+} from "@mui/material";
 import Add from "@mui/icons-material/Add";
 
 import { Scrollbar } from "src/components/scrollbar";
@@ -27,9 +34,25 @@ export default function CollaboratorView() {
       id: "name",
       label: "Collaborateurs",
       render: (row: any) => (
-        <>
-          {row.firstName} {row.lastName}
-        </>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          {" "}
+          <Avatar
+            sx={{
+              width: 36,
+              height: 36,
+              backgroundColor: theme.palette.primary.main,
+              fontSize: 14,
+              fontWeight: 600,
+            }}
+          >
+            {row.firstName?.charAt(0)}
+            {row.lastName?.charAt(0)}{" "}
+          </Avatar>{" "}
+          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+            {" "}
+            {row.firstName} {row.lastName}{" "}
+          </Typography>{" "}
+        </Box>
       ),
     },
     {

@@ -75,7 +75,33 @@ export default function CollaboratorView() {
     {
       id: "status",
       label: "Statut",
-      render: (row: any) => (row.isActive ? "Actif" : "Inactif"),
+      render: (row: any) => (
+        <Box
+          sx={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            px: 1.5,
+            py: 0.5,
+            borderRadius: 2,
+            border: 1,
+            borderColor: row.isActive
+              ? theme.palette.success.light
+              : theme.palette.error.light,
+            backgroundColor: row.isActive
+              ? theme.palette.success.lighter
+              : theme.palette.error.lighter,
+            color: row.isActive
+              ? theme.palette.success.dark
+              : theme.palette.error.dark,
+            fontWeight: 600,
+            fontSize: 12,
+          }}
+        >
+          {" "}
+          {row.isActive ? "Actif" : "Inactif"}{" "}
+        </Box>
+      ),
     },
     {
       id: "Actions",

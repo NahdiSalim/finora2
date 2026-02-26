@@ -202,7 +202,7 @@ export function MessagesPopover({
               }}
             >
               <Iconify
-                icon="solar:chat-round-dots-bold-duotone"
+                icon="solar:chat-round-dots-bold"
                 width={64}
                 sx={{ color: "text.disabled", mb: 2 }}
               />

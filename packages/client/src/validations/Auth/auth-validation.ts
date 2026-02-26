@@ -44,7 +44,8 @@ export const registerValidationSchema = yup.object({
 
   agreeToTerms: yup
     .boolean()
-    .oneOf([true], "Vous devez accepter les termes et conditions"),
+    .oneOf([true], "Vous devez accepter les termes et conditions")
+    .required("Vous devez accepter les termes et conditions"),
 });
 export type RegisterFormData = yup.InferType<typeof registerValidationSchema>;
 

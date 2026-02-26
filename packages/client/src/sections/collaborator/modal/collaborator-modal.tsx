@@ -6,26 +6,19 @@ import {
   Button,
   Box,
 } from "@mui/material";
+import type { SubmitHandler } from "react-hook-form";
 import { Controller, useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
-import * as yup from "yup";
-
+import {
+  collaboratorValidationSchema,
+  type CollaboratorFormData,
+} from "src/validations/collaborators/collaborator-validation";
 import CustomInput from "src/components/common/CustomInput";
 import PasswordField from "src/components/common/PasswordField";
 import { useCreateCollaboratorMutation } from "src/lib/services/collaboratorsApi";
 import { useAlert } from "src/contexts/AlertContext";
 
-const schema = yup.object({
-  firstName: yup.string().required(),
-  lastName: yup.string().required(),
-  email: yup.string().email().required(),
-  phone: yup.string().required(),
-  position: yup.string().optional(),
-  department: yup.string().optional(),
-  password: yup.string().min(8).required(),
-});
-
-type FormData = yup.InferType<typeof schema>;
+/* ---------------- SCHEMA ---------------- */
 
 interface Props {
   open: boolean;
@@ -36,11 +29,26 @@ export default function CollaboratorModal({ open, onClose }: Props) {
   const { showAlert } = useAlert();
   const [createCollaborator, { isLoading }] = useCreateCollaboratorMutation();
 
-  const { register, handleSubmit, control, reset } = useForm<FormData>({
-    resolver: yupResolver(schema),
+  const {
+    register,
+    handleSubmit,
+    control,
+    reset,
+    formState: { errors },
+  } = useForm<CollaboratorFormData>({
+    resolver: yupResolver(collaboratorValidationSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      password: "",
+      position: "",
+      department: "",
+    },
   });
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit: SubmitHandler<CollaboratorFormData> = async (data) => {
     try {
       await createCollaborator(data).unwrap();
       showAlert("Collaborator created successfully", "success");

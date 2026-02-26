@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-import Add from '@mui/icons-material/Add';
-import BorderColorIcon from '@mui/icons-material/BorderColor';
+import Add from "@mui/icons-material/Add";
+import BorderColorIcon from "@mui/icons-material/BorderColor";
 import {
   Box,
   Button,
@@ -14,26 +14,29 @@ import {
   TableContainer,
   TablePagination,
   Typography,
-} from '@mui/material';
-import DotSpinner from 'src/components/common/DotSpinner';
+} from "@mui/material";
+import DotSpinner from "src/components/common/DotSpinner";
 
-import { useTable } from 'src/hooks/use-table';
-import { useTableNavigation } from 'src/hooks/useTableNavigation';
-import { buildEditUrl } from 'src/utils/navigationHelpers';
-import { useAlert } from 'src/contexts/AlertContext';
-import { usePermissions } from 'src/hooks/usePermissions';
+import { useTable } from "src/hooks/use-table";
+import { useTableNavigation } from "src/hooks/useTableNavigation";
+import { buildEditUrl } from "src/utils/navigationHelpers";
+import { useAlert } from "src/contexts/AlertContext";
+import { usePermissions } from "src/hooks/usePermissions";
 
-import { DashboardContent } from 'src/layouts/dashboard';
+import { DashboardContent } from "src/layouts/dashboard";
 
-import { Label } from 'src/components/label';
-import { Scrollbar } from 'src/components/scrollbar';
-import { DataTableRow } from 'src/components/table/table-row';
+import { Label } from "src/components/label";
+import { Scrollbar } from "src/components/scrollbar";
+import { DataTableRow } from "src/components/table/table-row";
 
-import { DataTableHead } from 'src/components/table/table-head';
-import { TableNoData } from 'src/components/table/table-no-data';
-import { DataTableToolbar } from 'src/components/table/table-toolbar';
-import { TableEmptyRows } from 'src/components/table/table-empty-rows';
-import { useGetRolesQuery, useDeleteRoleMutation } from 'src/lib/services/roleApi';
+import { DataTableHead } from "src/components/table/table-head";
+import { TableNoData } from "src/components/table/table-no-data";
+import { DataTableToolbar } from "src/components/table/table-toolbar";
+import { TableEmptyRows } from "src/components/table/table-empty-rows";
+import {
+  useGetRolesQuery,
+  useDeleteRoleMutation,
+} from "src/lib/services/roleApi";
 
 export default function RoleView() {
   const table = useTable();
@@ -42,12 +45,12 @@ export default function RoleView() {
   const { showConfirm, showAlert } = useAlert();
   const { hasAction } = usePermissions();
 
-  const [filterName, setFilterName] = useState('');
+  const [filterName, setFilterName] = useState("");
   const [deleteRole] = useDeleteRoleMutation();
 
-  const canCreate = hasAction('/roles', 'CREATE');
-  const canUpdate = hasAction('/roles', 'UPDATE');
-  const canDelete = hasAction('/roles', 'DELETE');
+  const canCreate = hasAction("/roles", "WRITE");
+  const canUpdate = hasAction("/roles", "UPDATE");
+  const canDelete = hasAction("/roles", "DELETE");
 
   const { data, isLoading, isError } = useGetRolesQuery({
     page: table.page + 1,
@@ -61,36 +64,41 @@ export default function RoleView() {
   const notFound = !roles.length && !!filterName;
 
   const handleNewRole = () => {
-    navigate('/role/new');
+    navigate("/role/new");
   };
 
   const handleDeleteClick = () => {
-    showConfirm('Are you sure you want to delete this role?', async () => {
+    showConfirm("Are you sure you want to delete this role?", async () => {
       try {
-        await Promise.all(table.selected.map((roleId) => deleteRole(roleId).unwrap()));
+        await Promise.all(
+          table.selected.map((roleId) => deleteRole(roleId).unwrap()),
+        );
 
         table.onSelectAllRows(false, []);
-        showAlert('Role(s) deleted successfully', 'success');
+        showAlert("Role(s) deleted successfully", "success");
       } catch (error: unknown) {
         const message =
-          typeof error === 'object' &&
+          typeof error === "object" &&
           error !== null &&
-          'data' in error &&
+          "data" in error &&
           (error as { data?: { message?: string } })?.data?.message
             ? (error as { data: { message: string } }).data.message
-            : 'Failed to delete role. Please try again.';
+            : "Failed to delete role. Please try again.";
 
-        showAlert(message, 'error');
+        showAlert(message, "error");
       }
     });
   };
 
-  const getRoleTypeColor = (code: string): 'success' | 'warning' | 'error' | 'default' => {
-    const colors: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
-      ADMIN_TYPE: 'error',
-      BUSINESS_TYPE: 'success',
-    };
-    return colors[code] || 'default';
+  const getRoleTypeColor = (
+    code: string,
+  ): "success" | "warning" | "error" | "default" => {
+    const colors: Record<string, "success" | "warning" | "error" | "default"> =
+      {
+        ADMIN_TYPE: "error",
+        BUSINESS_TYPE: "success",
+      };
+    return colors[code] || "default";
   };
 
   return (
@@ -98,15 +106,20 @@ export default function RoleView() {
       <Box
         sx={{
           mb: 5,
-          display: 'flex',
-          alignItems: 'center',
+          display: "flex",
+          alignItems: "center",
         }}
       >
         <Typography variant="h5" sx={{ flexGrow: 1 }}>
           Roles Management
         </Typography>
         {canCreate && (
-          <Button variant="contained" color="primary" startIcon={<Add />} onClick={handleNewRole}>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<Add />}
+            onClick={handleNewRole}
+          >
             Add New Role
           </Button>
         )}
@@ -125,7 +138,7 @@ export default function RoleView() {
         />
 
         <Scrollbar>
-          <TableContainer sx={{ overflow: 'unset' }}>
+          <TableContainer sx={{ overflow: "unset" }}>
             <Table sx={{ minWidth: 800 }}>
               <DataTableHead
                 rowCount={totalCount}
@@ -134,22 +147,22 @@ export default function RoleView() {
                 onSelectAllRows={(checked: boolean) =>
                   table.onSelectAllRows(
                     checked,
-                    roles.map((role) => role.id)
+                    roles.map((role) => role.id),
                   )
                 }
                 headLabel={[
-                  { id: 'name', label: 'Role Name' },
-                  { id: 'description', label: 'Description' },
-                  { id: 'role_type', label: 'Type' },
-                  { id: 'created_at', label: 'Creation Date' },
-                  { id: 'actions', label: 'Actions', align: 'center' },
+                  { id: "name", label: "Role Name" },
+                  { id: "description", label: "Description" },
+                  { id: "role_type", label: "Type" },
+                  { id: "created_at", label: "Creation Date" },
+                  { id: "actions", label: "Actions", align: "center" },
                 ]}
               />
               <TableBody>
                 {isLoading ? (
                   <DataTableRow selected={false} onSelectRow={() => {}}>
                     <TableCell colSpan={5} align="center" sx={{ py: 10 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                      <Box sx={{ display: "flex", justifyContent: "center" }}>
                         <DotSpinner />
                       </Box>
                     </TableCell>
@@ -172,8 +185,8 @@ export default function RoleView() {
                           <Box
                             sx={{
                               gap: 2,
-                              display: 'flex',
-                              alignItems: 'center',
+                              display: "flex",
+                              alignItems: "center",
                             }}
                           >
                             {row.name}
@@ -187,22 +200,30 @@ export default function RoleView() {
                         </TableCell>
 
                         <TableCell>
-                          <Label color={getRoleTypeColor(row.role_type?.code || '')}>
-                            {row.role_type?.name || '-'}
+                          <Label
+                            color={getRoleTypeColor(row.role_type?.code || "")}
+                          >
+                            {row.role_type?.name || "-"}
                           </Label>
                         </TableCell>
 
                         <TableCell>
-                          {new Date(row.created_at).toLocaleDateString('en-GB')}
+                          {new Date(row.created_at).toLocaleDateString("en-GB")}
                         </TableCell>
 
                         <TableCell align="center">
                           {canUpdate && (
                             <IconButton
                               onClick={() =>
-                                navigate(buildEditUrl('/role/edit', row.id, currentPage))
+                                navigate(
+                                  buildEditUrl(
+                                    "/role/edit",
+                                    row.id,
+                                    currentPage,
+                                  ),
+                                )
                               }
-                              sx={{ color: 'rgba(157, 179, 198, 1)' }}
+                              sx={{ color: "rgba(157, 179, 198, 1)" }}
                             >
                               <BorderColorIcon />
                             </IconButton>
@@ -215,7 +236,10 @@ export default function RoleView() {
                       height={68}
                       emptyRows={
                         table.page > 0
-                          ? Math.max(0, (1 + table.page) * table.rowsPerPage - totalCount)
+                          ? Math.max(
+                              0,
+                              (1 + table.page) * table.rowsPerPage - totalCount,
+                            )
                           : 0
                       }
                     />
@@ -237,7 +261,9 @@ export default function RoleView() {
           rowsPerPageOptions={[5, 10, 25]}
           onRowsPerPageChange={table.onChangeRowsPerPage}
           labelRowsPerPage="Rows per page:"
-          labelDisplayedRows={({ from, to, count }) => `${from}-${to} of ${count}`}
+          labelDisplayedRows={({ from, to, count }) =>
+            `${from}-${to} of ${count}`
+          }
         />
       </Card>
     </DashboardContent>

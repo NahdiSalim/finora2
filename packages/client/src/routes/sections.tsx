@@ -17,6 +17,8 @@ import AuthLayout from "src/sections/auth/sign-in-view/Auth-Layout";
 // ----------------------------------------------------------------------
 
 export const UserPage = lazy(() => import("src/pages/users"));
+export const CollaboratorPage = lazy(() => import("src/pages/collaborators"));
+
 export const UserFormPage = lazy(
   () => import("src/sections/user/user-forms/index"),
 );
@@ -75,7 +77,119 @@ export const routesSection: RouteObject[] = [
       {
         path: "users",
         element: (
-          <PermissionGuard requiredPath="/users">
+          <PermissionGuard requiredPath="/archive">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "collaborators",
+        element: (
+          <PermissionGuard requiredPath="/collaborators">
+            <CollaboratorPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "dashboard",
+        element: (
+          <PermissionGuard requiredPath="/dashboard">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "documents",
+        element: (
+          <PermissionGuard requiredPath="/documents">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "documents/:id",
+        element: (
+          <PermissionGuard requiredPath="/documents/:id">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "meetings",
+        element: (
+          <PermissionGuard requiredPath="/meetings">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "meetings/:id",
+        element: (
+          <PermissionGuard requiredPath="/meetings/:id">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "requests",
+        element: (
+          <PermissionGuard requiredPath="/requests">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "requests/:id",
+        element: (
+          <PermissionGuard requiredPath="/requests/:id">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "messages",
+        element: (
+          <PermissionGuard requiredPath="/messages">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "messages/:id",
+        element: (
+          <PermissionGuard requiredPath="/messages/:id">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "banks",
+        element: (
+          <PermissionGuard requiredPath="/banks">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "network",
+        element: (
+          <PermissionGuard requiredPath="/network">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "profile",
+        element: (
+          <PermissionGuard requiredPath="/profile">
+            <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "profile/edit",
+        element: (
+          <PermissionGuard requiredPath="/profile/edit">
             <UserPage />
           </PermissionGuard>
         ),
@@ -98,6 +212,7 @@ export const routesSection: RouteObject[] = [
       },
       {
         path: "user/:id/documents",
+
         element: (
           <PermissionGuard requiredPath="/users">
             <DocumentValidationPage />

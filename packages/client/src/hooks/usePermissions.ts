@@ -1,4 +1,4 @@
-import { useAppSelector } from './use-redux';
+import { useAppSelector } from "./use-redux";
 
 export function usePermissions() {
   const features = useAppSelector((state) => state.auth.features);
@@ -6,19 +6,23 @@ export function usePermissions() {
   const hasAccessToPath = (path: string): boolean => {
     if (!features || features.length === 0) return false;
 
-    return features.some((feature) => feature.pages.some((page) => page.route === path));
+    return features.some((feature) =>
+      feature.pages.some((page) => page.route === path),
+    );
   };
 
   const hasAction = (
     path: string,
-    actionCode: 'READ' | 'CREATE' | 'UPDATE' | 'DELETE'
+    actionCode: "READ" | "WRITE" | "UPDATE" | "DELETE",
   ): boolean => {
     if (!features || features.length === 0) return false;
 
     return features.some((feature) =>
       feature.pages.some(
-        (page) => page.route === path && page.actions.some((action) => action.code === actionCode)
-      )
+        (page) =>
+          page.route === path &&
+          page.actions.some((action) => action.code === actionCode),
+      ),
     );
   };
 

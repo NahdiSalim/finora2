@@ -15,12 +15,21 @@ export function setupSwagger(app: INestApplication) {
         description: 'Enter JWT token',
         in: 'header',
       },
-      'JWT-auth' // This name here is important for matching up with @ApiBearerAuth() in your controller!
+      'JWT-auth'
     )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
+
+  // Force HTTP URLs in Swagger
+  document.servers = [
+    {
+      url: `http://192.168.1.185:${process.env.PORT || 3000}`,
+      description: 'Local HTTP server',
+    },
+  ];
+
   SwaggerModule.setup('docs', app, document);
 
-  console.log('📚 Swagger documentation available at /docs');
+  console.log('📚 Swagger documentation available at /docs (HTTP enforced)');
 }

@@ -4,7 +4,7 @@ import { yupResolver } from "@hookform/resolvers/yup";
 
 import CheckCircle from "@mui/icons-material/CheckCircle";
 import ArrowBackIosIcon from "@mui/icons-material/ArrowBackIos";
-import { Box, Grid, Link, Button, Typography } from "@mui/material";
+import { Box, Grid, Link, Typography } from "@mui/material";
 
 import { useRouter } from "src/routes/hooks";
 import { RouterLink } from "src/routes/components";
@@ -17,6 +17,8 @@ import {
 
 import { useAlert } from "src/contexts/AlertContext";
 import { useForgotPasswordMutation } from "src/lib/services/authApi";
+import CustomButton from "src/components/common/CustomButton";
+import FileUpload from "src/components/common/FileUpload";
 
 export function ForgotPasswordView() {
   const router = useRouter();
@@ -141,9 +143,13 @@ export function ForgotPasswordView() {
           </Box>
         </Grid>
 
-        <Box sx={{ width: "100%" }} />
-
         <Grid size={{ xs: 12 }}>
+          <FileUpload
+            label="Upload document"
+            maxSize={5}
+            acceptedFiles={[".jpg", ".png", ".pdf"]}
+            helperText="Max size 5MB"
+          />
           <CustomInput
             {...register("email")}
             fullWidth
@@ -155,13 +161,14 @@ export function ForgotPasswordView() {
             placeholder="Entrer votre adresse email"
           />
 
-          <Button
+          <CustomButton
             fullWidth
             type="submit"
             variant="contained"
             disabled={isLoading}
             sx={{
               height: 48,
+              mt: 3,
               borderRadius: "12px",
               textTransform: "none",
               fontWeight: 600,
@@ -174,7 +181,7 @@ export function ForgotPasswordView() {
             {isLoading
               ? "Envoi en cours…"
               : "Envoyer le lien de réinitialisation"}
-          </Button>
+          </CustomButton>
         </Grid>
 
         <Grid size={{ xs: 12 }}>

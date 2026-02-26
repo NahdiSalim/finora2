@@ -63,32 +63,9 @@ app.set('trust proxy', 1);
 
   app.setGlobalPrefix('api');
 
- app.use(
+app.use(
   helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: [
-          "'self'",
-          "'unsafe-inline'",
-          "'unsafe-eval'",
-          "blob:"
-        ],
-        scriptSrcElem: [
-          "'self'",
-          "'unsafe-inline'",
-          "'unsafe-eval'",
-          "blob:"
-        ],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "blob:"],
-        connectSrc: ["'self'", "http:"],
-      },
-    },
-    crossOriginEmbedderPolicy: false,
-    crossOriginOpenerPolicy: false,
-    originAgentCluster: false,
-    strictTransportSecurity: false,
+    contentSecurityPolicy: false,
   })
 );
 

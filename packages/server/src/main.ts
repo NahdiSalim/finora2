@@ -53,9 +53,31 @@ async function runSeeds() {
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  app.enableCors();
+  // CORS configuration - doit être avant tout
+  app.enableCors({
+    origin: true, // Permet toutes les origines en dev, à configurer en prod
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  });
+
   app.setGlobalPrefix('api');
-  app.use(helmet());
+
+  // Helmet avec configuration pour Swagger
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'", 'http:'],
+          styleSrc: ["'self'", "'unsafe-inline'", 'http:'],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'http:'],
+          imgSrc: ["'self'", 'data:', 'https:', 'http:'],
+        },
+      },
+      crossOriginEmbedderPolicy: false,
+    })
+  );
+
   app.use(rateLimit({ windowMs: 60000, max: 100 }));
   app.useGlobalPipes(
     new ValidationPipe({

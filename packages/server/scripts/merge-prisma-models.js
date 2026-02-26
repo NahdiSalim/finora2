@@ -33,5 +33,5 @@ modelFiles.forEach(file => {
 
 // Write combined schema
 fs.writeFileSync(schemaPath, schema);
-console.log(`\n✅ Schema merged successfully to ${schemaPath}`);
+console.log(`\n Schema merged successfully to ${schemaPath}`);
 console.log(`\nRun: npx prisma generate`);

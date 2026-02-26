@@ -96,7 +96,6 @@ export class AppointmentService {
     }
     const [total, appointments] = await Promise.all([
       this.prisma.appointment.count({ where }),
-
       this.prisma.appointment.findMany({
         where,
         skip,
@@ -157,7 +156,6 @@ export class AppointmentService {
     }
     const [total, appointments] = await Promise.all([
       this.prisma.appointment.count({ where }),
-
       this.prisma.appointment.findMany({
         where,
         skip,

@@ -49,7 +49,7 @@ COPY --from=prod_deps /repo/node_modules/.pnpm-workspace-state-v1.json /app/node
 COPY --from=build /repo/packages/server/dist ./dist
 COPY --from=build /repo/packages/server/prisma ./prisma
 COPY --from=build /repo/packages/server/package.json ./package.json
-
+COPY --from=build /repo/packages/server/scripts ./scripts
 
 EXPOSE 3000
 CMD ["node", "dist/src/main.js"]

@@ -46,6 +46,7 @@ export default function CollaboratorView() {
   });
 
   const collaborators = data?.data || [];
+  console.log(collaborators);
   const totalCount = data?.total || 0;
 
   const notFound = !collaborators.length;
@@ -174,8 +175,8 @@ export default function CollaboratorView() {
                         {/* Date d'ajout */}
                         <TableCell sx={{ p: 1 }}>
                           <Typography variant="body2">
-                            {row.created_at
-                              ? new Date(row.created_at).toLocaleDateString(
+                            {row.createdAt
+                              ? new Date(row.createdAt).toLocaleDateString(
                                   "fr-FR",
                                 )
                               : "-"}

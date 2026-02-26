@@ -93,10 +93,14 @@ jobs:
             echo "Starting new container..."
             docker run -d --restart unless-stopped \
               --name "$CONTAINER" \
+              --add-host=host.docker.internal:host-gateway \
               --env-file /tmp/server.env \
               -p 3000:3000 \
               -e NODE_ENV=production \
               "$IMAGE:$TAG"
+
+            echo "Smoke test: host.docker.internal resolution (inside container)"
+            docker exec "$CONTAINER" sh -lc 'getent hosts host.docker.internal || (echo "host.docker.internal not resolvable" && exit 1)'
 
             rm -f /tmp/server.env
 

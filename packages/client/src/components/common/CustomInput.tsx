@@ -16,9 +16,13 @@ export interface CustomInputProps extends Omit<TextFieldProps, "slotProps"> {
   isEdit?: boolean;
   isPassword?: boolean;
   showPasswordToggle?: boolean;
+  backgroundColor?: string;
+  startIcon?: ReactNode;
+  border?: boolean;
   slotProps?: Omit<TextFieldProps["slotProps"], "inputLabel"> & {
     inputLabel?: InputLabelProps;
     input?: Record<string, unknown> & {
+      startAdornment?: ReactNode;
       endAdornment?: ReactNode;
     };
   };
@@ -32,6 +36,9 @@ const CustomInput = forwardRef<HTMLDivElement, CustomInputProps>(
       isEdit = false,
       isPassword = false,
       showPasswordToggle = true,
+      backgroundColor,
+      startIcon,
+      border = true,
       slotProps,
       InputProps,
       type,
@@ -46,6 +53,25 @@ const CustomInput = forwardRef<HTMLDivElement, CustomInputProps>(
     const shouldShowToggle = isPassword && showPasswordToggle;
     const inputType = isPassword ? (showPassword ? "text" : "password") : type;
 
+    // Start Adornment
+    const startAdornment: ReactNode | undefined = startIcon ? (
+      <InputAdornment position="start">
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            color: theme.palette.grey[500],
+            fontSize: 20,
+          }}
+        >
+          {startIcon}
+        </Box>
+      </InputAdornment>
+    ) : (
+      slotProps?.input?.startAdornment
+    );
+
+    // End Adornment (Password Toggle)
     const endAdornment: ReactNode = shouldShowToggle ? (
       <InputAdornment position="end">
         <IconButton
@@ -81,6 +107,9 @@ const CustomInput = forwardRef<HTMLDivElement, CustomInputProps>(
       slotProps?.input?.endAdornment
     );
 
+    // Determine background color
+    const bgColor = backgroundColor || theme.palette.common.white;
+
     return (
       <TextField
         ref={ref}
@@ -109,6 +138,7 @@ const CustomInput = forwardRef<HTMLDivElement, CustomInputProps>(
           },
           input: {
             ...slotProps?.input,
+            startAdornment,
             endAdornment,
           },
         }}
@@ -152,41 +182,45 @@ const CustomInput = forwardRef<HTMLDivElement, CustomInputProps>(
             fontSize: theme.typography.body2.fontSize,
             fontWeight: theme.typography.fontWeightRegular,
             color: theme.palette.grey[900],
-            backgroundColor: theme.palette.common.white,
+            backgroundColor: bgColor,
             borderRadius: "10px",
             transition: "box-shadow 0.2s ease, border-color 0.2s ease",
 
             "& .MuiOutlinedInput-notchedOutline": {
-              borderColor: theme.palette.grey[300],
-              borderWidth: "1.5px",
+              borderColor: border ? theme.palette.grey[300] : "transparent",
+              borderWidth: border ? "1.5px" : "0px",
             },
 
             "&:hover:not(.Mui-disabled):not(.Mui-error) .MuiOutlinedInput-notchedOutline":
               {
-                borderColor: theme.palette.grey[600],
+                borderColor: border ? theme.palette.grey[600] : "transparent",
               },
 
             "&.Mui-focused:not(.Mui-error) .MuiOutlinedInput-notchedOutline": {
-              borderColor: theme.palette.primary.main,
-              borderWidth: "1.5px",
+              borderColor: border ? theme.palette.primary.main : "transparent",
+              borderWidth: border ? "1.5px" : "0px",
             },
             "&.Mui-focused:not(.Mui-error)": {
-              boxShadow: `0px 0px 0px 3px ${theme.palette.primary.lighter}`,
+              boxShadow: border
+                ? `0px 0px 0px 3px ${theme.palette.primary.lighter}`
+                : "none",
             },
 
             "&.Mui-error .MuiOutlinedInput-notchedOutline": {
-              borderColor: theme.palette.error.main,
-              borderWidth: "1.5px",
+              borderColor: border ? theme.palette.error.main : "transparent",
+              borderWidth: border ? "1.5px" : "0px",
             },
             "&.Mui-error": {
-              boxShadow: `0px 0px 0px 3px ${theme.palette.error.lighter}`,
+              boxShadow: border
+                ? `0px 0px 0px 3px ${theme.palette.error.lighter}`
+                : "none",
             },
 
             "&.Mui-disabled": {
               backgroundColor: theme.palette.grey[200],
               boxShadow: "none",
               "& .MuiOutlinedInput-notchedOutline": {
-                borderColor: theme.palette.grey[200],
+                borderColor: border ? theme.palette.grey[200] : "transparent",
               },
             },
           },
@@ -201,7 +235,7 @@ const CustomInput = forwardRef<HTMLDivElement, CustomInputProps>(
             lineHeight: theme.typography.body2.lineHeight,
 
             "&::placeholder": {
-              color: theme.palette.grey[500],
+              color: theme.palette.text.secondary,
               opacity: 1,
             },
 

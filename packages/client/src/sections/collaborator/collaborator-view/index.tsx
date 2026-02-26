@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   Box,
-  Button,
   Card,
   Table,
   TableBody,
@@ -10,14 +9,15 @@ import {
   TablePagination,
   Typography,
   IconButton,
+  TableRow,
+  TableHead,
+  useTheme,
+  Avatar,
+  alpha,
 } from "@mui/material";
 import Add from "@mui/icons-material/Add";
-import BorderColorIcon from "@mui/icons-material/BorderColor";
 
-import { DashboardContent } from "src/layouts/dashboard";
 import { Scrollbar } from "src/components/scrollbar";
-import { DataTableHead } from "src/components/table/table-head";
-import { DataTableRow } from "src/components/table/table-row";
 import { TableEmptyRows } from "src/components/table/table-empty-rows";
 import { TableNoData } from "src/components/table/table-no-data";
 import DotSpinner from "src/components/common/DotSpinner";
@@ -27,14 +27,18 @@ import { usePermissions } from "src/hooks/usePermissions";
 
 import { useGetCollaboratorsQuery } from "src/lib/services/collaboratorsApi";
 import CollaboratorModal from "../modal/collaborator-modal";
+import { PageHeader } from "src/layouts/components/page-header";
+import CustomInput from "src/components/common/CustomInput";
+import { Eye, Power, Search } from "lucide-react";
 
 export default function CollaboratorView() {
+  const theme = useTheme();
   const table = useTable();
   const { hasAction } = usePermissions();
 
   const [openModal, setOpenModal] = useState(false);
 
-  const canCreate = hasAction("/collaborators", "WRITE");
+  //const canCreate = hasAction("/collaborators", "WRITE");
 
   const { data, isLoading, isError } = useGetCollaboratorsQuery({
     page: table.page + 1,
@@ -47,79 +51,252 @@ export default function CollaboratorView() {
   const notFound = !collaborators.length;
 
   return (
-    <DashboardContent>
-      <Box sx={{ mb: 5, display: "flex", alignItems: "center" }}>
-        <Typography variant="h5" sx={{ flexGrow: 1 }}>
-          Collaborators
-        </Typography>
+    <PageHeader
+      title="Mes collaborateurs"
+      caption="Gérez votre equipe et suivez leurs performances ."
+      actions={[
+        {
+          label: "Ajouter un collaborateur",
+          icon: <Add />,
+          onClick: () => setOpenModal(true),
+          variant: "contained",
+          color: "primary",
+        },
+      ]}
+    >
+      <Card
+        sx={{
+          bgcolor: "white",
+          borderRadius: 3,
+          p: 2,
+        }}
+      >
+        <CustomInput
+          fullWidth
+          placeholder="Rechercher un collaborateur..."
+          startIcon={<Search size={20} />}
+          sx={{ mb: 1.5 }}
+        />
 
-        {canCreate && (
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => setOpenModal(true)}
-          >
-            Add Collaborator
-          </Button>
-        )}
-      </Box>
-
-      <Card>
         <Scrollbar>
-          <TableContainer sx={{ overflow: "unset" }}>
+          <TableContainer
+            sx={{
+              overflow: "unset",
+              border: 1,
+              borderColor: theme.palette.grey[100],
+              borderRadius: 2,
+            }}
+          >
             <Table sx={{ minWidth: 800 }}>
-              <DataTableHead
-                rowCount={totalCount}
-                currentPageRowCount={collaborators.length}
-                numSelected={0}
-                headLabel={[
-                  { id: "fullName", label: "Full Name" },
-                  { id: "email", label: "Email" },
-                  { id: "phone", label: "Phone" },
-                  { id: "position", label: "Position" },
-                  { id: "department", label: "Department" },
-                  { id: "actions", label: "Actions", align: "center" },
-                ]}
-              />
+              <TableHead
+                sx={{
+                  backgroundColor: theme.palette.grey[100],
+                }}
+              >
+                <TableRow>
+                  <TableCell sx={{ p: 1, fontWeight: 600 }}>
+                    <Typography fontSize={14}>Collaborateurs</Typography>
+                  </TableCell>
+                  <TableCell sx={{ p: 1, fontWeight: 600 }}>
+                    <Typography fontSize={14}> Date Aajout</Typography>
+                  </TableCell>
+                  <TableCell sx={{ p: 1, fontWeight: 600 }}>Position</TableCell>
+                  <TableCell sx={{ p: 1, fontWeight: 600 }}>
+                    <Typography fontSize={14}> Nom Utilisateur</Typography>
+                  </TableCell>
+                  <TableCell sx={{ p: 1, fontWeight: 600 }}>Statut</TableCell>
+                  <TableCell sx={{ p: 1, fontWeight: 600 }} align="center">
+                    <Typography fontSize={14}> Actions </Typography>
+                  </TableCell>
+                </TableRow>
+              </TableHead>
 
               <TableBody>
                 {isLoading ? (
-                  <DataTableRow selected={false} onSelectRow={() => {}}>
+                  <TableRow>
                     <TableCell colSpan={6} align="center" sx={{ py: 10 }}>
                       <DotSpinner />
                     </TableCell>
-                  </DataTableRow>
+                  </TableRow>
                 ) : isError ? (
-                  <DataTableRow selected={false} onSelectRow={() => {}}>
+                  <TableRow>
                     <TableCell colSpan={6} align="center">
                       <Typography color="error">
                         Error loading collaborators
                       </Typography>
                     </TableCell>
-                  </DataTableRow>
+                  </TableRow>
                 ) : (
                   <>
-                    {collaborators.map((row) => (
-                      <DataTableRow
+                    {collaborators.map((row, index) => (
+                      <TableRow
                         key={row.id}
-                        selected={false}
-                        onSelectRow={() => {}}
+                        sx={{
+                          backgroundColor:
+                            index % 2 === 0
+                              ? theme.palette.background.paper
+                              : theme.palette.grey[50],
+                          "&:hover": {
+                            backgroundColor: theme.palette.action.hover,
+                          },
+                        }}
                       >
-                        <TableCell>
-                          {row.firstName} {row.lastName}
+                        {/* Collaborateurs - Avatar + Name */}
+                        <TableCell sx={{ p: 1 }}>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1.5,
+                            }}
+                          >
+                            <Avatar
+                              sx={{
+                                width: 36,
+                                height: 36,
+                                backgroundColor: theme.palette.primary.main,
+                                fontSize: 14,
+                                fontWeight: 600,
+                              }}
+                            >
+                              {row.firstName?.charAt(0)}
+                              {row.lastName?.charAt(0)}
+                            </Avatar>
+                            <Typography
+                              variant="body2"
+                              sx={{ fontWeight: 500 }}
+                            >
+                              {row.firstName} {row.lastName}
+                            </Typography>
+                          </Box>
                         </TableCell>
 
-                        <TableCell>{row.email}</TableCell>
-                        <TableCell>{row.phone}</TableCell>
-                        <TableCell>{row.position || "-"}</TableCell>
-                        <TableCell>{row.department || "-"}</TableCell>
-
-                        <TableCell align="center">
-                          <IconButton>
-                            <BorderColorIcon />
-                          </IconButton>
+                        {/* Date d'ajout */}
+                        <TableCell sx={{ p: 1 }}>
+                          <Typography variant="body2">
+                            {row.created_at
+                              ? new Date(row.created_at).toLocaleDateString(
+                                  "fr-FR",
+                                )
+                              : "-"}
+                          </Typography>
                         </TableCell>
-                      </DataTableRow>
+
+                        {/* Position */}
+                        <TableCell sx={{ p: 1 }}>
+                          <Typography variant="body2">
+                            {row.position || "-"}
+                          </Typography>
+                        </TableCell>
+
+                        {/* Nom d'utilisateur (login) */}
+                        <TableCell sx={{ p: 1 }}>
+                          <Typography variant="body2">
+                            {row.email || row.username || "-"}
+                          </Typography>
+                        </TableCell>
+
+                        {/* Statut - Chip */}
+                        <TableCell sx={{ p: 1 }}>
+                          <Box
+                            sx={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              px: 1.5,
+                              py: 0.5,
+                              borderRadius: 2,
+                              border: 1,
+                              borderColor: row.isActive
+                                ? theme.palette.success.light
+                                : theme.palette.error.light,
+                              backgroundColor: row.isActive
+                                ? theme.palette.success.lighter
+                                : theme.palette.error.lighter,
+                              color: row.isActive
+                                ? theme.palette.success.dark
+                                : theme.palette.error.dark,
+                              fontWeight: 600,
+                              fontSize: 12,
+                            }}
+                          >
+                            {row.isActive ? "Actif" : "Inactif"}
+                          </Box>
+                        </TableCell>
+
+                        {/* Actions - Two Icon Buttons */}
+                        <TableCell align="center" sx={{ p: 1 }}>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              gap: 0.5,
+                              justifyContent: "center",
+                            }}
+                          >
+                            {/* Edit Button */}
+                            <IconButton
+                              size="small"
+                              sx={{
+                                minWidth: 32,
+                                height: 32,
+                                p: 0,
+                                borderRadius: 1.5,
+                                border: 1,
+                                borderColor: theme.palette.divider,
+                                backgroundColor: theme.palette.background.paper,
+                                color: theme.palette.text.secondary,
+                                transition: theme.transitions.create([
+                                  "border-color",
+                                  "background-color",
+                                  "color",
+                                ]),
+                                "&:hover": {
+                                  borderColor: theme.palette.primary.main,
+                                  backgroundColor: alpha(
+                                    theme.palette.primary.main,
+                                    0.08,
+                                  ),
+                                  color: theme.palette.primary.main,
+                                },
+                              }}
+                            >
+                              <Eye size={18} />
+                            </IconButton>
+
+                            {/* Power/Delete Button */}
+                            <IconButton
+                              size="small"
+                              sx={{
+                                minWidth: 32,
+                                height: 32,
+                                p: 0,
+                                borderRadius: 1.5,
+                                border: 1,
+                                borderColor: theme.palette.divider,
+                                backgroundColor: theme.palette.common.white,
+                                color: row.isActive
+                                  ? theme.palette.error.main
+                                  : theme.palette.grey[500],
+                                transition: theme.transitions.create([
+                                  "border-color",
+                                  "background-color",
+                                  "color",
+                                ]),
+                                "&:hover": {
+                                  borderColor: theme.palette.error.main,
+                                  backgroundColor: alpha(
+                                    theme.palette.error.main,
+                                    0.08,
+                                  ),
+                                  color: theme.palette.error.main,
+                                },
+                              }}
+                            >
+                              <Power size={18} />
+                            </IconButton>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
                     ))}
 
                     <TableEmptyRows
@@ -154,6 +331,6 @@ export default function CollaboratorView() {
       </Card>
 
       <CollaboratorModal open={openModal} onClose={() => setOpenModal(false)} />
-    </DashboardContent>
+    </PageHeader>
   );
 }

@@ -11,6 +11,8 @@ export interface Collaborator {
   department?: string;
   created_at: string;
   updated_at: string;
+  isActive: boolean;
+  username?: string;
 }
 
 export interface CollaboratorsResponse {

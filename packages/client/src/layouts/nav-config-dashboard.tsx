@@ -1,11 +1,15 @@
-import ArchiveIcon from "@mui/icons-material/Archive";
-import DescriptionIcon from "@mui/icons-material/Description";
-import EventIcon from "@mui/icons-material/Event";
-import AssignmentIcon from "@mui/icons-material/Assignment";
-import MessageIcon from "@mui/icons-material/Message";
-import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
-import HubIcon from "@mui/icons-material/Hub";
-import PersonIcon from "@mui/icons-material/Person";
+import {
+  Archive,
+  Calendar,
+  FileText,
+  HandCoins,
+  LayoutGrid,
+  List,
+  MessageSquareMore,
+  Share2,
+  User,
+  Users,
+} from "lucide-react";
 
 export type NavItem = {
   title: string;
@@ -20,49 +24,49 @@ export const NAV_CONFIG: Record<
 > = {
   "/archive": {
     title: "Archive",
-    icon: <ArchiveIcon />,
+    icon: <Archive />,
   },
   "/dashboard": {
     title: "Dashboard",
-    icon: <PersonIcon />,
+    icon: <LayoutGrid />,
   },
   "/collaborators": {
     title: "Collaborateurs",
-    icon: <PersonIcon />,
+    icon: <Users />,
   },
 
   "/documents": {
     title: "Documents",
-    icon: <DescriptionIcon />,
+    icon: <FileText />,
   },
 
   "/meetings": {
     title: "Rendez-vous",
-    icon: <EventIcon />,
+    icon: <Calendar />,
   },
 
   "/requests": {
     title: "Demandes",
-    icon: <AssignmentIcon />,
+    icon: <List />,
   },
 
   "/messages": {
     title: "Messagerie",
-    icon: <MessageIcon />,
+    icon: <MessageSquareMore />,
   },
 
   "/banks": {
     title: "Mes banques",
-    icon: <AccountBalanceIcon />,
+    icon: <HandCoins />,
   },
 
   "/network": {
     title: "Réseautage",
-    icon: <HubIcon />,
+    icon: <Share2 />,
   },
 
   "/profile": {
     title: "Mon profil",
-    icon: <PersonIcon />,
+    icon: <User />,
   },
 };

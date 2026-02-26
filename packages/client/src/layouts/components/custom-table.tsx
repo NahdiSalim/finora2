@@ -41,9 +41,9 @@ export function DataTable<T>({
   return (
     <TableContainer
       sx={{
-        overflow: "unset",
+        overflow: "hidden",
         border: 1,
-        borderColor: theme.palette.grey[100],
+        borderColor: theme.palette.grey[200],
         borderRadius: 2,
       }}
     >

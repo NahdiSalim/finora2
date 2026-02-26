@@ -64,25 +64,29 @@ app.set('trust proxy', 1);
   app.setGlobalPrefix('api');
 
   // Helmet avec configuration pour Swagger
-  app.use(
-    helmet({
-      contentSecurityPolicy: {
-        useDefaults: true,
-        directives: {
-          defaultSrc: ["'self'", 'http:'],
-          styleSrc: ["'self'", "'unsafe-inline'", 'http:'],
-          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'http:'],
-          imgSrc: ["'self'", 'data:', 'http:', 'https:'],
-        },
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        defaultSrc: ["'self'", 'http:'],
+        styleSrc: ["'self'", "'unsafe-inline'", 'http:'],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          'http:',
+          'blob:' 
+        ],
+        imgSrc: ["'self'", 'data:', 'http:', 'https:', 'blob:'],
       },
-
-      crossOriginEmbedderPolicy: false,
-
-      strictTransportSecurity: false,
-      crossOriginOpenerPolicy: false,
-      originAgentCluster: false,
-    })
-  );
+    },
+    crossOriginEmbedderPolicy: false,
+    strictTransportSecurity: false,
+    crossOriginOpenerPolicy: false,
+    originAgentCluster: false,
+  }),
+);
 
   app.use(rateLimit({ windowMs: 60000, max: 100 }));
   app.useGlobalPipes(

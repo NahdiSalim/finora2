@@ -1,3 +1,4 @@
+import type { SubmitHandler } from "react-hook-form";
 import { Controller, useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useRegisterMutation } from "src/lib/services/authApi";
@@ -41,11 +42,13 @@ export function RegisterView() {
       agreeToTerms: false,
     },
   });
-
+  const methods = useForm<RegisterFormData>({
+    resolver: yupResolver(registerValidationSchema),
+  });
   const role = watch("role");
   const agree = watch("agreeToTerms");
 
-  const onSubmit = async (data: RegisterFormData) => {
+  const onSubmit: SubmitHandler<RegisterFormData> = async (data) => {
     try {
       await registerUser(data).unwrap();
       router.push(`/check-email?email=${data.email}`);
@@ -66,7 +69,7 @@ export function RegisterView() {
     >
       <Box
         component="form"
-        onSubmit={handleSubmit(onSubmit)}
+        onSubmit={methods.handleSubmit(onSubmit)}
         sx={{
           width: "100%",
           maxWidth: 500,

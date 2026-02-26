@@ -1,5 +1,6 @@
 import { createApi } from "@reduxjs/toolkit/query/react";
 import { baseQueryWithReauth } from "./baseQueryWithReauth";
+import type { CollaboratorFormData } from "src/validations/collaborators/collaborator-validation";
 
 export interface Collaborator {
   id: string;
@@ -64,7 +65,7 @@ export const collaboratorsApi = createApi({
     }),
 
     // 🔹 CREATE collaborator
-    createCollaborator: builder.mutation<Collaborator, CreateCollaboratorDto>({
+    createCollaborator: builder.mutation<Collaborator, CollaboratorFormData>({
       query: (body) => ({
         url: "/accountant/collaborators",
         method: "POST",

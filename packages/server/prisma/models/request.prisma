@@ -1,0 +1,42 @@
+model Request {
+  id          Int      @id @default(autoincrement())
+  subject     String   // Titre de la demande
+  description String?  @db.Text
+  type        String   // 'accounting', 'tax', 'consultation', 'document', 'other'
+  urgency     String   @default("normal") // 'low', 'normal', 'high', 'urgent'
+  status      String   @default("pending") // 'pending', 'in_progress', 'resolved', 'rejected', 'cancelled'
+  response    String?  @db.Text
+  attachments String[] @default([]) // Array of file paths in MinIO
+  
+  // Relations
+  clientId    Int
+  client      User     @relation("ClientRequests", fields: [clientId], references: [id], onDelete: Cascade)
+  
+  assignedToId Int?
+  assignedTo   User?   @relation("AssignedRequests", fields: [assignedToId], references: [id], onDelete: SetNull)
+  
+  companyId   Int?
+  company     Company? @relation("CompanyRequests", fields: [companyId], references: [id], onDelete: Cascade)
+  
+  // Task conversion
+  convertedToTaskId Int?     @unique
+  convertedToTask   Task? @relation("RequestToTask", fields: [convertedToTaskId], references: [id], onDelete: SetNull)
+  taskFromRequest   Task? @relation("TaskFromRequest")
+  
+  // Ticket relation
+  tickets     Ticket[]
+  
+  // Timestamps
+  respondedAt DateTime?
+  resolvedAt  DateTime?
+  convertedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([clientId])
+  @@index([assignedToId])
+  @@index([companyId])
+  @@index([status])
+  @@index([convertedToTaskId])
+  @@map("requests")
+}

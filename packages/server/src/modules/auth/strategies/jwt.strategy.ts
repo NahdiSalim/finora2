@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'prisma/prisma.service';
+import { UserStatus } from 'src/common/enums/user-status.enum';
 
 export interface JwtPayload {
   sub: number;
@@ -13,7 +14,7 @@ export interface JwtPayload {
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private configService: ConfigService,
-    private prisma: PrismaService,
+    private prisma: PrismaService
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -22,13 +23,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(
-    payload: JwtPayload,
-  ): Promise<{ id: number; email: string; roleId?: number }> {
+  async validate(payload: JwtPayload): Promise<{ id: number; email: string; roleId?: number }> {
     const userId =
-      typeof payload.sub === 'string'
-        ? parseInt(payload.sub, 10)
-        : Number(payload.sub);
+      typeof payload.sub === 'string' ? parseInt(payload.sub, 10) : Number(payload.sub);
 
     if (isNaN(userId)) {
       throw new UnauthorizedException('Invalid token payload');
@@ -39,12 +36,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       select: {
         id: true,
         email: true,
-        isActive: true,
+        status: true,
         id_role: true,
       },
     });
 
-    if (!user || !user.isActive) {
+    if (!user || user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException('User not found or inactive');
     }
 

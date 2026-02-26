@@ -1,0 +1,51 @@
+model Appointment {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?  @db.Text
+  type        String   @default("meeting") // 'meeting', 'consultation', 'review', 'other'
+  
+  // Date and time
+  startTime   DateTime
+  endTime     DateTime
+  duration    Int      // in minutes
+  
+  // Status
+  status      String   @default("pending") // 'pending', 'confirmed', 'rescheduled', 'rejected', 'cancelled', 'completed'
+  
+  // Location
+  location    String?  // physical address or meeting link
+  meetingType String   @default("in_person") // 'in_person', 'online', 'phone'
+  
+  // Relations
+  clientId    Int
+  client      User     @relation("ClientAppointments", fields: [clientId], references: [id], onDelete: Cascade)
+  
+  accountantId Int?
+  accountant   User?   @relation("AccountantAppointments", fields: [accountantId], references: [id], onDelete: SetNull)
+  
+  companyId   Int?
+  company     Company? @relation("CompanyAppointments", fields: [companyId], references: [id], onDelete: Cascade)
+  
+  // Rescheduling
+  originalAppointmentId Int?
+  originalAppointment   Appointment?  @relation("RescheduledAppointments", fields: [originalAppointmentId], references: [id], onDelete: SetNull)
+  rescheduledAppointments Appointment[] @relation("RescheduledAppointments")
+  
+  // Notes
+  accountantNotes String?  @db.Text
+  clientNotes     String?  @db.Text
+  rejectionReason String?  @db.Text
+  
+  // Timestamps
+  confirmedAt DateTime?
+  cancelledAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([clientId])
+  @@index([accountantId])
+  @@index([companyId])
+  @@index([status])
+  @@index([startTime])
+  @@map("appointments")
+}

@@ -1,0 +1,61 @@
+import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
+
+export enum RequestType {
+  ACCOUNTING = 'accounting',
+  TAX = 'tax',
+  CONSULTATION = 'consultation',
+  DOCUMENT = 'document',
+  OTHER = 'other',
+}
+
+export enum RequestUrgency {
+  LOW = 'low',
+  NORMAL = 'normal',
+  HIGH = 'high',
+  URGENT = 'urgent',
+}
+
+export class CreateRequestDto {
+  @ApiProperty({ example: 'Demande de déclaration fiscale', description: 'Request subject' })
+  @IsString()
+  @IsNotEmpty()
+  subject: string;
+
+  @ApiProperty({
+    example: "J'ai besoin d'aide pour ma déclaration fiscale annuelle",
+    description: 'Request description',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @ApiProperty({
+    example: 'tax',
+    enum: RequestType,
+    description: 'Request type',
+  })
+  @IsEnum(RequestType)
+  @IsNotEmpty()
+  type: RequestType;
+
+  @ApiProperty({
+    example: 'high',
+    enum: RequestUrgency,
+    description: 'Request urgency',
+    default: RequestUrgency.NORMAL,
+  })
+  @IsEnum(RequestUrgency)
+  @IsOptional()
+  urgency?: RequestUrgency;
+
+  @ApiProperty({
+    type: 'array',
+    items: { type: 'string', format: 'binary' },
+    description: 'Attachments (optional)',
+    required: false,
+  })
+  @IsOptional()
+  attachments?: any;
+}

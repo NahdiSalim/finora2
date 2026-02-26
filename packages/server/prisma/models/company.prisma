@@ -1,0 +1,72 @@
+model Company {
+  id                Int       @id @default(autoincrement())
+  name              String
+  legalName         String?
+  siret             String?   @unique
+  vatNumber         String?
+  legalForm         String?
+  rne               String?
+  patentNumber      String?
+  patentFile        String?
+  creationDate      DateTime?
+  capital           Int?
+  address           String?
+  city              String?
+  postalCode        String?
+  country           String?   @default("France")
+  phone             String?
+  email             String?
+  website           String?
+  activityCode      String?
+  sector            String?
+  employeeCount     Int?
+  type              String?   // "client" | "accounting_firm"
+  description       String?
+  specialties       String[]
+  rating            Float?
+  numberOfReviews   Int?      @default(0)
+  ownerId           Int?
+  primaryContactId  Int?
+  fiscalInfo        String?
+  socialInfo        String?
+  status            String    @default("active")
+  logo              String?
+  
+  // Storage quota management
+  storageQuotaBytes BigInt?   @default(10737418240) // Default 10GB in bytes
+  storageUsedBytes  BigInt?   @default(0)
+  storageAlertThreshold Float? @default(0.8) // Alert at 80%
+  lastStorageAlert  DateTime?
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  owner             User?     @relation("CompanyOwner", fields: [ownerId], references: [id])
+  primaryContact    User?     @relation("CompanyPrimaryContact", fields: [primaryContactId], references: [id])
+  employees         User[]    @relation("CompanyEmployees")
+  
+  clientRelationships       ClientAccountingFirmRelationship[] @relation("ClientCompany")
+  accountingFirmRelationships ClientAccountingFirmRelationship[] @relation("AccountingFirm")
+  
+  // Documents
+  documents         Document[] @relation("DocumentCompany")
+  
+  // Requests
+  requests          Request[] @relation("CompanyRequests")
+  
+  // Appointments
+  appointments      Appointment[] @relation("CompanyAppointments")
+  
+  // Tasks
+  tasks             Task[] @relation("TaskCompany")
+  
+  // Tickets
+  tickets           Ticket[] @relation("TicketCompany")
+  
+  // Meetings
+  meetings          Meeting[] @relation("MeetingCompany")
+
+  @@index([siret])
+  @@index([type])
+  @@index([status])
+}

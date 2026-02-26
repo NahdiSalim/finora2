@@ -1,0 +1,15 @@
+model TaskComment {
+  id          Int      @id @default(autoincrement())
+  taskId      Int
+  userId      Int
+  comment     String   @db.Text
+  attachments String[] // Array of file URLs
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([taskId])
+  @@index([userId])
+}

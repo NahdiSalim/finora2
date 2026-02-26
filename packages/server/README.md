@@ -1,98 +1,219 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# FINORA Backend API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+API REST pour la plateforme FINORA - Gestion comptable et collaboration.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## 🚀 Installation
 
-## Description
+### Prérequis
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- Node.js 18+ et pnpm
+- PostgreSQL 14+
+- MinIO (pour le stockage de documents)
 
-## Project setup
+### Configuration
+
+1. **Cloner le projet et installer les dépendances**
 
 ```bash
-$ pnpm install
+pnpm install
 ```
 
-## Compile and run the project
+2. **Configurer les variables d'environnement**
 
 ```bash
-# development
-$ pnpm run start
-
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
+cp .env.example .env
+# Éditer .env avec vos valeurs
 ```
 
-## Run tests
+3. **Configurer PostgreSQL**
 
 ```bash
-# unit tests
-$ pnpm run test
+# Créer la base de données
+createdb finora
 
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
+# Ou via psql
+psql -U postgres
+CREATE DATABASE finora;
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+4. **Générer le client Prisma et créer les tables**
 
 ```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+npx prisma generate
+npx prisma db push
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+5. **Lancer les seeds (données de test)**
 
-## Resources
+```bash
+pnpm run seed
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+## 🏃 Démarrage
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+### Mode développement
 
-## Support
+```bash
+pnpm run start:dev
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### Mode production
 
-## Stay in touch
+```bash
+pnpm run build
+pnpm run start:prod
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## 📚 Documentation API
 
-## License
+Une fois le serveur démarré, accédez à la documentation Swagger :
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+```
+http://localhost:3000/docs
+```
+
+## 🔑 Comptes de test
+
+Après avoir lancé les seeds, vous aurez accès à ces comptes :
+
+| Rôle          | Email                    | Mot de passe |
+| ------------- | ------------------------ | ------------ |
+| Admin         | admin@finora.com         | password123  |
+| Comptable     | comptable@finora.com     | password123  |
+| Collaborateur | collaborateur@finora.com | password123  |
+| Client        | client@finora.com        | password123  |
+
+## 🗂️ Structure du projet
+
+```
+src/
+├── common/              # Services partagés (Hash, JWT, MinIO, etc.)
+├── modules/
+│   ├── auth/           # Authentification & autorisation
+│   ├── user/           # Gestion des utilisateurs
+│   ├── role/           # Gestion des rôles et permissions
+│   ├── admin/          # Module administrateur
+│   ├── accountant/     # Module comptable
+│   ├── document/       # Gestion des documents (MinIO)
+│   └── mail/           # Envoi d'emails
+└── prisma/
+    ├── models/         # Modèles Prisma
+    └── seeds/          # Données de test
+```
+
+## 🔐 Système de permissions
+
+Le système utilise des **Actions** liées aux **Pages** et **Features** :
+
+- **Feature** : Module fonctionnel (ex: Dashboard, Documents)
+- **Page** : Page spécifique dans un module
+- **Action** : Opération CRUD (VIEW, CREATE, UPDATE, DELETE)
+
+Les permissions sont assignées aux rôles via les actions.
+
+## 📦 Modules principaux
+
+### Auth Module
+
+- Login / Logout
+- Refresh token
+- Reset password
+- Vérification email
+
+### Document Module
+
+- Upload de fichiers vers MinIO
+- Structure hiérarchique (dossiers/sous-dossiers)
+- Téléchargement de fichiers
+- Gestion des permissions par société
+
+### Admin Module
+
+- Création de comptes comptables
+- Validation des inscriptions
+- Gestion des utilisateurs
+
+### Accountant Module
+
+- Création de collaborateurs
+- Création de clients
+- Gestion de cabinet
+
+## 🛠️ Commandes utiles
+
+```bash
+# Générer le client Prisma
+npx prisma generate
+
+# Créer une migration
+npx prisma migrate dev --name nom_migration
+
+# Synchroniser le schéma sans migration
+npx prisma db push
+
+# Réinitialiser la base de données
+npx prisma migrate reset
+
+# Lancer les seeds
+pnpm run seed
+
+# Linter
+pnpm run lint
+
+# Tests
+pnpm run test
+```
+
+## 🔧 Configuration MinIO
+
+MinIO est utilisé pour le stockage des documents. Configuration par défaut :
+
+```env
+MINIO_ENDPOINT=192.168.1.185
+MINIO_PORT=9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+```
+
+Le bucket `finora-documents` est créé automatiquement au démarrage.
+
+## 📧 Configuration Email
+
+Pour l'envoi d'emails via Gmail :
+
+1. Activer l'authentification à 2 facteurs sur votre compte Gmail
+2. Générer un "App Password" : https://myaccount.google.com/apppasswords
+3. Utiliser ce mot de passe (16 caractères) dans `EMAIL_PASS`
+
+## 🐛 Dépannage
+
+### Erreur de connexion PostgreSQL
+
+- Vérifier que PostgreSQL est démarré
+- Vérifier les credentials dans `.env`
+- Le mot de passe doit être une chaîne (pas un nombre)
+
+### Erreur MinIO
+
+- Vérifier que MinIO est accessible sur le réseau
+- Tester la connexion : `curl http://192.168.1.185:9000`
+
+### Erreur d'envoi d'email
+
+- Vérifier que vous utilisez un App Password Gmail (pas votre mot de passe normal)
+- Le mot de passe doit être 16 caractères sans espaces
+
+## 📝 Variables d'environnement
+
+Voir `.env.example` pour la liste complète des variables.
+
+## 🤝 Contribution
+
+1. Créer une branche : `git checkout -b feature/ma-fonctionnalite`
+2. Commiter : `git commit -m "feat: ajout de ma fonctionnalité"`
+3. Push : `git push origin feature/ma-fonctionnalite`
+4. Créer une Pull Request
+
+## 📄 Licence
+
+Propriétaire - FINORA © 2024

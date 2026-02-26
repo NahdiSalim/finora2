@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from './dto/login.dto';
@@ -11,21 +11,29 @@ import { MailService } from '../mail/mail.service';
 import { ConfigService } from '@nestjs/config';
 import { JwtPayload } from './types/jwt-payload.type';
 import { AuthRequest } from './types/user-type';
+import { RegisterClientDto } from './dto/register-client.dto';
+import { RegisterAccountantDto } from './dto/register-accountant.dto';
+import { FileUploadService, FileCategory } from 'src/common/services/file-upload.service';
+import { RoleCode } from 'src/common/enums/role.enum';
+import { UserStatus } from 'src/common/enums/user-status.enum';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private hashService: HashService,
     private jwtTokenService: JwtTokenService,
     private mailService: MailService,
-    private configService: ConfigService
+    private configService: ConfigService,
+    private fileUploadService: FileUploadService
   ) {}
 
   // Login
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
-
+    console.log(loginDto, 'dto');
     try {
       const user = await this.prisma.user.findUnique({
         where: { email },
@@ -41,8 +49,9 @@ export class AuthService {
           },
         },
       });
+      console.log(user, 'user');
 
-      if (!user || !user.isActive) {
+      if (!user || user.status !== UserStatus.ACTIVE) {
         throw new ApiError(
           errors.BAD_CREDENTIEL.message,
           errors.BAD_CREDENTIEL.code,
@@ -182,7 +191,7 @@ export class AuthService {
           email: true,
           username: true,
           phone: true,
-          isActive: true,
+          status: true,
           createdAt: true,
           updatedAt: true,
           role: {
@@ -193,13 +202,15 @@ export class AuthService {
               descriptionFr: true,
               descriptionEn: true,
 
-              p_tasks: {
+              roleActions: {
                 include: {
-                  task: {
+                  action: {
                     select: {
                       id: true,
-                      slug: true,
-                      id_page: true,
+                      name: true,
+                      code: true,
+                      category: true,
+                      pageId: true,
                     },
                   },
                 },
@@ -249,7 +260,7 @@ export class AuthService {
         );
       }
 
-      if (!user.isActive) {
+      if (user.status !== UserStatus.ACTIVE) {
         throw new ApiError(
           errors.BLOCKED_USER.message,
           errors.BLOCKED_USER.code,
@@ -277,13 +288,13 @@ export class AuthService {
       role.p_pages.forEach((pp) => {
         const feature = featuresMap.get(pp.page.featureId);
         if (feature) {
-          // Get actions (tasks) for this page
-          const pageActions = role.p_tasks
-            .filter((pt) => pt.task.id_page === pp.page.id)
-            .map((pt) => ({
-              id: String(pt.task.id),
-              name: pt.task.slug,
-              code: this.mapTaskToActionCode(pt.task.slug),
+          // Get actions for this page
+          const pageActions = role.roleActions
+            .filter((ra) => ra.action.pageId === pp.page.id)
+            .map((ra) => ({
+              id: String(ra.action.id),
+              name: ra.action.name,
+              code: ra.action.category?.toUpperCase() || 'READ',
             }));
 
           feature.pages.push({
@@ -305,10 +316,10 @@ export class AuthService {
         full_name: user.username,
         sex: null,
         dateOfBirth: null,
-        status: user.isActive ? 'active' : 'inactive',
+        status: user.status,
         address: null,
         phone: user.phone || '',
-        is_active: user.isActive,
+        is_active: user.status === UserStatus.ACTIVE,
         created_at: user.createdAt.toISOString(),
         updated_at: user.updatedAt.toISOString(),
         role: {
@@ -326,15 +337,6 @@ export class AuthService {
     }
   }
 
-  // Helper method to map task slugs to action codes
-  private mapTaskToActionCode(slug: string): 'READ' | 'CREATE' | 'UPDATE' | 'DELETE' {
-    if (slug.includes('view') || slug.includes('read')) return 'READ';
-    if (slug.includes('add') || slug.includes('create')) return 'CREATE';
-    if (slug.includes('edit') || slug.includes('update')) return 'UPDATE';
-    if (slug.includes('delete') || slug.includes('remove')) return 'DELETE';
-    return 'READ'; // Default
-  }
-
   // Get full user by ID
   async getFullUserById(userId: number) {
     try {
@@ -344,10 +346,12 @@ export class AuthService {
           id: true,
           email: true,
           username: true,
-          isActive: true,
+          status: true,
+          companyId: true,
           role: {
             select: {
               id: true,
+              code: true,
               nameFr: true,
               nameEn: true,
             },
@@ -363,7 +367,7 @@ export class AuthService {
         );
       }
 
-      if (!user.isActive) {
+      if (user.status !== UserStatus.ACTIVE) {
         throw new ApiError(
           errors.BLOCKED_USER.message,
           errors.BLOCKED_USER.code,
@@ -379,41 +383,70 @@ export class AuthService {
   }
 
   // ForgotPassword
-  async forgotPassword(email: string): Promise<{ message: string }> {
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-    });
+  async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { email },
+      });
 
-    if (!user) {
+      if (!user) {
+        // Pour des raisons de sécurité, on retourne toujours un message de succès
+        // même si l'email n'existe pas (évite l'énumération d'emails)
+        return {
+          success: true,
+          message: 'Si cet email existe, un lien de réinitialisation a été envoyé.',
+        };
+      }
+
+      // Générer le token de réinitialisation
+      const resetToken = this.jwtTokenService.generateResetToken({
+        sub: user.id,
+        email: user.email,
+      });
+
+      const hashedToken = this.hashService.hashToken(resetToken);
+
+      // Sauvegarder le token hashé et la date d'expiration (2 heures)
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          resetPasswordToken: hashedToken,
+          resetPasswordExpires: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 heures
+        },
+      });
+
+      // Construire le lien de réinitialisation
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+      const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+
+      // Envoyer l'email
+      try {
+        await this.mailService.sendPasswordResetEmail(user.email, resetLink);
+        this.logger.log(`Password reset email sent to ${user.email}`);
+      } catch (emailError) {
+        this.logger.error(`Failed to send password reset email to ${user.email}:`, emailError);
+        throw new ApiError(
+          'Failed to send password reset email. Please try again later.',
+          500,
+          'EMAIL_SEND_FAILED'
+        );
+      }
+
+      return {
+        success: true,
+        message: 'Un email de réinitialisation a été envoyé à votre adresse.',
+      };
+    } catch (error) {
+      this.logger.error('Forgot password error:', error);
+      if (error instanceof ApiError) {
+        throw error;
+      }
       throw new ApiError(
-        errors.BAD_EMAIL_CREDENTIEL.message,
-        errors.BAD_EMAIL_CREDENTIEL.code,
-        errors.BAD_EMAIL_CREDENTIEL.errorCode
+        'An error occurred while processing your request',
+        500,
+        'FORGOT_PASSWORD_ERROR'
       );
     }
-
-    const resetToken = this.jwtTokenService.generateResetToken({
-      sub: user.id,
-      email: user.email,
-    });
-
-    const hashedToken = this.hashService.hashToken(resetToken);
-
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        resetPasswordToken: hashedToken,
-        resetPasswordExpires: new Date(Date.now() + 2 * 60 * 60 * 1000),
-      },
-    });
-
-    // Build reset link
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
-    const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
-
-    await this.mailService.sendPasswordResetEmail(user.email, resetLink);
-
-    return { message: 'Password reset email sent successfully' };
   }
 
   // ResetPassword
@@ -421,46 +454,50 @@ export class AuthService {
     token: string,
     password: string,
     confirmepassword: string
-  ): Promise<{ message: string }> {
+  ): Promise<{ success: boolean; message: string }> {
     try {
-      const hashedToken = this.hashService.hashToken(token);
+      // Valider les mots de passe
+      if (!password || password.trim() === '') {
+        throw new ApiError('Le mot de passe est requis', 400, 'PASSWORD_REQUIRED');
+      }
 
-      if (!password || password === '') {
+      if (password.length < 8) {
         throw new ApiError(
-          errors.BAD_REQUEST.message,
-          errors.BAD_REQUEST.code,
-          errors.BAD_REQUEST.errorCode
+          'Le mot de passe doit contenir au moins 8 caractères',
+          400,
+          'PASSWORD_TOO_SHORT'
         );
       }
 
       if (password !== confirmepassword) {
-        throw new ApiError(
-          errors.BAD_REQUEST.message,
-          errors.BAD_REQUEST.code,
-          errors.BAD_REQUEST.errorCode
-        );
+        throw new ApiError('Les mots de passe ne correspondent pas', 400, 'PASSWORDS_DO_NOT_MATCH');
       }
 
+      // Hasher le token pour le comparer avec celui en base
+      const hashedToken = this.hashService.hashToken(token);
+
+      // Trouver l'utilisateur avec un token valide et non expiré
       const user = await this.prisma.user.findFirst({
         where: {
           resetPasswordToken: hashedToken,
           resetPasswordExpires: {
-            gt: new Date(),
+            gt: new Date(), // Token non expiré
           },
         },
       });
 
       if (!user) {
         throw new ApiError(
-          errors.INVALID_TOKEN.message,
-          errors.INVALID_TOKEN.code,
-          errors.INVALID_TOKEN.errorCode
+          'Le lien de réinitialisation est invalide ou a expiré',
+          400,
+          'INVALID_OR_EXPIRED_TOKEN'
         );
       }
 
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
+      // Hasher le nouveau mot de passe
+      const hashedPassword = await bcrypt.hash(password, 10);
 
+      // Mettre à jour le mot de passe et supprimer le token
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
@@ -470,10 +507,222 @@ export class AuthService {
         },
       });
 
-      return { message: 'Password reset successfully' };
-    } catch (err) {
-      console.error('Login error:', err);
-      throw err;
+      this.logger.log(`Password successfully reset for user ${user.email}`);
+
+      return {
+        success: true,
+        message: 'Votre mot de passe a été réinitialisé avec succès',
+      };
+    } catch (error) {
+      this.logger.error('Reset password error:', error);
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError(
+        'Une erreur est survenue lors de la réinitialisation du mot de passe',
+        500,
+        'RESET_PASSWORD_ERROR'
+      );
+    }
+  }
+
+  // Register Client (external self-registration)
+  async registerClient(dto: RegisterClientDto) {
+    const { email, phone, password } = dto;
+
+    try {
+      // Check if email already exists
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (existingUser) {
+        throw new ApiError('Email already exists', 400, 'EMAIL_EXISTS');
+      }
+
+      // Find CLIENT role by code
+      const clientRole = await this.prisma.role.findUnique({
+        where: { code: RoleCode.CLIENT },
+      });
+
+      if (!clientRole) {
+        throw new ApiError('Client role not found', 500, 'ROLE_NOT_FOUND');
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Extract username from email
+      const username = email.split('@')[0];
+
+      // Create user with pending status
+      const user = await this.prisma.user.create({
+        data: {
+          username,
+          email,
+          password: hashedPassword,
+          phone,
+          id_role: clientRole.id,
+          status: UserStatus.ACTIVE,
+        },
+      });
+
+      // Send welcome email with password
+      try {
+        await this.mailService.sendAccountCreatedWithPasswordEmail(
+          email,
+          username,
+          password, // Send the plain password before hashing
+          'Client',
+          'Client'
+        );
+      } catch (error) {
+        console.error('Failed to send welcome email:', error);
+      }
+
+      return {
+        success: true,
+        message: 'Registration successful. Your account is pending approval.',
+        data: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          phone: user.phone,
+          status: user.status,
+        },
+      };
+    } catch (error) {
+      console.error('Register client error:', error);
+      throw error;
+    }
+  }
+
+  // Register Accountant (external self-registration)
+  async registerAccountant(
+    dto: RegisterAccountantDto,
+    files?: { patentFile?: Express.Multer.File[]; rneFile?: Express.Multer.File[] }
+  ) {
+    const { email, phone, firmName, password, specialties } = dto;
+
+    try {
+      // Check if email already exists
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (existingUser) {
+        throw new ApiError('Email already exists', 400, 'EMAIL_EXISTS');
+      }
+
+      // Find ACCOUNTANT role by code
+      const accountantRole = await this.prisma.role.findUnique({
+        where: { code: RoleCode.ACCOUNTANT },
+      });
+
+      if (!accountantRole) {
+        throw new ApiError('Accountant role not found', 500, 'ROLE_NOT_FOUND');
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Handle file uploads
+      let patentFilePath: string | undefined;
+      let rneFilePath: string | undefined;
+
+      if (files?.patentFile && files.patentFile[0]) {
+        patentFilePath = await this.fileUploadService.saveFile(
+          files.patentFile[0],
+          FileCategory.ACCOUNTANT_PATENT
+        );
+      }
+
+      if (files?.rneFile && files.rneFile[0]) {
+        rneFilePath = await this.fileUploadService.saveFile(
+          files.rneFile[0],
+          FileCategory.ACCOUNTANT_RNE
+        );
+      }
+
+      // Convert specialties to array if it's a string
+      let specialtiesArray: string[] = [];
+      if (specialties) {
+        if (Array.isArray(specialties)) {
+          specialtiesArray = specialties;
+        } else if (typeof specialties === 'string') {
+          specialtiesArray = [specialties];
+        }
+      }
+
+      // Create accounting firm with pending status
+      const firm = await this.prisma.company.create({
+        data: {
+          name: firmName,
+          patentFile: patentFilePath,
+          rne: rneFilePath,
+          phone,
+          type: 'accounting_firm',
+          status: UserStatus.PENDING,
+          specialties: specialtiesArray,
+        },
+      });
+
+      // Extract username from email
+      const username = email.split('@')[0];
+
+      // Create user with pending status
+      const user = await this.prisma.user.create({
+        data: {
+          username,
+          email,
+          password: hashedPassword,
+          phone,
+          companyId: firm.id,
+          id_role: accountantRole.id,
+          status: UserStatus.PENDING,
+        },
+      });
+
+      // Update company owner
+      await this.prisma.company.update({
+        where: { id: firm.id },
+        data: { ownerId: user.id },
+      });
+
+      // Send welcome email with password
+      try {
+        await this.mailService.sendAccountCreatedWithPasswordEmail(
+          email,
+          username,
+          password, // Send the plain password before hashing
+          firmName,
+          'Comptable'
+        );
+      } catch (error) {
+        console.error('Failed to send welcome email:', error);
+      }
+
+      return {
+        success: true,
+        message: 'Registration successful. Your account is pending approval.',
+        data: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          phone: user.phone,
+          status: user.status,
+          company: {
+            id: firm.id,
+            name: firm.name,
+            patentFile: firm.patentFile,
+            rne: firm.rne,
+            specialties: firm.specialties,
+          },
+        },
+      };
+    } catch (error) {
+      console.error('Register accountant error:', error);
+      throw error;
     }
   }
 }

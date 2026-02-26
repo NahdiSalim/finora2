@@ -1,26 +1,28 @@
-import type { IconButtonProps } from '@mui/material/IconButton';
+import type { ButtonProps } from "@mui/material/Button";
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback } from "react";
 
-import Box from '@mui/material/Box';
-import List from '@mui/material/List';
-import Badge from '@mui/material/Badge';
-import Button from '@mui/material/Button';
-import Avatar from '@mui/material/Avatar';
-import Divider from '@mui/material/Divider';
-import Tooltip from '@mui/material/Tooltip';
-import Popover from '@mui/material/Popover';
-import Typography from '@mui/material/Typography';
-import IconButton from '@mui/material/IconButton';
-import ListItemText from '@mui/material/ListItemText';
-import ListSubheader from '@mui/material/ListSubheader';
-import ListItemAvatar from '@mui/material/ListItemAvatar';
-import ListItemButton from '@mui/material/ListItemButton';
+import Box from "@mui/material/Box";
+import List from "@mui/material/List";
+import Button from "@mui/material/Button";
+import Avatar from "@mui/material/Avatar";
+import Divider from "@mui/material/Divider";
+import Tooltip from "@mui/material/Tooltip";
+import Popover from "@mui/material/Popover";
+import Typography from "@mui/material/Typography";
+import IconButton from "@mui/material/IconButton";
+import ListItemText from "@mui/material/ListItemText";
+import ListSubheader from "@mui/material/ListSubheader";
+import ListItemAvatar from "@mui/material/ListItemAvatar";
+import ListItemButton from "@mui/material/ListItemButton";
+import { useTheme, alpha } from "@mui/material/styles";
 
-import { fToNow } from 'src/utils/format-time';
+import { Bell } from "lucide-react";
 
-import { Iconify } from 'src/components/iconify';
-import { Scrollbar } from 'src/components/scrollbar';
+import { fToNow } from "src/utils/format-time";
+
+import { Iconify } from "src/components/iconify";
+import { Scrollbar } from "src/components/scrollbar";
 
 // ----------------------------------------------------------------------
 
@@ -34,20 +36,33 @@ type NotificationItemProps = {
   postedAt: string | number | null;
 };
 
-export type NotificationsPopoverProps = IconButtonProps & {
+export type NotificationsPopoverProps = ButtonProps & {
   data?: NotificationItemProps[];
 };
 
-export function NotificationsPopover({ data = [], sx, ...other }: NotificationsPopoverProps) {
+export function NotificationsPopover({
+  data = [],
+  sx,
+  ...other
+}: NotificationsPopoverProps) {
+  const theme = useTheme();
   const [notifications, setNotifications] = useState(data);
 
-  const totalUnRead = notifications.filter((item) => item.isUnRead === true).length;
+  const totalUnRead = notifications.filter(
+    (item) => item.isUnRead === true,
+  ).length;
+  const hasUnread = totalUnRead > 0;
 
-  const [openPopover, setOpenPopover] = useState<HTMLButtonElement | null>(null);
+  const [openPopover, setOpenPopover] = useState<HTMLButtonElement | null>(
+    null,
+  );
 
-  const handleOpenPopover = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-    setOpenPopover(event.currentTarget);
-  }, []);
+  const handleOpenPopover = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      setOpenPopover(event.currentTarget);
+    },
+    [],
+  );
 
   const handleClosePopover = useCallback(() => {
     setOpenPopover(null);
@@ -64,30 +79,71 @@ export function NotificationsPopover({ data = [], sx, ...other }: NotificationsP
 
   return (
     <>
-      <IconButton
-        color={openPopover ? 'primary' : 'default'}
+      <Button
+        variant="outlined"
         onClick={handleOpenPopover}
-        sx={sx}
+        sx={{
+          position: "relative",
+          minWidth: 44,
+          height: 44,
+          p: 0,
+          borderRadius: 1.5,
+          borderColor: theme.palette.divider,
+          backgroundColor: theme.palette.background.paper,
+          color: theme.palette.common.black,
+          transition: theme.transitions.create([
+            "border-color",
+            "background-color",
+            "color",
+          ]),
+          "&:hover": {
+            borderColor: theme.palette.primary.main,
+            backgroundColor: alpha(theme.palette.primary.main, 0.08),
+            color: theme.palette.primary.main,
+          },
+          ...(openPopover && {
+            borderColor: theme.palette.primary.main,
+            backgroundColor: alpha(theme.palette.primary.main, 0.08),
+            color: theme.palette.primary.main,
+          }),
+          ...sx,
+        }}
         {...other}
       >
-        <Badge badgeContent={totalUnRead} color="error">
-          <Iconify width={24} icon="solar:bell-bing-bold-duotone" />
-        </Badge>
-      </IconButton>
+        <Bell />
+
+        {/* Red Dot Badge for Unread */}
+        {hasUnread && (
+          <Box
+            sx={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              backgroundColor: theme.palette.error.main,
+              border: `2px solid ${theme.palette.background.paper}`,
+            }}
+          />
+        )}
+      </Button>
 
       <Popover
         open={!!openPopover}
         anchorEl={openPopover}
         onClose={handleClosePopover}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
         slotProps={{
           paper: {
             sx: {
               width: 360,
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              mt: 1,
+              boxShadow: theme.shadows[8],
             },
           },
         }}
@@ -97,60 +153,96 @@ export function NotificationsPopover({ data = [], sx, ...other }: NotificationsP
             py: 2,
             pl: 2.5,
             pr: 1.5,
-            display: 'flex',
-            alignItems: 'center',
+            display: "flex",
+            alignItems: "center",
           }}
         >
           <Box sx={{ flexGrow: 1 }}>
-            <Typography variant="subtitle1">Notifications</Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              You have {totalUnRead} unread messages
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              Notifications
+            </Typography>
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+              You have {totalUnRead} unread message
+              {totalUnRead !== 1 ? "s" : ""}
             </Typography>
           </Box>
 
-          {totalUnRead > 0 && (
-            <Tooltip title=" Mark all as read">
-              <IconButton color="primary" onClick={handleMarkAllAsRead}>
+          {hasUnread && (
+            <Tooltip title="Mark all as read">
+              <IconButton
+                color="primary"
+                onClick={handleMarkAllAsRead}
+                size="small"
+                sx={{
+                  "&:hover": {
+                    backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                  },
+                }}
+              >
                 <Iconify icon="eva:done-all-fill" />
               </IconButton>
             </Tooltip>
           )}
         </Box>
 
-        <Divider sx={{ borderStyle: 'dashed' }} />
+        <Divider sx={{ borderStyle: "dashed" }} />
 
-        <Scrollbar fillContent sx={{ minHeight: 240, maxHeight: { xs: 360, sm: 'none' } }}>
+        <Scrollbar
+          fillContent
+          sx={{ minHeight: 240, maxHeight: { xs: 360, sm: "none" } }}
+        >
           <List
             disablePadding
             subheader={
-              <ListSubheader disableSticky sx={{ py: 1, px: 2.5, typography: 'overline' }}>
+              <ListSubheader
+                disableSticky
+                sx={{ py: 1, px: 2.5, typography: "overline" }}
+              >
                 New
               </ListSubheader>
             }
           >
             {notifications.slice(0, 2).map((notification) => (
-              <NotificationItem key={notification.id} notification={notification} />
+              <NotificationItem
+                key={notification.id}
+                notification={notification}
+              />
             ))}
           </List>
 
           <List
             disablePadding
             subheader={
-              <ListSubheader disableSticky sx={{ py: 1, px: 2.5, typography: 'overline' }}>
+              <ListSubheader
+                disableSticky
+                sx={{ py: 1, px: 2.5, typography: "overline" }}
+              >
                 Before that
               </ListSubheader>
             }
           >
             {notifications.slice(2, 5).map((notification) => (
-              <NotificationItem key={notification.id} notification={notification} />
+              <NotificationItem
+                key={notification.id}
+                notification={notification}
+              />
             ))}
           </List>
         </Scrollbar>
 
-        <Divider sx={{ borderStyle: 'dashed' }} />
+        <Divider sx={{ borderStyle: "dashed" }} />
 
         <Box sx={{ p: 1 }}>
-          <Button fullWidth disableRipple color="inherit">
+          <Button
+            fullWidth
+            disableRipple
+            color="inherit"
+            sx={{
+              "&:hover": {
+                backgroundColor: alpha(theme.palette.primary.main, 0.08),
+              },
+            }}
+          >
             View all
           </Button>
         </Box>
@@ -161,7 +253,11 @@ export function NotificationsPopover({ data = [], sx, ...other }: NotificationsP
 
 // ----------------------------------------------------------------------
 
-function NotificationItem({ notification }: { notification: NotificationItemProps }) {
+function NotificationItem({
+  notification,
+}: {
+  notification: NotificationItemProps;
+}) {
   const { avatarUrl, title } = renderContent(notification);
 
   return (
@@ -169,14 +265,14 @@ function NotificationItem({ notification }: { notification: NotificationItemProp
       sx={{
         py: 1.5,
         px: 2.5,
-        mt: '1px',
+        mt: "1px",
         ...(notification.isUnRead && {
-          bgcolor: 'action.selected',
+          bgcolor: "action.selected",
         }),
       }}
     >
       <ListItemAvatar>
-        <Avatar sx={{ bgcolor: 'background.neutral' }}>{avatarUrl}</Avatar>
+        <Avatar sx={{ bgcolor: "background.neutral" }}>{avatarUrl}</Avatar>
       </ListItemAvatar>
       <ListItemText
         primary={title}
@@ -186,12 +282,12 @@ function NotificationItem({ notification }: { notification: NotificationItemProp
             sx={{
               mt: 0.5,
               gap: 0.5,
-              display: 'flex',
-              alignItems: 'center',
-              color: 'text.disabled',
+              display: "flex",
+              alignItems: "center",
+              color: "text.disabled",
             }}
           >
-            <Iconify width={14} icon="solar:clock-circle-outline" />
+            <Bell />
             {fToNow(notification.postedAt)}
           </Typography>
         }
@@ -206,13 +302,17 @@ function renderContent(notification: NotificationItemProps) {
   const title = (
     <Typography variant="subtitle2">
       {notification.title}
-      <Typography component="span" variant="body2" sx={{ color: 'text.secondary' }}>
+      <Typography
+        component="span"
+        variant="body2"
+        sx={{ color: "text.secondary" }}
+      >
         &nbsp; {notification.description}
       </Typography>
     </Typography>
   );
 
-  if (notification.type === 'order-placed') {
+  if (notification.type === "order-placed") {
     return {
       avatarUrl: (
         <img
@@ -223,7 +323,7 @@ function renderContent(notification: NotificationItemProps) {
       title,
     };
   }
-  if (notification.type === 'order-shipped') {
+  if (notification.type === "order-shipped") {
     return {
       avatarUrl: (
         <img
@@ -234,18 +334,24 @@ function renderContent(notification: NotificationItemProps) {
       title,
     };
   }
-  if (notification.type === 'mail') {
+  if (notification.type === "mail") {
     return {
       avatarUrl: (
-        <img alt={notification.title} src="/assets/icons/notification/ic-notification-mail.svg" />
+        <img
+          alt={notification.title}
+          src="/assets/icons/notification/ic-notification-mail.svg"
+        />
       ),
       title,
     };
   }
-  if (notification.type === 'chat-message') {
+  if (notification.type === "chat-message") {
     return {
       avatarUrl: (
-        <img alt={notification.title} src="/assets/icons/notification/ic-notification-chat.svg" />
+        <img
+          alt={notification.title}
+          src="/assets/icons/notification/ic-notification-chat.svg"
+        />
       ),
       title,
     };

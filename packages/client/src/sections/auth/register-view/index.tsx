@@ -135,10 +135,13 @@ export function RegisterView() {
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        height: { xs: "80%", md: "90vh" },
         display: "flex",
+        overflowY: { xs: "auto", md: "auto" },
         alignItems: "center",
         justifyContent: "center",
+        mt: { xs: 4, md: 0 },
+        pt: { xs: 46, md: 18 },
       }}
     >
       <Box

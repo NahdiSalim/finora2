@@ -47,7 +47,7 @@ export const themeConfig: ThemeConfig = {
    *************************************** */
   palette: {
     primary: {
-      lighter: "#e8effd",
+      lighter: "#EAF2FF",
       light: "#e8effd",
       main: "#1d61e7",
       dark: "#1649ad",

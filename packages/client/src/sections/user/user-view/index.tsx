@@ -21,7 +21,8 @@ import {
 } from "@mui/material";
 import { Plus, FolderDown } from "lucide-react";
 import DotSpinner from "src/components/common/DotSpinner";
-import { PageTitleHeader } from "src/layouts/components/page-title-header";
+
+import { PageHeader } from "src/layouts/components/page-header";
 
 import { useTable } from "src/hooks/use-table";
 import { useTableNavigation } from "src/hooks/useTableNavigation";
@@ -33,8 +34,6 @@ import {
 import { useAlert } from "src/contexts/AlertContext";
 import { usePermissions } from "src/hooks/usePermissions";
 
-import { DashboardContent } from "src/layouts/dashboard";
-
 import { Label } from "src/components/label";
 import { Scrollbar } from "src/components/scrollbar";
 import { DataTableRow } from "src/components/table/table-row";
@@ -43,6 +42,7 @@ import { DataTableHead } from "src/components/table/table-head";
 import { TableNoData } from "src/components/table/table-no-data";
 import { DataTableToolbar } from "src/components/table/table-toolbar";
 import { TableEmptyRows } from "src/components/table/table-empty-rows";
+import { PageTitleHeader } from "src/layouts/components/page-title-header";
 
 const getStatusLabel = (status: string): string => {
   const statusLabels: Record<string, string> = {
@@ -125,7 +125,7 @@ export default function UserView() {
   }, [table, manageUserStatus, showConfirm, showAlert]);
 
   return (
-    <DashboardContent>
+    <PageHeader title="Users List">
       <PageTitleHeader
         title="Users List"
         caption="Manage user information and permissions"
@@ -377,6 +377,6 @@ export default function UserView() {
           }
         />
       </Card>
-    </DashboardContent>
+    </PageHeader>
   );
 }

@@ -1,7 +1,6 @@
 import type { Theme, SxProps, Breakpoint } from "@mui/material/styles";
 
 import { useEffect } from "react";
-import { varAlpha } from "minimal-shared/utils";
 
 import Box from "@mui/material/Box";
 import ListItem from "@mui/material/ListItem";
@@ -14,10 +13,9 @@ import { RouterLink } from "src/routes/components";
 
 import { Scrollbar } from "src/components/scrollbar";
 
-import { NavUpgrade } from "../components/nav-upgrade";
-
 import type { NavItem } from "../nav-config-dashboard";
-import Logo from "src/components/common/Logo";
+import { Search } from "lucide-react";
+import CustomInput from "src/components/common/CustomInput";
 
 // ----------------------------------------------------------------------
 
@@ -41,23 +39,33 @@ export function NavDesktop({
   return (
     <Box
       sx={{
-        pt: 2.5,
+        pt: 1,
         px: 2.5,
-        top: 0,
-        left: 0,
-        height: 1,
+        top: 12,
+        left: 12,
+        height: "calc(100vh - 24px)",
         display: "none",
         position: "fixed",
         flexDirection: "column",
         zIndex: "var(--layout-nav-zIndex)",
-        width: 250,
-        borderRight: `1px solid ${varAlpha(theme.vars.palette.grey["500Channel"], 0.12)}`,
+        width: "calc(var(--layout-nav-vertical-width) - 24px)",
+        borderRadius: 3,
+        overflow: "hidden",
+        bgcolor: theme.palette.common.white,
         [theme.breakpoints.up(layoutQuery)]: {
           display: "flex",
+          top: "calc(var(--layout-header-desktop-height) + 24px)",
+          height: "calc(100vh - var(--layout-header-desktop-height) - 36px)",
         },
         ...sx,
       }}
     >
+      <CustomInput
+        backgroundColor={theme.palette.grey[50]}
+        startIcon={<Search size={16} />}
+        border={false}
+        placeholder="Rechercher..."
+      />
       <NavContent data={data} slots={slots} />
     </Box>
   );
@@ -104,12 +112,18 @@ export function NavMobile({
 
 export function NavContent({ data, slots, sx }: NavContentProps) {
   const pathname = usePathname();
+  const theme = useTheme();
 
   return (
     <>
-      <Box sx={{ display: "flex", justifyContent: "center" }}>
-        <Logo variant="primary" size={160} />
-      </Box>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          mb: 2,
+        }}
+      />
 
       {slots?.topArea}
 
@@ -131,7 +145,6 @@ export function NavContent({ data, slots, sx }: NavContentProps) {
               gap: 0.5,
               display: "flex",
               flexDirection: "column",
-              mt: 2,
             }}
           >
             {data.map((item) => {
@@ -144,7 +157,7 @@ export function NavContent({ data, slots, sx }: NavContentProps) {
                     component={RouterLink}
                     href={item.path}
                     sx={[
-                      (theme) => ({
+                      () => ({
                         pl: 2,
                         py: 1,
                         gap: 2,
@@ -152,20 +165,18 @@ export function NavContent({ data, slots, sx }: NavContentProps) {
                         borderRadius: 0.75,
                         typography: "body2",
                         fontWeight: "fontWeightMedium",
-                        color: theme.vars.palette.text.secondary,
+                        color: "#090B0E",
                         minHeight: 44,
+                        "&:hover": {
+                          bgcolor: "transparent",
+                          color: theme.palette.primary.main,
+                        },
                         ...(isActived && {
                           fontWeight: "fontWeightSemiBold",
-                          color: theme.vars.palette.primary.main,
-                          bgcolor: varAlpha(
-                            theme.vars.palette.primary.mainChannel,
-                            0.08,
-                          ),
+                          bgcolor: theme.palette.primary.lighter,
+                          color: theme.palette.primary.main,
                           "&:hover": {
-                            bgcolor: varAlpha(
-                              theme.vars.palette.primary.mainChannel,
-                              0.16,
-                            ),
+                            bgcolor: theme.palette.primary.light,
                           },
                         }),
                       }),
@@ -190,7 +201,15 @@ export function NavContent({ data, slots, sx }: NavContentProps) {
 
       {slots?.bottomArea}
 
-      <NavUpgrade />
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        {/* <NavUpgrade /> */}
+      </Box>
     </>
   );
 }

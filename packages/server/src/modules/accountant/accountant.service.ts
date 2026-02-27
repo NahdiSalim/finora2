@@ -480,10 +480,12 @@ export class AccountantService {
 
       return {
         data: clients,
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
       };
     } catch (error) {
       console.error('Get clients error:', error);

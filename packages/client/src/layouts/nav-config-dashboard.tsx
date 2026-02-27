@@ -30,6 +30,10 @@ export const NAV_CONFIG: Record<
     title: "Collaborateurs",
     icon: <PersonIcon />,
   },
+  "/clients": {
+    title: "Clients",
+    icon: <PersonIcon />,
+  },
 
   "/documents": {
     title: "Documents",

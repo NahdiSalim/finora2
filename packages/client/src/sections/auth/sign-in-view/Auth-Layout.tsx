@@ -3,6 +3,7 @@
 import { Outlet } from "react-router-dom";
 import { Box, Typography } from "@mui/material";
 import AuthSlider from "src/components/Login/AuthSlider";
+import Logo from "src/components/common/Logo";
 
 export default function AuthLayout() {
   return (
@@ -34,7 +35,25 @@ export default function AuthLayout() {
         >
           {/* LEFT SLIDER */}
           <Box sx={{ width: { xs: "100%", md: "50%" } }}>
-            <AuthSlider />
+            {/* Mobile: branded blue box with logo */}
+            <Box
+              sx={{
+                display: { xs: "flex", md: "none" },
+                mb: -24,
+                alignItems: "center",
+                justifyContent: "center",
+                bgcolor: "primary.main",
+                borderRadius: 3,
+                py: 4,
+              }}
+            >
+              <Logo variant="primary" isOnDark />
+            </Box>
+
+            {/* Desktop: full slider */}
+            <Box sx={{ display: { xs: "none", md: "block" }, height: "100%" }}>
+              <AuthSlider />
+            </Box>
           </Box>
 
           {/* RIGHT CONTENT */}

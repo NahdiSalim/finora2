@@ -147,7 +147,7 @@ export function AccountPopover({
               lineHeight: 1.2,
             }}
           >
-            CEO
+            Comptable
           </Typography>
         </Box>
       </Button>

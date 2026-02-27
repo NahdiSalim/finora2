@@ -65,6 +65,9 @@ model Company {
   
   // Meetings
   meetings          Meeting[] @relation("MeetingCompany")
+  
+  // Audit Logs
+  auditLogs         AuditLog[] @relation("AuditLogCompany")
 
   @@index([siret])
   @@index([type])

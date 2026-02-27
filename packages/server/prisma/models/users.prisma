@@ -68,6 +68,9 @@ model User {
   
   // Role Actions
   grantedRoleActions   RoleAction[] @relation("RoleActionGrantedBy")
+  
+  // Audit Logs
+  auditLogs            AuditLog[] @relation("AuditLogUser")
 
   @@index([email])
   @@index([companyId])

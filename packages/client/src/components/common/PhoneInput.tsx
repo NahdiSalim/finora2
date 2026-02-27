@@ -100,7 +100,7 @@ function CountryDropdown({
           autoFocus
           fullWidth
           size="small"
-          placeholder="Search country or dial code…"
+          placeholder="rechercher votre pays"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           sx={{

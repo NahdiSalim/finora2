@@ -8,6 +8,7 @@ import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { BigIntSerializerInterceptor } from './common/interceptors/bigint-serializer.interceptor';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { seedRoles } from '../prisma/seeds/role.seed';
@@ -42,32 +43,37 @@ async function runSeeds() {
     await seedUsers(prisma);
     await seedRolePermissions(prisma);
 
-    console.log('✅ Database seeding completed!');
+    console.log(' Database seeding completed!');
   } catch (error) {
-    console.error('❌ Error during seeding:', error);
+    console.error(' Error during seeding:', error);
   } finally {
     await prisma.$disconnect();
   }
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
-app.set('trust proxy', 1);
-  // CORS configuration - doit être avant tout
-  app.enableCors({
-    origin: true, // Permet toutes les origines en dev, à configurer en prod
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    cors: true, // Enable CORS at creation
   });
 
-  app.setGlobalPrefix('api');
+  // Additional CORS configuration
+  app.enableCors({
+    origin: '*',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+    allowedHeaders: '*',
+  });
 
-app.use(
-  helmet({
-    contentSecurityPolicy: false,
-  })
-);
+  // Helmet AFTER CORS and BEFORE other middleware
+  app.use(
+    helmet({
+      contentSecurityPolicy: false, // Disable CSP for Swagger
+      crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: false,
+    })
+  );
+
+  app.setGlobalPrefix('api');
 
   app.use(rateLimit({ windowMs: 60000, max: 100 }));
   app.useGlobalPipes(
@@ -80,6 +86,9 @@ app.use(
   );
 
   app.useGlobalFilters(new GlobalExceptionFilter());
+
+  // Add BigInt serializer interceptor
+  app.useGlobalInterceptors(new BigIntSerializerInterceptor());
 
   // Setup Swagger documentation
   setupSwagger(app);
@@ -99,7 +108,13 @@ app.use(
   await runSeeds();
 
   await app.listen(process.env.PORT || 3000, '0.0.0.0');
-  console.log(`server is listening on port ${process.env.PORT || 3000}`);
-  console.log(`API → http://localhost:${process.env.PORT || 3000}/docs`);
+  const port = process.env.PORT || 3000;
+  console.log(`\n🚀 Server is running on port ${port}`);
+  console.log(`📚 Swagger UI:`);
+  console.log(`   - http://localhost:${port}/docs`);
+  console.log(`   - http://192.168.1.185:${port}/docs`);
+  console.log(`🔌 API Base URL:`);
+  console.log(`   - http://localhost:${port}/api`);
+  console.log(`   - http://192.168.1.185:${port}/api`);
 }
 bootstrap();

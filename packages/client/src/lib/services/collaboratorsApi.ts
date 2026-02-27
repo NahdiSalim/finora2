@@ -10,8 +10,10 @@ export interface Collaborator {
   phone: string;
   position?: string;
   department?: string;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
+  isActive: boolean;
+  username?: string;
 }
 
 export interface CollaboratorsResponse {

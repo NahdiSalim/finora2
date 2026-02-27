@@ -14,6 +14,7 @@ export async function seedFeatures(prisma: PrismaClient) {
     { slug: 'profil' },
     { slug: 'gestion-collaborateurs' },
     { slug: 'gestion-taches' },
+    { slug: 'gestion-clients' },
   ];
 
   for (const feature of features) {

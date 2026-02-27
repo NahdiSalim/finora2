@@ -1,0 +1,26 @@
+model AuditLog {
+  id           Int       @id @default(autoincrement())
+  userId       Int?
+  action       String    // "create" | "read" | "update" | "delete" | "login" | "logout" | "export" | "import"
+  entity       String    // "user" | "company" | "document" | "task" | "request" | etc.
+  entityId     Int?
+  changes      String?   @db.Text // JSON string of changes
+  metadata     String?   @db.Text // JSON string of additional metadata
+  ipAddress    String?
+  userAgent    String?
+  companyId    Int?
+  status       String    @default("success") // "success" | "failure"
+  errorMessage String?   @db.Text
+  createdAt    DateTime  @default(now())
+
+  user         User?     @relation("AuditLogUser", fields: [userId], references: [id], onDelete: SetNull)
+  company      Company?  @relation("AuditLogCompany", fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([entityId])
+  @@index([companyId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

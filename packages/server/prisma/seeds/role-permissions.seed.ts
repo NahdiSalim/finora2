@@ -61,7 +61,7 @@ export async function seedRolePermissions(prisma: PrismaClient) {
     'UPDATE_PROFILE',
   ];
 
-  // Accountant permissions: Collaborateurs + Demandes + Rendez-vous + Dashboard + Réseautage + Messagerie + Documents + Archive + Tâches + Profil
+  // Accountant permissions: Collaborateurs + Demandes + Rendez-vous + Dashboard + Réseautage + Messagerie + Documents + Archive + Tâches + Clients + Profil
   const accountantActionCodes = [
     'VIEW_COLLABORATORS',
     'CREATE_COLLABORATOR',
@@ -94,6 +94,11 @@ export async function seedRolePermissions(prisma: PrismaClient) {
     'VIEW_TASK_DETAIL',
     'UPDATE_TASK',
     'DELETE_TASK',
+    'VIEW_CLIENTS',
+    'CREATE_CLIENT',
+    'VIEW_CLIENT_DETAIL',
+    'UPDATE_CLIENT',
+    'DELETE_CLIENT',
     'VIEW_PROFILE',
     'UPDATE_PROFILE',
   ];

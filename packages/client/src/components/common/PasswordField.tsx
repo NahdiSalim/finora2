@@ -104,16 +104,16 @@ const PasswordField = forwardRef<HTMLDivElement, PasswordFieldProps>(
 
             <Box display="grid" gridTemplateColumns="1fr 1fr" gap={1.5}>
               <CriteriaItem
-                label="One lowercase character"
+                label="Une lettre minuscule"
                 valid={rules.lowercase}
               />
-              <CriteriaItem label="One number" valid={rules.number} />
+              <CriteriaItem label="Un chiffre" valid={rules.number} />
               <CriteriaItem
-                label="One uppercase character"
+                label="Une lettre majuscule"
                 valid={rules.uppercase}
               />
               <CriteriaItem
-                label="One special character"
+                label="Un caractère spécial"
                 valid={rules.special}
               />
             </Box>

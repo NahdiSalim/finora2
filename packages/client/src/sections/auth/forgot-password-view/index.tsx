@@ -1,3 +1,6 @@
+import { useRouter } from "src/routes/hooks";
+import { RouterLink } from "src/routes/components";
+import CustomInput from "src/components/common/CustomInput";
 import { useForm } from "react-hook-form";
 import { useState, useCallback } from "react";
 import { yupResolver } from "@hookform/resolvers/yup";
@@ -5,11 +8,6 @@ import { yupResolver } from "@hookform/resolvers/yup";
 import CheckCircle from "@mui/icons-material/CheckCircle";
 import ArrowBackIosIcon from "@mui/icons-material/ArrowBackIos";
 import { Box, Grid, Link, Typography } from "@mui/material";
-
-import { useRouter } from "src/routes/hooks";
-import { RouterLink } from "src/routes/components";
-import CustomInput from "src/components/common/CustomInput";
-
 import {
   forgotPasswordValidationSchema,
   type ForgotPasswordFormData,
@@ -18,7 +16,6 @@ import {
 import { useAlert } from "src/contexts/AlertContext";
 import { useForgotPasswordMutation } from "src/lib/services/authApi";
 import CustomButton from "src/components/common/CustomButton";
-import FileUpload from "src/components/common/FileUpload";
 
 export function ForgotPasswordView() {
   const router = useRouter();
@@ -100,18 +97,18 @@ export function ForgotPasswordView() {
               <br />
               Veuillez vérifier votre boîte de réception.
             </Typography>
+            <Typography
+              sx={{
+                color: "#6B7280",
+                fontSize: 14,
+                mt: 1,
+                textAlign: "center",
+              }}
+            >
+              Ne vous inquiétez pas, nous pouvons vous aider!
+            </Typography>
           </Box>
         </Grid>
-
-        <Typography
-          sx={{
-            color: "#6B7280",
-            fontSize: 14,
-            mt: 1,
-          }}
-        >
-          Ne vous inquiétez pas, nous pouvons vous aider!
-        </Typography>
       </Grid>
     );
   }
@@ -144,12 +141,6 @@ export function ForgotPasswordView() {
         </Grid>
 
         <Grid size={{ xs: 12 }}>
-          <FileUpload
-            label="Upload document"
-            maxSize={5}
-            acceptedFiles={[".jpg", ".png", ".pdf"]}
-            helperText="Max size 5MB"
-          />
           <CustomInput
             {...register("email")}
             fullWidth

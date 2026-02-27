@@ -5,12 +5,13 @@ import { collaboratorsApi } from "./services/collaboratorsApi";
 
 import { rolesApi } from "./services/roleApi";
 import authReducer, { logout } from "./slices/authSlice";
+import { clientsApi } from "./services/clientApi";
 
 const apiMiddlewares = [
   authApi.middleware,
   usersApi.middleware,
   collaboratorsApi.middleware,
-
+  clientsApi.middleware,
   rolesApi.middleware,
 ];
 
@@ -18,7 +19,7 @@ const apiResetters = [
   authApi.util.resetApiState,
   usersApi.util.resetApiState,
   collaboratorsApi.util.resetApiState,
-
+  clientsApi.util.resetApiState,
   rolesApi.util.resetApiState,
 ];
 
@@ -26,6 +27,7 @@ const appReducer = combineReducers({
   auth: authReducer,
   [authApi.reducerPath]: authApi.reducer,
   [usersApi.reducerPath]: usersApi.reducer,
+  [clientsApi.reducerPath]: clientsApi.reducer,
   [collaboratorsApi.reducerPath]: collaboratorsApi.reducer,
   [rolesApi.reducerPath]: rolesApi.reducer,
 });

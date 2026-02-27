@@ -135,18 +135,16 @@ export function RegisterView() {
   return (
     <Box
       sx={{
-        height: "100%",
-        overflowY: "auto",
+        minHeight: "100vh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        mt: { xs: 8, md: 0 },
       }}
     >
       <Box
         component="form"
         onSubmit={handleSubmit(onSubmit)}
-        sx={{ width: "100%", maxWidth: 500, px: 3, pt: { xs: 18, md: 18 } }}
+        sx={{ width: "100%", maxWidth: 500, px: 3 }}
       >
         <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
           S&apos;inscrire
@@ -189,12 +187,7 @@ export function RegisterView() {
         {/* ROLE Selection */}
         {role === "CLIENT" && (
           <>
-            <CustomInput
-              {...register("email")}
-              label="Email"
-              fullWidth
-              placeholder="votre adresse email"
-            />
+            <CustomInput {...register("email")} label="Email" fullWidth />
             <Controller
               name="phoneNumber"
               control={control}
@@ -256,7 +249,6 @@ export function RegisterView() {
                   {...register("email")}
                   label="Email"
                   fullWidth
-                  placeholder="votre adresse email"
                   sx={{ mb: 2 }}
                 />
                 <Controller

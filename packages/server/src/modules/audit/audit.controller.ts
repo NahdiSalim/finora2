@@ -17,7 +17,7 @@ import { AuditService } from './audit.service';
 import { SearchAuditLogsDto } from './dto/search-audit-logs.dto';
 
 @ApiTags('Audit')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
 @Controller('audit')
 export class AuditController {
@@ -27,7 +27,7 @@ export class AuditController {
   @ApiOperation({ summary: "Rechercher dans les logs d'audit" })
   @ApiResponse({ status: 200, description: 'Liste des logs' })
   async searchLogs(@Request() req, @Query() dto: SearchAuditLogsDto) {
-    return this.auditService.searchLogs(dto, req.user.sub);
+    return this.auditService.searchLogs(dto, req.user.id);
   }
 
   @Get('logs/entity/:entity/:entityId')
@@ -38,7 +38,7 @@ export class AuditController {
     @Param('entity') entity: string,
     @Param('entityId', ParseIntPipe) entityId: number
   ) {
-    return this.auditService.getEntityLogs(entity, entityId, req.user.sub);
+    return this.auditService.getEntityLogs(entity, entityId, req.user.id);
   }
 
   @Get('statistics')
@@ -51,7 +51,7 @@ export class AuditController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string
   ) {
-    return this.auditService.getStatistics(req.user.sub, startDate, endDate);
+    return this.auditService.getStatistics(req.user.id, startDate, endDate);
   }
 
   @Get('export')
@@ -60,7 +60,7 @@ export class AuditController {
   @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   @Header('Content-Disposition', 'attachment; filename=audit-logs.xlsx')
   async exportLogs(@Request() req, @Query() dto: SearchAuditLogsDto, @Res() res: Response) {
-    const buffer = await this.auditService.exportLogs(dto, req.user.sub);
+    const buffer = await this.auditService.exportLogs(dto, req.user.id);
     res.send(buffer);
   }
 

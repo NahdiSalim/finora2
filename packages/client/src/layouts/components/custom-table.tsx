@@ -49,11 +49,7 @@ export function DataTable<T>({
     >
       <Table sx={{ minWidth }}>
         {/* HEADER */}
-        <TableHead
-          sx={{
-            backgroundColor: theme.palette.grey[100],
-          }}
-        >
+        <TableHead>
           <TableRow>
             {columns.map((col) => (
               <TableCell
@@ -63,6 +59,7 @@ export function DataTable<T>({
                   p: 1,
                   fontWeight: 600,
                   width: col.width,
+                  backgroundColor: "#f5f5f5",
                 }}
               >
                 <Typography fontSize={14}>{col.label}</Typography>
@@ -102,7 +99,7 @@ export function DataTable<T>({
                 sx={{
                   backgroundColor:
                     index % 2 === 0
-                      ? theme.palette.background.paper
+                      ? theme.palette.common.white
                       : theme.palette.grey[50],
                   "&:hover": {
                     backgroundColor: theme.palette.action.hover,

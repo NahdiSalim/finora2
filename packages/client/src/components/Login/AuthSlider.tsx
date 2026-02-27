@@ -67,7 +67,7 @@ export default function AuthSlider() {
         justifyContent: "space-between",
         p: 4,
         color: theme.palette.common.white,
-        background: "url('public/assets/bg-slider.svg') center/cover no-repeat",
+        background: "url('/assets/bg-slider.svg') center/cover no-repeat",
       }}
     >
       {/* Logo */}

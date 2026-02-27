@@ -122,6 +122,9 @@ export function DashboardLayout({
             bgcolor: themeProps.palette.common.white,
             borderRadius: 3,
             overflow: "hidden",
+            display: "flex",
+            alignItems: "center",
+            flexDirection: "row",
             m: 1.5,
             width: "calc(100% - 24px)", // 👈 accounts for mx: 1.5 (12px each side)
             height: "var(--layout-header-mobile-height)",

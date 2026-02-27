@@ -284,7 +284,7 @@ export class AccountantService {
         await this.mailService.sendAccountCreatedWithPasswordEmail(
           email,
           `${firstName} ${lastName}`,
-          password, // Send the plain password before hashing
+          password,
           companyName,
           'Client'
         );
@@ -292,28 +292,29 @@ export class AccountantService {
         console.error('Failed to send welcome email:', error);
       }
 
+      // Return simple response with essential information
       return {
         success: true,
-        message: 'Client created successfully and relationship established',
+        message: 'Client créé avec succès',
         data: {
-          client: {
-            id: client.id,
-            username: client.username,
-            firstName: client.firstName,
-            lastName: client.lastName,
-            email: client.email,
-            phone: client.phone,
-            status: client.status,
-            role: client.role,
-            company: client.company,
+          id: client.id,
+          fullName: `${client.firstName} ${client.lastName}`,
+          email: client.email,
+          phone: client.phone,
+          company: {
+            id: clientCompany.id,
+            name: clientCompany.name,
+            siret: clientCompany.siret,
+            vatNumber: clientCompany.vatNumber,
+            legalForm: clientCompany.legalForm,
+            address: clientCompany.address,
+            city: clientCompany.city,
+            postalCode: clientCompany.postalCode,
+            phone: clientCompany.phone,
+            email: clientCompany.email,
           },
-          relationship: {
-            id: relationship.id,
-            status: relationship.status,
-            relationshipStart: relationship.relationshipStart,
-            clientCompany: relationship.clientCompany,
-            accountingFirm: relationship.accountingFirm,
-          },
+          status: client.status,
+          createdAt: client.createdAt,
         },
       };
     } catch (error) {
@@ -451,8 +452,34 @@ export class AccountantService {
         },
       });
 
+      // Transform data to simple format
+      const clients = relationships.map((rel) => {
+        const company = rel.clientCompany;
+        const primaryUser = company.employees[0]; // Get first employee (owner)
+
+        return {
+          id: company.id,
+          fullName: primaryUser ? `${primaryUser.firstName} ${primaryUser.lastName}` : 'N/A',
+          email: primaryUser?.email || company.email,
+          phone: primaryUser?.phone || company.phone,
+          company: {
+            name: company.name,
+            siret: company.siret,
+            vatNumber: company.vatNumber,
+            legalForm: company.legalForm,
+            address: company.address,
+            city: company.city,
+            postalCode: company.postalCode,
+          },
+          status: company.status,
+          relationshipStatus: rel.status,
+          relationshipStart: rel.relationshipStart,
+          createdAt: company.createdAt,
+        };
+      });
+
       return {
-        data: relationships,
+        data: clients,
         total,
         page,
         limit,

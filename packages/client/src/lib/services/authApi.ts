@@ -10,9 +10,9 @@ import type {
   RefreshTokenRequest,
   RefreshTokenResponse,
   RegisterResponse,
-  RegisterRequest,
 } from "src/types/auth";
 import { baseQueryWithReauth } from "./baseQueryWithReauth";
+import type { RegisterFormData } from "src/validations/Auth/auth-validation";
 
 export const authApi = createApi({
   reducerPath: "authApi",
@@ -47,7 +47,7 @@ export const authApi = createApi({
         body: data,
       }),
     }),
-    register: builder.mutation<RegisterResponse, RegisterRequest>({
+    register: builder.mutation<RegisterResponse, RegisterFormData>({
       query: (data) => ({
         url: "/auth/register/client",
         method: "POST",

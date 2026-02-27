@@ -45,10 +45,14 @@ export const registerValidationSchema = yup.object({
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
       "Doit contenir majuscule, minuscule et chiffre",
     ),
-  confirmPassword: yup
-    .string()
-    .required("La confirmation est obligatoire")
-    .oneOf([yup.ref("password")], "Les mots de passe ne correspondent pas"),
+  confirmPassword: yup.string().when("role", {
+    is: "COMPTABLE",
+    then: (schema) =>
+      schema
+        .required("Confirmation requise")
+        .oneOf([yup.ref("password")], "Les mots de passe ne correspondent pas"),
+    otherwise: (schema) => schema.notRequired(),
+  }),
   role: yup
     .string()
     .oneOf(["CLIENT", "COMPTABLE"])

@@ -2,7 +2,7 @@
 ARG PNPM_VERSION=10.13.1
 
 # 1) deps
-FROM node:lts-alpine AS deps
+FROM node:24.13.1 AS deps
 WORKDIR /repo
 RUN npm i -g pnpm@${PNPM_VERSION}
 
@@ -11,7 +11,7 @@ COPY packages/server/package.json packages/server/package.json
 RUN pnpm install --frozen-lockfile
 
 # 2) build
-FROM node:lts-alpine AS build
+FROM node:24.13.1 AS build
 WORKDIR /repo
 RUN npm i -g pnpm@${PNPM_VERSION}
 
@@ -24,7 +24,7 @@ RUN pnpm --filter "./packages/server" exec prisma generate --schema ./prisma/sch
 RUN pnpm --filter "./packages/server" build
 
 # 3) prod deps 
-FROM node:lts-alpine AS prod_deps
+FROM node:24.13.1 AS prod_deps
 WORKDIR /repo
 ENV NODE_ENV=production
 RUN npm i -g pnpm@${PNPM_VERSION}
@@ -40,7 +40,7 @@ RUN node packages/server/scripts/merge-prisma-models.js
 RUN pnpm --filter "./packages/server" exec prisma generate --schema ./prisma/schema.prisma
 
 # 4) runtime
-FROM node:lts-alpine AS runner
+FROM node:24.13.1 AS runner
 ENV NODE_ENV=production
 WORKDIR /app/packages/server
 

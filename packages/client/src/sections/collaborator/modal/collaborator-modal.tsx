@@ -78,7 +78,11 @@ export default function CollaboratorModal({ open, onClose }: Props) {
       showAlert("Erreur lors de la création du collaborateur", "error");
     }
   };
-
+  const handleClose = () => {
+    if (isLoading) return;
+    reset();
+    onClose();
+  };
   const sections = [
     {
       id: "personal",

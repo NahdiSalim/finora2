@@ -180,6 +180,17 @@ export class AccountantService {
         throw new ApiError('Email already exists', 400, 'EMAIL_EXISTS');
       }
 
+      // Check if SIRET already exists (if provided)
+      if (siret) {
+        const existingCompany = await this.prisma.company.findUnique({
+          where: { siret },
+        });
+
+        if (existingCompany) {
+          throw new ApiError('SIRET already exists', 400, 'SIRET_EXISTS');
+        }
+      }
+
       // Find CLIENT role
       const clientRole = await this.prisma.role.findUnique({
         where: { code: RoleCode.CLIENT },
@@ -199,7 +210,7 @@ export class AccountantService {
       const clientCompany = await this.prisma.company.create({
         data: {
           name: companyName,
-          siret,
+          siret: siret || null, // Allow null if not provided
           vatNumber,
           legalForm,
           address,

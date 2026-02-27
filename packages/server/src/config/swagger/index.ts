@@ -21,15 +21,16 @@ export function setupSwagger(app: INestApplication) {
 
   const document = SwaggerModule.createDocument(app, config);
 
-  // Force HTTP URLs in Swagger
-  document.servers = [
-    {
-      url: `http://192.168.1.185:${process.env.PORT || 3000}`,
-      description: 'Local HTTP server',
+  // Don't set servers - let Swagger use the current URL automatically
+  // This way it works with both localhost and 192.168.1.185
+
+  SwaggerModule.setup('docs', app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+      displayRequestDuration: true,
     },
-  ];
+    customSiteTitle: 'Finora API Documentation',
+  });
 
-  SwaggerModule.setup('docs', app, document);
-
-  console.log('📚 Swagger documentation available at /docs (HTTP enforced)');
+  console.log('📚 Swagger documentation available at /docs');
 }

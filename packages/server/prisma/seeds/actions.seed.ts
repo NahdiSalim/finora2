@@ -256,6 +256,38 @@ export async function seedActions(prisma: PrismaClient) {
       category: 'write',
       pageSlug: 'task-detail',
     },
+
+    // Gestion des clients
+    {
+      name: 'Voir la liste des clients',
+      code: 'VIEW_CLIENTS',
+      category: 'read',
+      pageSlug: 'clients-list',
+    },
+    {
+      name: 'Créer un client',
+      code: 'CREATE_CLIENT',
+      category: 'write',
+      pageSlug: 'clients-list',
+    },
+    {
+      name: "Voir le détail d'un client",
+      code: 'VIEW_CLIENT_DETAIL',
+      category: 'read',
+      pageSlug: 'client-detail',
+    },
+    {
+      name: 'Modifier un client',
+      code: 'UPDATE_CLIENT',
+      category: 'write',
+      pageSlug: 'client-detail',
+    },
+    {
+      name: 'Supprimer un client',
+      code: 'DELETE_CLIENT',
+      category: 'write',
+      pageSlug: 'client-detail',
+    },
   ];
 
   for (const action of actions) {

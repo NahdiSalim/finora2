@@ -80,6 +80,35 @@ model Appointment {
 }
 
 
+// From audit_log.prisma
+model AuditLog {
+  id           Int       @id @default(autoincrement())
+  userId       Int?
+  action       String    // "create" | "read" | "update" | "delete" | "login" | "logout" | "export" | "import"
+  entity       String    // "user" | "company" | "document" | "task" | "request" | etc.
+  entityId     Int?
+  changes      String?   @db.Text // JSON string of changes
+  metadata     String?   @db.Text // JSON string of additional metadata
+  ipAddress    String?
+  userAgent    String?
+  companyId    Int?
+  status       String    @default("success") // "success" | "failure"
+  errorMessage String?   @db.Text
+  createdAt    DateTime  @default(now())
+
+  user         User?     @relation("AuditLogUser", fields: [userId], references: [id], onDelete: SetNull)
+  company      Company?  @relation("AuditLogCompany", fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([entityId])
+  @@index([companyId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+
 // From chat_message.prisma
 model ChatMessage {
   id              Int       @id @default(autoincrement())
@@ -266,6 +295,9 @@ model Company {
   
   // Meetings
   meetings          Meeting[] @relation("MeetingCompany")
+  
+  // Audit Logs
+  auditLogs         AuditLog[] @relation("AuditLogCompany")
 
   @@index([siret])
   @@index([type])
@@ -373,18 +405,22 @@ model Meeting {
 model Notification {
   id          Int       @id @default(autoincrement())
   recipientId Int
-  type        String    // "request" | "task" | "meeting" | "message" | "system"
+  type        String    // "request" | "task" | "meeting" | "message" | "system" | "appointment" | "comment"
   title       String
   message     String
   data        String?   @db.Text // JSON with additional data
   read        Boolean   @default(false)
+  readAt      DateTime? // When the notification was read
+  actionUrl   String?   // URL to navigate to when clicking notification
+  priority    String    @default("normal") // "low" | "normal" | "high" | "urgent"
   createdAt   DateTime  @default(now())
 
-  recipient   User      @relation("NotificationRecipient", fields: [recipientId], references: [id])
+  recipient   User      @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@index([recipientId])
   @@index([read])
   @@index([createdAt])
+  @@index([type])
 }
 
 
@@ -717,6 +753,9 @@ model User {
   
   // Role Actions
   grantedRoleActions   RoleAction[] @relation("RoleActionGrantedBy")
+  
+  // Audit Logs
+  auditLogs            AuditLog[] @relation("AuditLogUser")
 
   @@index([email])
   @@index([companyId])

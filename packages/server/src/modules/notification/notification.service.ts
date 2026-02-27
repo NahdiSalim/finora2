@@ -1,0 +1,280 @@
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { NotificationGateway } from './notification.gateway';
+
+@Injectable()
+export class NotificationService {
+  constructor(
+    private prisma: PrismaService,
+    private notificationGateway: NotificationGateway
+  ) {}
+
+  /**
+   * Create and send a notification
+   */
+  async createNotification(data: {
+    recipientId: number;
+    type: string;
+    title: string;
+    message: string;
+    data?: any;
+    actionUrl?: string;
+    priority?: string;
+  }) {
+    const notification = await this.prisma.notification.create({
+      data: {
+        recipientId: data.recipientId,
+        type: data.type,
+        title: data.title,
+        message: data.message,
+        data: data.data ? JSON.stringify(data.data) : null,
+      },
+      include: {
+        recipient: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // Send real-time notification via WebSocket
+    this.notificationGateway.sendNotificationToUser(data.recipientId, notification);
+
+    return notification;
+  }
+
+  /**
+   * Get all notifications for a user
+   */
+  async getUserNotifications(
+    userId: number,
+    filters?: {
+      read?: boolean;
+      type?: string;
+      limit?: number;
+      offset?: number;
+    }
+  ) {
+    const where: any = { recipientId: userId };
+
+    if (filters?.read !== undefined) {
+      where.read = filters.read;
+    }
+
+    if (filters?.type) {
+      where.type = filters.type;
+    }
+
+    const [notifications, total, unreadCount] = await Promise.all([
+      this.prisma.notification.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: filters?.limit || 50,
+        skip: filters?.offset || 0,
+      }),
+      this.prisma.notification.count({ where }),
+      this.prisma.notification.count({
+        where: { recipientId: userId, read: false },
+      }),
+    ]);
+
+    return {
+      notifications: notifications.map((n) => ({
+        ...n,
+        data: n.data ? JSON.parse(n.data) : null,
+      })),
+      total,
+      unreadCount,
+    };
+  }
+
+  /**
+   * Mark notification as read
+   */
+  async markAsRead(notificationId: number, userId: number) {
+    const notification = await this.prisma.notification.findFirst({
+      where: { id: notificationId, recipientId: userId },
+    });
+
+    if (!notification) {
+      throw new Error('Notification not found');
+    }
+
+    const updated = await this.prisma.notification.update({
+      where: { id: notificationId },
+      data: {
+        read: true,
+      },
+    });
+
+    // Notify user about read status update
+    this.notificationGateway.sendNotificationUpdate(userId, {
+      notificationId,
+      read: true,
+    });
+
+    return updated;
+  }
+
+  /**
+   * Mark all notifications as read
+   */
+  async markAllAsRead(userId: number) {
+    await this.prisma.notification.updateMany({
+      where: { recipientId: userId, read: false },
+      data: {
+        read: true,
+      },
+    });
+
+    // Notify user about bulk read
+    this.notificationGateway.sendNotificationUpdate(userId, {
+      allRead: true,
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * Delete a notification
+   */
+  async deleteNotification(notificationId: number, userId: number) {
+    const notification = await this.prisma.notification.findFirst({
+      where: { id: notificationId, recipientId: userId },
+    });
+
+    if (!notification) {
+      throw new Error('Notification not found');
+    }
+
+    await this.prisma.notification.delete({
+      where: { id: notificationId },
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * Get unread count
+   */
+  async getUnreadCount(userId: number) {
+    const count = await this.prisma.notification.count({
+      where: { recipientId: userId, read: false },
+    });
+
+    return { unreadCount: count };
+  }
+
+  /**
+   * Fonction dynamique pour créer n'importe quelle notification
+   * Utilise des templates prédéfinis pour générer le contenu
+   */
+  async notify(params: {
+    recipientId: number | number[];
+    type: string;
+    action: string;
+    data?: any;
+    actorName?: string;
+    priority?: string;
+  }) {
+    const {
+      recipientId,
+      type,
+      action,
+      data = {},
+      actorName = 'Système',
+      priority = 'normal',
+    } = params;
+
+    // Templates de notifications
+    const templates: Record<string, any> = {
+      // Tasks
+      'task.assigned': {
+        title: 'Nouvelle tâche assignée',
+        message: `${actorName} vous a assigné une nouvelle tâche`,
+        actionUrl: `/tasks/${data.taskId}`,
+        priority: 'normal',
+      },
+      'task.completed': {
+        title: 'Tâche terminée',
+        message: `${actorName} a terminé une tâche`,
+        actionUrl: `/tasks/${data.taskId}`,
+        priority: 'low',
+      },
+      'task.comment': {
+        title: 'Nouveau commentaire',
+        message: `${actorName} a commenté sur une tâche`,
+        actionUrl: `/tasks/${data.taskId}`,
+        priority: 'normal',
+      },
+
+      // Requests
+      'request.created': {
+        title: 'Nouvelle demande',
+        message: `${actorName} a créé une nouvelle demande`,
+        actionUrl: `/requests/${data.requestId}`,
+        priority: 'high',
+      },
+      'request.status_changed': {
+        title: 'Statut de demande mis à jour',
+        message: `Votre demande est maintenant: ${data.status}`,
+        actionUrl: `/requests/${data.requestId}`,
+        priority: 'normal',
+      },
+
+      // Appointments
+      'appointment.created': {
+        title: 'Nouveau rendez-vous',
+        message: `${actorName} a créé un rendez-vous avec vous`,
+        actionUrl: `/appointments/${data.appointmentId}`,
+        priority: 'high',
+      },
+      'appointment.confirmed': {
+        title: 'Rendez-vous confirmé',
+        message: `Votre rendez-vous a été confirmé`,
+        actionUrl: `/appointments/${data.appointmentId}`,
+        priority: 'normal',
+      },
+
+      // Messages
+      'message.received': {
+        title: 'Nouveau message',
+        message: `${actorName} vous a envoyé un message`,
+        actionUrl: `/chat/${data.roomId || ''}`,
+        priority: 'normal',
+      },
+    };
+
+    const templateKey = `${type}.${action}`;
+    const template = templates[templateKey];
+
+    if (!template) {
+      throw new Error(`Template de notification non trouvé: ${templateKey}`);
+    }
+
+    // Support pour plusieurs destinataires
+    const recipients = Array.isArray(recipientId) ? recipientId : [recipientId];
+
+    // Créer les notifications pour tous les destinataires
+    const notifications = await Promise.all(
+      recipients.map((id) =>
+        this.createNotification({
+          recipientId: id,
+          type,
+          title: template.title,
+          message: template.message,
+          data,
+          actionUrl: template.actionUrl,
+          priority: priority || template.priority,
+        })
+      )
+    );
+
+    return notifications.length === 1 ? notifications[0] : notifications;
+  }
+}

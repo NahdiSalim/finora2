@@ -42,9 +42,9 @@ export function RegisterView() {
       agreeToTerms: false,
     },
   });
-  const methods = useForm<RegisterFormData>({
-    resolver: yupResolver(registerValidationSchema),
-  });
+
+  // ✅ removed duplicate `methods` form — was never used and caused bugs
+
   const role = watch("role");
   const agree = watch("agreeToTerms");
 
@@ -53,70 +53,47 @@ export function RegisterView() {
       await registerUser(data).unwrap();
       router.push(`/check-email?email=${data.email}`);
     } catch {
-      showAlert("Erreur lors de l&apos;inscription", "error");
+      showAlert("Erreur lors de l'inscription", "error");
     }
   };
 
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        height: { xs: "80%", md: "100%" },
+        overflowY: "auto", // ✅ scroll when content overflows
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        py: 3,
+        mt: { xs: 4, md: 0 },
       }}
     >
       <Box
         component="form"
-        onSubmit={methods.handleSubmit(onSubmit)}
+        onSubmit={handleSubmit(onSubmit)}
         sx={{
           width: "100%",
           maxWidth: 500,
           px: 3,
+          mt: { xs: 24, md: 18 },
         }}
       >
         {/* Header */}
         <Box sx={{ mb: 2.5 }}>
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 700,
-              mb: 0.5,
-            }}
-          >
+          <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
             S&apos;inscrire
           </Typography>
-
-          <Typography
-            variant="body2"
-            sx={{
-              color: "text.secondary",
-            }}
-          >
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             Inscrivez-vous pour profiter des fonctionnalités de FINORA
           </Typography>
         </Box>
 
         {/* ROLE Selection */}
         <Box sx={{ mb: 2 }}>
-          <Typography
-            variant="body2"
-            sx={{
-              mb: 1,
-              fontWeight: 500,
-            }}
-          >
+          <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
             S&apos;inscrire en tant que
           </Typography>
-
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "row",
-              gap: 1.5,
-            }}
-          >
+          <Box sx={{ display: "flex", flexDirection: "row", gap: 1.5 }}>
             {[
               { value: "CLIENT", label: "Une entreprise" },
               { value: "COMPTABLE", label: "Cabinet de comptabilité" },
@@ -133,14 +110,7 @@ export function RegisterView() {
         </Box>
 
         {/* Form Fields */}
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 2,
-          }}
-        >
-          {/* Email */}
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <CustomInput
             {...register("email")}
             label="Adresse email professionnelle"
@@ -151,7 +121,6 @@ export function RegisterView() {
             placeholder="ex: john@domain.com"
           />
 
-          {/* Phone */}
           <Controller
             name="phoneNumber"
             control={control}
@@ -169,7 +138,6 @@ export function RegisterView() {
             )}
           />
 
-          {/* Password */}
           <Controller
             name="password"
             control={control}
@@ -186,24 +154,15 @@ export function RegisterView() {
         </Box>
 
         {/* Terms and Conditions */}
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            mt: 2,
-          }}
-        >
+        <Box sx={{ display: "flex", alignItems: "center", mt: 2 }}>
           <Checkbox
             checked={agree}
             onChange={() => setValue("agreeToTerms", !agree)}
             sx={{
               color: "#D1D5DB",
-              "&.Mui-checked": {
-                color: "#2563EB",
-              },
+              "&.Mui-checked": { color: "#2563EB" },
             }}
           />
-
           <Typography variant="body2">
             J&apos;accepte{" "}
             <Link
@@ -211,9 +170,7 @@ export function RegisterView() {
               sx={{
                 color: "#2563EB",
                 textDecoration: "none",
-                "&:hover": {
-                  textDecoration: "underline",
-                },
+                "&:hover": { textDecoration: "underline" },
               }}
             >
               les termes et conditions
@@ -234,13 +191,7 @@ export function RegisterView() {
         </CustomButton>
 
         {/* Login Link */}
-        <Typography
-          variant="body2"
-          sx={{
-            textAlign: "center",
-            mt: 2,
-          }}
-        >
+        <Typography variant="body2" sx={{ textAlign: "center", mt: 2 }}>
           Vous avez déjà un compte ?{" "}
           <Link
             onClick={() => router.push("/sign-in")}
@@ -248,9 +199,7 @@ export function RegisterView() {
               color: "#2563EB",
               cursor: "pointer",
               textDecoration: "none",
-              "&:hover": {
-                textDecoration: "underline",
-              },
+              "&:hover": { textDecoration: "underline" },
             }}
           >
             Se connecter

@@ -17,6 +17,8 @@ import { TaskModule } from './modules/task/task.module';
 import { RequestModule } from './modules/request/request.module';
 import { AppointmentModule } from './modules/appointment/appointment.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { NotificationModule } from './modules/notification/notification.module';
 
 @Module({
   imports: [
@@ -53,6 +55,8 @@ import { ChatModule } from './modules/chat/chat.module';
     RequestModule,
     AppointmentModule,
     ChatModule,
+    AuditModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [

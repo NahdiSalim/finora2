@@ -1,16 +1,20 @@
 model Notification {
   id          Int       @id @default(autoincrement())
   recipientId Int
-  type        String    // "request" | "task" | "meeting" | "message" | "system"
+  type        String    // "request" | "task" | "meeting" | "message" | "system" | "appointment" | "comment"
   title       String
   message     String
   data        String?   @db.Text // JSON with additional data
   read        Boolean   @default(false)
+  readAt      DateTime? // When the notification was read
+  actionUrl   String?   // URL to navigate to when clicking notification
+  priority    String    @default("normal") // "low" | "normal" | "high" | "urgent"
   createdAt   DateTime  @default(now())
 
-  recipient   User      @relation("NotificationRecipient", fields: [recipientId], references: [id])
+  recipient   User      @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@index([recipientId])
   @@index([read])
   @@index([createdAt])
+  @@index([type])
 }

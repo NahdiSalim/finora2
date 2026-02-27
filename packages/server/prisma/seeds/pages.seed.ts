@@ -22,6 +22,7 @@ export async function seedPages(prisma: PrismaClient) {
     where: { slug: 'gestion-collaborateurs' },
   });
   const gestionTaches = await prisma.feature.findUnique({ where: { slug: 'gestion-taches' } });
+  const gestionClients = await prisma.feature.findUnique({ where: { slug: 'gestion-clients' } });
 
   const pages = [
     // Dashboard
@@ -80,6 +81,10 @@ export async function seedPages(prisma: PrismaClient) {
     // Gestion des tâches
     { PageUrl: '/tasks', slug: 'tasks-list', featureId: gestionTaches!.id },
     { PageUrl: '/tasks/:id', slug: 'task-detail', featureId: gestionTaches!.id },
+
+    // Gestion des clients
+    { PageUrl: '/clients', slug: 'clients-list', featureId: gestionClients!.id },
+    { PageUrl: '/clients/:id', slug: 'client-detail', featureId: gestionClients!.id },
   ];
 
   for (const page of pages) {

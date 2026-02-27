@@ -1,37 +1,174 @@
 import { useState } from "react";
 import {
+  Avatar,
   Box,
-  Button,
   Card,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TablePagination,
+  IconButton,
   Typography,
+  useTheme,
 } from "@mui/material";
 import Add from "@mui/icons-material/Add";
 
-import { DashboardContent } from "src/layouts/dashboard";
 import { Scrollbar } from "src/components/scrollbar";
-import { DataTableHead } from "src/components/table/table-head";
-import { DataTableRow } from "src/components/table/table-row";
-import { TableEmptyRows } from "src/components/table/table-empty-rows";
-import { TableNoData } from "src/components/table/table-no-data";
-import DotSpinner from "src/components/common/DotSpinner";
 
 import { useTable } from "src/hooks/use-table";
 import { usePermissions } from "src/hooks/usePermissions";
 
 import { useGetClientsQuery } from "src/lib/services/clientApi";
 import ClientModal from "./../modal/ClientModal";
+import { PageHeader } from "src/layouts/components/page-header";
+import { DataTable } from "src/layouts/components/custom-table";
+import CustomInput from "src/components/common/CustomInput";
+import { Eye, Power, Search } from "lucide-react";
+import { CustomPagination } from "src/layouts/components/table-pagination";
 
 export default function ClientView() {
+  const theme = useTheme();
   const table = useTable();
   const { hasAction } = usePermissions();
   const [openModal, setOpenModal] = useState(false);
 
-  const canCreate = hasAction("/clients", "WRITE");
+  const columns = [
+    {
+      id: "name",
+      label: "Clients",
+      render: (row: any) => (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          {" "}
+          <Avatar
+            sx={{
+              width: 36,
+              height: 36,
+              backgroundColor: theme.palette.primary.main,
+              fontSize: 14,
+              fontWeight: 600,
+            }}
+          >
+            {row.fullName?.charAt(0)}
+          </Avatar>{" "}
+          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+            {" "}
+            {row.fullName}{" "}
+          </Typography>{" "}
+        </Box>
+      ),
+    },
+    {
+      id: "email",
+      label: "Email",
+      render: (row: any) => row.email || "-",
+    },
+    {
+      id: "phone",
+      label: "Téléphone",
+      render: (row: any) => row.phone || "-",
+    },
+    {
+      id: "company",
+      label: "Entreprise",
+      render: (row: any) => row.company.name || "-",
+    },
+
+    {
+      id: "status",
+      label: "Statut",
+      render: (row: any) => (
+        <Box
+          sx={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            px: 1.5,
+            py: 0.5,
+            borderRadius: 2,
+            border: 1,
+            borderColor:
+              row.status === "active"
+                ? theme.palette.success.light
+                : theme.palette.error.light,
+            backgroundColor:
+              row.status === "active"
+                ? theme.palette.success.lighter
+                : theme.palette.error.lighter,
+            color:
+              row.status === "active"
+                ? theme.palette.success.dark
+                : theme.palette.error.dark,
+            fontWeight: 600,
+            fontSize: 12,
+          }}
+        >
+          {row.status === "active" ? "Actif" : "Inactif"}{" "}
+        </Box>
+      ),
+    },
+    {
+      id: "Actions",
+      label: "Actions",
+      render: (row: any) => (
+        <Box sx={{ display: "flex", gap: 0.5, justifyContent: "center" }}>
+          {/* Edit Button */}{" "}
+          <IconButton
+            size="small"
+            sx={{
+              minWidth: 32,
+              height: 32,
+              p: 0,
+              borderRadius: 1.5,
+              border: 1,
+              borderColor: theme.palette.divider,
+              backgroundColor: theme.palette.background.paper,
+              color: theme.palette.text.secondary,
+              transition: theme.transitions.create([
+                "border-color",
+                "background-color",
+                "color",
+              ]),
+              "&:hover": {
+                borderColor: theme.palette.primary.main,
+                backgroundColor: (theme.palette.primary.main, 0.08),
+                color: theme.palette.primary.main,
+              },
+            }}
+          >
+            {" "}
+            <Eye size={18} />{" "}
+          </IconButton>{" "}
+          {/* Power/Delete Button */}{" "}
+          <IconButton
+            size="small"
+            sx={{
+              minWidth: 32,
+              height: 32,
+              p: 0,
+              borderRadius: 1.5,
+              border: 1,
+              borderColor: theme.palette.divider,
+              backgroundColor: theme.palette.common.white,
+              color: row.isActive
+                ? theme.palette.error.main
+                : theme.palette.grey[500],
+              transition: theme.transitions.create([
+                "border-color",
+                "background-color",
+                "color",
+              ]),
+              "&:hover": {
+                borderColor: theme.palette.error.main,
+                backgroundColor: theme.palette.error.lighter,
+                color: theme.palette.error.main,
+              },
+            }}
+          >
+            {" "}
+            <Power size={18} />{" "}
+          </IconButton>{" "}
+        </Box>
+      ),
+    },
+  ];
+
+  // const canCreate = hasAction("/clients", "WRITE");
 
   const { data, isLoading, isError } = useGetClientsQuery({
     page: table.page + 1,
@@ -44,105 +181,52 @@ export default function ClientView() {
   const notFound = !clients.length;
 
   return (
-    <DashboardContent>
-      <Box sx={{ mb: 5, display: "flex", alignItems: "center" }}>
-        <Typography variant="h5" sx={{ flexGrow: 1 }}>
-          Clients
-        </Typography>
+    <PageHeader
+      title="Clients"
+      caption="Gérez vos clients et suivez leurs activités."
+      actions={[
+        {
+          label: "Ajouter un client",
+          icon: <Add />,
+          onClick: () => setOpenModal(true),
+          variant: "contained",
+          color: "primary",
+        },
+      ]}
+    >
+      <Card
+        sx={{
+          bgcolor: "white",
+          borderRadius: 3,
+          p: 2,
+        }}
+      >
+        <CustomInput
+          fullWidth
+          placeholder="Rechercher un client..."
+          startIcon={<Search size={20} />}
+          sx={{ mb: 1.5 }}
+        />
 
-        {canCreate && (
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => setOpenModal(true)}
-          >
-            Add Client
-          </Button>
-        )}
-      </Box>
-
-      <Card>
         <Scrollbar>
-          <TableContainer sx={{ overflow: "unset" }}>
-            <Table sx={{ minWidth: 1000 }}>
-              <DataTableHead
-                rowCount={totalCount}
-                currentPageRowCount={clients.length}
-                numSelected={0}
-                headLabel={[
-                  { id: "fullName", label: "Full Name" },
-                  { id: "email", label: "Email" },
-                  { id: "phone", label: "Phone" },
-                  { id: "companyName", label: "Company" },
-                  { id: "city", label: "City" },
-                ]}
-              />
-
-              <TableBody>
-                {isLoading ? (
-                  <DataTableRow selected={false} onSelectRow={() => {}}>
-                    <TableCell colSpan={5} align="center" sx={{ py: 10 }}>
-                      <DotSpinner />
-                    </TableCell>
-                  </DataTableRow>
-                ) : isError ? (
-                  <DataTableRow selected={false} onSelectRow={() => {}}>
-                    <TableCell colSpan={5} align="center">
-                      <Typography color="error">
-                        Error loading clients
-                      </Typography>
-                    </TableCell>
-                  </DataTableRow>
-                ) : (
-                  <>
-                    {clients.map((row) => (
-                      <DataTableRow
-                        key={row.id}
-                        selected={false}
-                        onSelectRow={() => {}}
-                      >
-                        <TableCell>
-                          {row.firstName} {row.lastName}
-                        </TableCell>
-                        <TableCell>{row.email}</TableCell>
-                        <TableCell>{row.phone}</TableCell>
-                        <TableCell>{row.companyName}</TableCell>
-                        <TableCell>{row.city || "-"}</TableCell>
-                      </DataTableRow>
-                    ))}
-
-                    <TableEmptyRows
-                      height={68}
-                      emptyRows={
-                        table.page > 0
-                          ? Math.max(
-                              0,
-                              (1 + table.page) * table.rowsPerPage - totalCount,
-                            )
-                          : 0
-                      }
-                    />
-
-                    {notFound && <TableNoData />}
-                  </>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <DataTable
+            columns={columns}
+            data={clients}
+            isLoading={isLoading}
+            isError={isError}
+            rowKey={(row) => row.id}
+          />
         </Scrollbar>
 
-        <TablePagination
-          component="div"
+        <CustomPagination
           page={table.page}
           count={totalCount}
           rowsPerPage={table.rowsPerPage}
           onPageChange={table.onChangePage}
-          rowsPerPageOptions={[5, 10, 25]}
-          onRowsPerPageChange={table.onChangeRowsPerPage}
         />
       </Card>
 
       <ClientModal open={openModal} onClose={() => setOpenModal(false)} />
-    </DashboardContent>
+    </PageHeader>
   );
 }

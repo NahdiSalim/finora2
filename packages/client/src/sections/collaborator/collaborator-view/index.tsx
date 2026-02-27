@@ -177,7 +177,6 @@ export default function CollaboratorView() {
   });
 
   const collaborators = data?.data || [];
-  console.log(collaborators);
   const totalCount = data?.total || 0;
 
   const notFound = !collaborators.length;

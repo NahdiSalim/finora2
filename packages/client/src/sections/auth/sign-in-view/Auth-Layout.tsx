@@ -51,7 +51,7 @@ export default function AuthLayout() {
             </Box>
 
             {/* Desktop: full slider */}
-            <Box sx={{ display: { xs: "none", md: "block" } }}>
+            <Box sx={{ display: { xs: "none", md: "block" }, height: "100%" }}>
               <AuthSlider />
             </Box>
           </Box>

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # 1) Build stage
-FROM node:lts-alpine AS builder
+FROM node:24.13.1 AS builder
 WORKDIR /repo
 
 RUN corepack enable && corepack prepare pnpm@10.13.1 --activate

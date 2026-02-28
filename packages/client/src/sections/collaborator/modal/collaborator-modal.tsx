@@ -31,22 +31,30 @@ import {
   Mail,
   ChevronRight,
 } from "lucide-react";
+import { useEffect } from "react";
 
 /* ---------------- SCHEMA ---------------- */
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  collaborator?: any;
 }
 
 // Custom transition component
 
-export default function CollaboratorModal({ open, onClose }: Props) {
+export default function CollaboratorModal({
+  open,
+  onClose,
+  collaborator,
+}: Props) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { showAlert } = useAlert();
 
   const [createCollaborator, { isLoading }] = useCreateCollaboratorMutation();
+
+  const isViewMode = !!collaborator;
 
   const {
     register,
@@ -67,6 +75,30 @@ export default function CollaboratorModal({ open, onClose }: Props) {
       department: "",
     },
   });
+
+  useEffect(() => {
+    if (collaborator) {
+      reset({
+        firstName: collaborator.firstName,
+        lastName: collaborator.lastName,
+        email: collaborator.email,
+        phone: collaborator.phone || "",
+        position: collaborator.position,
+        department: collaborator.department || "",
+        password: "",
+      });
+    } else {
+      reset({
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        password: "",
+        position: "",
+        department: "",
+      });
+    }
+  }, [collaborator, reset]);
 
   const onSubmit: SubmitHandler<CollaboratorFormData> = async (data) => {
     try {
@@ -105,6 +137,7 @@ export default function CollaboratorModal({ open, onClose }: Props) {
             required
             error={!!errors.lastName}
             helperText={errors.lastName?.message}
+            InputProps={{ readOnly: isViewMode }}
           />
           <CustomInput
             {...register("firstName")}
@@ -114,6 +147,7 @@ export default function CollaboratorModal({ open, onClose }: Props) {
             required
             error={!!errors.firstName}
             helperText={errors.firstName?.message}
+            InputProps={{ readOnly: isViewMode }}
           />
         </Box>
       ),
@@ -139,6 +173,7 @@ export default function CollaboratorModal({ open, onClose }: Props) {
             required
             error={!!errors.email}
             helperText={errors.email?.message}
+            InputProps={{ readOnly: isViewMode }}
           />
           <CustomInput
             {...register("phone")}
@@ -148,6 +183,7 @@ export default function CollaboratorModal({ open, onClose }: Props) {
             required
             error={!!errors.phone}
             helperText={errors.phone?.message}
+            InputProps={{ readOnly: isViewMode }}
           />
         </Box>
       ),
@@ -172,6 +208,7 @@ export default function CollaboratorModal({ open, onClose }: Props) {
             fullWidth
             error={!!errors.position}
             helperText={errors.position?.message}
+            InputProps={{ readOnly: isViewMode }}
           />
           <CustomInput
             {...register("department")}
@@ -180,6 +217,7 @@ export default function CollaboratorModal({ open, onClose }: Props) {
             fullWidth
             error={!!errors.department}
             helperText={errors.department?.message}
+            InputProps={{ readOnly: isViewMode }}
           />
         </Box>
       ),
@@ -205,7 +243,7 @@ export default function CollaboratorModal({ open, onClose }: Props) {
         />
       ),
     },
-  ];
+  ].filter((section) => !(isViewMode && section.id === "security"));
 
   return (
     <Dialog
@@ -252,14 +290,16 @@ export default function CollaboratorModal({ open, onClose }: Props) {
               lineHeight: 1.4,
             }}
           >
-            Nouveau collaborateur
+            {isViewMode ? "Détails du collaborateur" : "Nouveau collaborateur"}
           </Typography>
           <Typography
             variant="caption"
             color="text.secondary"
             sx={{ display: { xs: "none", sm: "block" } }}
           >
-            Remplissez les informations pour créer un nouveau compte
+            {isViewMode
+              ? "Consultez les informations du collaborateur"
+              : "Remplissez les informations pour créer un nouveau compte"}
           </Typography>
         </Box>
 
@@ -390,53 +430,68 @@ export default function CollaboratorModal({ open, onClose }: Props) {
               borderTop: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
             }}
           >
-            <CustomButton
-              variant="text"
-              onClick={handleClose}
-              disabled={isLoading}
-              fullWidth={isMobile}
-              sx={{
-                color: "text.secondary",
-                "&:hover": {
-                  bgcolor: alpha(theme.palette.error.main, 0.04),
-                  color: theme.palette.error.main,
-                },
-              }}
-            >
-              Annuler
-            </CustomButton>
+            {isViewMode ? (
+              <CustomButton
+                variant="contained"
+                onClick={handleClose}
+                fullWidth={isMobile}
+              >
+                Fermer
+              </CustomButton>
+            ) : (
+              <>
+                <CustomButton
+                  variant="text"
+                  onClick={handleClose}
+                  disabled={isLoading}
+                  fullWidth={isMobile}
+                  sx={{
+                    color: "text.secondary",
+                    "&:hover": {
+                      bgcolor: alpha(theme.palette.error.main, 0.04),
+                      color: theme.palette.error.main,
+                    },
+                  }}
+                >
+                  Annuler
+                </CustomButton>
 
-            <CustomButton
-              type="submit"
-              variant="contained"
-              disabled={isLoading || !isDirty || !isValid}
-              startIcon={isLoading ? undefined : <Save size={18} />}
-              fullWidth={isMobile}
-              sx={{
-                minWidth: { sm: 140 },
-                position: "relative",
-                overflow: "hidden",
-                "&::after":
-                  !isLoading && isDirty && isValid
-                    ? {
-                        content: '""',
-                        position: "absolute",
-                        top: 0,
-                        left: 0,
-                        width: "100%",
-                        height: "100%",
-                        background: `linear-gradient(90deg, transparent, ${alpha("#fff", 0.2)}, transparent)`,
-                        animation: "shimmer 1.5s infinite",
-                      }
-                    : {},
-                "@keyframes shimmer": {
-                  "0%": { transform: "translateX(-100%)" },
-                  "100%": { transform: "translateX(100%)" },
-                },
-              }}
-            >
-              {isLoading ? "Création..." : "Créer"}
-            </CustomButton>
+                <CustomButton
+                  type="submit"
+                  variant="contained"
+                  disabled={isLoading || !isDirty || !isValid}
+                  startIcon={isLoading ? undefined : <Save size={18} />}
+                  fullWidth={isMobile}
+                  sx={{
+                    minWidth: { sm: 140 },
+                    position: "relative",
+                    overflow: "hidden",
+                    "&::after":
+                      !isLoading && isDirty && isValid
+                        ? {
+                            content: '""',
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            width: "100%",
+                            height: "100%",
+                            background: `linear-gradient(90deg, transparent, ${alpha(
+                              "#fff",
+                              0.2,
+                            )}, transparent)`,
+                            animation: "shimmer 1.5s infinite",
+                          }
+                        : {},
+                    "@keyframes shimmer": {
+                      "0%": { transform: "translateX(-100%)" },
+                      "100%": { transform: "translateX(100%)" },
+                    },
+                  }}
+                >
+                  {isLoading ? "Création..." : "Créer"}
+                </CustomButton>
+              </>
+            )}
           </Box>
         </Box>
       </DialogContent>

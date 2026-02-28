@@ -28,6 +28,17 @@ export default function CollaboratorView() {
   const { hasAction } = usePermissions();
 
   const [openModal, setOpenModal] = useState(false);
+  const [selectedCollaborator, setSelectedCollaborator] = useState<any>(null);
+
+  const handleOpenModal = (collaborator: any = null) => {
+    setSelectedCollaborator(collaborator);
+    setOpenModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setOpenModal(false);
+    setSelectedCollaborator(null);
+  };
 
   const columns = [
     {
@@ -111,6 +122,7 @@ export default function CollaboratorView() {
           {/* Edit Button */}{" "}
           <IconButton
             size="small"
+            onClick={() => handleOpenModal(row)}
             sx={{
               minWidth: 32,
               height: 32,
@@ -189,7 +201,7 @@ export default function CollaboratorView() {
         {
           label: "Ajouter un collaborateur",
           icon: <Add />,
-          onClick: () => setOpenModal(true),
+          onClick: () => handleOpenModal(),
           variant: "contained",
           color: "primary",
         },
@@ -227,7 +239,11 @@ export default function CollaboratorView() {
         />
       </Card>
 
-      <CollaboratorModal open={openModal} onClose={() => setOpenModal(false)} />
+      <CollaboratorModal
+        open={openModal}
+        onClose={handleCloseModal}
+        collaborator={selectedCollaborator}
+      />
     </PageHeader>
   );
 }

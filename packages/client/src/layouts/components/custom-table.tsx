@@ -41,7 +41,7 @@ export function DataTable<T>({
   return (
     <TableContainer
       sx={{
-        overflow: "hidden",
+        overflow: "scroll",
         border: 1,
         borderColor: theme.palette.grey[200],
         borderRadius: 2,

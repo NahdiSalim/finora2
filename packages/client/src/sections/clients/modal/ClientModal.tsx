@@ -34,17 +34,21 @@ import {
   type ClientFormData,
 } from "src/validations/client/client-validation";
 import PhoneInput from "src/components/common/PhoneInput";
+import { useEffect } from "react";
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  client?: any;
 }
 
-export default function ClientModal({ open, onClose }: Props) {
+export default function ClientModal({ open, onClose, client }: Props) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { showAlert } = useAlert();
   const [createClient, { isLoading }] = useCreateClientMutation();
+
+  const isViewMode = !!client;
 
   const {
     register,
@@ -70,6 +74,41 @@ export default function ClientModal({ open, onClose }: Props) {
       postalCode: "",
     },
   });
+
+  useEffect(() => {
+    if (client) {
+      const [firstName, ...lastName] = client.fullName.split(" ");
+      reset({
+        firstName,
+        lastName: lastName.join(" "),
+        email: client.email,
+        phone: client.phone || "",
+        companyName: client.company?.name || "",
+        password: "",
+        siret: client.company?.siret || "",
+        vatNumber: client.company?.vatNumber || "",
+        legalForm: client.company?.legalForm || "",
+        address: client.company?.address?.address || "",
+        city: client.company?.address?.city || "",
+        postalCode: client.company?.address?.postalCode || "",
+      });
+    } else {
+      reset({
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        companyName: "",
+        password: "",
+        siret: "",
+        vatNumber: "",
+        legalForm: "",
+        address: "",
+        city: "",
+        postalCode: "",
+      });
+    }
+  }, [client, reset]);
 
   const onSubmit: SubmitHandler<ClientFormData> = async (data) => {
     try {
@@ -110,6 +149,7 @@ export default function ClientModal({ open, onClose }: Props) {
             required
             error={!!errors.lastName}
             helperText={errors.lastName?.message}
+            InputProps={{ readOnly: isViewMode }}
           />
           <CustomInput
             {...register("firstName")}
@@ -119,6 +159,7 @@ export default function ClientModal({ open, onClose }: Props) {
             required
             error={!!errors.firstName}
             helperText={errors.firstName?.message}
+            InputProps={{ readOnly: isViewMode }}
           />
         </Box>
       ),
@@ -147,6 +188,7 @@ export default function ClientModal({ open, onClose }: Props) {
             required
             error={!!errors.email}
             helperText={errors.email?.message}
+            InputProps={{ readOnly: isViewMode }}
           />
           <Controller
             name="phone"
@@ -161,6 +203,7 @@ export default function ClientModal({ open, onClose }: Props) {
                 helperText={errors.phone?.message}
                 required
                 fullWidth
+                disabled={isViewMode}
               />
             )}
           />
@@ -189,6 +232,7 @@ export default function ClientModal({ open, onClose }: Props) {
               required
               error={!!errors.companyName}
               helperText={errors.companyName?.message}
+              InputProps={{ readOnly: isViewMode }}
             />
             <CustomInput
               {...register("legalForm")}
@@ -197,6 +241,7 @@ export default function ClientModal({ open, onClose }: Props) {
               fullWidth
               error={!!errors.legalForm}
               helperText={errors.legalForm?.message}
+              InputProps={{ readOnly: isViewMode }}
             />
           </Box>
           <Box
@@ -213,6 +258,7 @@ export default function ClientModal({ open, onClose }: Props) {
               fullWidth
               error={!!errors.siret}
               helperText={errors.siret?.message}
+              InputProps={{ readOnly: isViewMode }}
             />
             <CustomInput
               {...register("vatNumber")}
@@ -221,6 +267,7 @@ export default function ClientModal({ open, onClose }: Props) {
               fullWidth
               error={!!errors.vatNumber}
               helperText={errors.vatNumber?.message}
+              InputProps={{ readOnly: isViewMode }}
             />
           </Box>
         </Box>
@@ -240,6 +287,7 @@ export default function ClientModal({ open, onClose }: Props) {
             fullWidth
             error={!!errors.address}
             helperText={errors.address?.message}
+            InputProps={{ readOnly: isViewMode }}
           />
           <Box
             sx={{
@@ -255,6 +303,7 @@ export default function ClientModal({ open, onClose }: Props) {
               fullWidth
               error={!!errors.city}
               helperText={errors.city?.message}
+              InputProps={{ readOnly: isViewMode }}
             />
             <CustomInput
               {...register("postalCode")}
@@ -263,6 +312,7 @@ export default function ClientModal({ open, onClose }: Props) {
               fullWidth
               error={!!errors.postalCode}
               helperText={errors.postalCode?.message}
+              InputProps={{ readOnly: isViewMode }}
             />
           </Box>
         </Box>
@@ -289,7 +339,7 @@ export default function ClientModal({ open, onClose }: Props) {
         />
       ),
     },
-  ];
+  ].filter((section) => !(isViewMode && section.id === "security"));
 
   return (
     <Dialog
@@ -330,15 +380,16 @@ export default function ClientModal({ open, onClose }: Props) {
               lineHeight: 1.4,
             }}
           >
-            New Client
+            {isViewMode ? "Client Details" : "New Client"}
           </Typography>
           <Typography
             variant="caption"
             color="text.secondary"
             sx={{ display: { xs: "none", sm: "block" } }}
           >
-            remplissez les informations du client pour créer un nouveau client
-            dans le système
+            {isViewMode
+              ? "View client information"
+              : "Fill in the client information to create a new client in the system"}
           </Typography>
         </Box>
 
@@ -455,50 +506,65 @@ export default function ClientModal({ open, onClose }: Props) {
               borderTop: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
             }}
           >
-            <CustomButton
-              variant="text"
-              onClick={handleClose}
-              disabled={isLoading}
-              fullWidth={isMobile}
-              sx={{
-                color: "text.secondary",
-                "&:hover": {
-                  bgcolor: alpha(theme.palette.error.main, 0.04),
-                  color: theme.palette.error.main,
-                },
-              }}
-            >
-              Cancel
-            </CustomButton>
+            {isViewMode ? (
+              <CustomButton
+                variant="contained"
+                onClick={handleClose}
+                fullWidth={isMobile}
+              >
+                Close
+              </CustomButton>
+            ) : (
+              <>
+                <CustomButton
+                  variant="text"
+                  onClick={handleClose}
+                  disabled={isLoading}
+                  fullWidth={isMobile}
+                  sx={{
+                    color: "text.secondary",
+                    "&:hover": {
+                      bgcolor: alpha(theme.palette.error.main, 0.04),
+                      color: theme.palette.error.main,
+                    },
+                  }}
+                >
+                  Cancel
+                </CustomButton>
 
-            <CustomButton
-              type="submit"
-              variant="contained"
-              disabled={isLoading || !isDirty || !isValid}
-              startIcon={isLoading ? undefined : <Save size={18} />}
-              fullWidth={isMobile}
-              sx={{
-                minWidth: { sm: 140 },
-                position: "relative",
-                overflow: "hidden",
-                "&::after":
-                  !isLoading && isDirty && isValid
-                    ? {
-                        content: '""',
-                        position: "absolute",
-                        inset: 0,
-                        background: `linear-gradient(90deg, transparent, ${alpha("#fff", 0.2)}, transparent)`,
-                        animation: "shimmer 1.5s infinite",
-                      }
-                    : {},
-                "@keyframes shimmer": {
-                  "0%": { transform: "translateX(-100%)" },
-                  "100%": { transform: "translateX(100%)" },
-                },
-              }}
-            >
-              {isLoading ? "Creating..." : "Create"}
-            </CustomButton>
+                <CustomButton
+                  type="submit"
+                  variant="contained"
+                  disabled={isLoading || !isDirty || !isValid}
+                  startIcon={isLoading ? undefined : <Save size={18} />}
+                  fullWidth={isMobile}
+                  sx={{
+                    minWidth: { sm: 140 },
+                    position: "relative",
+                    overflow: "hidden",
+                    "&::after":
+                      !isLoading && isDirty && isValid
+                        ? {
+                            content: '""',
+                            position: "absolute",
+                            inset: 0,
+                            background: `linear-gradient(90deg, transparent, ${alpha(
+                              "#fff",
+                              0.2,
+                            )}, transparent)`,
+                            animation: "shimmer 1.5s infinite",
+                          }
+                        : {},
+                    "@keyframes shimmer": {
+                      "0%": { transform: "translateX(-100%)" },
+                      "100%": { transform: "translateX(100%)" },
+                    },
+                  }}
+                >
+                  {isLoading ? "Creating..." : "Create"}
+                </CustomButton>
+              </>
+            )}
           </Box>
         </Box>
       </DialogContent>

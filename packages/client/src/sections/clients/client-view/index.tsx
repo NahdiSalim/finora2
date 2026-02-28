@@ -27,6 +27,17 @@ export default function ClientView() {
   const table = useTable();
   const { hasAction } = usePermissions();
   const [openModal, setOpenModal] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<any>(null);
+
+  const handleOpenModal = (client: any = null) => {
+    setSelectedClient(client);
+    setOpenModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setOpenModal(false);
+    setSelectedClient(null);
+  };
 
   const columns = [
     {
@@ -110,6 +121,7 @@ export default function ClientView() {
           {/* Edit Button */}{" "}
           <IconButton
             size="small"
+            onClick={() => handleOpenModal(row)}
             sx={{
               minWidth: 32,
               height: 32,
@@ -188,7 +200,7 @@ export default function ClientView() {
         {
           label: "Ajouter un client",
           icon: <Add />,
-          onClick: () => setOpenModal(true),
+          onClick: () => handleOpenModal(),
           variant: "contained",
           color: "primary",
         },
@@ -226,7 +238,11 @@ export default function ClientView() {
         />
       </Card>
 
-      <ClientModal open={openModal} onClose={() => setOpenModal(false)} />
+      <ClientModal
+        open={openModal}
+        onClose={handleCloseModal}
+        client={selectedClient}
+      />
     </PageHeader>
   );
 }

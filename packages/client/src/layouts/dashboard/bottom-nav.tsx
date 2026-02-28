@@ -137,16 +137,44 @@ export function BottomNav() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                borderRadius: 2,
-                transition: "background-color 0.2s",
-                ...(activeTab === tab.path && {
-                  bgcolor: alpha(theme.palette.primary.main, 0.1),
-                }),
+                minWidth: 0,
+                padding: 0,
+                "& .MuiBottomNavigationAction-label": { display: "none" }, // hide default label
               }}
               key={tab.path}
-              label={tab.label}
               value={tab.path}
-              icon={<Box>{tab.icon}</Box>}
+              icon={
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 2,
+                    px: 2.5,
+                    py: 0.75,
+                    gap: 0.5,
+                    ...(activeTab === tab.path && {
+                      bgcolor: alpha(theme.palette.primary.main, 0.1),
+                    }),
+                  }}
+                >
+                  {tab.icon}
+                  <Box
+                    component="span"
+                    sx={{
+                      fontSize: "0.7rem",
+                      fontWeight: 500,
+                      color:
+                        activeTab === tab.path
+                          ? theme.palette.primary.main
+                          : theme.palette.text.secondary,
+                    }}
+                  >
+                    {tab.label}
+                  </Box>
+                </Box>
+              }
             />
           ))}
         </BottomNavigation>

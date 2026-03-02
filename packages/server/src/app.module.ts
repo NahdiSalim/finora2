@@ -19,6 +19,10 @@ import { AppointmentModule } from './modules/appointment/appointment.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { PostModule } from './modules/post/post.module';
+import { ReviewModule } from './modules/review/review.module';
+import { ContactModule } from './modules/contact/contact.module';
+import { RelationshipModule } from './modules/relationship/relationship.module';
 
 @Module({
   imports: [
@@ -57,6 +61,10 @@ import { NotificationModule } from './modules/notification/notification.module';
     ChatModule,
     AuditModule,
     NotificationModule,
+    PostModule,
+    ReviewModule,
+    ContactModule,
+    RelationshipModule,
   ],
   controllers: [AppController],
   providers: [

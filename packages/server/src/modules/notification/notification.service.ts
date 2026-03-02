@@ -248,6 +248,32 @@ export class NotificationService {
         actionUrl: `/chat/${data.roomId || ''}`,
         priority: 'normal',
       },
+
+      // Relationships
+      'relationship.invitation_received': {
+        title: 'Nouvelle invitation de relation',
+        message: `${actorName} vous a envoyé une invitation pour établir une relation professionnelle`,
+        actionUrl: `/relationships/invitations/${data.invitationId}`,
+        priority: 'normal',
+      },
+      'relationship.invitation_accepted': {
+        title: 'Invitation acceptée',
+        message: `${actorName} a accepté votre invitation`,
+        actionUrl: `/relationships`,
+        priority: 'normal',
+      },
+      'relationship.invitation_rejected': {
+        title: 'Invitation refusée',
+        message: `${actorName} a refusé votre invitation`,
+        actionUrl: `/relationships`,
+        priority: 'normal',
+      },
+      'relationship.terminated': {
+        title: 'Relation résiliée',
+        message: `${actorName} a résilié la relation professionnelle`,
+        actionUrl: `/relationships`,
+        priority: 'high',
+      },
     };
 
     const templateKey = `${type}.${action}`;

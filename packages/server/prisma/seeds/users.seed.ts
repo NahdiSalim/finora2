@@ -143,9 +143,9 @@ export async function seedUsers(prisma: PrismaClient) {
     });
   }
 
-  console.log('✅ Users seeded successfully');
-  console.log('📧 Email: admin@finora.com | Password: password123');
-  console.log('📧 Email: comptable@finora.com | Password: password123');
-  console.log('📧 Email: collaborateur@finora.com | Password: password123');
-  console.log('📧 Email: client@finora.com | Password: password123');
+  console.log(' Users seeded successfully');
+  console.log(' Email: admin@finora.com | Password: password123');
+  console.log(' Email: comptable@finora.com | Password: password123');
+  console.log(' Email: collaborateur@finora.com | Password: password123');
+  console.log(' Email: client@finora.com | Password: password123');
 }

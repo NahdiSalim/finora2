@@ -15,7 +15,7 @@ export const prisma = new PrismaClient({
 
 async function main() {
   try {
-    console.log('🌱 Starting database seeding...\n');
+    console.log(' Starting database seeding...\n');
 
     await seedRoles(prisma);
     await seedFeatures(prisma);
@@ -24,9 +24,9 @@ async function main() {
     await seedUsers(prisma);
     await seedRolePermissions(prisma);
 
-    console.log('\n✅ Database seeding completed successfully!');
+    console.log('\n Database seeding completed successfully!');
   } catch (error) {
-    console.error('❌ Error during seeding:', error);
+    console.error(' Error during seeding:', error);
     throw error;
   }
 }

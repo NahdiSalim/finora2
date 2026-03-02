@@ -68,6 +68,15 @@ model Company {
   
   // Audit Logs
   auditLogs         AuditLog[] @relation("AuditLogCompany")
+  
+  // Reviews
+  reviews           Review[] @relation("CompanyReviews")
+  
+  // Posts
+  posts             Post[] @relation("CompanyPosts")
+  
+  // Contact Messages
+  contactMessages   ContactMessage[] @relation("ContactMessageCompany")
 
   @@index([siret])
   @@index([type])

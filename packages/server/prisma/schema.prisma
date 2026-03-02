@@ -298,10 +298,59 @@ model Company {
   
   // Audit Logs
   auditLogs         AuditLog[] @relation("AuditLogCompany")
+  
+  // Reviews
+  reviews           Review[] @relation("CompanyReviews")
+  
+  // Posts
+  posts             Post[] @relation("CompanyPosts")
+  
+  // Contact Messages
+  contactMessages   ContactMessage[] @relation("ContactMessageCompany")
 
   @@index([siret])
   @@index([type])
   @@index([status])
+}
+
+
+// From contact_message.prisma
+model ContactMessage {
+  id              Int       @id @default(autoincrement())
+  accountantId    Int       // Comptable contacté
+  companyId       Int?      // Cabinet comptable
+  
+  // Informations du visiteur
+  visitorName     String
+  visitorEmail    String
+  visitorPhone    String?
+  visitorCompany  String?   // Nom de l'entreprise du visiteur
+  
+  // Message
+  subject         String
+  message         String    @db.Text
+  
+  // Statut
+  status          String    @default("new") // "new" | "read" | "replied" | "archived"
+  isReplied       Boolean   @default(false)
+  repliedAt       DateTime?
+  
+  // Métadonnées
+  ipAddress       String?
+  userAgent       String?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  accountant      User      @relation("ContactMessageAccountant", fields: [accountantId], references: [id], onDelete: Cascade)
+  company         Company?  @relation("ContactMessageCompany", fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([accountantId])
+  @@index([companyId])
+  @@index([status])
+  @@index([visitorEmail])
+  @@index([createdAt])
+  @@map("contact_messages")
 }
 
 
@@ -438,6 +487,70 @@ model Pages {
 }
 
 
+// From post.prisma
+model Post {
+  id              Int       @id @default(autoincrement())
+  authorId        Int       // Comptable qui publie
+  companyId       Int?      // Cabinet comptable
+  title           String
+  content         String    @db.Text
+  images          String[]  // Array of image URLs
+  tags            String[]  // Tags pour catégoriser les posts
+  visibility      String    @default("public") // "public" | "clients_only" | "private"
+  status          String    @default("published") // "draft" | "published" | "archived"
+  viewsCount      Int       @default(0)
+  likesCount      Int       @default(0)
+  commentsCount   Int       @default(0)
+  publishedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  author          User      @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  company         Company?  @relation("CompanyPosts", fields: [companyId], references: [id], onDelete: SetNull)
+  
+  comments        PostComment[]
+  likes           PostLike[]
+
+  @@index([authorId])
+  @@index([companyId])
+  @@index([status])
+  @@index([visibility])
+  @@index([publishedAt])
+  @@map("posts")
+}
+
+model PostComment {
+  id          Int       @id @default(autoincrement())
+  postId      Int
+  authorId    Int
+  content     String    @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  post        Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author      User      @relation("PostCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([authorId])
+  @@map("post_comments")
+}
+
+model PostLike {
+  id          Int       @id @default(autoincrement())
+  postId      Int
+  userId      Int
+  createdAt   DateTime  @default(now())
+
+  post        Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user        User      @relation("PostLikeUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+  @@map("post_likes")
+}
+
+
 // From p_features.prisma
 model p_features {
     role_id    Int
@@ -541,6 +654,35 @@ model Request {
   @@index([status])
   @@index([convertedToTaskId])
   @@map("requests")
+}
+
+
+// From review.prisma
+model Review {
+  id              Int       @id @default(autoincrement())
+  accountantId    Int       // Comptable évalué
+  clientId        Int       // Client qui évalue
+  companyId       Int?      // Cabinet comptable évalué
+  rating          Int       // 1-5 étoiles
+  comment         String?   @db.Text
+  isVerified      Boolean   @default(false) // Client vérifié (a vraiment travaillé avec le comptable)
+  isPublic        Boolean   @default(true)  // Visible publiquement
+  response        String?   @db.Text // Réponse du comptable
+  respondedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  accountant      User      @relation("ReviewAccountant", fields: [accountantId], references: [id], onDelete: Cascade)
+  client          User      @relation("ReviewClient", fields: [clientId], references: [id], onDelete: Cascade)
+  company         Company?  @relation("CompanyReviews", fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@unique([accountantId, clientId]) // Un client ne peut laisser qu'un seul avis par comptable
+  @@index([accountantId])
+  @@index([clientId])
+  @@index([companyId])
+  @@index([rating])
+  @@index([isPublic])
+  @@map("reviews")
 }
 
 
@@ -756,6 +898,18 @@ model User {
   
   // Audit Logs
   auditLogs            AuditLog[] @relation("AuditLogUser")
+  
+  // Reviews
+  givenReviews         Review[] @relation("ReviewClient")
+  receivedReviews      Review[] @relation("ReviewAccountant")
+  
+  // Posts
+  posts                Post[] @relation("PostAuthor")
+  postComments         PostComment[] @relation("PostCommentAuthor")
+  postLikes            PostLike[] @relation("PostLikeUser")
+  
+  // Contact Messages
+  receivedContactMessages ContactMessage[] @relation("ContactMessageAccountant")
 
   @@index([email])
   @@index([companyId])

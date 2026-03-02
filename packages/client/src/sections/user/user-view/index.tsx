@@ -19,7 +19,6 @@ import {
   TablePagination,
   Typography,
 } from "@mui/material";
-import { Plus, FolderDown } from "lucide-react";
 import DotSpinner from "src/components/common/DotSpinner";
 
 import { PageHeader } from "src/layouts/components/page-header";
@@ -129,32 +128,6 @@ export default function UserView() {
       <PageTitleHeader
         title="Users List"
         caption="Manage user information and permissions"
-        // breadcrumbs={[
-        //   { label: 'Home', path: '/' },
-        //   { label: 'Users', path: '/users' }
-        // ]}
-        documentsProcessed={{
-          processed: 45,
-          total: 120,
-        }}
-        // searchbar={{
-        //   value: searchValue,
-        //   onChange: setSearchValue,
-        //   placeholder: 'Search users...',
-        // }}
-        actions={[
-          {
-            label: "Export",
-            icon: <FolderDown />,
-            onClick: () => console.log("Export"),
-            variant: "outlined",
-          },
-          {
-            label: "Add User",
-            icon: <Plus />,
-            onClick: () => console.log("Add"),
-          },
-        ]}
       />
 
       <Card>

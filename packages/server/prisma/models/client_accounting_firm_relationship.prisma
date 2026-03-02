@@ -4,7 +4,7 @@ model ClientAccountingFirmRelationship {
   accountingFirmId    Int
   
   // Invitation details
-  invitedBy           Int       // User ID who sent the invitation
+  invitedBy           Int       @default(1) // User ID who sent the invitation
   invitationType      String    @default("client_to_accountant") // "client_to_accountant" | "accountant_to_client"
   
   // Status management

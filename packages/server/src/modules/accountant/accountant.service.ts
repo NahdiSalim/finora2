@@ -260,9 +260,10 @@ export class AccountantService {
         data: {
           clientCompanyId: clientCompany.id,
           accountingFirmId: accountant.companyId,
+          invitedBy: accountant.id, // Accountant who created the client
           status: UserStatus.ACTIVE,
           relationshipStart: new Date(),
-        },
+        } as any,
         include: {
           clientCompany: {
             select: {

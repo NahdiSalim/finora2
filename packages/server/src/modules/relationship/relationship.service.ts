@@ -116,6 +116,7 @@ export class RelationshipService {
       data: {
         clientCompanyId,
         accountingFirmId,
+        invitedBy: userId,
         status: 'pending',
         invitationMessage: dto.invitationMessage,
       } as any,

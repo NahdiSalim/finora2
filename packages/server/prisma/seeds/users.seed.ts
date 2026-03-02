@@ -137,9 +137,10 @@ export async function seedUsers(prisma: PrismaClient) {
       data: {
         clientCompanyId: clientUser.companyId,
         accountingFirmId: accountingFirm.id,
+        invitedBy: clientUser.id, // Client user who initiated the relationship
         status: 'active',
         relationshipStart: new Date(),
-      },
+      } as any,
     });
   }
 

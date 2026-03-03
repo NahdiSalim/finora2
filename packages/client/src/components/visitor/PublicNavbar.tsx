@@ -49,6 +49,11 @@ export function PublicNavbar() {
       }}
       sx={[
         (theme) => ({
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+
           bgcolor: "transparent",
           "& .MuiToolbar-root": {
             maxWidth: "1440px",

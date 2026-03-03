@@ -77,7 +77,7 @@ export function HeaderSection({
         {slots?.rightArea}
       </HeaderContainer>
       {slots?.bottomArea}
-      <BottomNav /> {/* 👈 add this */}
+      <BottomNav />
     </HeaderRoot>
   );
 }

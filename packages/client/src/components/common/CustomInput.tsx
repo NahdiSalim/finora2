@@ -217,7 +217,7 @@ const CustomInput = forwardRef<HTMLDivElement, CustomInputProps>(
             },
 
             "&.Mui-disabled": {
-              backgroundColor: theme.palette.grey[200],
+              backgroundColor: theme.palette.grey[50],
               boxShadow: "none",
               "& .MuiOutlinedInput-notchedOutline": {
                 borderColor: border ? theme.palette.grey[200] : "transparent",
@@ -240,7 +240,7 @@ const CustomInput = forwardRef<HTMLDivElement, CustomInputProps>(
             },
 
             "&.Mui-disabled": {
-              WebkitTextFillColor: theme.palette.grey[400],
+              WebkitTextFillColor: theme.palette.grey[700],
               cursor: "not-allowed",
             },
           },

@@ -7,7 +7,7 @@ import {
   useTheme,
   alpha,
 } from "@mui/material";
-import { Camera, Pencil } from "lucide-react";
+import { Camera, CameraIcon, Pencil } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
 
 export interface ProfileHeaderProps {
@@ -37,7 +37,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
       <Box
         sx={{
           position: "relative",
-          height: { xs: 120, sm: 180, md: 200 },
+          height: { xs: 160, sm: 140, md: 170 },
           borderRadius: 3,
           overflow: "hidden",
           backgroundColor: theme.palette.grey[200],
@@ -72,7 +72,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
               },
             }}
           >
-            <Camera size={18} />
+            <CameraIcon size={18} />
           </IconButton>
         )}
       </Box>
@@ -82,7 +82,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
         sx={{
           position: "relative",
           px: { xs: 2, sm: 4 },
-          pb: 3,
+          pb: 1,
           mt: -6,
         }}
       >
@@ -91,7 +91,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             display: "flex",
             alignItems: { xs: "flex-start", sm: "center" },
             flexDirection: { xs: "column", sm: "row" },
-            gap: 2,
+            gap: { xs: 0, sm: 2 },
           }}
         >
           {/* Avatar */}

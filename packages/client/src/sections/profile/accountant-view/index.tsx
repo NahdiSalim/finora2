@@ -1,9 +1,18 @@
-import { Card } from "@mui/material";
+import { Box, Card } from "@mui/material";
+import { ShieldCheck } from "lucide-react";
 
 import { PageHeader } from "src/layouts/components/page-header";
+import ContactInfos from "src/layouts/components/profile-contact";
 import ProfileHeader from "src/layouts/components/profile-header";
+import ProfileStrength from "src/layouts/components/profile-strength";
+import ProfileTabs from "src/layouts/components/profile-tabs";
 
 export default function AccountantView() {
+  const mockContactData = {
+    phone: "+216 99 123 456",
+    email: "ahmed.bensalah@email.com",
+    address: "Avenue Habib Bourguiba, Tunis, Tunisia",
+  };
   return (
     <PageHeader
       title="Mon profil"
@@ -26,6 +35,43 @@ export default function AccountantView() {
           onEditProfile={() => console.log("Edit profile")}
         />
       </Card>
+      <Card
+        sx={{
+          mt: 1.5,
+          borderRadius: 3,
+        }}
+      >
+        <ProfileStrength
+          icon={ShieldCheck}
+          title="Force du profil"
+          caption="Veuillez compléter votre profil afin de pouvoir télécharger un fichier ou contacter un comptable."
+          completedSteps={1}
+          totalSteps={5}
+        />
+      </Card>
+
+      <Box
+        width="100%"
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: 1.5,
+          mt: 1.5,
+        }}
+      >
+        <Card
+          sx={{
+            width: { sx: "100%", sm: "100", md: "70%" },
+          }}
+        >
+          <ProfileTabs />
+        </Card>
+        <Card>
+          <ContactInfos data={mockContactData} isLoading={false} />
+        </Card>
+      </Box>
     </PageHeader>
   );
 }

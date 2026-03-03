@@ -2,10 +2,10 @@ import { configureStore, combineReducers } from "@reduxjs/toolkit";
 import { authApi } from "./services/authApi";
 import { usersApi } from "./services/usersApi";
 import { collaboratorsApi } from "./services/collaboratorsApi";
-
 import { rolesApi } from "./services/roleApi";
 import authReducer, { logout } from "./slices/authSlice";
 import { clientsApi } from "./services/clientApi";
+import { publicAccountantsApi } from "./services/publicAccountantsApi";
 
 const apiMiddlewares = [
   authApi.middleware,
@@ -13,6 +13,7 @@ const apiMiddlewares = [
   collaboratorsApi.middleware,
   clientsApi.middleware,
   rolesApi.middleware,
+  publicAccountantsApi.middleware,
 ];
 
 const apiResetters = [
@@ -21,6 +22,7 @@ const apiResetters = [
   collaboratorsApi.util.resetApiState,
   clientsApi.util.resetApiState,
   rolesApi.util.resetApiState,
+  publicAccountantsApi.util.resetApiState,
 ];
 
 const appReducer = combineReducers({
@@ -30,6 +32,7 @@ const appReducer = combineReducers({
   [clientsApi.reducerPath]: clientsApi.reducer,
   [collaboratorsApi.reducerPath]: collaboratorsApi.reducer,
   [rolesApi.reducerPath]: rolesApi.reducer,
+  [publicAccountantsApi.reducerPath]: publicAccountantsApi.reducer,
 });
 
 const baseStore = configureStore({

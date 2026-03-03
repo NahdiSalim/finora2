@@ -6,9 +6,10 @@ import {
   Stack,
   Skeleton,
   useTheme,
-  alpha,
+  Divider,
 } from "@mui/material";
 import { Phone, Mail, MapPin } from "lucide-react";
+import CustomChip from "src/components/common/CustomChip";
 
 export interface ContactInfosData {
   phone?: string;
@@ -21,17 +22,31 @@ interface ContactInfosProps {
   isLoading?: boolean;
 }
 
+const chipVariants = [
+  "primary",
+  "secondary",
+  "success",
+  "error",
+  "purple",
+  "brown",
+] as const;
+
+const getRandomVariant = () =>
+  chipVariants[Math.floor(Math.random() * chipVariants.length)];
+
+const specialities = ["React", "TypeScript", "Node.js", "UI/UX", "GraphQL"];
+
 const InfoItem = ({
   icon: Icon,
   label,
   value,
-  color,
 }: {
   icon: any;
   label: string;
   value?: string;
   color: string;
 }) => {
+  const theme = useTheme();
   return (
     <Box
       sx={{
@@ -48,8 +63,8 @@ const InfoItem = ({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: alpha(color, 0.1),
-          color,
+          backgroundColor: theme.palette.grey[50],
+          color: theme.palette.grey[900],
         }}
       >
         <Icon size={18} />
@@ -117,6 +132,49 @@ export default function ContactInfos({ data, isLoading }: ContactInfosProps) {
           color={theme.palette.warning.main}
         />
       </Stack>
+      <Box
+        sx={{
+          mt: 2,
+          borderRadius: 2,
+          overflow: "hidden",
+          height: 180,
+        }}
+      >
+        <iframe
+          title="Google Map"
+          width="100%"
+          height="100%"
+          style={{ border: 0 }}
+          loading="lazy"
+          allowFullScreen
+          src={`https://www.google.com/maps?q=${encodeURIComponent(
+            data?.address || "",
+          )}&output=embed`}
+        />
+      </Box>
+
+      <Divider sx={{ my: 1.5 }} />
+
+      <Box>
+        <Typography
+          variant="body1"
+          fontWeight={600}
+          color={theme.palette.grey[500]}
+        >
+          Spécialités
+        </Typography>
+        <Box>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+            {specialities.map((speciality) => (
+              <CustomChip
+                key={speciality}
+                label={speciality}
+                variant={getRandomVariant()}
+              />
+            ))}
+          </Box>
+        </Box>
+      </Box>
     </Paper>
   );
 }

@@ -54,9 +54,9 @@ export default function AccountantView() {
         width="100%"
         sx={{
           display: "flex",
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
+          flexDirection: { xs: "column", md: "row" },
+          justifyContent: { xs: "center", md: "space-between" },
+          alignItems: { xs: "center", md: "flex-start" },
           gap: 1.5,
           mt: 1.5,
         }}

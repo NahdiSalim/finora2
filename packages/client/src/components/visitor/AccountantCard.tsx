@@ -140,19 +140,6 @@ export function AccountantCard({
               ? theme.shadows[4]
               : theme.shadows[1],
           transition: "box-shadow 0.3s ease-in-out",
-          "&::before": isHighlighted
-            ? {
-                content: '""',
-                position: "absolute",
-                top: -2,
-                right: -2,
-                width: 40,
-                height: 40,
-                background: theme.palette.secondary.main,
-                clipPath: "polygon(100% 0, 0 0, 100% 100%)",
-                borderRadius: "0 3px 0 0",
-              }
-            : {},
         }}
       >
         {/* Featured Badge with animation */}

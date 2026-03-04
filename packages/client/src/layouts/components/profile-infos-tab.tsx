@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Box, MenuItem, Stack, Typography } from "@mui/material";
+import { Box, MenuItem, Stack } from "@mui/material";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import CustomInput from "src/components/common/CustomInput";
 import CustomSelect from "src/components/common/CustomSelect";
@@ -70,15 +70,10 @@ export default function ProfileInfosTab({
               value={data?.sector ?? ""}
               onChange={() => {}}
               disabled={!isEditing}
-              size="small"
               IconComponent={KeyboardArrowDownIcon}
               displayEmpty
             >
-              <MenuItem value="">
-                <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
-                  Secteur d&apos;activité
-                </Typography>
-              </MenuItem>
+              <MenuItem value="">Secteur d&apos;activité</MenuItem>
               {SECTOR_OPTIONS.map((opt) => (
                 <MenuItem key={opt} value={opt}>
                   {opt}
@@ -93,15 +88,10 @@ export default function ProfileInfosTab({
               value={data?.collaboratorsCount ?? ""}
               onChange={() => {}}
               disabled={!isEditing}
-              size="small"
               IconComponent={KeyboardArrowDownIcon}
               displayEmpty
             >
-              <MenuItem value="">
-                <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
-                  Nombre de collaborateurs
-                </Typography>
-              </MenuItem>
+              <MenuItem value="">Nombre de collaborateurs</MenuItem>
               {COLLABORATORS_OPTIONS.map((opt) => (
                 <MenuItem key={opt} value={opt}>
                   {opt}

@@ -162,7 +162,7 @@ export function VisitorView() {
                       endAdornment: (
                         <InputAdornment
                           position="end"
-                          sx={{ display: { xs: "none", md: "flex" } }} // 👈 hide on mobile
+                          sx={{ display: { xs: "none", md: "flex" } }}
                         >
                           <CustomButton
                             variant="contained"

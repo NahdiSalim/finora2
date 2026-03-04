@@ -101,7 +101,7 @@ const CustomSelect = forwardRef<HTMLDivElement, CustomSelectProps>(
             },
 
             "&.Mui-disabled": {
-              backgroundColor: theme.palette.grey[200],
+              backgroundColor: theme.palette.grey[50],
               "& .MuiOutlinedInput-notchedOutline": {
                 borderColor: theme.palette.grey[200],
               },

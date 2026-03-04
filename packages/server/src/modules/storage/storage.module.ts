@@ -8,6 +8,7 @@ import { JwtTokenService } from 'src/common/jwt/jwt-token.service';
 import { MailService } from '../mail/mail.service';
 import { FileUploadService } from 'src/common/services/file-upload.service';
 import { JwtService } from '@nestjs/jwt';
+import { MinioService } from 'src/common/services/minio.service';
 
 @Module({
   imports: [PrismaModule],
@@ -20,6 +21,7 @@ import { JwtService } from '@nestjs/jwt';
     MailService,
     FileUploadService,
     JwtService,
+    MinioService,
   ],
   exports: [StorageService],
 })

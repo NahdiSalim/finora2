@@ -7,11 +7,14 @@ import ProfileReviewsTab from "./profile-reviews-tab";
 
 type ProfileTabsProps = {
   profileInfosData?: ProfileInfosTabData;
+  isEditing?: boolean;
 };
 
-export default function ProfileTabs({ profileInfosData }: ProfileTabsProps) {
+export default function ProfileTabs({
+  profileInfosData,
+  isEditing = false,
+}: ProfileTabsProps) {
   const [tab, setTab] = useState(0);
-  const [isEditing, setIsEditing] = useState(false);
 
   return (
     <Box>
@@ -52,9 +55,9 @@ export default function ProfileTabs({ profileInfosData }: ProfileTabsProps) {
         {tab === 0 && (
           <ProfileInfosTab
             isEditing={isEditing}
-            onEdit={() => setIsEditing(true)}
-            onCancel={() => setIsEditing(false)}
-            onSave={() => setIsEditing(false)}
+            onEdit={() => {}}
+            onCancel={() => {}}
+            onSave={() => {}}
             data={profileInfosData}
           />
         )}

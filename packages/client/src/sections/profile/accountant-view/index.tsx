@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Box, Card } from "@mui/material";
 import { ShieldCheck } from "lucide-react";
 
@@ -6,9 +7,11 @@ import ContactInfos from "src/layouts/components/profile-contact";
 import ProfileHeader from "src/layouts/components/profile-header";
 import ProfileStrength from "src/layouts/components/profile-strength";
 import ProfileTabs from "src/layouts/components/profile-tabs";
+import CustomButton from "src/components/common/CustomButton";
 import { useGetMyAccountantProfileQuery } from "src/lib/services/accountantProfileApi";
 
 export default function AccountantView() {
+  const [isEditing, setIsEditing] = useState(false);
   const { data, isLoading } = useGetMyAccountantProfileQuery();
 
   const name =
@@ -29,6 +32,8 @@ export default function AccountantView() {
         .filter(Boolean)
         .join(" ") ||
       "",
+    whatsapp: "",
+    website: "",
   };
 
   const profileInfosData = {
@@ -116,7 +121,7 @@ export default function AccountantView() {
           subtitle={subtitle}
           onEditCover={() => console.log("Edit cover")}
           onEditAvatar={() => console.log("Edit avatar")}
-          onEditProfile={() => console.log("Edit profile")}
+          onEditProfile={() => setIsEditing(true)}
         />
       </Card>
       <Card
@@ -150,12 +155,51 @@ export default function AccountantView() {
             width: { sx: "100%", sm: "100", md: "70%" },
           }}
         >
-          <ProfileTabs profileInfosData={profileInfosData} />
+          <ProfileTabs
+            profileInfosData={profileInfosData}
+            isEditing={isEditing}
+          />
         </Card>
-        <Card>
-          <ContactInfos data={contactData} isLoading={isLoading} />
+        <Card
+          sx={{
+            width: { xs: "100%", md: 440 },
+            minWidth: { xs: "100%", md: 440 },
+            flexShrink: 0,
+          }}
+        >
+          <ContactInfos
+            data={contactData}
+            isLoading={isLoading}
+            isEditing={isEditing}
+          />
         </Card>
       </Box>
+
+      {isEditing && (
+        <Box
+          sx={{
+            mt: 3,
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 2,
+          }}
+        >
+          <CustomButton
+            variant="outlined"
+            color="info"
+            onClick={() => setIsEditing(false)}
+          >
+            Annuler
+          </CustomButton>
+          <CustomButton
+            variant="contained"
+            color="primary"
+            onClick={() => setIsEditing(false)}
+          >
+            Enregistrer
+          </CustomButton>
+        </Box>
+      )}
     </PageHeader>
   );
 }

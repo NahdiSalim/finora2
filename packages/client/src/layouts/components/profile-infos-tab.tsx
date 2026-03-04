@@ -1,11 +1,30 @@
-import React from "react";
-import { Box, Button, Stack } from "@mui/material";
+import React, { useState } from "react";
+import { Box, MenuItem, Stack, Typography } from "@mui/material";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import CustomInput from "src/components/common/CustomInput";
+import CustomSelect from "src/components/common/CustomSelect";
+import FileUpload from "src/components/common/FileUpload";
 
 export type ProfileInfosTabData = {
   cabinetName?: string;
   sector?: string;
+  collaboratorsCount?: string;
 };
+
+const SECTOR_OPTIONS = [
+  "Expert Comptable",
+  "Comptable",
+  "Fiscaliste",
+  "Finance",
+  "Audit",
+  "Conseil",
+];
+
+const COLLABORATORS_OPTIONS = [
+  "1-5 collaborateurs",
+  "6-10 collaborateurs",
+  "+ 10 collaborateurs",
+];
 
 interface Props {
   isEditing: boolean;
@@ -22,6 +41,9 @@ export default function ProfileInfosTab({
   onSave,
   data,
 }: Props) {
+  const [patenteFile, setPatenteFile] = useState<File | null>(null);
+  const [rneFile, setRneFile] = useState<File | null>(null);
+
   return (
     <Box
       component="form"
@@ -41,49 +63,77 @@ export default function ProfileInfosTab({
           fullWidth
         />
 
-        <Box sx={{ display: "flex", gap: 1 }}>
-          <CustomInput
-            label="Secteur d'activité"
-            value={data?.sector ?? ""}
-            placeholder="Secteur d'activité"
-            disabled={!isEditing}
-            fullWidth
-          />
-
-          <CustomInput
-            label="Nombre de collaborateurs"
-            defaultValue="10"
-            disabled={!isEditing}
-            fullWidth
-          />
-        </Box>
-
-        <Box sx={{ display: "flex", gap: 1 }}>
-          <CustomInput
-            label="Patente"
-            defaultValue="Patente"
-            disabled={!isEditing}
-            fullWidth
-          />
-
-          <CustomInput
-            label="RNE"
-            defaultValue="RNE"
-            disabled={!isEditing}
-            fullWidth
-          />
-        </Box>
-
-        {isEditing && (
-          <Box sx={{ display: "flex", gap: 2 }}>
-            <Button variant="contained" onClick={onSave}>
-              Enregistrer
-            </Button>
-            <Button variant="outlined" onClick={onCancel}>
-              Annuler
-            </Button>
+        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+          <Box sx={{ flex: 1, minWidth: 200 }}>
+            <CustomSelect
+              label="Secteur d'activité"
+              value={data?.sector ?? ""}
+              onChange={() => {}}
+              disabled={!isEditing}
+              size="small"
+              IconComponent={KeyboardArrowDownIcon}
+              displayEmpty
+            >
+              <MenuItem value="">
+                <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
+                  Secteur d&apos;activité
+                </Typography>
+              </MenuItem>
+              {SECTOR_OPTIONS.map((opt) => (
+                <MenuItem key={opt} value={opt}>
+                  {opt}
+                </MenuItem>
+              ))}
+            </CustomSelect>
           </Box>
-        )}
+
+          <Box sx={{ flex: 1, minWidth: 200 }}>
+            <CustomSelect
+              label="Nombre de collaborateurs"
+              value={data?.collaboratorsCount ?? ""}
+              onChange={() => {}}
+              disabled={!isEditing}
+              size="small"
+              IconComponent={KeyboardArrowDownIcon}
+              displayEmpty
+            >
+              <MenuItem value="">
+                <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
+                  Nombre de collaborateurs
+                </Typography>
+              </MenuItem>
+              {COLLABORATORS_OPTIONS.map((opt) => (
+                <MenuItem key={opt} value={opt}>
+                  {opt}
+                </MenuItem>
+              ))}
+            </CustomSelect>
+          </Box>
+        </Box>
+
+        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+          <Box sx={{ flex: 1, minWidth: 200 }}>
+            <FileUpload
+              label="Patente"
+              value={patenteFile}
+              onChange={setPatenteFile}
+              disabled={!isEditing}
+              acceptedFiles={[".pdf", ".jpg", ".jpeg", ".png"]}
+              maxSize={10}
+            />
+          </Box>
+
+          <Box sx={{ flex: 1, minWidth: 200 }}>
+            <FileUpload
+              label="RNE"
+              value={rneFile}
+              onChange={setRneFile}
+              disabled={!isEditing}
+              acceptedFiles={[".pdf", ".jpg", ".jpeg", ".png"]}
+              maxSize={10}
+            />
+          </Box>
+        </Box>
       </Stack>
     </Box>
   );

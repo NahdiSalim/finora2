@@ -63,7 +63,7 @@ export const themeConfig: ThemeConfig = {
       contrastText: "#FFFFFF",
     },
     info: {
-      lighter: "#b2bbc6",
+      lighter: "#E2E8F0",
       light: "#a3adbb",
       main: "#546881",
       dark: "#1d242d",

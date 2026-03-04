@@ -257,12 +257,11 @@ export const routesSection: RouteObject[] = [
     ],
   },
 
+  // Auth routes (sans protection)
   {
     path: "visitor",
     element: <VisitorPage />,
   },
-
-  // Auth routes (sans protection)
   {
     path: "sign-in",
     element: <AuthLayout />,

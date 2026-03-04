@@ -184,5 +184,5 @@ export async function seedRolePermissions(prisma: PrismaClient) {
   await assignPermissions(accountantRole!.id, accountantActionCodes);
   await assignPermissions(collaboratorRole!.id, collaboratorActionCodes);
 
-  console.log('✅ Role permissions (actions, pages, features) seeded successfully');
+  console.log(' Role permissions (actions, pages, features) seeded successfully');
 }

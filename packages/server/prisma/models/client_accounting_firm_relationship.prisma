@@ -2,13 +2,31 @@ model ClientAccountingFirmRelationship {
   id                  Int       @id @default(autoincrement())
   clientCompanyId     Int
   accountingFirmId    Int
-  status              String    @default("pending") // "pending" | "active" | "terminated"
+  
+  // Invitation details
+  invitedBy           Int       @default(1) // User ID who sent the invitation
+  invitationType      String    @default("client_to_accountant") // "client_to_accountant" | "accountant_to_client"
+  
+  // Status management
+  status              String    @default("pending") // "pending" | "accepted" | "rejected" | "active" | "terminated"
   requestDate         DateTime  @default(now())
   responseDate        DateTime?
+  respondedBy         Int?      // User ID who responded to the invitation
+  
+  // Contract and relationship
   contractId          Int?
   relationshipStart   DateTime?
   relationshipEnd     DateTime?
+  
+  // Termination
   terminationReason   String?
+  terminatedBy        Int?      // User ID who terminated the relationship
+  terminatedAt        DateTime?
+  
+  // Additional info
+  invitationMessage   String?   @db.Text
+  rejectionReason     String?   @db.Text
+  
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -16,7 +34,9 @@ model ClientAccountingFirmRelationship {
   accountingFirm      Company   @relation("AccountingFirm", fields: [accountingFirmId], references: [id])
   contract            Contract? @relation(fields: [contractId], references: [id])
 
+  @@unique([clientCompanyId, accountingFirmId])
   @@index([clientCompanyId])
   @@index([accountingFirmId])
   @@index([status])
+  @@index([invitedBy])
 }

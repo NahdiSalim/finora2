@@ -102,5 +102,5 @@ export async function seedPages(prisma: PrismaClient) {
     });
   }
 
-  console.log('✅ Pages seeded successfully');
+  console.log(' Pages seeded successfully');
 }

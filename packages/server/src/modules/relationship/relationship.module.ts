@@ -9,6 +9,7 @@ import { JwtTokenService } from 'src/common/jwt/jwt-token.service';
 import { FileUploadService } from 'src/common/services/file-upload.service';
 import { AuthService } from '../auth/auth.service';
 import { MailService } from '../mail/mail.service';
+import { MinioService } from 'src/common/services/minio.service';
 
 @Module({
   imports: [PrismaModule, NotificationModule],
@@ -21,6 +22,7 @@ import { MailService } from '../mail/mail.service';
     MailService,
     FileUploadService,
     JwtService,
+    MinioService,
   ],
   exports: [RelationshipService],
 })

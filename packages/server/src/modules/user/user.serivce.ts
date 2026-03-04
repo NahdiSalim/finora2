@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 import { HashService } from 'src/common/crypto/hash.service';
 import { JwtTokenService } from 'src/common/jwt/jwt-token.service';
 import { FileUploadService, FileCategory } from 'src/common/services/file-upload.service';
+import { MinioService } from 'src/common/services/minio.service';
 import { UserStatus } from 'src/common/enums/user-status.enum';
 import * as bcrypt from 'bcrypt';
 import { stringify } from 'csv-stringify/sync';
@@ -20,7 +21,8 @@ export class UserService {
     private prisma: PrismaService,
     private hashService: HashService,
     private jwtTokenService: JwtTokenService,
-    private fileUploadService: FileUploadService
+    private fileUploadService: FileUploadService,
+    private minioService: MinioService
   ) {}
 
   async getAll(page: number = 1, limit: number = 10, search?: string) {
@@ -393,7 +395,16 @@ export class UserService {
   }
 
   // Update user profile with photo
-  async updateProfile(userId: number, dto: UpdateUserProfileDto, photoFile?: Express.Multer.File) {
+  async updateProfile(
+    userId: number,
+    dto: UpdateUserProfileDto,
+    photoFile?: Express.Multer.File,
+    coverPhotoFile?: Express.Multer.File
+  ) {
+    console.log('updateProfile called for user:', userId);
+    console.log('Photo file:', photoFile ? 'Yes' : 'No');
+    console.log('Cover photo file:', coverPhotoFile ? 'Yes' : 'No');
+
     try {
       // Get current user
       const user = await this.prisma.user.findUnique({
@@ -403,6 +414,8 @@ export class UserService {
       if (!user) {
         throw new ApiError('User not found', 404, 'USER_NOT_FOUND');
       }
+
+      console.log('User found:', user.email);
 
       // Check email uniqueness if email is being updated
       if (dto.email && dto.email !== user.email) {
@@ -415,20 +428,62 @@ export class UserService {
         }
       }
 
-      // Handle photo upload
+      // Handle photo upload to MinIO
       let photoPath: string | undefined;
-      if (photoFile) {
-        // Delete old photo if exists
-        if (user.photo) {
-          await this.fileUploadService.deleteFile(user.photo);
-        }
+      if (photoFile && user.companyId) {
+        console.log('Processing photo upload to MinIO...');
+        try {
+          // Delete old photo from MinIO if exists
+          if (user.photo) {
+            try {
+              await this.minioService.deleteFile(user.photo);
+            } catch (deleteError) {
+              console.log('Could not delete old photo:', deleteError);
+              // Continue anyway
+            }
+          }
 
-        // Save new photo
-        photoPath = await this.fileUploadService.saveFile(
-          photoFile,
-          FileCategory.USER_PHOTO,
-          `user_${userId}`
-        );
+          // Upload new photo to MinIO
+          photoPath = await this.minioService.uploadFile(user.companyId, 'users/photos', photoFile);
+          console.log('Photo uploaded successfully to MinIO:', photoPath);
+        } catch (photoError) {
+          console.error('Photo upload error:', photoError);
+          // Continue without photo if upload fails
+          photoPath = undefined;
+        }
+      } else if (photoFile && !user.companyId) {
+        console.log('User has no company, cannot upload to MinIO');
+      }
+
+      // Handle cover photo upload to MinIO
+      let coverPhotoPath: string | undefined;
+      if (coverPhotoFile && user.companyId) {
+        console.log('Processing cover photo upload to MinIO...');
+        try {
+          // Delete old cover photo from MinIO if exists
+          if (user.coverPhoto) {
+            try {
+              await this.minioService.deleteFile(user.coverPhoto);
+            } catch (deleteError) {
+              console.log('Could not delete old cover photo:', deleteError);
+              // Continue anyway
+            }
+          }
+
+          // Upload new cover photo to MinIO
+          coverPhotoPath = await this.minioService.uploadFile(
+            user.companyId,
+            'users/cover-photos',
+            coverPhotoFile
+          );
+          console.log('Cover photo uploaded successfully to MinIO:', coverPhotoPath);
+        } catch (coverPhotoError) {
+          console.error('Cover photo upload error:', coverPhotoError);
+          // Continue without cover photo if upload fails
+          coverPhotoPath = undefined;
+        }
+      } else if (coverPhotoFile && !user.companyId) {
+        console.log('User has no company, cannot upload cover photo to MinIO');
       }
 
       // Update user
@@ -444,6 +499,7 @@ export class UserService {
           cin: dto.cin,
           diploma: dto.diploma,
           ...(photoPath && { photo: photoPath }),
+          ...(coverPhotoPath && { coverPhoto: coverPhotoPath }),
           updatedById: userId,
         },
         include: {
@@ -465,6 +521,31 @@ export class UserService {
         },
       });
 
+      // Generate presigned URL for photo if exists
+      let photoUrl: string | null = null;
+      if (updatedUser.photo) {
+        try {
+          photoUrl = await this.minioService.getPresignedUrl(updatedUser.photo, 7 * 24 * 60 * 60); // 7 days
+        } catch (error) {
+          console.error('Error generating presigned URL:', error);
+          photoUrl = updatedUser.photo; // Fallback to path
+        }
+      }
+
+      // Generate presigned URL for cover photo if exists
+      let coverPhotoUrl: string | null = null;
+      if (updatedUser.coverPhoto) {
+        try {
+          coverPhotoUrl = await this.minioService.getPresignedUrl(
+            updatedUser.coverPhoto,
+            7 * 24 * 60 * 60
+          ); // 7 days
+        } catch (error) {
+          console.error('Error generating presigned URL for cover photo:', error);
+          coverPhotoUrl = updatedUser.coverPhoto; // Fallback to path
+        }
+      }
+
       return {
         success: true,
         message: 'Profile updated successfully',
@@ -479,7 +560,8 @@ export class UserService {
           department: updatedUser.department,
           cin: updatedUser.cin,
           diploma: updatedUser.diploma,
-          photo: updatedUser.photo,
+          photoUrl: photoUrl, // URL présignée MinIO
+          coverPhotoUrl: coverPhotoUrl, // URL présignée MinIO
           role: updatedUser.role,
           company: updatedUser.company,
         },
@@ -515,20 +597,46 @@ export class UserService {
         throw new ApiError('Only accountants and clients can update company', 403, 'FORBIDDEN');
       }
 
-      // Handle logo upload
+      // Check SIRET uniqueness if being updated
+      if (dto.siret && dto.siret !== user.company?.siret) {
+        const siretExists = await this.prisma.company.findFirst({
+          where: {
+            siret: dto.siret,
+            id: { not: user.companyId },
+          },
+        });
+
+        if (siretExists) {
+          throw new ApiError('SIRET number already exists', 400, 'SIRET_EXISTS');
+        }
+      }
+
+      // Handle logo upload to MinIO
       let logoPath: string | undefined;
       if (logoFile) {
-        // Delete old logo if exists
-        if (user.company?.logo) {
-          await this.fileUploadService.deleteFile(user.company.logo);
-        }
+        try {
+          // Delete old logo from MinIO if exists
+          if (user.company?.logo) {
+            try {
+              await this.minioService.deleteFile(user.company.logo);
+            } catch (deleteError) {
+              console.log('Could not delete old logo:', deleteError);
+              // Continue anyway
+            }
+          }
 
-        // Save new logo
-        logoPath = await this.fileUploadService.saveFile(
-          logoFile,
-          FileCategory.COMPANY_LOGO,
-          `company_${user.companyId}`
-        );
+          // Upload new logo to MinIO
+          logoPath = await this.minioService.uploadFile(
+            user.companyId,
+            'companies/logos',
+            logoFile
+          );
+          console.log('Logo uploaded successfully to MinIO:', logoPath);
+        } catch (logoError) {
+          console.error('Logo upload error:', logoError);
+          // Continue without logo if upload fails
+          logoPath = undefined;
+        }
       }
 
       // Update company
@@ -550,15 +658,33 @@ export class UserService {
           activityCode: dto.activityCode,
           sector: dto.sector,
           employeeCount: dto.employeeCount,
+          experience: dto.experience,
           description: dto.description,
           ...(logoPath && { logo: logoPath }),
         },
       });
 
+      // Generate presigned URL for logo if exists
+      let logoUrl: string | null = null;
+      if (updatedCompany.logo) {
+        try {
+          logoUrl = await this.minioService.getPresignedUrl(updatedCompany.logo, 7 * 24 * 60 * 60); // 7 days
+        } catch (error) {
+          console.error('Error generating presigned URL for logo:', error);
+          logoUrl = updatedCompany.logo; // Fallback to path
+        }
+      }
+
+      // Remove internal logo path and return only the presigned URL
+      const { logo, ...companyData } = updatedCompany;
+
       return {
         success: true,
         message: 'Company updated successfully',
-        data: updatedCompany,
+        data: {
+          ...companyData,
+          logoUrl: logoUrl, // URL présignée MinIO
+        },
       };
     } catch (error) {
       console.error('Update company error:', error);

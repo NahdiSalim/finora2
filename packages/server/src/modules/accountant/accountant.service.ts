@@ -3,6 +3,7 @@ import { PrismaService } from 'prisma/prisma.service';
 import { ApiError } from 'src/common/errors/api-error';
 import * as bcrypt from 'bcrypt';
 import { MailService } from '../mail/mail.service';
+import { MinioService } from 'src/common/services/minio.service';
 import { CreateCollaboratorDto } from './dto/create-collaborator.dto';
 import { CreateClientDto } from './dto/create-client.dto';
 import { RoleCode } from 'src/common/enums/role.enum';
@@ -12,7 +13,8 @@ import { UserStatus } from 'src/common/enums/user-status.enum';
 export class AccountantService {
   constructor(
     private prisma: PrismaService,
-    private mailService: MailService
+    private mailService: MailService,
+    private minioService: MinioService
   ) {}
 
   // Create collaborator (by accountant)
@@ -260,9 +262,10 @@ export class AccountantService {
         data: {
           clientCompanyId: clientCompany.id,
           accountingFirmId: accountant.companyId,
+          invitedBy: accountant.id, // Accountant who created the client
           status: UserStatus.ACTIVE,
           relationshipStart: new Date(),
-        },
+        } as any,
         include: {
           clientCompany: {
             select: {
@@ -584,17 +587,29 @@ export class AccountantService {
             email: true,
             phone: true,
             photo: true,
+            coverPhoto: true,
             position: true,
             department: true,
+            cin: true,
+            diploma: true,
             company: {
               select: {
                 id: true,
                 name: true,
+                description: true,
+                experience: true,
                 city: true,
                 address: true,
                 postalCode: true,
                 phone: true,
                 email: true,
+                siret: true,
+                vatNumber: true,
+                legalForm: true,
+                specialties: true,
+                rating: true,
+                numberOfReviews: true,
+                logo: true,
               },
             },
           },
@@ -604,19 +619,87 @@ export class AccountantService {
         }),
       ]);
 
+      // Generate presigned URLs for all accountants
+      const accountantsWithUrls = await Promise.all(
+        data.map(async (accountant) => {
+          let photoUrl: string | null = null;
+          if (accountant.photo) {
+            try {
+              photoUrl = await this.minioService.getPresignedUrl(
+                accountant.photo,
+                7 * 24 * 60 * 60
+              );
+            } catch (error) {
+              console.error('Error generating presigned URL for photo:', error);
+              photoUrl = accountant.photo;
+            }
+          }
+
+          let coverPhotoUrl: string | null = null;
+          if (accountant.coverPhoto) {
+            try {
+              coverPhotoUrl = await this.minioService.getPresignedUrl(
+                accountant.coverPhoto,
+                7 * 24 * 60 * 60
+              );
+            } catch (error) {
+              console.error('Error generating presigned URL for cover photo:', error);
+              coverPhotoUrl = accountant.coverPhoto;
+            }
+          }
+
+          let logoUrl: string | null = null;
+          if (accountant.company?.logo) {
+            try {
+              logoUrl = await this.minioService.getPresignedUrl(
+                accountant.company.logo,
+                7 * 24 * 60 * 60
+              );
+            } catch (error) {
+              console.error('Error generating presigned URL for logo:', error);
+              logoUrl = accountant.company.logo;
+            }
+          }
+
+          return {
+            id: accountant.id,
+            name: `${accountant.firstName} ${accountant.lastName}`,
+            firstName: accountant.firstName,
+            lastName: accountant.lastName,
+            email: accountant.email,
+            phone: accountant.phone,
+            photoUrl,
+            coverPhotoUrl,
+            specialty: accountant.position,
+            department: accountant.department,
+            cin: accountant.cin,
+            diploma: accountant.diploma,
+            company: accountant.company
+              ? {
+                  id: accountant.company.id,
+                  name: accountant.company.name,
+                  description: accountant.company.description,
+                  experience: accountant.company.experience,
+                  city: accountant.company.city,
+                  address: accountant.company.address,
+                  postalCode: accountant.company.postalCode,
+                  phone: accountant.company.phone,
+                  email: accountant.company.email,
+                  siret: accountant.company.siret,
+                  vatNumber: accountant.company.vatNumber,
+                  legalForm: accountant.company.legalForm,
+                  logoUrl,
+                  specialties: accountant.company.specialties || [],
+                  rating: accountant.company.rating || 0,
+                  numberOfReviews: accountant.company.numberOfReviews || 0,
+                }
+              : null,
+          };
+        })
+      );
+
       return {
-        data: data.map((accountant) => ({
-          id: accountant.id,
-          name: `${accountant.firstName} ${accountant.lastName}`,
-          firstName: accountant.firstName,
-          lastName: accountant.lastName,
-          email: accountant.email,
-          phone: accountant.phone,
-          photo: accountant.photo,
-          specialty: accountant.position,
-          department: accountant.department,
-          company: accountant.company,
-        })),
+        data: accountantsWithUrls,
         pagination: {
           total,
           page,
@@ -655,6 +738,7 @@ export class AccountantService {
           email: true,
           phone: true,
           photo: true,
+          coverPhoto: true,
           position: true,
           department: true,
           diploma: true,
@@ -662,6 +746,8 @@ export class AccountantService {
             select: {
               id: true,
               name: true,
+              description: true,
+              experience: true,
               city: true,
               address: true,
               postalCode: true,
@@ -670,6 +756,10 @@ export class AccountantService {
               siret: true,
               vatNumber: true,
               legalForm: true,
+              logo: true,
+              specialties: true,
+              rating: true,
+              numberOfReviews: true,
             },
           },
         },
@@ -679,6 +769,47 @@ export class AccountantService {
         throw new ApiError('Accountant profile not found', 404, 'PROFILE_NOT_FOUND');
       }
 
+      // Generate presigned URLs for photo and coverPhoto if they exist
+      let photoUrl: string | null = null;
+      if (accountant.photo) {
+        try {
+          photoUrl = await this.minioService.getPresignedUrl(accountant.photo, 7 * 24 * 60 * 60); // 7 days
+        } catch (error) {
+          console.error('Error generating presigned URL for photo:', error);
+          photoUrl = accountant.photo; // Fallback to path
+        }
+      }
+
+      let coverPhotoUrl: string | null = null;
+      if (accountant.coverPhoto) {
+        try {
+          coverPhotoUrl = await this.minioService.getPresignedUrl(
+            accountant.coverPhoto,
+            7 * 24 * 60 * 60
+          ); // 7 days
+        } catch (error) {
+          console.error('Error generating presigned URL for cover photo:', error);
+          coverPhotoUrl = accountant.coverPhoto; // Fallback to path
+        }
+      }
+
+      // Generate presigned URL for company logo if exists
+      let logoUrl: string | null = null;
+      if (accountant.company?.logo) {
+        try {
+          logoUrl = await this.minioService.getPresignedUrl(
+            accountant.company.logo,
+            7 * 24 * 60 * 60
+          ); // 7 days
+        } catch (error) {
+          console.error('Error generating presigned URL for logo:', error);
+          logoUrl = accountant.company.logo; // Fallback to path
+        }
+      }
+
+      // Remove internal paths and return only presigned URLs
+      const { logo, ...companyData } = accountant.company || {};
+
       return {
         id: accountant.id,
         name: `${accountant.firstName} ${accountant.lastName}`,
@@ -686,11 +817,18 @@ export class AccountantService {
         lastName: accountant.lastName,
         email: accountant.email,
         phone: accountant.phone,
-        photo: accountant.photo,
+        photoUrl: photoUrl, // URL présignée MinIO
+        coverPhotoUrl: coverPhotoUrl, // URL présignée MinIO
         specialty: accountant.position,
         department: accountant.department,
         diploma: accountant.diploma,
-        company: accountant.company,
+        company: {
+          ...companyData,
+          logoUrl: logoUrl, // URL présignée MinIO
+          specialties: accountant.company?.specialties || [],
+          rating: accountant.company?.rating || 0,
+          numberOfReviews: accountant.company?.numberOfReviews || 0,
+        },
       };
     } catch (error) {
       console.error('Get accountant profile error:', error);
@@ -702,12 +840,27 @@ export class AccountantService {
   async updateMyProfile(
     accountantId: number,
     data: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
       position?: string;
       department?: string;
       phone?: string;
+      cin?: string;
       diploma?: string;
-    }
+      experience?: number;
+      description?: string;
+    },
+    photoFile?: Express.Multer.File,
+    coverPhotoFile?: Express.Multer.File
   ) {
+    console.log('updateMyProfile called');
+    console.log('Photo file:', photoFile ? photoFile.originalname : 'No photo');
+    console.log(
+      'Cover photo file:',
+      coverPhotoFile ? coverPhotoFile.originalname : 'No cover photo'
+    );
+
     try {
       // Verify user is accountant
       const accountant = await this.prisma.user.findUnique({
@@ -719,13 +872,96 @@ export class AccountantService {
         throw new ApiError('Only accountants can update their profile', 403, 'FORBIDDEN');
       }
 
+      // Check email uniqueness if email is being updated
+      if (data.email && data.email !== accountant.email) {
+        const emailExists = await this.prisma.user.findUnique({
+          where: { email: data.email },
+        });
+
+        if (emailExists) {
+          throw new ApiError('Email already exists', 400, 'EMAIL_EXISTS');
+        }
+      }
+
+      // Handle photo upload to MinIO
+      let photoPath: string | undefined;
+      if (photoFile && accountant.companyId) {
+        try {
+          // Delete old photo from MinIO if exists
+          if (accountant.photo) {
+            try {
+              await this.minioService.deleteFile(accountant.photo);
+            } catch (deleteError) {
+              console.log('Could not delete old photo:', deleteError);
+            }
+          }
+
+          // Upload new photo to MinIO
+          photoPath = await this.minioService.uploadFile(
+            accountant.companyId,
+            'users/photos',
+            photoFile
+          );
+          console.log('Photo uploaded successfully to MinIO:', photoPath);
+        } catch (photoError) {
+          console.error('Photo upload error:', photoError);
+          photoPath = undefined;
+        }
+      }
+
+      // Handle cover photo upload to MinIO
+      let coverPhotoPath: string | undefined;
+      if (coverPhotoFile && accountant.companyId) {
+        try {
+          // Delete old cover photo from MinIO if exists
+          if (accountant.coverPhoto) {
+            try {
+              await this.minioService.deleteFile(accountant.coverPhoto);
+            } catch (deleteError) {
+              console.log('Could not delete old cover photo:', deleteError);
+            }
+          }
+
+          // Upload new cover photo to MinIO
+          coverPhotoPath = await this.minioService.uploadFile(
+            accountant.companyId,
+            'users/cover-photos',
+            coverPhotoFile
+          );
+          console.log('Cover photo uploaded successfully to MinIO:', coverPhotoPath);
+        } catch (coverPhotoError) {
+          console.error('Cover photo upload error:', coverPhotoError);
+          coverPhotoPath = undefined;
+        }
+      }
+
+      // Update company if experience or description provided
+      if (
+        accountant.companyId &&
+        (data.experience !== undefined || data.description !== undefined)
+      ) {
+        await this.prisma.company.update({
+          where: { id: accountant.companyId },
+          data: {
+            ...(data.experience !== undefined && { experience: data.experience }),
+            ...(data.description !== undefined && { description: data.description }),
+          },
+        });
+      }
+
       const updated = await this.prisma.user.update({
         where: { id: accountantId },
         data: {
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
           position: data.position,
           department: data.department,
           phone: data.phone,
+          cin: data.cin,
           diploma: data.diploma,
+          ...(photoPath && { photo: photoPath }),
+          ...(coverPhotoPath && { coverPhoto: coverPhotoPath }),
         },
         select: {
           id: true,
@@ -734,8 +970,10 @@ export class AccountantService {
           email: true,
           phone: true,
           photo: true,
+          coverPhoto: true,
           position: true,
           department: true,
+          cin: true,
           diploma: true,
           company: {
             select: {
@@ -746,15 +984,54 @@ export class AccountantService {
               postalCode: true,
               phone: true,
               email: true,
+              experience: true,
+              description: true,
             },
           },
         },
       });
 
+      // Generate presigned URLs for photos if they exist
+      let photoUrl: string | null = null;
+      if (updated.photo) {
+        try {
+          photoUrl = await this.minioService.getPresignedUrl(updated.photo, 7 * 24 * 60 * 60);
+        } catch (error) {
+          console.error('Error generating presigned URL for photo:', error);
+          photoUrl = updated.photo;
+        }
+      }
+
+      let coverPhotoUrl: string | null = null;
+      if (updated.coverPhoto) {
+        try {
+          coverPhotoUrl = await this.minioService.getPresignedUrl(
+            updated.coverPhoto,
+            7 * 24 * 60 * 60
+          );
+        } catch (error) {
+          console.error('Error generating presigned URL for cover photo:', error);
+          coverPhotoUrl = updated.coverPhoto;
+        }
+      }
+
       return {
         success: true,
         message: 'Profile updated successfully',
-        data: updated,
+        data: {
+          id: updated.id,
+          firstName: updated.firstName,
+          lastName: updated.lastName,
+          email: updated.email,
+          phone: updated.phone,
+          photoUrl,
+          coverPhotoUrl,
+          position: updated.position,
+          department: updated.department,
+          cin: updated.cin,
+          diploma: updated.diploma,
+          company: updated.company,
+        },
       };
     } catch (error) {
       console.error('Update profile error:', error);

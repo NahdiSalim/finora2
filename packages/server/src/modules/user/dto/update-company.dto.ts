@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsOptional, IsString, IsNumber } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class UpdateCompanyDto {
   @ApiProperty({ example: 'Entreprise SARL', description: 'Company name', required: false })
@@ -73,9 +74,16 @@ export class UpdateCompanyDto {
   sector?: string;
 
   @ApiProperty({ example: 50, description: 'Employee count', required: false })
+  @Type(() => Number)
   @IsNumber()
   @IsOptional()
   employeeCount?: number;
+
+  @ApiProperty({ example: 15, description: 'Years of experience', required: false })
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  experience?: number;
 
   @ApiProperty({
     example: "Description de l'entreprise",

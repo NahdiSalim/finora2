@@ -22,6 +22,7 @@ model Company {
   employeeCount     Int?
   type              String?   // "client" | "accounting_firm"
   description       String?
+  experience        Int?      // Years of experience for accounting firms
   specialties       String[]
   rating            Float?
   numberOfReviews   Int?      @default(0)
@@ -68,6 +69,15 @@ model Company {
   
   // Audit Logs
   auditLogs         AuditLog[] @relation("AuditLogCompany")
+  
+  // Reviews
+  reviews           Review[] @relation("CompanyReviews")
+  
+  // Posts
+  posts             Post[] @relation("CompanyPosts")
+  
+  // Contact Messages
+  contactMessages   ContactMessage[] @relation("ContactMessageCompany")
 
   @@index([siret])
   @@index([type])

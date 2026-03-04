@@ -1,13 +1,20 @@
 import React, { useState } from "react";
 import { Box, Tabs, Tab, Paper } from "@mui/material";
 
-import ProfileInfosTab from "./profile-infos-tab";
+import ProfileInfosTab, { type ProfileInfosTabData } from "./profile-infos-tab";
 import ProfileFeedTab from "./profile-feed-tab";
 import ProfileReviewsTab from "./profile-reviews-tab";
 
-export default function ProfileTabs() {
+type ProfileTabsProps = {
+  profileInfosData?: ProfileInfosTabData;
+  isEditing?: boolean;
+};
+
+export default function ProfileTabs({
+  profileInfosData,
+  isEditing = false,
+}: ProfileTabsProps) {
   const [tab, setTab] = useState(0);
-  const [isEditing, setIsEditing] = useState(false);
 
   return (
     <Box>
@@ -48,9 +55,10 @@ export default function ProfileTabs() {
         {tab === 0 && (
           <ProfileInfosTab
             isEditing={isEditing}
-            onEdit={() => setIsEditing(true)}
-            onCancel={() => setIsEditing(false)}
-            onSave={() => setIsEditing(false)}
+            onEdit={() => {}}
+            onCancel={() => {}}
+            onSave={() => {}}
+            data={profileInfosData}
           />
         )}
 

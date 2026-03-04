@@ -54,4 +54,13 @@ export class UpdateUserProfileDto {
   })
   @IsOptional()
   photo?: any;
+
+  @ApiProperty({
+    type: 'string',
+    format: 'binary',
+    description: 'User cover photo',
+    required: false,
+  })
+  @IsOptional()
+  coverPhoto?: any;
 }

@@ -1,0 +1,26 @@
+model Review {
+  id              Int       @id @default(autoincrement())
+  accountantId    Int       // Comptable évalué
+  clientId        Int       // Client qui évalue
+  companyId       Int?      // Cabinet comptable évalué
+  rating          Int       // 1-5 étoiles
+  comment         String?   @db.Text
+  isVerified      Boolean   @default(false) // Client vérifié (a vraiment travaillé avec le comptable)
+  isPublic        Boolean   @default(true)  // Visible publiquement
+  response        String?   @db.Text // Réponse du comptable
+  respondedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  accountant      User      @relation("ReviewAccountant", fields: [accountantId], references: [id], onDelete: Cascade)
+  client          User      @relation("ReviewClient", fields: [clientId], references: [id], onDelete: Cascade)
+  company         Company?  @relation("CompanyReviews", fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@unique([accountantId, clientId]) // Un client ne peut laisser qu'un seul avis par comptable
+  @@index([accountantId])
+  @@index([clientId])
+  @@index([companyId])
+  @@index([rating])
+  @@index([isPublic])
+  @@map("reviews")
+}

@@ -8,11 +8,23 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  Patch,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+  ApiConsumes,
+} from '@nestjs/swagger';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AccountantService } from './accountant.service';
 import { CreateCollaboratorDto } from './dto/create-collaborator.dto';
 import { CreateClientDto } from './dto/create-client.dto';
+import { UpdateAccountantProfileDto } from './dto/update-profile.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -194,25 +206,31 @@ export class AccountantProfileController {
     return await this.accountantService.getAccountantProfile(accountantId);
   }
 
-  @Post('update')
+  @Patch('update')
   @Roles(RoleCode.ACCOUNTANT)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Update my public profile (accountant only)' })
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'photo', maxCount: 1 },
+      { name: 'coverPhoto', maxCount: 1 },
+    ])
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Update my public profile with photo and cover photo (accountant only)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Profile updated successfully',
   })
   async updateMyProfile(
     @Req() req: AuthRequest,
-    @Body()
-    data: {
-      position?: string;
-      department?: string;
-      phone?: string;
-      diploma?: string;
-    }
+    @Body() data: UpdateAccountantProfileDto,
+    @UploadedFiles() files?: { photo?: Express.Multer.File[]; coverPhoto?: Express.Multer.File[] }
   ) {
     const accountantId = req.user!.id;
-    return await this.accountantService.updateMyProfile(accountantId, data);
+    const photo = files?.photo?.[0];
+    const coverPhoto = files?.coverPhoto?.[0];
+    return await this.accountantService.updateMyProfile(accountantId, data, photo, coverPhoto);
   }
 }

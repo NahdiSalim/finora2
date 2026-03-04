@@ -26,12 +26,12 @@ async function runSeeds() {
   });
 
   try {
-    console.log('🌱 Running database seeds...');
+    console.log(' Running database seeds...');
 
     // Check if data already exists
     const rolesCount = await prisma.role.count();
     if (rolesCount > 0) {
-      console.log('✅ Database already seeded, skipping...');
+      console.log(' Database already seeded, skipping...');
       await prisma.$disconnect();
       return;
     }
@@ -109,8 +109,8 @@ async function bootstrap() {
 
   await app.listen(process.env.PORT || 3000, '0.0.0.0');
   const port = process.env.PORT || 3000;
-  console.log(`\n🚀 Server is running on port ${port}`);
-  console.log(`📚 Swagger UI:`);
+  console.log(`\n Server is running on port ${port}`);
+  console.log(` Swagger UI:`);
   console.log(`   - http://localhost:${port}/docs`);
   console.log(`   - http://192.168.1.185:${port}/docs`);
   console.log(`🔌 API Base URL:`);

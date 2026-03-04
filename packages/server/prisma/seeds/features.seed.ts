@@ -25,5 +25,5 @@ export async function seedFeatures(prisma: PrismaClient) {
     });
   }
 
-  console.log('✅ Features seeded successfully');
+  console.log(' Features seeded successfully');
 }

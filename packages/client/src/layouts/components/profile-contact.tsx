@@ -10,16 +10,20 @@ import {
 } from "@mui/material";
 import { Phone, Mail, MapPin } from "lucide-react";
 import CustomChip from "src/components/common/CustomChip";
+import CustomInput from "src/components/common/CustomInput";
 
 export interface ContactInfosData {
   phone?: string;
   email?: string;
   address?: string;
+  whatsapp?: string;
+  website?: string;
 }
 
 interface ContactInfosProps {
   data?: ContactInfosData;
   isLoading?: boolean;
+  isEditing?: boolean;
 }
 
 const chipVariants = [
@@ -87,12 +91,40 @@ const InfoItem = ({
   );
 };
 
-export default function ContactInfos({ data, isLoading }: ContactInfosProps) {
+export default function ContactInfos({
+  data,
+  isLoading,
+  isEditing = false,
+}: ContactInfosProps) {
   const theme = useTheme();
+
+  const cardSx = {
+    p: 3,
+    border: 1,
+    borderColor: "divider",
+    borderRadius: 3,
+    minWidth: 320,
+    width: "100%",
+    boxSizing: "border-box",
+  };
+
+  const contactTitleSx = {
+    mb: 2,
+    color: "text.primary",
+    fontWeight: 700,
+    fontSize: "1rem",
+  };
+
+  const mapBoxSx = {
+    mt: 1,
+    borderRadius: 2,
+    overflow: "hidden" as const,
+    height: 180,
+  };
 
   if (isLoading) {
     return (
-      <Paper sx={{ p: 3, borderRadius: 3 }}>
+      <Paper sx={cardSx}>
         <Stack spacing={3}>
           <Skeleton height={50} />
           <Skeleton height={50} />
@@ -102,14 +134,51 @@ export default function ContactInfos({ data, isLoading }: ContactInfosProps) {
     );
   }
 
+  if (isEditing) {
+    return (
+      <Paper sx={cardSx}>
+        <Typography variant="subtitle1" sx={contactTitleSx}>
+          Contact
+        </Typography>
+        <Stack spacing={2}>
+          <CustomInput
+            label="Adresse email professionnelle"
+            value={data?.email ?? ""}
+            placeholder="contact@exemple.com"
+            fullWidth
+          />
+          <CustomInput
+            label="Numéro de téléphone"
+            value={data?.phone ?? ""}
+            placeholder="+216 00 000 000"
+            fullWidth
+            required
+          />
+          <CustomInput
+            label="Numéro WhatsApp"
+            value={data?.whatsapp ?? ""}
+            placeholder="Entrer votre numéro whatsapp..."
+            fullWidth
+          />
+          <CustomInput
+            label="Localisation"
+            value={data?.address ?? ""}
+            placeholder="rue, immeuble, région"
+            fullWidth
+          />
+          <CustomInput
+            label="Site web"
+            value={data?.website ?? ""}
+            placeholder="https://..."
+            fullWidth
+          />
+        </Stack>
+      </Paper>
+    );
+  }
+
   return (
-    <Paper
-      sx={{
-        p: 3,
-        border: 1,
-        borderColor: "divider",
-      }}
-    >
+    <Paper sx={cardSx}>
       <Stack spacing={3}>
         <InfoItem
           icon={Phone}
@@ -117,14 +186,12 @@ export default function ContactInfos({ data, isLoading }: ContactInfosProps) {
           value={data?.phone}
           color={theme.palette.primary.main}
         />
-
         <InfoItem
           icon={Mail}
           label="Email"
           value={data?.email}
           color={theme.palette.success.main}
         />
-
         <InfoItem
           icon={MapPin}
           label="Adresse"
@@ -132,14 +199,7 @@ export default function ContactInfos({ data, isLoading }: ContactInfosProps) {
           color={theme.palette.warning.main}
         />
       </Stack>
-      <Box
-        sx={{
-          mt: 2,
-          borderRadius: 2,
-          overflow: "hidden",
-          height: 180,
-        }}
-      >
+      <Box sx={mapBoxSx}>
         <iframe
           title="Google Map"
           width="100%"
@@ -152,9 +212,7 @@ export default function ContactInfos({ data, isLoading }: ContactInfosProps) {
           )}&output=embed`}
         />
       </Box>
-
       <Divider sx={{ my: 1.5 }} />
-
       <Box>
         <Typography
           variant="body1"
@@ -163,16 +221,14 @@ export default function ContactInfos({ data, isLoading }: ContactInfosProps) {
         >
           Spécialités
         </Typography>
-        <Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {specialities.map((speciality) => (
-              <CustomChip
-                key={speciality}
-                label={speciality}
-                variant={getRandomVariant()}
-              />
-            ))}
-          </Box>
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}>
+          {specialities.map((speciality) => (
+            <CustomChip
+              key={speciality}
+              label={speciality}
+              variant={getRandomVariant()}
+            />
+          ))}
         </Box>
       </Box>
     </Paper>

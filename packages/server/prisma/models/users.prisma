@@ -13,6 +13,7 @@ model User {
   cin                  String?
   diploma              String?
   photo                String?
+  coverPhoto           String?
   lastLogin            DateTime?
   isActive             Boolean   @default(true)
   status               String    @default("pending") // "pending" | "active" | "suspended"
@@ -71,6 +72,18 @@ model User {
   
   // Audit Logs
   auditLogs            AuditLog[] @relation("AuditLogUser")
+  
+  // Reviews
+  givenReviews         Review[] @relation("ReviewClient")
+  receivedReviews      Review[] @relation("ReviewAccountant")
+  
+  // Posts
+  posts                Post[] @relation("PostAuthor")
+  postComments         PostComment[] @relation("PostCommentAuthor")
+  postLikes            PostLike[] @relation("PostLikeUser")
+  
+  // Contact Messages
+  receivedContactMessages ContactMessage[] @relation("ContactMessageAccountant")
 
   @@index([email])
   @@index([companyId])

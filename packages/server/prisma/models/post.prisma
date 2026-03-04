@@ -1,0 +1,61 @@
+model Post {
+  id              Int       @id @default(autoincrement())
+  authorId        Int       // Comptable qui publie
+  companyId       Int?      // Cabinet comptable
+  title           String
+  content         String    @db.Text
+  images          String[]  // Array of image URLs
+  tags            String[]  // Tags pour catégoriser les posts
+  visibility      String    @default("public") // "public" | "clients_only" | "private"
+  status          String    @default("published") // "draft" | "published" | "archived"
+  viewsCount      Int       @default(0)
+  likesCount      Int       @default(0)
+  commentsCount   Int       @default(0)
+  publishedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  author          User      @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  company         Company?  @relation("CompanyPosts", fields: [companyId], references: [id], onDelete: SetNull)
+  
+  comments        PostComment[]
+  likes           PostLike[]
+
+  @@index([authorId])
+  @@index([companyId])
+  @@index([status])
+  @@index([visibility])
+  @@index([publishedAt])
+  @@map("posts")
+}
+
+model PostComment {
+  id          Int       @id @default(autoincrement())
+  postId      Int
+  authorId    Int
+  content     String    @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  post        Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author      User      @relation("PostCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([authorId])
+  @@map("post_comments")
+}
+
+model PostLike {
+  id          Int       @id @default(autoincrement())
+  postId      Int
+  userId      Int
+  createdAt   DateTime  @default(now())
+
+  post        Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user        User      @relation("PostLikeUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+  @@map("post_likes")
+}

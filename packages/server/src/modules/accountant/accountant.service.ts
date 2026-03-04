@@ -850,6 +850,7 @@ export class AccountantService {
       diploma?: string;
       experience?: number;
       description?: string;
+      specialties?: string[];
     },
     photoFile?: Express.Multer.File,
     coverPhotoFile?: Express.Multer.File
@@ -935,17 +936,37 @@ export class AccountantService {
         }
       }
 
-      // Update company if experience or description provided
+      // Update company if experience, description, or specialties provided
       if (
         accountant.companyId &&
-        (data.experience !== undefined || data.description !== undefined)
+        (data.experience !== undefined ||
+          data.description !== undefined ||
+          data.specialties !== undefined)
       ) {
+        const companyUpdateData: any = {};
+
+        if (data.experience !== undefined) {
+          companyUpdateData.experience = data.experience;
+        }
+
+        if (data.description !== undefined) {
+          companyUpdateData.description = data.description;
+        }
+
+        if (data.specialties !== undefined) {
+          // Transform specialties if it's a string (from form-data)
+          let specialtiesArray: string[] = [];
+          if (typeof data.specialties === 'string') {
+            specialtiesArray = (data.specialties as string).split(',').map((s) => s.trim());
+          } else if (Array.isArray(data.specialties)) {
+            specialtiesArray = data.specialties;
+          }
+          companyUpdateData.specialties = specialtiesArray;
+        }
+
         await this.prisma.company.update({
           where: { id: accountant.companyId },
-          data: {
-            ...(data.experience !== undefined && { experience: data.experience }),
-            ...(data.description !== undefined && { description: data.description }),
-          },
+          data: companyUpdateData,
         });
       }
 

@@ -33,6 +33,7 @@ import { UserService } from './user.serivce';
 import { UpdateUserDto } from './update-user.dto';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
+import { UpdateCompleteProfileDto } from './dto/update-complete-profile.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { SuspendUserDto } from './dto/suspend-user.dto';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
@@ -110,6 +111,45 @@ export class UserController {
   })
   async suspendUser(@Param('id', ParseIntPipe) id: number, @Body() dto: SuspendUserDto) {
     return this.userService.suspendUser(id, dto.reason);
+  }
+
+  @Patch('profile/complete')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'photo', maxCount: 1 },
+      { name: 'coverPhoto', maxCount: 1 },
+      { name: 'cinFile', maxCount: 1 },
+      { name: 'diplomaFile', maxCount: 1 },
+      { name: 'companyLogo', maxCount: 1 },
+      { name: 'companyPatentFile', maxCount: 1 },
+      { name: 'companyRneFile', maxCount: 1 },
+    ])
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Update complete profile (user + company + documents) - UNIFIED API' })
+  @ApiOkResponse({ description: 'Profile updated successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'Email already exists or validation error',
+  })
+  async updateCompleteProfile(
+    @Req() req: AuthRequest,
+    @Body() dto: UpdateCompleteProfileDto,
+    @UploadedFiles()
+    files?: {
+      photo?: Express.Multer.File[];
+      coverPhoto?: Express.Multer.File[];
+      cinFile?: Express.Multer.File[];
+      diplomaFile?: Express.Multer.File[];
+      companyLogo?: Express.Multer.File[];
+      companyPatentFile?: Express.Multer.File[];
+      companyRneFile?: Express.Multer.File[];
+    }
+  ) {
+    const userId = req.user!.id;
+    return await this.userService.updateCompleteProfile(userId, dto, files);
   }
 
   @Patch('profile')

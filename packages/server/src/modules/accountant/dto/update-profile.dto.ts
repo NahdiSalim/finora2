@@ -95,6 +95,15 @@ export class UpdateAccountantProfileDto {
   description?: string;
 
   @ApiProperty({
+    example: ['Comptabilité générale', 'Audit financier', 'Conseil fiscal'],
+    description: 'Company specialties (array of strings)',
+    required: false,
+    type: [String],
+  })
+  @IsOptional()
+  specialties?: string[];
+
+  @ApiProperty({
     type: 'string',
     format: 'binary',
     description: 'User photo',

@@ -6,6 +6,7 @@ import { rolesApi } from "./services/roleApi";
 import authReducer, { logout } from "./slices/authSlice";
 import { clientsApi } from "./services/clientApi";
 import { publicAccountantsApi } from "./services/publicAccountantsApi";
+import { accountantProfileApi } from "./services/accountantProfileApi";
 
 const apiMiddlewares = [
   authApi.middleware,
@@ -14,6 +15,7 @@ const apiMiddlewares = [
   clientsApi.middleware,
   rolesApi.middleware,
   publicAccountantsApi.middleware,
+  accountantProfileApi.middleware,
 ];
 
 const apiResetters = [
@@ -23,6 +25,7 @@ const apiResetters = [
   clientsApi.util.resetApiState,
   rolesApi.util.resetApiState,
   publicAccountantsApi.util.resetApiState,
+  accountantProfileApi.util.resetApiState,
 ];
 
 const appReducer = combineReducers({
@@ -33,6 +36,7 @@ const appReducer = combineReducers({
   [collaboratorsApi.reducerPath]: collaboratorsApi.reducer,
   [rolesApi.reducerPath]: rolesApi.reducer,
   [publicAccountantsApi.reducerPath]: publicAccountantsApi.reducer,
+  [accountantProfileApi.reducerPath]: accountantProfileApi.reducer,
 });
 
 const baseStore = configureStore({

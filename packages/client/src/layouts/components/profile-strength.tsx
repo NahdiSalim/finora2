@@ -23,14 +23,18 @@ const ProfileStrength: React.FC<ProfileStrengthProps> = ({
 
   const percentage = (completedSteps / totalSteps) * 100;
 
+  // Ranges de couleur par pourcentage :
+  // 0–39%   → faible  (rouge)
+  // 40–79%  → moyen   (orange)
+  // 80–100% → fort    (vert)
   let strength: StrengthLevel = "weak";
-  if (percentage >= 70) strength = "strong";
+  if (percentage >= 80) strength = "strong";
   else if (percentage >= 40) strength = "medium";
 
   const strengthColors = {
-    weak: theme.palette.error.main,
-    medium: theme.palette.secondary.main,
-    strong: theme.palette.success.main,
+    weak: "#F97373", // rouge
+    medium: "#FDBA74", // orange
+    strong: "#22C55E", // vert
   };
 
   const containerBg = alpha(strengthColors[strength], 0.08);

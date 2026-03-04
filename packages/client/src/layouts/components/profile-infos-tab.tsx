@@ -2,11 +2,17 @@ import React from "react";
 import { Box, Button, Stack } from "@mui/material";
 import CustomInput from "src/components/common/CustomInput";
 
+export type ProfileInfosTabData = {
+  cabinetName?: string;
+  sector?: string;
+};
+
 interface Props {
   isEditing: boolean;
   onEdit: () => void;
   onCancel: () => void;
   onSave: () => void;
+  data?: ProfileInfosTabData;
 }
 
 export default function ProfileInfosTab({
@@ -14,6 +20,7 @@ export default function ProfileInfosTab({
   onEdit,
   onCancel,
   onSave,
+  data,
 }: Props) {
   return (
     <Box
@@ -28,7 +35,8 @@ export default function ProfileInfosTab({
       <Stack spacing={2}>
         <CustomInput
           label="Nom du cabinet"
-          defaultValue="Cabinet nom"
+          value={data?.cabinetName ?? ""}
+          placeholder="Nom du cabinet"
           disabled={!isEditing}
           fullWidth
         />
@@ -36,7 +44,8 @@ export default function ProfileInfosTab({
         <Box sx={{ display: "flex", gap: 1 }}>
           <CustomInput
             label="Secteur d'activité"
-            defaultValue="Secteur d'activité"
+            value={data?.sector ?? ""}
+            placeholder="Secteur d'activité"
             disabled={!isEditing}
             fullWidth
           />

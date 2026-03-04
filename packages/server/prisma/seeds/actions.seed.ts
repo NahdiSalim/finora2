@@ -310,5 +310,5 @@ export async function seedActions(prisma: PrismaClient) {
     }
   }
 
-  console.log('✅ Actions seeded successfully');
+  console.log(' Actions seeded successfully');
 }

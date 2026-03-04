@@ -137,15 +137,16 @@ export async function seedUsers(prisma: PrismaClient) {
       data: {
         clientCompanyId: clientUser.companyId,
         accountingFirmId: accountingFirm.id,
+        invitedBy: clientUser.id, // Client user who initiated the relationship
         status: 'active',
         relationshipStart: new Date(),
-      },
+      } as any,
     });
   }
 
-  console.log('✅ Users seeded successfully');
-  console.log('📧 Email: admin@finora.com | Password: password123');
-  console.log('📧 Email: comptable@finora.com | Password: password123');
-  console.log('📧 Email: collaborateur@finora.com | Password: password123');
-  console.log('📧 Email: client@finora.com | Password: password123');
+  console.log(' Users seeded successfully');
+  console.log(' Email: admin@finora.com | Password: password123');
+  console.log(' Email: comptable@finora.com | Password: password123');
+  console.log(' Email: collaborateur@finora.com | Password: password123');
+  console.log(' Email: client@finora.com | Password: password123');
 }

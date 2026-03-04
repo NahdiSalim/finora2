@@ -32,5 +32,5 @@ export function setupSwagger(app: INestApplication) {
     customSiteTitle: 'Finora API Documentation',
   });
 
-  console.log('📚 Swagger documentation available at /docs');
+  console.log(' Swagger documentation available at /docs');
 }

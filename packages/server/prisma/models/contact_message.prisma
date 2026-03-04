@@ -1,0 +1,37 @@
+model ContactMessage {
+  id              Int       @id @default(autoincrement())
+  accountantId    Int       // Comptable contacté
+  companyId       Int?      // Cabinet comptable
+  
+  // Informations du visiteur
+  visitorName     String
+  visitorEmail    String
+  visitorPhone    String?
+  visitorCompany  String?   // Nom de l'entreprise du visiteur
+  
+  // Message
+  subject         String
+  message         String    @db.Text
+  
+  // Statut
+  status          String    @default("new") // "new" | "read" | "replied" | "archived"
+  isReplied       Boolean   @default(false)
+  repliedAt       DateTime?
+  
+  // Métadonnées
+  ipAddress       String?
+  userAgent       String?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  accountant      User      @relation("ContactMessageAccountant", fields: [accountantId], references: [id], onDelete: Cascade)
+  company         Company?  @relation("ContactMessageCompany", fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([accountantId])
+  @@index([companyId])
+  @@index([status])
+  @@index([visitorEmail])
+  @@index([createdAt])
+  @@map("contact_messages")
+}

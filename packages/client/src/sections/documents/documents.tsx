@@ -1,9 +1,4 @@
-import { Box, Typography } from "@mui/material";
-
+import { PageHeader } from "src/layouts/components/page-header";
 export default function DocumentsView() {
-  return (
-    <Box>
-      <Typography variant="h1">hello docx</Typography>
-    </Box>
-  );
+  return <PageHeader title="Documents" caption="Details " />;
 }

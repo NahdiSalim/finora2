@@ -5,6 +5,8 @@ import { PublicNavbar } from "src/components/visitor/PublicNavbar";
 import { AccountantProfileContent } from "src/sections/profile/accountant-profile-content";
 
 export default function AccountantPublicView() {
+  const theme = useTheme();
+
   const { id } = useParams<{ id: string }>();
   const accountantId = id ? parseInt(id, 10) : NaN;
 
@@ -26,13 +28,24 @@ export default function AccountantPublicView() {
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        height: "100vh",
         display: "flex",
         flexDirection: "column",
-        bgcolor: "grey.50",
+        overflow: "hidden", // stop full page scroll
+        backgroundColor: theme.palette.grey[50],
       }}
     >
-      <Box sx={{ height: "10vh", flexShrink: 0 }}>
+      <Box
+        sx={{
+          height: "10vh",
+          flexShrink: 0,
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: theme.palette.common.white,
+        }}
+      >
         <PublicNavbar />
       </Box>
 

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import type { SxProps, Theme } from "@mui/material";
 import {
   Box,
@@ -8,28 +8,24 @@ import {
   Paper,
   Avatar,
   useTheme,
+  Skeleton,
+  TextField,
 } from "@mui/material";
 import StarIcon from "@mui/icons-material/Star";
+import SendIcon from "@mui/icons-material/Send";
 import CustomButton from "src/components/common/CustomButton";
+import {
+  useGetAccountantReviewsQuery,
+  useRespondToReviewMutation,
+} from "src/lib/services/reviewsApi";
+import type { ReviewItem } from "src/lib/services/reviewsApi";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
 
 // ============ Types ============
-interface Review {
-  id: number;
-  author: string;
-  rating: number;
-  comment: string;
-  date: string;
-  userInitial?: string;
-}
-
 interface RatingDistributionItem {
   stars: number;
   count: number;
-}
-
-interface ReviewCardProps {
-  review: Review;
-  showReadMore?: boolean;
 }
 
 interface RatingSummaryProps {
@@ -37,38 +33,6 @@ interface RatingSummaryProps {
   totalReviews: number;
   distribution: RatingDistributionItem[];
 }
-
-// ============ Constants ============
-const MOCK_REVIEWS: Review[] = [
-  {
-    id: 1,
-    author: "You",
-    rating: 5,
-    comment:
-      "KaiB was amazing with our cats!! This was our first time using a pet-sitting service, so we were naturally quite anxious. We took a chance on Kai and completely lucked out! We booked Kai to come twice a day for three days. Kai spent a considerable amount of time playing and engaging with our cats. She also sent us very funny and detailed reports at the end of each session...",
-    date: "Jan 20, 2024",
-    userInitial: "C",
-  },
-  {
-    id: 2,
-    author: "CRK",
-    rating: 5,
-    comment:
-      "KaiB was amazing with was our first time using a pet-sitting service, so we were naturally quite anxious. We took a chance on Kai and completely lucked out! We booked Kai to come twice a day",
-    date: "Jan 20, 2024",
-    userInitial: "C",
-  },
-];
-
-const RATING_DISTRIBUTION: RatingDistributionItem[] = [
-  { stars: 5, count: 488 },
-  { stars: 4, count: 74 },
-  { stars: 3, count: 14 },
-  { stars: 2, count: 0 },
-  { stars: 1, count: 0 },
-];
-
-const AVERAGE_RATING = 4.7;
 
 // ============ Styled Paper Component ============
 const StyledPaper = ({
@@ -106,7 +70,7 @@ const RatingDistributionBar = ({
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
       <Typography variant="body2" sx={{ minWidth: 60 }}>
-        {item.stars} stars
+        {item.stars} étoiles
       </Typography>
       <Box
         sx={{
@@ -143,16 +107,16 @@ const RatingSummary: React.FC<RatingSummaryProps> = ({
   return (
     <StyledPaper>
       <Typography variant="h5" fontWeight={600} gutterBottom>
-        Employee Reviews
+        Avis
       </Typography>
 
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
         <Typography variant="h3" fontWeight={600} color="text.primary">
-          {averageRating}
+          {totalReviews > 0 ? averageRating.toFixed(1) : "-"}
         </Typography>
         <Box>
           <Rating
-            value={averageRating}
+            value={totalReviews > 0 ? averageRating : 0}
             precision={0.1}
             readOnly
             size="large"
@@ -161,7 +125,7 @@ const RatingSummary: React.FC<RatingSummaryProps> = ({
             }
           />
           <Typography variant="body2" color="text.secondary">
-            ({totalReviews} Reviews)
+            ({totalReviews} avis)
           </Typography>
         </Box>
       </Box>
@@ -181,11 +145,56 @@ const RatingSummary: React.FC<RatingSummaryProps> = ({
 };
 
 // ============ Review Card Component ============
+function reviewToAuthorName(item: ReviewItem): string {
+  const { client } = item;
+  const parts = [client.firstName, client.lastName].filter(Boolean);
+  return parts.length > 0 ? parts.join(" ") : "Client";
+}
+
+function reviewToInitial(item: ReviewItem): string {
+  const name = reviewToAuthorName(item);
+  return name.charAt(0).toUpperCase() || "?";
+}
+
+interface ReviewCardProps {
+  item: ReviewItem;
+  isAccountantView?: boolean;
+  onRespondSuccess?: () => void;
+}
+
 const ReviewCard: React.FC<ReviewCardProps> = ({
-  review,
-  showReadMore = true,
+  item,
+  isAccountantView = false,
+  onRespondSuccess,
 }) => {
   const theme = useTheme();
+  const [showReplyInput, setShowReplyInput] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [respondToReview, { isLoading: isResponding }] =
+    useRespondToReviewMutation();
+
+  const author = reviewToAuthorName(item);
+  const initial = reviewToInitial(item);
+  const dateStr = format(new Date(item.createdAt), "d MMM yyyy", {
+    locale: fr,
+  });
+  const comment = item.comment ?? "";
+  const hasResponse = Boolean(item.response?.trim());
+
+  const handleSendResponse = async () => {
+    if (!replyText.trim()) return;
+    try {
+      await respondToReview({
+        reviewId: item.id,
+        response: replyText.trim(),
+      }).unwrap();
+      setReplyText("");
+      setShowReplyInput(false);
+      onRespondSuccess?.();
+    } catch {
+      // Error handled by API
+    }
+  };
 
   return (
     <Box
@@ -204,7 +213,7 @@ const ReviewCard: React.FC<ReviewCardProps> = ({
           color: theme.palette.common.white,
         }}
       >
-        {review.userInitial || review.author.charAt(0)}
+        {initial}
       </Avatar>
 
       <Box sx={{ flex: 1 }}>
@@ -213,6 +222,8 @@ const ReviewCard: React.FC<ReviewCardProps> = ({
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            flexWrap: "wrap",
+            gap: 1,
             mb: 1,
           }}
         >
@@ -225,47 +236,175 @@ const ReviewCard: React.FC<ReviewCardProps> = ({
             }}
           >
             <Typography variant="subtitle1" fontWeight={600}>
-              {review.author}
+              {author}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {review.date}
+              {dateStr}
             </Typography>
           </Box>
-          <Rating value={review.rating} readOnly size="small" sx={{ mb: 1 }} />
+          <Rating value={item.rating} readOnly size="small" />
         </Box>
 
         <Typography variant="body2" color="text.primary">
-          {review.comment}
-          {showReadMore && review.comment.length > 100 && (
-            <CustomButton component="span" variant="text" color="primary">
-              Read More
-            </CustomButton>
-          )}
+          {comment}
         </Typography>
+
+        {hasResponse && (
+          <Box
+            sx={{
+              mt: 2,
+              pl: 2,
+              borderLeft: 2,
+              borderColor: theme.palette.primary.light,
+            }}
+          >
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              fontWeight={600}
+            >
+              Réponse du cabinet
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 0.5 }}>
+              {item.response}
+            </Typography>
+          </Box>
+        )}
+
+        {isAccountantView && !hasResponse && (
+          <Box sx={{ mt: 2 }}>
+            {!showReplyInput ? (
+              <CustomButton
+                size="small"
+                variant="outlined"
+                onClick={() => setShowReplyInput(true)}
+              >
+                Répondre
+              </CustomButton>
+            ) : (
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                <TextField
+                  multiline
+                  minRows={2}
+                  placeholder="Votre réponse..."
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  size="small"
+                  fullWidth
+                />
+                <Box sx={{ display: "flex", gap: 1 }}>
+                  <CustomButton
+                    size="small"
+                    variant="contained"
+                    onClick={handleSendResponse}
+                    disabled={!replyText.trim() || isResponding}
+                    startIcon={<SendIcon />}
+                  >
+                    Envoyer
+                  </CustomButton>
+                  <CustomButton
+                    size="small"
+                    variant="text"
+                    onClick={() => {
+                      setShowReplyInput(false);
+                      setReplyText("");
+                    }}
+                  >
+                    Annuler
+                  </CustomButton>
+                </Box>
+              </Box>
+            )}
+          </Box>
+        )}
       </Box>
     </Box>
   );
 };
 
+function computeDistribution(reviews: ReviewItem[]): RatingDistributionItem[] {
+  const counts: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  reviews.forEach((r) => {
+    if (r.rating >= 1 && r.rating <= 5)
+      counts[r.rating] = (counts[r.rating] ?? 0) + 1;
+  });
+  return [5, 4, 3, 2, 1].map((stars) => ({ stars, count: counts[stars] ?? 0 }));
+}
+
 // ============ Main Component ============
-export default function ProfileReviewsTab() {
-  const totalReviews = RATING_DISTRIBUTION.reduce(
-    (sum, item) => sum + item.count,
-    0,
+interface ProfileReviewsTabProps {
+  /** Current profile user id (accountant). When undefined, tab may show empty or skip fetch. */
+  accountantId?: number;
+  /** When true, current user is the accountant (can respond to reviews) */
+  isAccountantView?: boolean;
+}
+
+export default function ProfileReviewsTab({
+  accountantId,
+  isAccountantView = true,
+}: ProfileReviewsTabProps) {
+  const { data, isLoading, isError } = useGetAccountantReviewsQuery(
+    { accountantId: accountantId!, page: 1, limit: 50 },
+    { skip: accountantId == null || accountantId === 0 },
   );
+
+  const theme = useTheme();
+
+  if (accountantId == null || accountantId === 0) {
+    return (
+      <StyledPaper>
+        <Typography variant="body2" color="text.secondary">
+          Chargement du profil…
+        </Typography>
+      </StyledPaper>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <Stack spacing={3}>
+        <Skeleton variant="rectangular" height={180} sx={{ borderRadius: 3 }} />
+        <Skeleton variant="rectangular" height={100} sx={{ borderRadius: 3 }} />
+        <Skeleton variant="rectangular" height={100} sx={{ borderRadius: 3 }} />
+      </Stack>
+    );
+  }
+
+  if (isError) {
+    return (
+      <StyledPaper>
+        <Typography color="error">Impossible de charger les avis.</Typography>
+      </StyledPaper>
+    );
+  }
+
+  const reviews = data?.data ?? [];
+  const totalReviews = data?.pagination?.total ?? 0;
+  const averageRating = data?.averageRating ?? 0;
+  const distribution = computeDistribution(reviews);
 
   return (
     <Stack spacing={3}>
       <RatingSummary
-        averageRating={AVERAGE_RATING}
+        averageRating={averageRating}
         totalReviews={totalReviews}
-        distribution={RATING_DISTRIBUTION}
+        distribution={distribution}
       />
 
       <Box sx={{ p: 2 }}>
-        {MOCK_REVIEWS.map((review) => (
-          <ReviewCard key={review.id} review={review} />
-        ))}
+        {reviews.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            Aucun avis pour le moment.
+          </Typography>
+        ) : (
+          reviews.map((item) => (
+            <ReviewCard
+              key={item.id}
+              item={item}
+              isAccountantView={isAccountantView}
+            />
+          ))
+        )}
       </Box>
     </Stack>
   );

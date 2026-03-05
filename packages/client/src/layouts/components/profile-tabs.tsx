@@ -12,12 +12,15 @@ type ProfileTabsProps = {
   profileInfosData?: ProfileInfosTabData;
   isEditing?: boolean;
   onProfileInfosChange?: (updates: Partial<ProfileInfosFormState>) => void;
+  /** Current profile user id (accountant) for the Avis tab */
+  accountantId?: number;
 };
 
 export default function ProfileTabs({
   profileInfosData,
   isEditing = false,
   onProfileInfosChange,
+  accountantId,
 }: ProfileTabsProps) {
   const [tab, setTab] = useState(0);
 
@@ -70,7 +73,12 @@ export default function ProfileTabs({
 
         {tab === 1 && <ProfileFeedTab />}
 
-        {tab === 2 && <ProfileReviewsTab />}
+        {tab === 2 && (
+          <ProfileReviewsTab
+            accountantId={accountantId}
+            isAccountantView={!!accountantId}
+          />
+        )}
       </Box>
     </Box>
   );

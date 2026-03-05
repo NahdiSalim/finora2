@@ -30,6 +30,9 @@ export const DocumentValidationPage = lazy(
 export const SignInPage = lazy(() => import("src/pages/sign-in"));
 export const RegisterPage = lazy(() => import("src/pages/register"));
 export const VisitorPage = lazy(() => import("src/pages/visitor"));
+export const EntryPointPage = lazy(() =>
+  import("src/components/entry-point").then((m) => ({ default: m.default })),
+);
 
 export const ForgotPasswordPage = lazy(
   () => import("src/pages/forgot-password"),
@@ -71,6 +74,14 @@ function DashboardWrapper() {
 export const routesSection: RouteObject[] = [
   {
     path: "/",
+    element: (
+      <Suspense fallback={renderFallback()}>
+        <EntryPointPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: "dashboard",
     Component: DashboardWrapper,
     children: [
       {

@@ -8,6 +8,7 @@ import { clientsApi } from "./services/clientApi";
 import { publicAccountantsApi } from "./services/publicAccountantsApi";
 import { accountantProfileApi } from "./services/accountantProfileApi";
 import { postsApi } from "./services/postsApi";
+import { reviewsApi } from "./services/reviewsApi";
 
 const apiMiddlewares = [
   authApi.middleware,
@@ -18,6 +19,7 @@ const apiMiddlewares = [
   publicAccountantsApi.middleware,
   accountantProfileApi.middleware,
   postsApi.middleware,
+  reviewsApi.middleware,
 ];
 
 const apiResetters = [
@@ -41,6 +43,7 @@ const appReducer = combineReducers({
   [publicAccountantsApi.reducerPath]: publicAccountantsApi.reducer,
   [accountantProfileApi.reducerPath]: accountantProfileApi.reducer,
   [postsApi.reducerPath]: postsApi.reducer,
+  [reviewsApi.reducerPath]: reviewsApi.reducer,
 });
 
 const baseStore = configureStore({

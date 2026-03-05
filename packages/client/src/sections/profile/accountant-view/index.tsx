@@ -334,6 +334,7 @@ export default function AccountantView() {
             profileInfosData={profileInfosData}
             isEditing={isEditing}
             onProfileInfosChange={handleProfileInfosChange}
+            accountantId={data?.id}
           />
         </Card>
         <Card

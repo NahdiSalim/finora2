@@ -13,9 +13,7 @@ import {
 
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 
-import {
-  NavigateNext as NavigateNextIcon,
-} from "@mui/icons-material";
+import { NavigateNext as NavigateNextIcon } from "@mui/icons-material";
 
 import { MoveLeft, Search } from "lucide-react";
 
@@ -86,7 +84,11 @@ export function PageHeader({
   return (
     <DashboardContent
       maxWidth={false}
-      sx={{ pt: 0, pl: { lg: 0 }, pr: { lg: 1.5 } }}
+      sx={{
+        pt: 0,
+        pl: { lg: 0 },
+        pr: { lg: 1.5 },
+      }}
     >
       <Box
         sx={{
@@ -96,6 +98,8 @@ export function PageHeader({
           p: 2,
           mb: 1.5,
           ...sx,
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         {/* Breadcrumbs */}
@@ -149,9 +153,9 @@ export function PageHeader({
         <Box
           sx={{
             display: "flex",
-            alignItems: "center",
+            flexDirection: { xs: "column", md: "row" },
+            alignItems: { xs: "flex-start", md: "center" },
             justifyContent: "space-between",
-            flexWrap: "wrap",
             gap: 2,
           }}
         >
@@ -163,6 +167,7 @@ export function PageHeader({
               gap: 1.5,
               flex: 1,
               minWidth: 0,
+              width: { xs: "100%", md: "auto" },
             }}
           >
             {/* Back Button */}
@@ -179,7 +184,7 @@ export function PageHeader({
             )}
 
             {/* Title + Caption Column */}
-            <Box sx={{ minWidth: 0 }}>
+            <Box sx={{ minWidth: 0, width: "100%" }}>
               <Box
                 sx={{
                   display: "flex",
@@ -244,6 +249,8 @@ export function PageHeader({
               alignItems: "center",
               gap: 2,
               flexWrap: "wrap",
+              width: { xs: "100%", md: "auto" },
+              justifyContent: { xs: "flex-start", md: "flex-end" },
             }}
           >
             {/* Search */}
@@ -261,7 +268,7 @@ export function PageHeader({
                   ),
                 }}
                 sx={{
-                  minWidth: 280,
+                  minWidth: { xs: "100%", md: 280 },
                   "& .MuiOutlinedInput-root": {
                     borderRadius: 2,
                   },
@@ -270,18 +277,31 @@ export function PageHeader({
             )}
 
             {/* Actions */}
-            {actions.map((action, index) => (
-              <CustomButton
-                key={index}
-                variant={action.variant || "contained"}
-                color={action.color || "primary"}
-                startIcon={action.icon}
-                onClick={action.onClick}
-                size="medium"
-              >
-                {action.label}
-              </CustomButton>
-            ))}
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+                flexWrap: "wrap",
+                width: { xs: "100%", md: "auto" },
+              }}
+            >
+              {actions.map((action, index) => (
+                <CustomButton
+                  key={index}
+                  variant={action.variant || "contained"}
+                  color={action.color || "primary"}
+                  startIcon={action.icon}
+                  onClick={action.onClick}
+                  size="medium"
+                  sx={{
+                    flex: { xs: 1, md: "none" },
+                  }}
+                >
+                  {action.label}
+                </CustomButton>
+              ))}
+            </Box>
           </Box>
         </Box>
       </Box>

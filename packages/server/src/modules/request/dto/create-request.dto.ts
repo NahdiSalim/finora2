@@ -58,4 +58,13 @@ export class CreateRequestDto {
   })
   @IsOptional()
   attachments?: any;
+
+  @ApiProperty({
+    example: [1, 2, 3],
+    description: 'IDs of existing documents from document management space',
+    required: false,
+    type: [Number],
+  })
+  @IsOptional()
+  existingDocumentIds?: number[];
 }

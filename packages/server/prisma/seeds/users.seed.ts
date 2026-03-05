@@ -31,7 +31,7 @@ export async function seedUsers(prisma: PrismaClient) {
       status: 'active',
       description:
         "Cabinet d'expertise comptable spécialisé en audit, conseil fiscal et gestion d'entreprise. Plus de 15 ans d'expérience au service des PME et grandes entreprises.",
-      experience: 15,
+      experience: '15',
       specialties: [
         'Comptabilité générale',
         'Audit financier',

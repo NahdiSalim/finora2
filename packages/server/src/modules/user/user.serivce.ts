@@ -719,7 +719,7 @@ export class UserService {
       companyEmail?: string;
       companyWebsite?: string;
       companyDescription?: string;
-      companyExperience?: number;
+      companyExperience?: string;
       companyActivityCode?: string;
       companySector?: string;
       companyEmployeeCount?: number;

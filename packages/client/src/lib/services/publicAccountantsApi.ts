@@ -12,6 +12,8 @@ export type PublicAccountant = {
   email: string;
   phone: string;
   photo: string | null;
+  /** Presigned photo URL (returned by list endpoint) */
+  photoUrl?: string | null;
   specialty: string | null;
   department: string | null;
   company: {
@@ -22,6 +24,8 @@ export type PublicAccountant = {
     postalCode: string | null;
     phone: string | null;
     email: string | null;
+    rating?: number;
+    numberOfReviews?: number;
   };
 };
 

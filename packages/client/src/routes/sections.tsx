@@ -20,6 +20,12 @@ export const UserPage = lazy(() => import("src/pages/users"));
 export const CollaboratorPage = lazy(() => import("src/pages/collaborators"));
 export const ClientPage = lazy(() => import("src/pages/clients"));
 export const ProfilePage = lazy(() => import("src/pages/profile"));
+export const NetworkPage = lazy(() => import("src/pages/network"));
+export const NetworkAccountantProfilePage = lazy(() =>
+  import("src/pages/network/accountant-profile").then((m) => ({
+    default: m.default,
+  })),
+);
 export const DocumentsPage = lazy(
   () => import("src/pages/documents/documents"),
 );
@@ -193,10 +199,20 @@ export const routesSection: RouteObject[] = [
         ),
       },
       {
+        path: "network/accountant/:id",
+        element: (
+          <PermissionGuard requiredPath="/network">
+            <Suspense fallback={renderFallback()}>
+              <NetworkAccountantProfilePage />
+            </Suspense>
+          </PermissionGuard>
+        ),
+      },
+      {
         path: "network",
         element: (
           <PermissionGuard requiredPath="/network">
-            <UserPage />
+            <NetworkPage />
           </PermissionGuard>
         ),
       },

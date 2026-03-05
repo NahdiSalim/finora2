@@ -28,6 +28,9 @@ export function ContactAccountantModal({
 }: ContactAccountantModalProps) {
   const [visitorName, setVisitorName] = useState("");
   const [visitorEmail, setVisitorEmail] = useState("");
+  const [visitorPhone, setVisitorPhone] = useState("");
+  const [visitorCompany, setVisitorCompany] = useState("");
+  const [subject, setSubject] = useState(DEFAULT_SUBJECT);
   const [message, setMessage] = useState("");
   const [sendContactMessage, { isLoading, isSuccess, isError }] =
     useSendContactMessageMutation();
@@ -41,12 +44,17 @@ export function ContactAccountantModal({
         body: {
           visitorName,
           visitorEmail,
-          subject: DEFAULT_SUBJECT,
+          visitorPhone: visitorPhone || undefined,
+          visitorCompany: visitorCompany || undefined,
+          subject,
           message,
         },
       }).unwrap();
       setVisitorName("");
       setVisitorEmail("");
+      setVisitorPhone("");
+      setVisitorCompany("");
+      setSubject(DEFAULT_SUBJECT);
       setMessage("");
       onClose();
     } catch {
@@ -58,6 +66,9 @@ export function ContactAccountantModal({
     if (!isLoading) {
       setVisitorName("");
       setVisitorEmail("");
+      setVisitorPhone("");
+      setVisitorCompany("");
+      setSubject(DEFAULT_SUBJECT);
       setMessage("");
       onClose();
     }
@@ -67,6 +78,7 @@ export function ContactAccountantModal({
     accountantId != null &&
     visitorName.trim().length >= 2 &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(visitorEmail.trim()) &&
+    subject.trim().length >= 5 &&
     message.trim().length >= 10;
 
   return (
@@ -103,24 +115,66 @@ export function ContactAccountantModal({
       <DialogContent sx={{ px: 3, pb: 3, pt: 2 }}>
         <form onSubmit={handleSubmit}>
           <Stack spacing={2}>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                gap: 2,
+              }}
+            >
+              <CustomInput
+                label="Nom et prénom"
+                required
+                fullWidth
+                value={visitorName}
+                onChange={(e) => setVisitorName(e.target.value)}
+                placeholder="Attijari"
+                inputProps={{ minLength: 2, maxLength: 100 }}
+              />
+              <CustomInput
+                label="Adresse email"
+                type="email"
+                required
+                fullWidth
+                value={visitorEmail}
+                onChange={(e) => setVisitorEmail(e.target.value)}
+                placeholder="votre@email.com"
+              />
+            </Box>
+
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                gap: 2,
+              }}
+            >
+              <CustomInput
+                label="Téléphone"
+                fullWidth
+                value={visitorPhone}
+                onChange={(e) => setVisitorPhone(e.target.value)}
+                placeholder="+216 ..."
+              />
+              <CustomInput
+                label="Nom de l’entreprise"
+                fullWidth
+                value={visitorCompany}
+                onChange={(e) => setVisitorCompany(e.target.value)}
+                placeholder="Nom de votre société"
+              />
+            </Box>
+
             <CustomInput
-              label="Nom et prénom"
+              label="Sujet"
               required
               fullWidth
-              value={visitorName}
-              onChange={(e) => setVisitorName(e.target.value)}
-              placeholder="Attijari"
-              inputProps={{ minLength: 2, maxLength: 100 }}
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder={DEFAULT_SUBJECT}
+              inputProps={{ minLength: 5, maxLength: 200 }}
             />
-            <CustomInput
-              label="Adresse email"
-              type="email"
-              required
-              fullWidth
-              value={visitorEmail}
-              onChange={(e) => setVisitorEmail(e.target.value)}
-              placeholder="votre@email.com"
-            />
+
             <CustomInput
               label="Contenu"
               required

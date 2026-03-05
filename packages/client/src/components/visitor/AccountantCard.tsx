@@ -49,6 +49,8 @@ interface AccountantCardProps {
   index?: number;
   /** When set, Message button opens this callback instead of navigating to profile */
   onMessageClick?: (accountantId: number) => void;
+  /** When set, card and Schedule/Message navigate here instead of /accountant/:id (e.g. /dashboard/network/accountant/:id) */
+  getProfilePath?: (accountantId: number) => string;
 }
 
 // ----------------------------------------------------------------------
@@ -94,12 +96,20 @@ export function AccountantCard({
   highlighted = false,
   index = 0,
   onMessageClick,
+  getProfilePath,
 }: AccountantCardProps) {
   const theme = useTheme();
   const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const { accountantId } = data;
+
+  const profilePath =
+    accountantId != null
+      ? getProfilePath
+        ? getProfilePath(accountantId)
+        : `/accountant/${accountantId}`
+      : "";
 
   const {
     name,
@@ -131,11 +141,7 @@ export function AccountantCard({
       style={{ height: "100%" }}
     >
       <Card
-        onClick={
-          accountantId != null
-            ? () => navigate(`/accountant/${accountantId}`)
-            : undefined
-        }
+        onClick={profilePath ? () => navigate(profilePath) : undefined}
         sx={{
           height: "100%",
           borderRadius: 3,
@@ -209,8 +215,11 @@ export function AccountantCard({
                   <Typography
                     variant="body1"
                     fontWeight={600}
+                    noWrap
                     sx={{
-                      maxWidth: 140,
+                      maxWidth: 200,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
                       color: isHighlighted
                         ? theme.palette.secondary.main
                         : "text.primary",
@@ -413,10 +422,7 @@ export function AccountantCard({
                   color="primary"
                   fullWidth
                   startIcon={<CalendarTodayIcon />}
-                  onClick={() =>
-                    accountantId != null &&
-                    navigate(`/accountant/${accountantId}`)
-                  }
+                  onClick={() => profilePath && navigate(profilePath)}
                   sx={{
                     borderRadius: 2,
                     textTransform: "none",
@@ -445,7 +451,7 @@ export function AccountantCard({
                   onClick={() => {
                     if (accountantId == null) return;
                     if (onMessageClick) onMessageClick(accountantId);
-                    else navigate(`/accountant/${accountantId}`);
+                    else if (profilePath) navigate(profilePath);
                   }}
                   sx={{
                     borderRadius: 2,

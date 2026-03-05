@@ -45,14 +45,10 @@ export function VisitorView() {
 
   const accountants: Accountant[] =
     data?.data.map((item) => {
-      const fullName =
-        item.name && item.name !== "null null"
-          ? item.name
-          : [item.firstName, item.lastName].filter(Boolean).join(" ") ||
-            item.company.name;
+      const companyName = item.company?.name || "Cabinet";
 
       const initials =
-        fullName
+        companyName
           .split(" ")
           .filter(Boolean)
           .map((part) => part[0])
@@ -61,15 +57,15 @@ export function VisitorView() {
           .toUpperCase() || "C";
 
       return {
-        name: fullName,
+        name: companyName,
         initials,
         avatarColor: theme.palette.primary.main,
         yearsExperience: 12,
         location: item.company.city || item.company.address || "",
-        rating: 4.8,
-        reviews: 127,
+        rating: item.company?.rating ?? 0,
+        reviews: item.company?.numberOfReviews ?? 0,
         tags: ["Fiscaliste", "Expert comptable"],
-        profilePhotoUrl: item.photo ?? undefined,
+        profilePhotoUrl: item.photoUrl ?? item.photo ?? undefined,
         title: item.specialty || "Expert comptable",
         description:
           item.company.address ||

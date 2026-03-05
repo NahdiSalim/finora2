@@ -43,12 +43,14 @@ export type AccountantProfile = {
 export const accountantProfileApi = createApi({
   reducerPath: "accountantProfileApi",
   baseQuery: baseQueryWithReauth,
+  tagTypes: ["AccountantProfile"],
   endpoints: (builder) => ({
     getMyAccountantProfile: builder.query<AccountantProfile, void>({
       query: () => ({
         url: "/accountant/profile/me",
         method: "GET",
       }),
+      providesTags: ["AccountantProfile"],
     }),
   }),
 });

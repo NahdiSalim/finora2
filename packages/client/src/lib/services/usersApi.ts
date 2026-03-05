@@ -79,7 +79,7 @@ type PageParam = {
 export const usersApi = createApi({
   reducerPath: "usersApi",
   baseQuery: baseQueryWithReauth,
-  tagTypes: ["Users", "Roles"],
+  tagTypes: ["Users", "Roles", "AccountantProfile"],
   endpoints: (builder) => ({
     getUsers: builder.query<UsersResponse, GetUsersQueryArg>({
       query: ({
@@ -368,6 +368,7 @@ export const usersApi = createApi({
         method: "PATCH",
         body: formData,
       }),
+      invalidatesTags: ["AccountantProfile"],
     }),
   }),
 });

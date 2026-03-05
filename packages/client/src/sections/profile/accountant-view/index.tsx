@@ -72,6 +72,9 @@ export default function AccountantView() {
     cabinetName: data?.company?.name ?? "",
     sector: data?.specialty ?? "",
     collaboratorsCount: "",
+    experience: data?.company?.experience ?? "",
+    description: data?.company?.description ?? "",
+    specialties: data?.company?.specialties ?? [],
   };
 
   const handleProfileInfosChange = useCallback(
@@ -96,6 +99,9 @@ export default function AccountantView() {
       cabinetName: data?.company?.name ?? "",
       sector: data?.specialty ?? "",
       collaboratorsCount: "",
+      experience: data?.company?.experience ?? "",
+      description: data?.company?.description ?? "",
+      specialties: data?.company?.specialties ?? [],
     };
     contactFormRef.current = {
       phone: data?.company?.phone || data?.phone || "",
@@ -118,6 +124,9 @@ export default function AccountantView() {
     data?.company?.address,
     data?.company?.postalCode,
     data?.company?.city,
+    data?.company?.experience,
+    data?.company?.description,
+    data?.company?.specialties,
     data?.phone,
     data?.email,
   ]);
@@ -129,6 +138,12 @@ export default function AccountantView() {
     if (form?.cabinetName !== undefined)
       fd.append("companyName", form.cabinetName);
     if (form?.sector !== undefined) fd.append("companySector", form.sector);
+    if (form?.experience !== undefined)
+      fd.append("companyExperience", form.experience);
+    if (form?.description !== undefined)
+      fd.append("companyDescription", form.description);
+    if (form?.specialties !== undefined && form.specialties.length > 0)
+      fd.append("companySpecialties", form.specialties.join(","));
     const empCount = form?.collaboratorsCount
       ? collaboratorsCountToNumber(form.collaboratorsCount)
       : undefined;

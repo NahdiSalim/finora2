@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom";
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, useTheme } from "@mui/material";
 
 import { PublicNavbar } from "src/components/visitor/PublicNavbar";
 import { AccountantProfileContent } from "src/sections/profile/accountant-profile-content";

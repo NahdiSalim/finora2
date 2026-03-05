@@ -6,6 +6,7 @@ import {
   UseGuards,
   Req,
   Query,
+  Param,
   HttpCode,
   HttpStatus,
   Patch,
@@ -181,7 +182,7 @@ export class PublicAccountantsController {
     status: 404,
     description: 'Accountant profile not found',
   })
-  async getAccountantProfile(@Query('id') id: string) {
+  async getAccountantProfile(@Param('id') id: string) {
     return await this.accountantService.getAccountantProfile(parseInt(id));
   }
 }

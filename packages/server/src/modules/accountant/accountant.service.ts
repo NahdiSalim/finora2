@@ -258,7 +258,7 @@ export class AccountantService {
       });
 
       // Create relationship between client company and accounting firm
-      const relationship = await this.prisma.clientAccountingFirmRelationship.create({
+      await this.prisma.clientAccountingFirmRelationship.create({
         data: {
           clientCompanyId: clientCompany.id,
           accountingFirmId: accountant.companyId,
@@ -266,20 +266,6 @@ export class AccountantService {
           status: UserStatus.ACTIVE,
           relationshipStart: new Date(),
         } as any,
-        include: {
-          clientCompany: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          accountingFirm: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
       });
 
       // Send welcome email with password
@@ -761,7 +747,9 @@ export class AccountantService {
               vatNumber: true,
               legalForm: true,
               patentNumber: true,
+              patentFile: true,
               rne: true,
+              rneFile: true,
               logo: true,
               specialties: true,
               rating: true,
@@ -813,8 +801,34 @@ export class AccountantService {
         }
       }
 
-      // Remove internal paths and return only presigned URLs
-      const { logo, ...companyData } = accountant.company || {};
+      // Generate presigned URL for patent file if exists
+      let patentFileUrl: string | null = null;
+      if (accountant.company?.patentFile) {
+        try {
+          patentFileUrl = await this.minioService.getPresignedUrl(
+            accountant.company.patentFile,
+            7 * 24 * 60 * 60
+          );
+        } catch (error) {
+          console.error('Error generating presigned URL for patent file:', error);
+          patentFileUrl = accountant.company.patentFile;
+        }
+      }
+
+      // Generate presigned URL for RNE file if exists
+      let rneFileUrl: string | null = null;
+      const rneFilePath =
+        accountant.company?.rneFile ||
+        (accountant.company?.rne?.includes('/') ? accountant.company.rne : null);
+
+      if (rneFilePath) {
+        try {
+          rneFileUrl = await this.minioService.getPresignedUrl(rneFilePath, 7 * 24 * 60 * 60);
+        } catch (error) {
+          console.error('Error generating presigned URL for RNE file:', error);
+          rneFileUrl = rneFilePath;
+        }
+      }
 
       return {
         id: accountant.id,
@@ -849,7 +863,9 @@ export class AccountantService {
               vatNumber: accountant.company.vatNumber,
               legalForm: accountant.company.legalForm,
               patentNumber: accountant.company.patentNumber,
-              rne: accountant.company.rne,
+              patentFileUrl: patentFileUrl,
+              rne: accountant.company.rne?.includes('/') ? null : accountant.company.rne, // Only return if it's a number, not a path
+              rneFileUrl: rneFileUrl,
               logoUrl: logoUrl,
               specialties: accountant.company.specialties || [],
               rating: accountant.company.rating || 0,

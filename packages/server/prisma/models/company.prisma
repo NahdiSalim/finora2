@@ -6,6 +6,7 @@ model Company {
   vatNumber         String?
   legalForm         String?
   rne               String?
+  rneFile           String?
   patentNumber      String?
   patentFile        String?
   creationDate      DateTime?

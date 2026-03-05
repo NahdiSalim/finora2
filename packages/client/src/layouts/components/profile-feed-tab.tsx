@@ -80,13 +80,25 @@ interface PostAttachment {
   type: "image" | "file";
 }
 
-export default function ProfileFeedTab() {
+interface ProfileFeedTabProps {
+  /** Mode lecture seule (profil visiteur) : pas d’ajout ni modification de posts */
+  readOnly?: boolean;
+  /** CompanyId pour charger les posts (mode visiteur, au lieu du profil “me”) */
+  companyId?: number;
+}
+
+export default function ProfileFeedTab({
+  readOnly = false,
+  companyId: companyIdProp,
+}: ProfileFeedTabProps = {}) {
   const theme = useTheme();
-  const { data: profile } = useGetMyAccountantProfileQuery();
-  const companyId = profile?.company?.id ?? undefined;
+  const { data: profile } = useGetMyAccountantProfileQuery(undefined, {
+    skip: companyIdProp != null,
+  });
+  const companyId = companyIdProp ?? profile?.company?.id ?? undefined;
   const { data: postsResponse, isLoading } = useGetPostsQuery(
     { companyId, limit: 20 },
-    { skip: profile === undefined },
+    { skip: companyId == null },
   );
   const [createPost, { isLoading: isCreating }] = useCreatePostMutation();
   const [updatePost, { isLoading: isUpdating }] = useUpdatePostMutation();
@@ -214,15 +226,17 @@ export default function ProfileFeedTab() {
 
   return (
     <Box sx={{ p: 2 }}>
-      <Box width="100%" sx={{ display: "flex", justifyContent: "flex-end" }}>
-        <CustomButton
-          variant="contained"
-          color="secondary"
-          onClick={handleOpenNewPost}
-        >
-          Ajouter nouveau post
-        </CustomButton>
-      </Box>
+      {!readOnly && (
+        <Box width="100%" sx={{ display: "flex", justifyContent: "flex-end" }}>
+          <CustomButton
+            variant="contained"
+            color="secondary"
+            onClick={handleOpenNewPost}
+          >
+            Ajouter nouveau post
+          </CustomButton>
+        </Box>
+      )}
 
       {isLoading ? (
         <Stack spacing={2}>
@@ -246,8 +260,9 @@ export default function ProfileFeedTab() {
               color="text.secondary"
               sx={{ py: 4, textAlign: "center" }}
             >
-              Aucun post pour le moment. Créez-en un avec &laquo; Ajouter
-              nouveau post &raquo;.
+              {readOnly
+                ? "Aucun post pour le moment."
+                : "Aucun post pour le moment. Créez-en un avec « Ajouter nouveau post »."}
             </Typography>
           ) : (
             posts.map((post) => (
@@ -300,13 +315,18 @@ export default function ProfileFeedTab() {
                     </Box>
                   </Box>
 
-                  <IconButton
-                    size="small"
-                    onClick={() => handleOpenEditPost(post)}
-                    aria-label="Modifier le post"
-                  >
-                    <PencilLine size={18} color={theme.palette.primary.main} />
-                  </IconButton>
+                  {!readOnly && (
+                    <IconButton
+                      size="small"
+                      onClick={() => handleOpenEditPost(post)}
+                      aria-label="Modifier le post"
+                    >
+                      <PencilLine
+                        size={18}
+                        color={theme.palette.primary.main}
+                      />
+                    </IconButton>
+                  )}
                 </Box>
 
                 <Typography variant="body2" sx={{ my: 1.5 }}>

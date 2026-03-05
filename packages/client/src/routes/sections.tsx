@@ -33,6 +33,11 @@ export const VisitorPage = lazy(() => import("src/pages/visitor"));
 export const EntryPointPage = lazy(() =>
   import("src/components/entry-point").then((m) => ({ default: m.default })),
 );
+export const AccountantPublicProfilePage = lazy(() =>
+  import("src/sections/profile/accountant-public-view").then((m) => ({
+    default: m.default,
+  })),
+);
 
 export const ForgotPasswordPage = lazy(
   () => import("src/pages/forgot-password"),
@@ -268,10 +273,18 @@ export const routesSection: RouteObject[] = [
     ],
   },
 
-  // Auth routes (sans protection)
+  // Public routes (sans protection)
   {
     path: "visitor",
     element: <VisitorPage />,
+  },
+  {
+    path: "accountant/:id",
+    element: (
+      <Suspense fallback={renderFallback()}>
+        <AccountantPublicProfilePage />
+      </Suspense>
+    ),
   },
   {
     path: "sign-in",

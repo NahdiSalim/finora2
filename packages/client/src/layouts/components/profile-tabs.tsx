@@ -14,15 +14,25 @@ type ProfileTabsProps = {
   onProfileInfosChange?: (updates: Partial<ProfileInfosFormState>) => void;
   /** Current profile user id (accountant) for the Avis tab */
   accountantId?: number;
+  /** Mode visiteur : seulement Fil d'actualité + Avis */
+  mode?: "own" | "visitor";
+  /** Pour le fil en mode visiteur : companyId du cabinet (lecture seule) */
+  companyId?: number;
 };
+
+const TABS_OWN = ["Mes informations", "Fil d'actualité", "Avis"] as const;
+const TABS_VISITOR = ["Fil d'actualité", "Avis"] as const;
 
 export default function ProfileTabs({
   profileInfosData,
   isEditing = false,
   onProfileInfosChange,
   accountantId,
+  mode = "own",
+  companyId,
 }: ProfileTabsProps) {
   const [tab, setTab] = useState(0);
+  const tabs = mode === "visitor" ? TABS_VISITOR : TABS_OWN;
 
   return (
     <Box>
@@ -42,7 +52,7 @@ export default function ProfileTabs({
             "& .MuiTabs-indicator": {},
           })}
         >
-          {["Mes informations", "Fil d’actualité", "Avis"].map((label) => (
+          {tabs.map((label) => (
             <Tab
               key={label}
               label={label}
@@ -60,7 +70,7 @@ export default function ProfileTabs({
       </Paper>
 
       <Box sx={{ mt: 3 }}>
-        {tab === 0 && (
+        {mode === "own" && tab === 0 && (
           <ProfileInfosTab
             isEditing={isEditing}
             onEdit={() => {}}
@@ -71,12 +81,17 @@ export default function ProfileTabs({
           />
         )}
 
-        {tab === 1 && <ProfileFeedTab />}
+        {(mode === "visitor" ? tab === 0 : tab === 1) && (
+          <ProfileFeedTab
+            readOnly={mode === "visitor"}
+            companyId={mode === "visitor" ? companyId : undefined}
+          />
+        )}
 
-        {tab === 2 && (
+        {(mode === "visitor" ? tab === 1 : tab === 2) && (
           <ProfileReviewsTab
             accountantId={accountantId}
-            isAccountantView={!!accountantId}
+            isAccountantView={mode === "own"}
           />
         )}
       </Box>

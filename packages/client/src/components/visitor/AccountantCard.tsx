@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -38,6 +39,8 @@ export interface Accountant {
   description: string;
   featured?: boolean;
   verified?: boolean;
+  /** Id du comptable (user id) pour lien vers le profil public */
+  accountantId?: number;
 }
 
 interface AccountantCardProps {
@@ -90,8 +93,10 @@ export function AccountantCard({
   index = 0,
 }: AccountantCardProps) {
   const theme = useTheme();
+  const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const { accountantId } = data;
 
   const {
     name,
@@ -123,11 +128,19 @@ export function AccountantCard({
       style={{ height: "100%" }}
     >
       <Card
+        onClick={
+          accountantId != null
+            ? () => navigate(`/accountant/${accountantId}`)
+            : undefined
+        }
         sx={{
           height: "100%",
           borderRadius: 3,
           position: "relative",
           overflow: "visible",
+          ...(accountantId != null && {
+            cursor: "pointer",
+          }),
           background: isHighlighted
             ? `linear-gradient(135deg, ${theme.palette.secondary.light} 0%, ${theme.palette.background.paper} 100%)`
             : theme.palette.background.paper,
@@ -390,12 +403,17 @@ export function AccountantCard({
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 style={{ flex: 1 }}
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
               >
                 <CustomButton
                   variant="contained"
                   color="primary"
                   fullWidth
                   startIcon={<CalendarTodayIcon />}
+                  onClick={() =>
+                    accountantId != null &&
+                    navigate(`/accountant/${accountantId}`)
+                  }
                   sx={{
                     borderRadius: 2,
                     textTransform: "none",
@@ -414,12 +432,17 @@ export function AccountantCard({
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 style={{ flex: 1 }}
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
               >
                 <CustomButton
                   variant="outlined"
                   color="info"
                   fullWidth
                   startIcon={<ChatBubbleOutlineIcon />}
+                  onClick={() =>
+                    accountantId != null &&
+                    navigate(`/accountant/${accountantId}`)
+                  }
                   sx={{
                     borderRadius: 2,
                     textTransform: "none",

@@ -70,6 +70,7 @@ export function VisitorView() {
           item.company.address ||
           "Mollit in laborum tempor Lorem incididunt irure.",
         featured: false,
+        accountantId: item.id,
       } as Accountant;
     }) ?? [];
 

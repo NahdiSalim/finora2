@@ -25,6 +25,39 @@ export type PublicAccountant = {
   };
 };
 
+/** Détail profil public (GET /public/accountants/:id) - même forme que getAccountantProfile */
+export type PublicAccountantProfile = {
+  id: number;
+  name: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+  phone: string | null;
+  photoUrl: string | null;
+  coverPhotoUrl: string | null;
+  specialty: string | null;
+  department: string | null;
+  diploma: string | null;
+  company: {
+    id: number;
+    name: string;
+    description?: string | null;
+    experience?: string | null;
+    city: string | null;
+    address: string | null;
+    postalCode: string | null;
+    phone: string | null;
+    email: string | null;
+    siret: string | null;
+    vatNumber: string | null;
+    legalForm: string | null;
+    logoUrl: string | null;
+    specialties: string[];
+    rating?: number;
+    numberOfReviews?: number;
+  };
+};
+
 export type PublicAccountantsResponse = {
   data: PublicAccountant[];
   pagination: {
@@ -63,7 +96,15 @@ export const publicAccountantsApi = createApi({
         };
       },
     }),
+
+    getPublicAccountantById: builder.query<PublicAccountantProfile, number>({
+      query: (id) => ({
+        url: `/public/accountants/${id}`,
+        method: "GET",
+      }),
+    }),
   }),
 });
 
-export const { useGetPublicAccountantsQuery } = publicAccountantsApi;
+export const { useGetPublicAccountantsQuery, useGetPublicAccountantByIdQuery } =
+  publicAccountantsApi;

@@ -4,10 +4,17 @@ import {
   Avatar,
   Typography,
   IconButton,
+  Stack,
   useTheme,
   alpha,
 } from "@mui/material";
-import { Camera, CameraIcon, Pencil } from "lucide-react";
+import {
+  Camera,
+  CameraIcon,
+  Pencil,
+  Calendar,
+  MessageCircle,
+} from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
 
 export interface ProfileHeaderProps {
@@ -15,9 +22,13 @@ export interface ProfileHeaderProps {
   avatarImage?: string;
   name: string;
   subtitle?: string;
+  /** Mode propriétaire du profil : boutons Modifier / Edit cover / Edit avatar */
   onEditCover?: () => void;
   onEditAvatar?: () => void;
   onEditProfile?: () => void;
+  /** Mode visiteur : boutons Schedule et Contacter */
+  onSchedule?: () => void;
+  onContact?: () => void;
 }
 
 const ProfileHeader: React.FC<ProfileHeaderProps> = ({
@@ -28,8 +39,11 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   onEditCover,
   onEditAvatar,
   onEditProfile,
+  onSchedule,
+  onContact,
 }) => {
   const theme = useTheme();
+  const isVisitorMode = onSchedule != null || onContact != null;
 
   return (
     <Box sx={{ width: "100%" }}>
@@ -146,7 +160,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             )}
           </Box>
 
-          {/* Edit Profile Button */}
+          {/* Edit Profile Button (mode propriétaire) */}
           {onEditProfile && (
             <CustomButton
               size="large"
@@ -162,6 +176,49 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             >
               Modifier
             </CustomButton>
+          )}
+
+          {/* Schedule + Contacter (mode visiteur) */}
+          {isVisitorMode && (
+            <Stack
+              direction="row"
+              spacing={1.5}
+              sx={{
+                mt: 8,
+                alignSelf: { xs: "flex-start", sm: "center" },
+              }}
+            >
+              {onSchedule && (
+                <CustomButton
+                  size="large"
+                  variant="outlined"
+                  startIcon={<Calendar size={18} />}
+                  onClick={onSchedule}
+                  sx={{
+                    borderRadius: 2,
+                    textTransform: "none",
+                    fontWeight: 600,
+                  }}
+                >
+                  Schedule
+                </CustomButton>
+              )}
+              {onContact && (
+                <CustomButton
+                  size="large"
+                  variant="contained"
+                  startIcon={<MessageCircle size={18} />}
+                  onClick={onContact}
+                  sx={{
+                    borderRadius: 2,
+                    textTransform: "none",
+                    fontWeight: 600,
+                  }}
+                >
+                  Contacter
+                </CustomButton>
+              )}
+            </Stack>
           )}
         </Box>
       </Box>

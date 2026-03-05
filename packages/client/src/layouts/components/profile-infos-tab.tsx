@@ -12,6 +12,8 @@ export type ProfileInfosTabData = {
   experience?: string;
   description?: string;
   specialties?: string[];
+  patentFileUrl?: string | null;
+  rneFileUrl?: string | null;
 };
 
 export type ProfileInfosFormState = ProfileInfosTabData & {
@@ -292,6 +294,9 @@ export default function ProfileInfosTab({
             <FileUpload
               label="Patente"
               value={patenteFile}
+              existingFileUrl={
+                patenteFile ? null : (data?.patentFileUrl ?? null)
+              }
               onChange={(file) => {
                 setPatenteFile(file);
                 notifyChange({ patenteFile: file ?? undefined });
@@ -306,6 +311,7 @@ export default function ProfileInfosTab({
             <FileUpload
               label="RNE"
               value={rneFile}
+              existingFileUrl={rneFile ? null : (data?.rneFileUrl ?? null)}
               onChange={(file) => {
                 setRneFile(file);
                 notifyChange({ rneFile: file ?? undefined });

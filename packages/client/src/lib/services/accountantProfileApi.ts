@@ -25,11 +25,15 @@ export type AccountantProfile = {
     name: string;
     description?: string | null;
     experience?: string | null;
+    employeeCount?: string | null;
+    sector?: string | null;
     city: string | null;
     address: string | null;
     postalCode: string | null;
     phone: string | null;
+    numWhatsapp?: string | null;
     email: string | null;
+    website?: string | null;
     siret: string | null;
     vatNumber: string | null;
     legalForm: string | null;
@@ -37,6 +41,8 @@ export type AccountantProfile = {
     specialties?: string[];
     rating?: number;
     numberOfReviews?: number;
+    patentFileUrl?: string | null;
+    rneFileUrl?: string | null;
   };
 };
 

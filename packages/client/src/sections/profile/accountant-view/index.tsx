@@ -28,6 +28,18 @@ function collaboratorsCountToNumber(s: string): number | undefined {
   return undefined;
 }
 
+/** Map API employeeCount (5|10|15 or string "5"|"10"|"15") to display value for select */
+function employeeCountToCollaboratorsCount(
+  value: number | string | null | undefined,
+): string {
+  if (value == null || value === "") return "";
+  const n = typeof value === "string" ? parseInt(value, 10) : value;
+  if (Number.isNaN(n)) return "";
+  if (n <= 5) return "1-5 collaborateurs";
+  if (n <= 10) return "6-10 collaborateurs";
+  return "+ 10 collaborateurs";
+}
+
 export default function AccountantView() {
   const [isEditing, setIsEditing] = useState(false);
   const [cropModalOpen, setCropModalOpen] = useState(false);
@@ -56,25 +68,30 @@ export default function AccountantView() {
   const subtitle = data?.specialty || "Expert comptable";
 
   const contactData = {
-    phone: data?.company.phone || data?.phone || "",
-    email: data?.company.email || data?.email || "",
+    phone: data?.company?.phone || data?.phone || "",
+    email: data?.company?.email || data?.email || "",
     address:
-      data?.company.address ||
-      [data?.company.postalCode, data?.company.city]
+      data?.company?.address ||
+      [data?.company?.postalCode, data?.company?.city]
         .filter(Boolean)
         .join(" ") ||
       "",
-    whatsapp: "",
-    website: "",
+    whatsapp: data?.company?.numWhatsapp ?? "",
+    website: data?.company?.website ?? "",
+    specialties: data?.company?.specialties ?? [],
   };
 
   const profileInfosData = {
     cabinetName: data?.company?.name ?? "",
-    sector: data?.specialty ?? "",
-    collaboratorsCount: "",
+    sector: data?.company?.sector ?? "",
+    collaboratorsCount: employeeCountToCollaboratorsCount(
+      data?.company?.employeeCount,
+    ),
     experience: data?.company?.experience ?? "",
     description: data?.company?.description ?? "",
     specialties: data?.company?.specialties ?? [],
+    patentFileUrl: data?.company?.patentFileUrl ?? null,
+    rneFileUrl: data?.company?.rneFileUrl ?? null,
   };
 
   const handleProfileInfosChange = useCallback(
@@ -97,8 +114,10 @@ export default function AccountantView() {
   const handleStartEditing = useCallback(() => {
     profileInfosFormRef.current = {
       cabinetName: data?.company?.name ?? "",
-      sector: data?.specialty ?? "",
-      collaboratorsCount: "",
+      sector: data?.company?.sector ?? "",
+      collaboratorsCount: employeeCountToCollaboratorsCount(
+        data?.company?.employeeCount,
+      ),
       experience: data?.company?.experience ?? "",
       description: data?.company?.description ?? "",
       specialties: data?.company?.specialties ?? [],
@@ -112,13 +131,14 @@ export default function AccountantView() {
           .filter(Boolean)
           .join(" ") ||
         "",
-      whatsapp: "",
-      website: "",
+      whatsapp: data?.company?.numWhatsapp ?? "",
+      website: data?.company?.website ?? "",
     };
     setIsEditing(true);
   }, [
     data?.company?.name,
-    data?.specialty,
+    data?.company?.sector,
+    data?.company?.employeeCount,
     data?.company?.phone,
     data?.company?.email,
     data?.company?.address,
@@ -127,6 +147,8 @@ export default function AccountantView() {
     data?.company?.experience,
     data?.company?.description,
     data?.company?.specialties,
+    data?.company?.numWhatsapp,
+    data?.company?.website,
     data?.phone,
     data?.email,
   ]);
@@ -157,6 +179,8 @@ export default function AccountantView() {
       fd.append("companyAddress", contact.address);
     if (contact?.website !== undefined)
       fd.append("companyWebsite", contact.website);
+    if (contact?.whatsapp !== undefined)
+      fd.append("companyNumWhatsapp", contact.whatsapp);
     try {
       await updateCompleteProfile(fd).unwrap();
       await refetchProfile();

@@ -51,8 +51,9 @@ export function AccountantProfileContent({
         .filter(Boolean)
         .join(" ") ||
       "",
-    whatsapp: "",
-    website: "",
+    whatsapp: data?.company?.numWhatsapp ?? "",
+    website: data?.company?.website ?? "",
+    specialties: data?.company?.specialties ?? [],
   };
 
   const handleSchedule = () => {

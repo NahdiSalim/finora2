@@ -52,6 +52,8 @@ export type PublicAccountantProfile = {
     postalCode: string | null;
     phone: string | null;
     email: string | null;
+    numWhatsapp?: string | null;
+    website?: string | null;
     siret: string | null;
     vatNumber: string | null;
     legalForm: string | null;

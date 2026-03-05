@@ -15,6 +15,7 @@ model Company {
   postalCode        String?
   country           String?   @default("France")
   phone             String?
+  numWhatsapp       String?
   email             String?
   website           String?
   activityCode      String?
@@ -22,7 +23,7 @@ model Company {
   employeeCount     Int?
   type              String?   // "client" | "accounting_firm"
   description       String?
-  experience        Int?      // Years of experience for accounting firms
+  experience        String?   // Experience description for accounting firms
   specialties       String[]
   rating            Float?
   numberOfReviews   Int?      @default(0)

@@ -418,11 +418,22 @@ export class PostService {
       }
 
       if (user.companyId) {
+        // Delete old images from MinIO
+        if (post.images && post.images.length > 0) {
+          const deletePromises = post.images.map((imagePath) =>
+            this.minioService.deleteFile(imagePath).catch((error) => {
+              console.error('Error deleting old image from MinIO:', error);
+            })
+          );
+          await Promise.all(deletePromises);
+        }
+
+        // Upload new images to MinIO
         const uploadPromises = images.map((file) =>
           this.minioService.uploadFile(user.companyId!, 'posts', file)
         );
         const newImages = await Promise.all(uploadPromises);
-        imageUrls = [...imageUrls, ...newImages];
+        imageUrls = newImages; // Replace old images with new ones
       }
     }
 

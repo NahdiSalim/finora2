@@ -76,14 +76,13 @@ export class UpdateAccountantProfileDto {
   diploma?: string;
 
   @ApiProperty({
-    example: 15,
-    description: 'Years of experience for the company',
+    example: '15',
+    description: 'Years of experience for the company (as string)',
     required: false,
   })
-  @Type(() => Number)
-  @IsNumber()
+  @IsString()
   @IsOptional()
-  experience?: number;
+  experience?: string;
 
   @ApiProperty({
     example: 'Cabinet spécialisé en audit et conseil fiscal',

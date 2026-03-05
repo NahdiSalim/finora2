@@ -159,11 +159,10 @@ export class UpdateCompleteProfileDto {
   @IsOptional()
   companyDescription?: string;
 
-  @ApiProperty({ example: 15, description: 'Years of experience', required: false })
-  @Type(() => Number)
-  @IsNumber()
+  @ApiProperty({ example: '15 ans', description: 'Experience description', required: false })
+  @IsString()
   @IsOptional()
-  companyExperience?: number;
+  companyExperience?: string;
 
   @ApiProperty({ example: '6201Z', description: 'Activity code (NAF/APE)', required: false })
   @IsString()

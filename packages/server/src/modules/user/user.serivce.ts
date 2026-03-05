@@ -719,7 +719,7 @@ export class UserService {
       companyEmail?: string;
       companyWebsite?: string;
       companyDescription?: string;
-      companyExperience?: number;
+      companyExperience?: string;
       companyActivityCode?: string;
       companySector?: string;
       companyEmployeeCount?: number;
@@ -875,6 +875,9 @@ export class UserService {
         let patentFilePath: string | undefined;
         if (files?.companyPatentFile && files.companyPatentFile[0]) {
           try {
+            if (user.company?.patentFile) {
+              await this.minioService.deleteFile(user.company.patentFile).catch(() => {});
+            }
             patentFilePath = await this.minioService.uploadFile(
               user.companyId,
               'companies/documents/patents',
@@ -888,6 +891,9 @@ export class UserService {
         let rneFilePath: string | undefined;
         if (files?.companyRneFile && files.companyRneFile[0]) {
           try {
+            if (user.company?.rne) {
+              await this.minioService.deleteFile(user.company.rne).catch(() => {});
+            }
             rneFilePath = await this.minioService.uploadFile(
               user.companyId,
               'companies/documents/rne',

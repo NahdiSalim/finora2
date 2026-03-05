@@ -195,4 +195,38 @@ export class MinioService implements OnModuleInit {
       return false;
     }
   }
+
+  /**
+   * Get file as buffer (alias for downloadFile)
+   */
+  async getFileBuffer(objectName: string): Promise<Buffer> {
+    return this.downloadFile(objectName);
+  }
+
+  /**
+   * Upload buffer with custom path
+   */
+  async uploadBuffer(
+    companyId: number,
+    fullPath: string,
+    buffer: Buffer,
+    mimeType: string
+  ): Promise<string> {
+    if (!this.minioClient) {
+      throw new Error(
+        'SERVICE_UNAVAILABLE: MinIO storage is not configured. Please contact your administrator.'
+      );
+    }
+
+    const objectName = `company_${companyId}/${fullPath}`;
+
+    const metadata = {
+      'Content-Type': mimeType,
+    };
+
+    await this.minioClient.putObject(this.bucketName, objectName, buffer, buffer.length, metadata);
+
+    this.logger.log(`Buffer uploaded: ${objectName}`);
+    return objectName;
+  }
 }

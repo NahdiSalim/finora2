@@ -748,14 +748,20 @@ export class AccountantService {
               name: true,
               description: true,
               experience: true,
+              employeeCount: true,
+              sector: true,
               city: true,
               address: true,
               postalCode: true,
               phone: true,
+              numWhatsapp: true,
               email: true,
+              website: true,
               siret: true,
               vatNumber: true,
               legalForm: true,
+              patentNumber: true,
+              rne: true,
               logo: true,
               specialties: true,
               rating: true,
@@ -822,13 +828,34 @@ export class AccountantService {
         specialty: accountant.position,
         department: accountant.department,
         diploma: accountant.diploma,
-        company: {
-          ...companyData,
-          logoUrl: logoUrl, // URL présignée MinIO
-          specialties: accountant.company?.specialties || [],
-          rating: accountant.company?.rating || 0,
-          numberOfReviews: accountant.company?.numberOfReviews || 0,
-        },
+        company: accountant.company
+          ? {
+              id: accountant.company.id,
+              name: accountant.company.name,
+              description: accountant.company.description,
+              experience: accountant.company.experience,
+              employeeCount: accountant.company.employeeCount
+                ? String(accountant.company.employeeCount)
+                : null,
+              sector: accountant.company.sector,
+              city: accountant.company.city,
+              address: accountant.company.address,
+              postalCode: accountant.company.postalCode,
+              phone: accountant.company.phone,
+              numWhatsapp: accountant.company.numWhatsapp,
+              email: accountant.company.email,
+              website: accountant.company.website,
+              siret: accountant.company.siret,
+              vatNumber: accountant.company.vatNumber,
+              legalForm: accountant.company.legalForm,
+              patentNumber: accountant.company.patentNumber,
+              rne: accountant.company.rne,
+              logoUrl: logoUrl,
+              specialties: accountant.company.specialties || [],
+              rating: accountant.company.rating || 0,
+              numberOfReviews: accountant.company.numberOfReviews || 0,
+            }
+          : null,
       };
     } catch (error) {
       console.error('Get accountant profile error:', error);
@@ -848,7 +875,7 @@ export class AccountantService {
       phone?: string;
       cin?: string;
       diploma?: string;
-      experience?: number;
+      experience?: string;
       description?: string;
       specialties?: string[];
     },
@@ -945,8 +972,15 @@ export class AccountantService {
       ) {
         const companyUpdateData: any = {};
 
-        if (data.experience !== undefined) {
-          companyUpdateData.experience = data.experience;
+        if (data.experience !== undefined && data.experience !== null) {
+          // Keep experience as string (can be text like "5 ans" or "Expert depuis 2010")
+          const experienceStr = String(data.experience).trim();
+          if (experienceStr !== '' && experienceStr !== 'null' && experienceStr !== 'undefined') {
+            companyUpdateData.experience = experienceStr;
+            console.log('Experience saved as string:', experienceStr);
+          } else {
+            console.log('Experience is empty or null string');
+          }
         }
 
         if (data.description !== undefined) {

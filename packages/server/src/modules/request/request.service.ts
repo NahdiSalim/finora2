@@ -20,8 +20,8 @@ export class RequestService {
   async createRequest(dto: CreateRequestDto, clientId: number, files?: Express.Multer.File[]) {
     try {
       console.log('CreateRequestDto received:', dto);
-      console.log('Subject value:', dto.subject);
-      console.log('Subject type:', typeof dto.subject);
+      console.log('Files received:', files?.length || 0);
+      console.log('Existing document IDs:', dto.existingDocumentIds?.length || 0);
 
       // Validate subject field
       if (!dto.subject || dto.subject.trim() === '') {
@@ -34,22 +34,11 @@ export class RequestService {
         select: { companyId: true },
       });
 
-      // Upload attachments to MinIO if provided
-      const attachmentUrls: string[] = [];
-      if (files && files.length > 0 && client?.companyId) {
-        for (const file of files) {
-          const fileName = `request-${Date.now()}-${file.originalname}`;
-          const filePath = `requests/${fileName}`;
-
-          try {
-            await this.minioService.uploadFile(client.companyId, filePath, file);
-            attachmentUrls.push(filePath);
-          } catch (error) {
-            console.error('MinIO upload error:', error);
-            // Continue without the file if upload fails
-          }
-        }
+      if (!client?.companyId) {
+        throw new ApiError('Client must belong to a company', 400, 'NO_COMPANY');
       }
+
+      // Create request first to get the ID
       const request = await this.prisma.request.create({
         data: {
           subject: dto.subject.trim(),
@@ -57,9 +46,163 @@ export class RequestService {
           type: dto.type,
           urgency: dto.urgency || 'normal',
           clientId,
-          companyId: client?.companyId,
-          attachments: attachmentUrls,
+          companyId: client.companyId,
+          attachments: [], // Will be updated after file uploads
         },
+      });
+
+      const attachmentUrls: string[] = [];
+      // Create dedicated folder for this request: demande-1, demande-2, etc.
+      const requestFolderName = `demande-${request.id}`;
+      console.log(`Creating request folder: ${requestFolderName}`);
+
+      // 1. Upload new files from PC to MinIO
+      if (files && files.length > 0) {
+        console.log(`Uploading ${files.length} new files to MinIO...`);
+        for (const file of files) {
+          // Add timestamp to avoid filename conflicts
+          const fileName = `${Date.now()}-${file.originalname}`;
+          const filePath = `requests/${requestFolderName}/${fileName}`;
+
+          try {
+            const uploadedPath = await this.minioService.uploadFile(
+              client.companyId,
+              `requests/${requestFolderName}`,
+              file
+            );
+            attachmentUrls.push(uploadedPath);
+            console.log(`✓ Uploaded: ${fileName}`);
+          } catch (error) {
+            console.error(`✗ Failed to upload ${fileName}:`, error);
+            // Continue without the file if upload fails
+          }
+        }
+      }
+
+      // 2. Copy existing documents from document management space
+      if (dto.existingDocumentIds && dto.existingDocumentIds.length > 0) {
+        console.log(`Copying ${dto.existingDocumentIds.length} existing documents...`);
+
+        // Convert to array of numbers if it's a string or array of strings
+        let documentIds: number[] = [];
+        if (typeof dto.existingDocumentIds === 'string') {
+          // Single ID as string: "3" -> [3]
+          documentIds = [parseInt(dto.existingDocumentIds, 10)];
+        } else if (Array.isArray(dto.existingDocumentIds)) {
+          // Array of strings or numbers: ["3", "4"] -> [3, 4]
+          documentIds = dto.existingDocumentIds
+            .map((id) => (typeof id === 'string' ? parseInt(id, 10) : id))
+            .filter((id) => !isNaN(id));
+        }
+
+        console.log('Document IDs to copy:', documentIds);
+
+        const existingDocs = await this.prisma.document.findMany({
+          where: {
+            id: { in: documentIds },
+            companyId: client.companyId,
+          },
+        });
+
+        for (const doc of existingDocs) {
+          try {
+            // Get the file from MinIO using the url field
+            const fileBuffer = await this.minioService.getFileBuffer(doc.url);
+
+            // Create new path in request folder (keep original filename)
+            const fileName = doc.name;
+            const newPath = `requests/${requestFolderName}/${fileName}`;
+
+            // Upload copy to request folder
+            const mimeType = doc.mimeType || 'application/octet-stream';
+            const uploadedPath = await this.minioService.uploadBuffer(
+              client.companyId,
+              newPath,
+              fileBuffer,
+              mimeType
+            );
+            attachmentUrls.push(uploadedPath);
+            console.log(`✓ Copied: ${fileName}`);
+          } catch (error) {
+            console.error(`✗ Failed to copy document ${doc.name}:`, error);
+            // Continue without this document if copy fails
+          }
+        }
+      }
+
+      console.log(`Total attachments: ${attachmentUrls.length}`);
+
+      // Create a folder in "My Documents" for this request with all attachments inside
+      if (attachmentUrls.length > 0) {
+        console.log('Creating folder and document entries...');
+
+        // 1. Create the folder for this request
+        const requestFolder = await this.prisma.document.create({
+          data: {
+            name: `Demande ${request.id} - ${dto.subject}`,
+            url: `requests/${requestFolderName}`, // Folder path in MinIO
+            type: 'folder',
+            status: 'active',
+            ownerId: clientId,
+            companyId: client.companyId,
+            requestId: request.id,
+            isFolder: true,
+            size: 0,
+            permissions: [],
+            children: [], // Will be updated with child document IDs
+          },
+        });
+        console.log(`✓ Folder created: ${requestFolder.name}`);
+
+        const childIds: string[] = [];
+
+        // 2. Create document entries for each attachment as children of the folder
+        for (const attachmentPath of attachmentUrls) {
+          try {
+            // Extract filename from path
+            const fileName = attachmentPath.split('/').pop() || 'attachment';
+
+            // Get file metadata from MinIO
+            const metadata = await this.minioService.getFileMetadata(attachmentPath);
+
+            const doc = await this.prisma.document.create({
+              data: {
+                name: fileName,
+                url: attachmentPath,
+                type: 'request_attachment',
+                status: 'active',
+                ownerId: clientId,
+                companyId: client.companyId,
+                requestId: request.id,
+                parentId: requestFolder.id, // Link to parent folder
+                size: metadata.size || 0,
+                mimeType: metadata.metaData?.['content-type'] || 'application/octet-stream',
+                isFolder: false,
+                permissions: [],
+                children: [],
+              },
+            });
+
+            childIds.push(doc.id.toString());
+            console.log(`✓ Document created: ${fileName}`);
+          } catch (error) {
+            console.error('Error creating document entry:', error);
+            // Continue even if document creation fails
+          }
+        }
+
+        // 3. Update folder with children IDs
+        await this.prisma.document.update({
+          where: { id: requestFolder.id },
+          data: { children: childIds },
+        });
+        console.log(`✓ Folder updated with ${childIds.length} children`);
+      }
+
+      // Update request with attachments
+      const updatedRequest = await this.prisma.request.update({
+        where: { id: request.id },
+        data: { attachments: attachmentUrls },
         include: {
           client: {
             select: {
@@ -79,10 +222,28 @@ export class RequestService {
         },
       });
 
+      // Generate presigned URLs for attachments
+      const attachmentPresignedUrls: string[] = [];
+      for (const attachmentPath of attachmentUrls) {
+        try {
+          const url = await this.minioService.getPresignedUrl(
+            attachmentPath,
+            7 * 24 * 60 * 60 // 7 days
+          );
+          attachmentPresignedUrls.push(url);
+        } catch (error) {
+          console.error('Error generating presigned URL:', error);
+          attachmentPresignedUrls.push(attachmentPath); // Fallback
+        }
+      }
+
       return {
         success: true,
         message: 'Request created successfully',
-        data: request,
+        data: {
+          ...updatedRequest,
+          attachmentUrls: attachmentPresignedUrls, // URLs présignées MinIO
+        },
       };
     } catch (error) {
       console.error('Create request error:', error);
@@ -130,9 +291,37 @@ export class RequestService {
       }),
     ]);
 
+    // Generate presigned URLs for attachments
+    const requestsWithUrls = await Promise.all(
+      requests.map(async (request) => {
+        const attachmentUrls: string[] = [];
+
+        if (request.attachments && Array.isArray(request.attachments)) {
+          for (const attachmentPath of request.attachments) {
+            try {
+              const url = await this.minioService.getPresignedUrl(
+                attachmentPath,
+                7 * 24 * 60 * 60 // 7 days
+              );
+              attachmentUrls.push(url);
+            } catch (error) {
+              console.error('Error generating presigned URL for attachment:', error);
+              attachmentUrls.push(attachmentPath); // Fallback to path
+            }
+          }
+        }
+
+        return {
+          ...request,
+          attachmentUrls, // URLs présignées pour télécharger
+          attachments: request.attachments, // Chemins originaux (optionnel)
+        };
+      })
+    );
+
     return {
       success: true,
-      data: requests,
+      data: requestsWithUrls,
       pagination: {
         page,
         limit,
@@ -237,9 +426,37 @@ export class RequestService {
       counts[item.status] = item._count;
     });
 
+    // Generate presigned URLs for attachments
+    const requestsWithUrls = await Promise.all(
+      requests.map(async (request) => {
+        const attachmentUrls: string[] = [];
+
+        if (request.attachments && Array.isArray(request.attachments)) {
+          for (const attachmentPath of request.attachments) {
+            try {
+              const url = await this.minioService.getPresignedUrl(
+                attachmentPath,
+                7 * 24 * 60 * 60 // 7 days
+              );
+              attachmentUrls.push(url);
+            } catch (error) {
+              console.error('Error generating presigned URL for attachment:', error);
+              attachmentUrls.push(attachmentPath); // Fallback to path
+            }
+          }
+        }
+
+        return {
+          ...request,
+          attachmentUrls, // URLs présignées pour télécharger
+          attachments: request.attachments, // Chemins originaux (optionnel)
+        };
+      })
+    );
+
     return {
       success: true,
-      data: requests,
+      data: requestsWithUrls,
       pagination: {
         page,
         limit,
@@ -317,9 +534,29 @@ export class RequestService {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
     }
 
+    // Generate presigned URLs for attachments
+    const attachmentUrls: string[] = [];
+    if (request.attachments && Array.isArray(request.attachments)) {
+      for (const attachmentPath of request.attachments) {
+        try {
+          const url = await this.minioService.getPresignedUrl(
+            attachmentPath,
+            7 * 24 * 60 * 60 // 7 days
+          );
+          attachmentUrls.push(url);
+        } catch (error) {
+          console.error('Error generating presigned URL for attachment:', error);
+          attachmentUrls.push(attachmentPath); // Fallback to path
+        }
+      }
+    }
+
     return {
       success: true,
-      data: request,
+      data: {
+        ...request,
+        attachmentUrls, // URLs présignées pour télécharger
+      },
     };
   }
 

@@ -79,11 +79,10 @@ export class UpdateCompanyDto {
   @IsOptional()
   employeeCount?: number;
 
-  @ApiProperty({ example: 15, description: 'Years of experience', required: false })
-  @Type(() => Number)
-  @IsNumber()
+  @ApiProperty({ example: '15 ans', description: 'Experience description', required: false })
+  @IsString()
   @IsOptional()
-  experience?: number;
+  experience?: string;
 
   @ApiProperty({
     example: "Description de l'entreprise",

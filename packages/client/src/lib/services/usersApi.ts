@@ -361,6 +361,14 @@ export const usersApi = createApi({
         };
       },
     }),
+
+    updateCompleteProfile: builder.mutation<unknown, FormData>({
+      query: (formData) => ({
+        url: "/users/profile/complete",
+        method: "PATCH",
+        body: formData,
+      }),
+    }),
   }),
 });
 
@@ -375,4 +383,5 @@ export const {
   useGetCountriesForSelectInfiniteQuery,
   useGetRegionsForSelectInfiniteQuery,
   useGetUsersForSelectInfiniteQuery,
+  useUpdateCompleteProfileMutation,
 } = usersApi;

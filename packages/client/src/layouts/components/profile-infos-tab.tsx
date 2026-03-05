@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Box, MenuItem, Stack } from "@mui/material";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import CustomInput from "src/components/common/CustomInput";
@@ -9,6 +9,11 @@ export type ProfileInfosTabData = {
   cabinetName?: string;
   sector?: string;
   collaboratorsCount?: string;
+};
+
+export type ProfileInfosFormState = ProfileInfosTabData & {
+  patenteFile?: File | null;
+  rneFile?: File | null;
 };
 
 const SECTOR_OPTIONS = [
@@ -32,6 +37,8 @@ interface Props {
   onCancel: () => void;
   onSave: () => void;
   data?: ProfileInfosTabData;
+  /** Called when any field changes so parent can build FormData on Save */
+  onFormChange?: (updates: Partial<ProfileInfosFormState>) => void;
 }
 
 export default function ProfileInfosTab({
@@ -40,9 +47,44 @@ export default function ProfileInfosTab({
   onCancel,
   onSave,
   data,
+  onFormChange,
 }: Props) {
+  const [cabinetName, setCabinetName] = useState(data?.cabinetName ?? "");
+  const [sector, setSector] = useState(data?.sector ?? "");
+  const [collaboratorsCount, setCollaboratorsCount] = useState(
+    data?.collaboratorsCount ?? "",
+  );
   const [patenteFile, setPatenteFile] = useState<File | null>(null);
   const [rneFile, setRneFile] = useState<File | null>(null);
+
+  const notifyChange = (updates: Partial<ProfileInfosFormState>) => {
+    onFormChange?.(updates);
+  };
+
+  // Sync local state from data when entering edit mode or when data changes
+  useEffect(() => {
+    if (data) {
+      const name = data.cabinetName ?? "";
+      const sec = data.sector ?? "";
+      const count = data.collaboratorsCount ?? "";
+      setCabinetName(name);
+      setSector(sec);
+      setCollaboratorsCount(count);
+      if (isEditing) {
+        onFormChange?.({
+          cabinetName: name,
+          sector: sec,
+          collaboratorsCount: count,
+        });
+      }
+    }
+  }, [
+    data?.cabinetName,
+    data?.sector,
+    data?.collaboratorsCount,
+    isEditing,
+    onFormChange,
+  ]);
 
   return (
     <Box
@@ -57,7 +99,12 @@ export default function ProfileInfosTab({
       <Stack spacing={2}>
         <CustomInput
           label="Nom du cabinet"
-          value={data?.cabinetName ?? ""}
+          value={cabinetName}
+          onChange={(e) => {
+            const v = e.target.value;
+            setCabinetName(v);
+            notifyChange({ cabinetName: v });
+          }}
           placeholder="Nom du cabinet"
           disabled={!isEditing}
           fullWidth
@@ -67,8 +114,12 @@ export default function ProfileInfosTab({
           <Box sx={{ flex: 1, minWidth: 200 }}>
             <CustomSelect
               label="Secteur d'activité"
-              value={data?.sector ?? ""}
-              onChange={() => {}}
+              value={sector}
+              onChange={(e) => {
+                const v = e.target.value as string;
+                setSector(v);
+                notifyChange({ sector: v });
+              }}
               disabled={!isEditing}
               IconComponent={KeyboardArrowDownIcon}
               displayEmpty
@@ -85,8 +136,12 @@ export default function ProfileInfosTab({
           <Box sx={{ flex: 1, minWidth: 200 }}>
             <CustomSelect
               label="Nombre de collaborateurs"
-              value={data?.collaboratorsCount ?? ""}
-              onChange={() => {}}
+              value={collaboratorsCount}
+              onChange={(e) => {
+                const v = e.target.value as string;
+                setCollaboratorsCount(v);
+                notifyChange({ collaboratorsCount: v });
+              }}
               disabled={!isEditing}
               IconComponent={KeyboardArrowDownIcon}
               displayEmpty
@@ -106,7 +161,10 @@ export default function ProfileInfosTab({
             <FileUpload
               label="Patente"
               value={patenteFile}
-              onChange={setPatenteFile}
+              onChange={(file) => {
+                setPatenteFile(file);
+                notifyChange({ patenteFile: file ?? undefined });
+              }}
               disabled={!isEditing}
               acceptedFiles={[".pdf", ".jpg", ".jpeg", ".png"]}
               maxSize={10}
@@ -117,7 +175,10 @@ export default function ProfileInfosTab({
             <FileUpload
               label="RNE"
               value={rneFile}
-              onChange={setRneFile}
+              onChange={(file) => {
+                setRneFile(file);
+                notifyChange({ rneFile: file ?? undefined });
+              }}
               disabled={!isEditing}
               acceptedFiles={[".pdf", ".jpg", ".jpeg", ".png"]}
               maxSize={10}

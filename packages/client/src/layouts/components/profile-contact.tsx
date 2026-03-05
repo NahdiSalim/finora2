@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -20,10 +20,14 @@ export interface ContactInfosData {
   website?: string;
 }
 
+export type ContactFormState = ContactInfosData;
+
 interface ContactInfosProps {
   data?: ContactInfosData;
   isLoading?: boolean;
   isEditing?: boolean;
+  /** Called when any contact field changes so parent can include in save */
+  onContactChange?: (updates: Partial<ContactFormState>) => void;
 }
 
 const chipVariants = [
@@ -95,8 +99,31 @@ export default function ContactInfos({
   data,
   isLoading,
   isEditing = false,
+  onContactChange,
 }: ContactInfosProps) {
   const theme = useTheme();
+  const [email, setEmail] = useState(data?.email ?? "");
+  const [phone, setPhone] = useState(data?.phone ?? "");
+  const [whatsapp, setWhatsapp] = useState(data?.whatsapp ?? "");
+  const [address, setAddress] = useState(data?.address ?? "");
+  const [website, setWebsite] = useState(data?.website ?? "");
+
+  useEffect(() => {
+    if (data) {
+      setEmail(data.email ?? "");
+      setPhone(data.phone ?? "");
+      setWhatsapp(data.whatsapp ?? "");
+      setAddress(data.address ?? "");
+      setWebsite(data.website ?? "");
+    }
+  }, [
+    data?.email,
+    data?.phone,
+    data?.whatsapp,
+    data?.address,
+    data?.website,
+    isEditing,
+  ]);
 
   const cardSx = {
     p: 3,
@@ -143,32 +170,57 @@ export default function ContactInfos({
         <Stack spacing={2}>
           <CustomInput
             label="Adresse email professionnelle"
-            value={data?.email ?? ""}
+            value={email}
+            onChange={(e) => {
+              const v = e.target.value;
+              setEmail(v);
+              onContactChange?.({ email: v });
+            }}
             placeholder="contact@exemple.com"
             fullWidth
           />
           <CustomInput
             label="Numéro de téléphone"
-            value={data?.phone ?? ""}
+            value={phone}
+            onChange={(e) => {
+              const v = e.target.value;
+              setPhone(v);
+              onContactChange?.({ phone: v });
+            }}
             placeholder="+216 00 000 000"
             fullWidth
             required
           />
           <CustomInput
             label="Numéro WhatsApp"
-            value={data?.whatsapp ?? ""}
+            value={whatsapp}
+            onChange={(e) => {
+              const v = e.target.value;
+              setWhatsapp(v);
+              onContactChange?.({ whatsapp: v });
+            }}
             placeholder="Entrer votre numéro whatsapp..."
             fullWidth
           />
           <CustomInput
             label="Localisation"
-            value={data?.address ?? ""}
+            value={address}
+            onChange={(e) => {
+              const v = e.target.value;
+              setAddress(v);
+              onContactChange?.({ address: v });
+            }}
             placeholder="rue, immeuble, région"
             fullWidth
           />
           <CustomInput
             label="Site web"
-            value={data?.website ?? ""}
+            value={website}
+            onChange={(e) => {
+              const v = e.target.value;
+              setWebsite(v);
+              onContactChange?.({ website: v });
+            }}
             placeholder="https://..."
             fullWidth
           />

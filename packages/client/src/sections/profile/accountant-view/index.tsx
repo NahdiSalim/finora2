@@ -1,18 +1,50 @@
-import { useState } from "react";
+import { useRef, useState, useCallback } from "react";
 import { Box, Card } from "@mui/material";
 import { ShieldCheck } from "lucide-react";
 
 import { PageHeader } from "src/layouts/components/page-header";
-import ContactInfos from "src/layouts/components/profile-contact";
+import ContactInfos, {
+  type ContactFormState,
+} from "src/layouts/components/profile-contact";
 import ProfileHeader from "src/layouts/components/profile-header";
 import ProfileStrength from "src/layouts/components/profile-strength";
 import ProfileTabs from "src/layouts/components/profile-tabs";
 import CustomButton from "src/components/common/CustomButton";
+import ImageCropModal, {
+  type CropType,
+} from "src/components/profile/ImageCropModal";
+import type { ProfileInfosFormState } from "src/layouts/components/profile-infos-tab";
 import { useGetMyAccountantProfileQuery } from "src/lib/services/accountantProfileApi";
+import { useUpdateCompleteProfileMutation } from "src/lib/services/usersApi";
+
+const ACCEPT_IMAGE = "image/jpeg,image/png,image/webp";
+
+/** Map "1-5 collaborateurs" -> 5, "6-10" -> 10, "+ 10" -> 15 for API */
+function collaboratorsCountToNumber(s: string): number | undefined {
+  if (!s?.trim()) return undefined;
+  if (s.includes("1-5")) return 5;
+  if (s.includes("6-10")) return 10;
+  if (s.includes("+ 10") || s.includes("+10")) return 15;
+  return undefined;
+}
 
 export default function AccountantView() {
   const [isEditing, setIsEditing] = useState(false);
-  const { data, isLoading } = useGetMyAccountantProfileQuery();
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [cropType, setCropType] = useState<CropType>("avatar");
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const profileInfosFormRef = useRef<Partial<ProfileInfosFormState>>({});
+  const contactFormRef = useRef<Partial<ContactFormState>>({});
+
+  const {
+    data,
+    isLoading,
+    refetch: refetchProfile,
+  } = useGetMyAccountantProfileQuery();
+  const [updateCompleteProfile, { isLoading: isUpdatingProfile }] =
+    useUpdateCompleteProfileMutation();
 
   const name =
     data?.company.name ||
@@ -39,7 +71,85 @@ export default function AccountantView() {
   const profileInfosData = {
     cabinetName: data?.company?.name ?? "",
     sector: data?.specialty ?? "",
+    collaboratorsCount: "",
   };
+
+  const handleProfileInfosChange = useCallback(
+    (updates: Partial<ProfileInfosFormState>) => {
+      profileInfosFormRef.current = {
+        ...profileInfosFormRef.current,
+        ...updates,
+      };
+    },
+    [],
+  );
+
+  const handleContactChange = useCallback(
+    (updates: Partial<ContactFormState>) => {
+      contactFormRef.current = { ...contactFormRef.current, ...updates };
+    },
+    [],
+  );
+
+  const handleStartEditing = useCallback(() => {
+    profileInfosFormRef.current = {
+      cabinetName: data?.company?.name ?? "",
+      sector: data?.specialty ?? "",
+      collaboratorsCount: "",
+    };
+    contactFormRef.current = {
+      phone: data?.company?.phone || data?.phone || "",
+      email: data?.company?.email || data?.email || "",
+      address:
+        data?.company?.address ||
+        [data?.company?.postalCode, data?.company?.city]
+          .filter(Boolean)
+          .join(" ") ||
+        "",
+      whatsapp: "",
+      website: "",
+    };
+    setIsEditing(true);
+  }, [
+    data?.company?.name,
+    data?.specialty,
+    data?.company?.phone,
+    data?.company?.email,
+    data?.company?.address,
+    data?.company?.postalCode,
+    data?.company?.city,
+    data?.phone,
+    data?.email,
+  ]);
+
+  const handleSaveProfile = useCallback(async () => {
+    const form = profileInfosFormRef.current;
+    const contact = contactFormRef.current;
+    const fd = new FormData();
+    if (form?.cabinetName !== undefined)
+      fd.append("companyName", form.cabinetName);
+    if (form?.sector !== undefined) fd.append("companySector", form.sector);
+    const empCount = form?.collaboratorsCount
+      ? collaboratorsCountToNumber(form.collaboratorsCount)
+      : undefined;
+    if (empCount !== undefined)
+      fd.append("companyEmployeeCount", String(empCount));
+    if (form?.patenteFile) fd.append("companyPatentFile", form.patenteFile);
+    if (form?.rneFile) fd.append("companyRneFile", form.rneFile);
+    if (contact?.email !== undefined) fd.append("companyEmail", contact.email);
+    if (contact?.phone !== undefined) fd.append("companyPhone", contact.phone);
+    if (contact?.address !== undefined)
+      fd.append("companyAddress", contact.address);
+    if (contact?.website !== undefined)
+      fd.append("companyWebsite", contact.website);
+    try {
+      await updateCompleteProfile(fd).unwrap();
+      await refetchProfile();
+      setIsEditing(false);
+    } catch {
+      // Error handled by RTK / snackbar if needed
+    }
+  }, [updateCompleteProfile, refetchProfile]);
 
   // ------------------------------------------------------------------
   // Compute profile strength (percentage + label)
@@ -102,6 +212,44 @@ export default function AccountantView() {
   const strengthCaption =
     "Veuillez compléter votre profil afin de pouvoir télécharger un fichier ou contacter un comptable.";
 
+  const openCropFor = (type: CropType) => {
+    if (type === "avatar") avatarInputRef.current?.click();
+    else coverInputRef.current?.click();
+  };
+
+  const onAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCropFile(file);
+      setCropType("avatar");
+      setCropModalOpen(true);
+    }
+    e.target.value = "";
+  };
+
+  const onCoverFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCropFile(file);
+      setCropType("cover");
+      setCropModalOpen(true);
+    }
+    e.target.value = "";
+  };
+
+  const onCropConfirm = async (file: File) => {
+    const formData = new FormData();
+    if (cropType === "avatar") formData.append("photo", file);
+    else formData.append("coverPhoto", file);
+    try {
+      await updateCompleteProfile(formData).unwrap();
+      await refetchProfile();
+    } finally {
+      setCropModalOpen(false);
+      setCropFile(null);
+    }
+  };
+
   return (
     <PageHeader
       title="Mon profil"
@@ -114,14 +262,41 @@ export default function AccountantView() {
           p: 2,
         }}
       >
+        <input
+          ref={avatarInputRef}
+          type="file"
+          accept={ACCEPT_IMAGE}
+          style={{ display: "none" }}
+          onChange={onAvatarFileChange}
+        />
+        <input
+          ref={coverInputRef}
+          type="file"
+          accept={ACCEPT_IMAGE}
+          style={{ display: "none" }}
+          onChange={onCoverFileChange}
+        />
         <ProfileHeader
-          coverImage="/assets/cover.png"
-          avatarImage={data?.photo || "/assets/profilePic.png"}
+          coverImage={data?.coverPhotoUrl ?? "/assets/cover.png"}
+          avatarImage={
+            data?.photoUrl ?? data?.photo ?? "/assets/profilePic.png"
+          }
           name={name}
           subtitle={subtitle}
-          onEditCover={() => console.log("Edit cover")}
-          onEditAvatar={() => console.log("Edit avatar")}
-          onEditProfile={() => setIsEditing(true)}
+          onEditCover={() => openCropFor("cover")}
+          onEditAvatar={() => openCropFor("avatar")}
+          onEditProfile={handleStartEditing}
+        />
+        <ImageCropModal
+          open={cropModalOpen}
+          onClose={() => {
+            setCropModalOpen(false);
+            setCropFile(null);
+          }}
+          file={cropFile}
+          type={cropType}
+          onConfirm={onCropConfirm}
+          loading={isUpdatingProfile}
         />
       </Card>
       <Card
@@ -158,6 +333,7 @@ export default function AccountantView() {
           <ProfileTabs
             profileInfosData={profileInfosData}
             isEditing={isEditing}
+            onProfileInfosChange={handleProfileInfosChange}
           />
         </Card>
         <Card
@@ -171,6 +347,7 @@ export default function AccountantView() {
             data={contactData}
             isLoading={isLoading}
             isEditing={isEditing}
+            onContactChange={handleContactChange}
           />
         </Card>
       </Box>
@@ -194,7 +371,9 @@ export default function AccountantView() {
           <CustomButton
             variant="contained"
             color="primary"
-            onClick={() => setIsEditing(false)}
+            onClick={handleSaveProfile}
+            loading={isUpdatingProfile}
+            disabled={isUpdatingProfile}
           >
             Enregistrer
           </CustomButton>

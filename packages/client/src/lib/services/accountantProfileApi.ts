@@ -11,13 +11,20 @@ export type AccountantProfile = {
   lastName: string | null;
   email: string;
   phone: string | null;
-  photo: string | null;
+  /** URL présignée de la photo de profil */
+  photoUrl?: string | null;
+  /** URL présignée de la photo de couverture */
+  coverPhotoUrl?: string | null;
+  /** @deprecated préférer photoUrl */
+  photo?: string | null;
   specialty: string | null;
   department: string | null;
   diploma: string | null;
   company: {
     id: number;
     name: string;
+    description?: string | null;
+    experience?: string | null;
     city: string | null;
     address: string | null;
     postalCode: string | null;
@@ -26,6 +33,10 @@ export type AccountantProfile = {
     siret: string | null;
     vatNumber: string | null;
     legalForm: string | null;
+    logoUrl?: string | null;
+    specialties?: string[];
+    rating?: number;
+    numberOfReviews?: number;
   };
 };
 

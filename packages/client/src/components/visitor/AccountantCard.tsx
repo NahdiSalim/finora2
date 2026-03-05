@@ -29,7 +29,10 @@ export interface Accountant {
   name: string;
   initials: string;
   avatarColor: string;
+  /** Années d'expérience (affiché si experienceLabel non fourni) */
   yearsExperience: number;
+  /** Libellé d'expérience brut (ex. "15 ans") - prioritaire sur yearsExperience */
+  experienceLabel?: string;
   location: string;
   rating: number;
   reviews: number;
@@ -116,6 +119,7 @@ export function AccountantCard({
     initials,
     avatarColor,
     yearsExperience,
+    experienceLabel,
     location,
     rating,
     reviews,
@@ -144,6 +148,7 @@ export function AccountantCard({
         onClick={profilePath ? () => navigate(profilePath) : undefined}
         sx={{
           height: "100%",
+          minHeight: 420,
           borderRadius: 3,
           position: "relative",
           overflow: "visible",
@@ -256,67 +261,71 @@ export function AccountantCard({
             </Stack>
           </Stack>
 
-          {/* Description with expand animation */}
-          <Box sx={{ mt: 2 }}>
-            <motion.div
-              animate={{ height: isExpanded ? "auto" : "3em" }}
-              transition={{ duration: 0.3 }}
-              style={{ overflow: "hidden" }}
-            >
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{
-                  lineHeight: 1.6,
-                  display: "-webkit-box",
-                  WebkitLineClamp: isExpanded ? "unset" : 2,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
-                }}
-              >
-                {description}
-              </Typography>
-            </motion.div>
-            {description.length > 100 && (
-              <Typography
-                variant="caption"
-                color="primary"
-                sx={{
-                  mt: 0.5,
-                  cursor: "pointer",
-                  fontWeight: 600,
-                  display: "inline-block",
-                  "&:hover": { textDecoration: "underline" },
-                }}
-                onClick={() => setIsExpanded(!isExpanded)}
-              >
-                {isExpanded ? "Show less" : "Read more"}
+          {/* Description — zone à hauteur fixe quand vide pour équilibrer les cartes */}
+          <Box sx={{ mt: 2, minHeight: description ? undefined : 72 }}>
+            {description ? (
+              <>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{
+                    lineHeight: 1.6,
+                    display: "-webkit-box",
+                    WebkitLineClamp: isExpanded ? "unset" : 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
+                  {description}
+                </Typography>
+                {description.length > 100 && (
+                  <Typography
+                    variant="caption"
+                    component="span"
+                    color="primary"
+                    sx={{
+                      mt: 0.5,
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      display: "inline-block",
+                      "&:hover": { textDecoration: "underline" },
+                    }}
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      setIsExpanded((prev) => !prev);
+                    }}
+                  >
+                    {isExpanded ? "Voir moins" : "Voir plus"}
+                  </Typography>
+                )}
+              </>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                &nbsp;
               </Typography>
             )}
           </Box>
 
-          {/* Tags with staggered animation */}
-          {tags.length > 0 && (
-            <Stack
-              direction="row"
-              spacing={0.5}
-              flexWrap="wrap"
-              sx={{ mt: 2, gap: 0.5 }}
-            >
-              {tags.map((tag, idx) => (
-                <motion.div
-                  key={tag}
-                  variants={tagVariants}
-                  initial="hidden"
-                  animate="visible"
-                  whileHover="hover"
-                  transition={{ delay: 0.3 + idx * 0.05 }}
-                >
-                  <CustomChip label={tag} />
-                </motion.div>
-              ))}
-            </Stack>
-          )}
+          {/* Tags — hauteur réservée pour équilibrer les cartes */}
+          <Stack
+            direction="row"
+            spacing={0.5}
+            flexWrap="wrap"
+            sx={{ mt: 2, gap: 0.5, minHeight: 32 }}
+          >
+            {tags.map((tag, idx) => (
+              <motion.div
+                key={tag}
+                variants={tagVariants}
+                initial="hidden"
+                animate="visible"
+                whileHover="hover"
+                transition={{ delay: 0.3 + idx * 0.05 }}
+              >
+                <CustomChip label={tag} />
+              </motion.div>
+            ))}
+          </Stack>
 
           {/* Info row with animated icons */}
           <Stack
@@ -326,24 +335,27 @@ export function AccountantCard({
             flexWrap="wrap"
             sx={{ mt: 2 }}
           >
-            <motion.div
-              whileHover={{ scale: 1.05, x: 2 }}
-              transition={{ type: "spring", stiffness: 400 }}
-            >
-              <Stack direction="row" spacing={0.5} alignItems="center">
-                <AccessTimeIcon
-                  sx={{
-                    fontSize: 18,
-                    color: theme.palette.primary.main,
-                    opacity: 0.8,
-                  }}
-                />
-                <Typography variant="caption" fontWeight={500}>
-                  {yearsExperience} {yearsExperience > 1 ? "years" : "year"}{" "}
-                  exp.
-                </Typography>
-              </Stack>
-            </motion.div>
+            {(experienceLabel != null && experienceLabel !== "") ||
+            yearsExperience > 0 ? (
+              <motion.div
+                whileHover={{ scale: 1.05, x: 2 }}
+                transition={{ type: "spring", stiffness: 400 }}
+              >
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  <AccessTimeIcon
+                    sx={{
+                      fontSize: 18,
+                      color: theme.palette.primary.main,
+                      opacity: 0.8,
+                    }}
+                  />
+                  <Typography variant="caption" fontWeight={500}>
+                    {experienceLabel ??
+                      `${yearsExperience} ${yearsExperience > 1 ? "years" : "year"} exp.`}
+                  </Typography>
+                </Stack>
+              </motion.div>
+            ) : null}
 
             <motion.div
               whileHover={{ scale: 1.05, x: 2 }}

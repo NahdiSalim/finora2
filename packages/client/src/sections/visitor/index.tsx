@@ -60,16 +60,18 @@ export function VisitorView() {
         name: companyName,
         initials,
         avatarColor: theme.palette.primary.main,
-        yearsExperience: 12,
-        location: item.company.city || item.company.address || "",
+        yearsExperience: 0,
+        experienceLabel: item.company?.experience ?? undefined,
+        location:
+          [item.company?.city, item.company?.address]
+            .filter(Boolean)
+            .join(", ") || "",
         rating: item.company?.rating ?? 0,
         reviews: item.company?.numberOfReviews ?? 0,
-        tags: ["Fiscaliste", "Expert comptable"],
+        tags: item.company?.specialties ?? [],
         profilePhotoUrl: item.photoUrl ?? item.photo ?? undefined,
         title: item.specialty || "Expert comptable",
-        description:
-          item.company.address ||
-          "Mollit in laborum tempor Lorem incididunt irure.",
+        description: item.company?.description ?? item.company?.address ?? "",
         featured: false,
         accountantId: item.id,
       } as Accountant;

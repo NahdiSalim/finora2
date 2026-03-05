@@ -19,11 +19,14 @@ export type PublicAccountant = {
   company: {
     id: number;
     name: string;
+    description?: string | null;
+    experience?: string | null;
     city: string | null;
     address: string | null;
     postalCode: string | null;
     phone: string | null;
     email: string | null;
+    specialties?: string[];
     rating?: number;
     numberOfReviews?: number;
   };

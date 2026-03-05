@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Box, Card, Typography } from "@mui/material";
 import { ArrowLeft } from "lucide-react";
 
 import { PublicNavbar } from "src/components/visitor/PublicNavbar";
+import { ContactAccountantModal } from "src/components/visitor/ContactAccountantModal";
 import ProfileHeader from "src/layouts/components/profile-header";
 import ProfileTabs from "src/layouts/components/profile-tabs";
 import ContactInfos from "src/layouts/components/profile-contact";
@@ -12,6 +14,7 @@ export default function AccountantPublicView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const accountantId = id ? parseInt(id, 10) : NaN;
+  const [contactModalOpen, setContactModalOpen] = useState(false);
 
   const { data, isLoading, isError } = useGetPublicAccountantByIdQuery(
     accountantId,
@@ -45,10 +48,7 @@ export default function AccountantPublicView() {
   };
 
   const handleContact = () => {
-    // TODO: ouvrir formulaire contact ou mailto
-    if (contactData.email) {
-      window.location.href = `mailto:${contactData.email}`;
-    }
+    setContactModalOpen(true);
   };
 
   if (Number.isNaN(accountantId)) {
@@ -179,6 +179,11 @@ export default function AccountantPublicView() {
           </Card>
         </Box>
       </Box>
+      <ContactAccountantModal
+        open={contactModalOpen}
+        onClose={() => setContactModalOpen(false)}
+        accountantId={data?.id ?? null}
+      />
     </Box>
   );
 }

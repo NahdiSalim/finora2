@@ -17,6 +17,7 @@ import {
   AccountantCard,
   type Accountant,
 } from "src/components/visitor/AccountantCard";
+import { ContactAccountantModal } from "src/components/visitor/ContactAccountantModal";
 import { PageHeader } from "src/layouts/components/page-header";
 import CustomButton from "src/components/common/CustomButton";
 import CustomSelect from "src/components/common/CustomSelect";
@@ -29,6 +30,10 @@ export function VisitorView() {
   const [search, setSearch] = useState<string | undefined>(undefined);
   const [specialty, setSpecialty] = useState<string | undefined>(undefined);
   const [location, setLocation] = useState<string | undefined>(undefined);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [contactAccountantId, setContactAccountantId] = useState<number | null>(
+    null,
+  );
 
   const { data, isLoading } = useGetPublicAccountantsQuery({
     page: 1,
@@ -259,6 +264,10 @@ export function VisitorView() {
                 <AccountantCard
                   key={accountant.name + accountant.location}
                   data={accountant}
+                  onMessageClick={(id) => {
+                    setContactAccountantId(id);
+                    setContactModalOpen(true);
+                  }}
                 />
               ))}
             </Box>
@@ -296,6 +305,14 @@ export function VisitorView() {
           ) : null}
         </Container>
       </MainSection>
+      <ContactAccountantModal
+        open={contactModalOpen}
+        onClose={() => {
+          setContactModalOpen(false);
+          setContactAccountantId(null);
+        }}
+        accountantId={contactAccountantId}
+      />
     </Box>
   );
 }

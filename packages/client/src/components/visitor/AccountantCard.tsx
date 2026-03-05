@@ -47,6 +47,8 @@ interface AccountantCardProps {
   data: Accountant;
   highlighted?: boolean;
   index?: number;
+  /** When set, Message button opens this callback instead of navigating to profile */
+  onMessageClick?: (accountantId: number) => void;
 }
 
 // ----------------------------------------------------------------------
@@ -91,6 +93,7 @@ export function AccountantCard({
   data,
   highlighted = false,
   index = 0,
+  onMessageClick,
 }: AccountantCardProps) {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -439,10 +442,11 @@ export function AccountantCard({
                   color="info"
                   fullWidth
                   startIcon={<ChatBubbleOutlineIcon />}
-                  onClick={() =>
-                    accountantId != null &&
-                    navigate(`/accountant/${accountantId}`)
-                  }
+                  onClick={() => {
+                    if (accountantId == null) return;
+                    if (onMessageClick) onMessageClick(accountantId);
+                    else navigate(`/accountant/${accountantId}`);
+                  }}
                   sx={{
                     borderRadius: 2,
                     textTransform: "none",

@@ -653,6 +653,7 @@ export class UserService {
           postalCode: dto.postalCode,
           country: dto.country,
           phone: dto.phone,
+          numWhatsapp: dto.numWhatsapp,
           email: dto.email,
           website: dto.website,
           activityCode: dto.activityCode,
@@ -716,6 +717,7 @@ export class UserService {
       companyPostalCode?: string;
       companyCountry?: string;
       companyPhone?: string;
+      companyNumWhatsapp?: string;
       companyEmail?: string;
       companyWebsite?: string;
       companyDescription?: string;
@@ -920,6 +922,8 @@ export class UserService {
           companyUpdateData.postalCode = data.companyPostalCode;
         if (data.companyCountry !== undefined) companyUpdateData.country = data.companyCountry;
         if (data.companyPhone !== undefined) companyUpdateData.phone = data.companyPhone;
+        if (data.companyNumWhatsapp !== undefined)
+          companyUpdateData.numWhatsapp = data.companyNumWhatsapp;
         if (data.companyEmail !== undefined) companyUpdateData.email = data.companyEmail;
         if (data.companyWebsite !== undefined) companyUpdateData.website = data.companyWebsite;
         if (data.companyDescription !== undefined)

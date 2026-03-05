@@ -53,6 +53,11 @@ export class UpdateCompanyDto {
   @IsOptional()
   phone?: string;
 
+  @ApiProperty({ example: '+33612345678', description: 'WhatsApp number', required: false })
+  @IsString()
+  @IsOptional()
+  numWhatsapp?: string;
+
   @ApiProperty({ example: 'contact@entreprise.fr', description: 'Email', required: false })
   @IsEmail()
   @IsOptional()

@@ -140,6 +140,11 @@ export class UpdateCompleteProfileDto {
   @IsOptional()
   companyPhone?: string;
 
+  @ApiProperty({ example: '+33612345678', description: 'Company WhatsApp number', required: false })
+  @IsString()
+  @IsOptional()
+  companyNumWhatsapp?: string;
+
   @ApiProperty({ example: 'contact@cabinet.fr', description: 'Company email', required: false })
   @IsEmail()
   @IsOptional()

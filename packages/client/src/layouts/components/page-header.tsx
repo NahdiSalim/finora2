@@ -8,10 +8,16 @@ import {
   Link,
   TextField,
   InputAdornment,
+  IconButton,
 } from "@mui/material";
-import { Link as RouterLink } from "react-router-dom";
-import { NavigateNext as NavigateNextIcon } from "@mui/icons-material";
-import { Search } from "lucide-react";
+
+import { Link as RouterLink, useNavigate } from "react-router-dom";
+
+import {
+  NavigateNext as NavigateNextIcon,
+} from "@mui/icons-material";
+
+import { MoveLeft, Search } from "lucide-react";
 
 import { DashboardContent } from "src/layouts/dashboard";
 import CustomButton from "src/components/common/CustomButton";
@@ -31,6 +37,11 @@ type ActionButton = {
   color?: "primary" | "secondary" | "error" | "warning" | "info" | "success";
 };
 
+type BackButton = {
+  onClick?: () => void;
+  path?: string;
+};
+
 export type PageHeaderProps = {
   title: string;
   caption?: string;
@@ -46,8 +57,9 @@ export type PageHeaderProps = {
     placeholder?: string;
   };
   actions?: ActionButton[];
+  backButton?: BackButton;
   sx?: any;
-  children?: ReactNode; // ← Made optional
+  children?: ReactNode;
 };
 
 export function PageHeader({
@@ -58,10 +70,18 @@ export function PageHeader({
   documentsProcessed,
   searchbar,
   actions = [],
+  backButton,
   children,
   sx,
 }: PageHeaderProps) {
   const theme = useTheme();
+  const navigate = useNavigate();
+
+  const handleBack = () => {
+    if (backButton?.onClick) backButton.onClick();
+    else if (backButton?.path) navigate(backButton.path);
+    else navigate(-1);
+  };
 
   return (
     <DashboardContent
@@ -114,9 +134,7 @@ export function PageHeader({
                     fontSize: 14,
                     cursor: crumb.path ? "pointer" : "default",
                     "&:hover": crumb.path
-                      ? {
-                          color: theme.palette.primary.main,
-                        }
+                      ? { color: theme.palette.primary.main }
                       : {},
                   }}
                 >
@@ -137,23 +155,37 @@ export function PageHeader({
             gap: 2,
           }}
         >
-          {/* Left Side - Title, Caption, Documents Chip */}
+          {/* LEFT SIDE */}
           <Box
             sx={{
               display: "flex",
-              alignItems: "center",
-              gap: 2,
+              alignItems: "flex-start",
+              gap: 1.5,
               flex: 1,
               minWidth: 0,
             }}
           >
+            {/* Back Button */}
+            {backButton && (
+              <IconButton
+                size="small"
+                onClick={handleBack}
+                sx={{
+                  mt: 0.5,
+                }}
+              >
+                <MoveLeft fontSize="small" />
+              </IconButton>
+            )}
+
+            {/* Title + Caption Column */}
             <Box sx={{ minWidth: 0 }}>
               <Box
                 sx={{
                   display: "flex",
                   alignItems: "center",
                   gap: 1.5,
-                  mb: caption ? 0.5 : 0,
+                  flexWrap: "wrap",
                 }}
               >
                 <Typography
@@ -168,7 +200,6 @@ export function PageHeader({
                   {title}
                 </Typography>
 
-                {/* Documents Processed Chip */}
                 {documentsProcessed && (
                   <Box
                     sx={{
@@ -190,7 +221,6 @@ export function PageHeader({
                 )}
               </Box>
 
-              {/* Caption */}
               {caption && (
                 <Typography
                   variant="body2"
@@ -203,12 +233,11 @@ export function PageHeader({
                 </Typography>
               )}
 
-              {/* Subheader */}
               {subheader && <Box sx={{ mt: 1 }}>{subheader}</Box>}
             </Box>
           </Box>
 
-          {/* Right Side - Searchbar and Actions */}
+          {/* RIGHT SIDE */}
           <Box
             sx={{
               display: "flex",
@@ -217,7 +246,7 @@ export function PageHeader({
               flexWrap: "wrap",
             }}
           >
-            {/* Searchbar */}
+            {/* Search */}
             {searchbar && (
               <TextField
                 size="small"
@@ -240,7 +269,7 @@ export function PageHeader({
               />
             )}
 
-            {/* Action Buttons */}
+            {/* Actions */}
             {actions.map((action, index) => (
               <CustomButton
                 key={index}

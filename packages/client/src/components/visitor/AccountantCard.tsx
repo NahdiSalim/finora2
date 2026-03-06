@@ -61,7 +61,8 @@ interface AccountantCardProps {
 
 // ----------------------------------------------------------------------
 
-// Animation variants for framer-motion
+// Animation variants for framer-motion (ease as cubic-bezier tuple)
+const cardEase = [0.4, 0, 0.2, 1] as const;
 const cardVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: (i: number) => ({
@@ -70,14 +71,14 @@ const cardVariants = {
     transition: {
       delay: i * 0.1,
       duration: 0.5,
-      ease: [0.4, 0, 0.2, 1],
+      ease: cardEase,
     },
   }),
   hover: {
     y: -8,
     transition: {
       duration: 0.3,
-      ease: [0.4, 0, 0.2, 1],
+      ease: cardEase,
     },
   },
 };
@@ -475,7 +476,7 @@ export function AccountantCard({
                   fontWeight: 600,
                 }}
               >
-                <MessageCircle Size={14} />
+                <MessageCircle size={14} />
               </CustomButton>
             </Box>
           </Grow>

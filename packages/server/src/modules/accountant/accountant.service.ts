@@ -509,22 +509,6 @@ export class AccountantService {
       // Build company filter
       const companyFilter: any = {};
 
-      // Filter by location (city)
-      if (filters.location) {
-        companyFilter.city = {
-          contains: filters.location,
-          mode: 'insensitive',
-        };
-      }
-
-      // Filter by specialty (search in company specialties array)
-      // Note: We'll filter this after fetching data for partial matching
-      // if (filters.specialty) {
-      //   companyFilter.specialties = {
-      //     has: filters.specialty,
-      //   };
-      // }
-
       // Filter by review rating range
       if (filters.reviewMin !== undefined || filters.reviewMax !== undefined) {
         const ratingCondition: any = {};
@@ -544,11 +528,55 @@ export class AccountantService {
         companyId: { not: null }, // Must have a company
       };
 
-      // Add company filters if any
+      // Add company filters if any (except location which needs OR)
       if (Object.keys(companyFilter).length > 0) {
         where.company = {
           is: companyFilter,
         };
+      }
+
+      // Filter by location (search in city, address, or postalCode)
+      if (filters.location) {
+        const locationConditions = [
+          {
+            company: {
+              is: {
+                city: {
+                  contains: filters.location,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
+          {
+            company: {
+              is: {
+                address: {
+                  contains: filters.location,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
+          {
+            company: {
+              is: {
+                postalCode: {
+                  contains: filters.location,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
+        ];
+
+        // Combine with existing where conditions
+        if (where.OR) {
+          where.AND = [{ OR: where.OR }, { OR: locationConditions }];
+          delete where.OR;
+        } else {
+          where.OR = locationConditions;
+        }
       }
 
       // Search by firstName, lastName, or company name

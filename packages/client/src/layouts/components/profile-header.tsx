@@ -203,7 +203,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                     fontWeight: 600,
                   }}
                 >
-                  Schedule
+                  Planifier{" "}
                 </CustomButton>
               )}
               {onContact && (

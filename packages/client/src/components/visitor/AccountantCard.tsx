@@ -20,7 +20,7 @@ import VerifiedIcon from "@mui/icons-material/Verified";
 import CustomButton from "../common/CustomButton";
 import CustomChip from "../common/CustomChip";
 import { motion } from "framer-motion";
-import { Handshake, MessageCircle } from "lucide-react";
+import { Calendar, Handshake, MessageCircle } from "lucide-react";
 
 // ----------------------------------------------------------------------
 
@@ -104,7 +104,7 @@ export function AccountantCard({
   index = 0,
   onMessageClick,
   getProfilePath,
-  scheduleButtonLabel = "Schedule",
+  scheduleButtonLabel = "Planifier",
   onScheduleClick,
 }: AccountantCardProps) {
   const theme = useTheme();
@@ -443,7 +443,9 @@ export function AccountantCard({
                 variant="contained"
                 color="primary"
                 fullWidth
-                startIcon={<Handshake />}
+                startIcon={
+                  onScheduleClick ? <Handshake /> : <Calendar size={18} />
+                }
                 onClick={(e) => {
                   e.stopPropagation();
                   if (onScheduleClick) onScheduleClick();

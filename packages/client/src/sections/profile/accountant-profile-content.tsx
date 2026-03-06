@@ -16,6 +16,8 @@ export type AccountantProfileContentProps = {
   title?: string;
   /** Caption below the title */
   caption?: string;
+  /** Afficher le formulaire "Partager un avis" (client connecté uniquement, pas pour le visiteur) */
+  allowSubmitReview?: boolean;
 };
 
 export function AccountantProfileContent({
@@ -23,6 +25,7 @@ export function AccountantProfileContent({
   backTo,
   title = "Détails profil",
   caption = "Tout sur votre profil en un seul endroit",
+  allowSubmitReview = false,
 }: AccountantProfileContentProps) {
   const [contactModalOpen, setContactModalOpen] = useState(false);
 
@@ -119,6 +122,7 @@ export function AccountantProfileContent({
             mode="visitor"
             accountantId={data?.id}
             companyId={data?.company?.id}
+            allowSubmitReview={allowSubmitReview}
           />
         </Card>
         <Card

@@ -20,6 +20,7 @@ export default function NetworkAccountantProfileView() {
       backTo="/dashboard/network"
       title="Détails profil"
       caption="Profil du comptable"
+      allowSubmitReview
     />
   );
 }

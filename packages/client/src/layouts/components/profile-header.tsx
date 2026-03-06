@@ -148,14 +148,14 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
 
           {/* Name + Subtitle */}
           <Box sx={{ flex: 1, mt: 8 }}>
-            <Typography variant="h5" fontWeight={700}>
+            <Typography variant="h6" fontWeight={600}>
               {name}
             </Typography>
 
             {subtitle && (
               <Typography
                 variant="body2"
-                color="text.secondary"
+                color={theme.palette.info.main}
                 sx={{ mt: 0.5 }}
               >
                 {subtitle}
@@ -203,7 +203,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                     fontWeight: 600,
                   }}
                 >
-                  Schedule
+                  Planifier{" "}
                 </CustomButton>
               )}
               {onContact && (

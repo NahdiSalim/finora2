@@ -150,9 +150,12 @@ importers:
       libphonenumber-js:
         specifier: ^1.12.37
         version: 1.12.37
+<<<<<<< HEAD
       lucide-react:
         specifier: ^0.575.0
         version: 0.575.0(react@19.1.0)
+=======
+>>>>>>> d7761ce (fix(git): merge with remote branch)
       minimal-shared:
         specifier: ^1.0.7
         version: 1.1.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -4023,6 +4026,7 @@ packages:
   country-codes-list@2.0.0:
     resolution: {integrity: sha512-KZqq/LBdCD76hQCa6nOx0bA/nIjYly1OtV8+Bbt/4SW+mJEqGk7oZHjUj7PRrV0gXJJKs6Tv2cIntFdofBByvA==}
 
+<<<<<<< HEAD
   crc-32@1.2.2:
     resolution: {integrity: sha512-ROmzCKrTnOwybPcJApAA6WBWij23HVfGVNKqqrZpuyZOHqK2CwHSvpGuyt/UNNvaIjEd8X5IFGp4Mh+Ie1IHJQ==}
     engines: {node: '>=0.8'}
@@ -4032,6 +4036,8 @@ packages:
     resolution: {integrity: sha512-NT7w2JVU7DFroFdYkeq8cywxrgjPHWkdX1wjpRQXPX5Asews3tA+Ght6lddQO5Mkumffp3X7GEqku3epj2toIw==}
     engines: {node: '>= 10'}
 
+=======
+>>>>>>> d7761ce (fix(git): merge with remote branch)
   create-require@1.1.1:
     resolution: {integrity: sha512-dcKFX3jn0MpIaXjisoRvexIJVEKzaq7z2rZKxf+MSr9TkdmHmsU4m2lcLojrj/FHl8mk5VxMmYA+ftRkP/3oKQ==}
 
@@ -11928,6 +11934,7 @@ snapshots:
 
   country-codes-list@2.0.0: {}
 
+<<<<<<< HEAD
   crc-32@1.2.2: {}
 
   crc32-stream@4.0.3:
@@ -11935,6 +11942,8 @@ snapshots:
       crc-32: 1.2.2
       readable-stream: 3.6.2
 
+=======
+>>>>>>> d7761ce (fix(git): merge with remote branch)
   create-require@1.1.1: {}
 
   cross-spawn@7.0.6:

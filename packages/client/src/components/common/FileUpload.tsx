@@ -9,8 +9,8 @@ import {
 } from "@mui/material";
 import { Close as CloseIcon } from "@mui/icons-material";
 import UploadIcon from "../../../public/assets/upload.svg";
-import CustomButton from "./CustomButton";
 import { Replace } from "lucide-react";
+import CustomButton from "./CustomButton";
 
 interface FileUploadProps {
   label: string;
@@ -177,9 +177,9 @@ export default function FileUpload({
         <Box
           sx={{
             borderRadius: 3,
-            backgroundColor: theme.palette.background.default,
-            border: 2,
-            borderColor: theme.palette.primary.light,
+            backgroundColor: theme.palette.grey[50],
+            border: 1,
+            borderColor: theme.palette.grey[200],
             px: 2,
             py: 1,
             display: "flex",
@@ -228,11 +228,11 @@ export default function FileUpload({
                 component="a"
                 href={existingFileUrl ?? undefined}
                 target="_blank"
-                rel="noopener noreferrer"
                 variant="caption"
+                fontWeight={500}
+                color={theme.palette.primary.main}
                 sx={{
-                  color: "primary.main",
-                  "&:hover": { textDecoration: "underline" },
+                  "&:hover": { fontWeight: "600" },
                 }}
               >
                 Ouvrir le fichier
@@ -244,13 +244,7 @@ export default function FileUpload({
               variant="contained"
               color="info"
               onClick={handleClick}
-              sx={{
-                ml: 1,
-                textTransform: "none",
-                width: 40,
-                padding: 0,
-                height: 40,
-              }}
+              sx={{ ml: 1, textTransform: "none" }}
             >
               <Replace />
             </CustomButton>

@@ -16,12 +16,11 @@ import {
 } from "@mui/material";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
-import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
-import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import VerifiedIcon from "@mui/icons-material/Verified";
 import CustomButton from "../common/CustomButton";
 import CustomChip from "../common/CustomChip";
 import { motion } from "framer-motion";
+import { Calendar, Handshake, MessageCircle } from "lucide-react";
 
 // ----------------------------------------------------------------------
 
@@ -54,11 +53,16 @@ interface AccountantCardProps {
   onMessageClick?: (accountantId: number) => void;
   /** When set, card and Schedule/Message navigate here instead of /accountant/:id (e.g. /dashboard/network/accountant/:id) */
   getProfilePath?: (accountantId: number) => string;
+  /** Label du bouton principal (défaut: "Schedule"). Ex: "Devenir un client" sur la page visiteur */
+  scheduleButtonLabel?: string;
+  /** Si fourni, le bouton Schedule appelle ce callback au lieu de naviguer vers le profil */
+  onScheduleClick?: () => void;
 }
 
 // ----------------------------------------------------------------------
 
-// Animation variants for framer-motion
+// Animation variants for framer-motion (ease as cubic-bezier tuple)
+const cardEase = [0.4, 0, 0.2, 1] as const;
 const cardVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: (i: number) => ({
@@ -67,14 +71,14 @@ const cardVariants = {
     transition: {
       delay: i * 0.1,
       duration: 0.5,
-      ease: [0.4, 0, 0.2, 1],
+      ease: cardEase,
     },
   }),
   hover: {
     y: -8,
     transition: {
       duration: 0.3,
-      ease: [0.4, 0, 0.2, 1],
+      ease: cardEase,
     },
   },
 };
@@ -100,6 +104,8 @@ export function AccountantCard({
   index = 0,
   onMessageClick,
   getProfilePath,
+  scheduleButtonLabel = "Planifier",
+  onScheduleClick,
 }: AccountantCardProps) {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -422,63 +428,59 @@ export function AccountantCard({
 
           {/* Action buttons with animations */}
           <Grow in timeout={500}>
-            <Stack direction="row" spacing={1} sx={{ mt: 2.5 }}>
-              <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                style={{ flex: 1 }}
-                onClick={(e: React.MouseEvent) => e.stopPropagation()}
+            <Box
+              width="100%"
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                mt: 2.5,
+                gap: 1,
+              }}
+            >
+              <CustomButton
+                variant="contained"
+                color="primary"
+                fullWidth
+                startIcon={
+                  onScheduleClick ? <Handshake /> : <Calendar size={18} />
+                }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onScheduleClick) onScheduleClick();
+                  else if (profilePath) navigate(profilePath);
+                }}
+                sx={{
+                  height: 40,
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontWeight: 600,
+                  boxShadow: isHovered
+                    ? `0 8px 16px ${theme.palette.primary.main}40`
+                    : "none",
+                  transition: "box-shadow 0.3s ease",
+                }}
               >
-                <CustomButton
-                  variant="contained"
-                  color="primary"
-                  fullWidth
-                  startIcon={<CalendarTodayIcon />}
-                  onClick={() => profilePath && navigate(profilePath)}
-                  sx={{
-                    borderRadius: 2,
-                    textTransform: "none",
-                    fontWeight: 600,
-                    boxShadow: isHovered
-                      ? `0 8px 16px ${theme.palette.primary.main}40`
-                      : "none",
-                    transition: "box-shadow 0.3s ease",
-                  }}
-                >
-                  Schedule
-                </CustomButton>
-              </motion.div>
+                {scheduleButtonLabel}
+              </CustomButton>
 
-              <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                style={{ flex: 1 }}
-                onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              <CustomButton
+                variant="outlined"
+                color="info"
+                onClick={() => {
+                  if (accountantId == null) return;
+                  if (onMessageClick) onMessageClick(accountantId);
+                  else if (profilePath) navigate(profilePath);
+                }}
+                sx={{
+                  height: 40,
+                  fontWeight: 600,
+                }}
               >
-                <CustomButton
-                  variant="outlined"
-                  color="info"
-                  fullWidth
-                  startIcon={<ChatBubbleOutlineIcon />}
-                  onClick={() => {
-                    if (accountantId == null) return;
-                    if (onMessageClick) onMessageClick(accountantId);
-                    else if (profilePath) navigate(profilePath);
-                  }}
-                  sx={{
-                    borderRadius: 2,
-                    textTransform: "none",
-                    fontWeight: 600,
-                    borderWidth: 2,
-                    "&:hover": {
-                      borderWidth: 2,
-                    },
-                  }}
-                >
-                  Message
-                </CustomButton>
-              </motion.div>
-            </Stack>
+                <MessageCircle size={14} />
+              </CustomButton>
+            </Box>
           </Grow>
         </CardContent>
       </Card>

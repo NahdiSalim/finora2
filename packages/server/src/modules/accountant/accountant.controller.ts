@@ -152,13 +152,15 @@ export class PublicAccountantsController {
     name: 'location',
     required: false,
     type: String,
-    description: 'Filter by city',
+    description: 'Filter by location (searches in city, address, and postal code)',
+    example: '123',
   })
   @ApiQuery({
     name: 'specialty',
     required: false,
     type: String,
-    description: 'Filter by company specialty (exact match)',
+    description: 'Filter by company specialty (partial match, case insensitive)',
+    example: 'Audit',
   })
   @ApiQuery({
     name: 'search',

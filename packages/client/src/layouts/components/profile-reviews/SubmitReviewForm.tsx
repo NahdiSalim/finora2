@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Box, Rating, TextField, Typography } from "@mui/material";
+import { Box, Rating, TextField, Typography, useTheme } from "@mui/material";
 import StarIcon from "@mui/icons-material/Star";
 
 import CustomButton from "src/components/common/CustomButton";
@@ -19,6 +19,7 @@ export function SubmitReviewForm({
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [createReview, { isLoading }] = useCreateReviewMutation();
+  const theme = useTheme();
 
   const handleSubmit = async () => {
     if (rating < 1 || rating > 5) return;
@@ -38,7 +39,7 @@ export function SubmitReviewForm({
 
   return (
     <StyledPaper>
-      <Typography variant="h6" fontWeight={600} gutterBottom>
+      <Typography variant="h6" fontWeight={500} gutterBottom>
         Partagez votre avis
       </Typography>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
@@ -49,7 +50,11 @@ export function SubmitReviewForm({
           emptyIcon={<StarIcon style={{ opacity: 0.55 }} fontSize="inherit" />}
         />
       </Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+      <Typography
+        variant="body2"
+        color={theme.palette.info.main}
+        sx={{ mb: 1 }}
+      >
         Votre commentaire :
       </Typography>
       <TextField
@@ -63,11 +68,21 @@ export function SubmitReviewForm({
           setComment(e.target.value.slice(0, MAX_COMMENT_LENGTH))
         }
         inputProps={{ maxLength: MAX_COMMENT_LENGTH }}
-        sx={{ mb: 1 }}
+        sx={{
+          mb: 1,
+          "& .MuiOutlinedInput-root": {
+            borderRadius: 3,
+            fontSize: 14,
+            fontWeight: 500,
+          },
+          "& .MuiInputBase-input": {
+            fontSize: 14,
+          },
+        }}
       />
       <Typography
         variant="caption"
-        color="text.secondary"
+        color={theme.palette.info.light}
         sx={{ mb: 2, display: "block" }}
       >
         {comment.length}/{MAX_COMMENT_LENGTH} caractères

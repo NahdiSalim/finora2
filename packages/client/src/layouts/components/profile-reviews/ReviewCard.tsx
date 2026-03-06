@@ -94,9 +94,14 @@ export function ReviewCard({
               gap: 1,
             }}
           >
-            <Typography variant="subtitle1" fontWeight={600}>
+            <Typography variant="body1" fontWeight={500}>
               {author}
             </Typography>
+
+            <Typography fontSize={11} fontWeight={500}>
+              •
+            </Typography>
+
             <Typography variant="caption" color="text.secondary">
               {dateStr}
             </Typography>
@@ -119,7 +124,7 @@ export function ReviewCard({
           >
             <Typography
               variant="caption"
-              color="text.secondary"
+              color={theme.palette.info.main}
               fontWeight={600}
             >
               Réponse du cabinet

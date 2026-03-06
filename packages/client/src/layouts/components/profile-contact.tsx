@@ -44,8 +44,6 @@ const chipVariants = [
 const getRandomVariant = () =>
   chipVariants[Math.floor(Math.random() * chipVariants.length)];
 
-const specialities = ["React", "TypeScript", "Node.js", "UI/UX", "GraphQL"];
-
 const InfoItem = ({
   icon: Icon,
   label,
@@ -81,13 +79,13 @@ const InfoItem = ({
       </Box>
 
       <Box>
-        <Typography
+        {/* <Typography
           variant="caption"
           color="text.secondary"
           sx={{ textTransform: "uppercase", fontWeight: 600 }}
         >
           {label}
-        </Typography>
+        </Typography> */}
 
         <Typography variant="body2" sx={{ mt: 0.5 }}>
           {value || "-"}
@@ -145,7 +143,7 @@ export default function ContactInfos({
   };
 
   const mapBoxSx = {
-    mt: 1,
+    mt: 3,
     borderRadius: 2,
     overflow: "hidden" as const,
     height: 180,
@@ -233,6 +231,9 @@ export default function ContactInfos({
 
   return (
     <Paper sx={cardSx}>
+      <Typography variant="body1" sx={{ mb: 3 }}>
+        Informations de contact
+      </Typography>
       <Stack spacing={3}>
         <InfoItem
           icon={Phone}
@@ -269,9 +270,10 @@ export default function ContactInfos({
       <Divider sx={{ my: 1.5 }} />
       <Box>
         <Typography
-          variant="body1"
+          variant="caption"
           fontWeight={600}
-          color={theme.palette.grey[500]}
+          color={theme.palette.info.light}
+          mb={2}
         >
           Spécialités
         </Typography>

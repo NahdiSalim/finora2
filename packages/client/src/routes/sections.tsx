@@ -103,7 +103,7 @@ export const routesSection: RouteObject[] = [
         element: <DefaultRedirect />,
       },
       {
-        path: "users",
+        path: "archive",
         element: (
           <PermissionGuard requiredPath="/archive">
             <UserPage />

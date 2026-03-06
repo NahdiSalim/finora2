@@ -236,10 +236,13 @@ const ReviewCard: React.FC<ReviewCardProps> = ({
               gap: 1,
             }}
           >
-            <Typography variant="subtitle1" fontWeight={600}>
+            <Typography variant="body2" fontWeight={600}>
               {author}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+
+            <Typography variant="caption">•</Typography>
+
+            <Typography variant="caption" color={theme.palette.info.main}>
               {dateStr}
             </Typography>
           </Box>

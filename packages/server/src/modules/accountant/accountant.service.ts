@@ -489,6 +489,8 @@ export class AccountantService {
     location?: string;
     specialty?: string;
     search?: string;
+    reviewMin?: number;
+    reviewMax?: number;
   }) {
     const page = filters.page || 1;
     const limit = Math.min(filters.limit || 20, 50); // Max 50 per page
@@ -504,23 +506,52 @@ export class AccountantService {
         throw new ApiError('Accountant role not found', 500, 'ROLE_NOT_FOUND');
       }
 
+      // Build company filter
+      const companyFilter: any = {};
+
+      // Filter by location (city)
+      if (filters.location) {
+        companyFilter.city = {
+          contains: filters.location,
+          mode: 'insensitive',
+        };
+      }
+
+      // Filter by specialty (search in company specialties array)
+      // Note: We'll filter this after fetching data for partial matching
+      // if (filters.specialty) {
+      //   companyFilter.specialties = {
+      //     has: filters.specialty,
+      //   };
+      // }
+
+      // Filter by review rating range
+      if (filters.reviewMin !== undefined || filters.reviewMax !== undefined) {
+        const ratingCondition: any = {};
+        if (filters.reviewMin !== undefined) {
+          ratingCondition.gte = filters.reviewMin;
+        }
+        if (filters.reviewMax !== undefined) {
+          ratingCondition.lte = filters.reviewMax;
+        }
+        companyFilter.rating = ratingCondition;
+      }
+
       // Build where clause
       const where: any = {
         id_role: accountantRole.id,
         status: UserStatus.ACTIVE,
+        companyId: { not: null }, // Must have a company
       };
 
-      // Filter by location (city)
-      if (filters.location) {
+      // Add company filters if any
+      if (Object.keys(companyFilter).length > 0) {
         where.company = {
-          city: {
-            contains: filters.location,
-            mode: 'insensitive',
-          },
+          is: companyFilter,
         };
       }
 
-      // Search by name, company name, or position
+      // Search by firstName, lastName, or company name
       if (filters.search) {
         where.OR = [
           {
@@ -537,27 +568,15 @@ export class AccountantService {
           },
           {
             company: {
-              name: {
-                contains: filters.search,
-                mode: 'insensitive',
+              is: {
+                name: {
+                  contains: filters.search,
+                  mode: 'insensitive',
+                },
               },
             },
           },
-          {
-            position: {
-              contains: filters.search,
-              mode: 'insensitive',
-            },
-          },
         ];
-      }
-
-      // Filter by specialty (position field)
-      if (filters.specialty) {
-        where.position = {
-          contains: filters.specialty,
-          mode: 'insensitive',
-        };
       }
 
       const [total, data] = await Promise.all([
@@ -605,9 +624,39 @@ export class AccountantService {
         }),
       ]);
 
-      // Generate presigned URLs for all accountants
+      // Filter out incomplete profiles (must have required company fields)
+      const completeProfiles = data.filter((accountant) => {
+        if (!accountant.company) return false;
+
+        // Check required fields
+        const hasName = accountant.company.name && accountant.company.name.trim() !== '';
+        const hasDescription =
+          accountant.company.description && accountant.company.description.trim() !== '';
+        const hasExperience =
+          accountant.company.experience && accountant.company.experience.trim() !== '';
+        const hasAddress = accountant.company.address && accountant.company.address.trim() !== '';
+        const hasSpecialties =
+          accountant.company.specialties && accountant.company.specialties.length > 0;
+
+        if (!hasName || !hasDescription || !hasExperience || !hasAddress || !hasSpecialties) {
+          return false;
+        }
+
+        // Filter by specialty (partial match, case insensitive)
+        if (filters.specialty) {
+          const specialtyLower = filters.specialty.toLowerCase();
+          const hasMatchingSpecialty = accountant.company.specialties.some((s) =>
+            s.toLowerCase().includes(specialtyLower)
+          );
+          if (!hasMatchingSpecialty) return false;
+        }
+
+        return true;
+      });
+
+      // Generate presigned URLs for all accountants with complete profiles
       const accountantsWithUrls = await Promise.all(
-        data.map(async (accountant) => {
+        completeProfiles.map(async (accountant) => {
           let photoUrl: string | null = null;
           if (accountant.photo) {
             try {
@@ -687,10 +736,17 @@ export class AccountantService {
       return {
         data: accountantsWithUrls,
         pagination: {
-          total,
+          total: accountantsWithUrls.length, // Use filtered count
           page,
           limit,
-          totalPages: Math.ceil(total / limit),
+          totalPages: Math.ceil(accountantsWithUrls.length / limit),
+        },
+        filters: {
+          location: filters.location || null,
+          specialty: filters.specialty || null,
+          search: filters.search || null,
+          reviewMin: filters.reviewMin !== undefined ? filters.reviewMin : null,
+          reviewMax: filters.reviewMax !== undefined ? filters.reviewMax : null,
         },
       };
     } catch (error) {

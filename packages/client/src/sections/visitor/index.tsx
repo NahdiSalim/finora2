@@ -10,6 +10,7 @@ import {
 import SearchIcon from "@mui/icons-material/Search";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { MainSection } from "src/layouts/core/main-section";
 import { PublicNavbar } from "src/components/visitor/PublicNavbar";
@@ -30,6 +31,7 @@ import {
 
 export function VisitorView() {
   const theme = useTheme();
+  const navigate = useNavigate();
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState<string | undefined>(undefined);
   const [specialty, setSpecialty] = useState<string | undefined>(undefined);
@@ -295,6 +297,8 @@ export function VisitorView() {
                 <AccountantCard
                   key={accountant.name + accountant.location}
                   data={accountant}
+                  scheduleButtonLabel="Devenir un client"
+                  onScheduleClick={() => navigate("/sign-in")}
                   onMessageClick={(id) => {
                     setContactAccountantId(id);
                     setContactModalOpen(true);

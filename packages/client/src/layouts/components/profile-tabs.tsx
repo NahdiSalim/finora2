@@ -18,6 +18,8 @@ type ProfileTabsProps = {
   mode?: "own" | "visitor";
   /** Pour le fil en mode visiteur : companyId du cabinet (lecture seule) */
   companyId?: number;
+  /** Afficher le formulaire "Partager un avis" (réservé au client connecté, pas au visiteur) */
+  allowSubmitReview?: boolean;
 };
 
 const TABS_OWN = ["Mes informations", "Fil d'actualité", "Avis"] as const;
@@ -30,6 +32,7 @@ export default function ProfileTabs({
   accountantId,
   mode = "own",
   companyId,
+  allowSubmitReview = false,
 }: ProfileTabsProps) {
   const [tab, setTab] = useState(0);
   const tabs = mode === "visitor" ? TABS_VISITOR : TABS_OWN;
@@ -92,7 +95,7 @@ export default function ProfileTabs({
           <ProfileReviewsTab
             accountantId={accountantId}
             isAccountantView={mode === "own"}
-            allowSubmitReview={mode === "visitor"}
+            allowSubmitReview={allowSubmitReview}
           />
         )}
       </Box>

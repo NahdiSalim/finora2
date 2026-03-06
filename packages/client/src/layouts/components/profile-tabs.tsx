@@ -92,6 +92,7 @@ export default function ProfileTabs({
           <ProfileReviewsTab
             accountantId={accountantId}
             isAccountantView={mode === "own"}
+            allowSubmitReview={mode === "visitor"}
           />
         )}
       </Box>

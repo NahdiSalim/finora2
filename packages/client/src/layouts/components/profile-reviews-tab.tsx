@@ -16,6 +16,7 @@ import SendIcon from "@mui/icons-material/Send";
 import CustomButton from "src/components/common/CustomButton";
 import {
   useGetAccountantReviewsQuery,
+  useCreateReviewMutation,
   useRespondToReviewMutation,
 } from "src/lib/services/reviewsApi";
 import type { ReviewItem } from "src/lib/services/reviewsApi";
@@ -322,6 +323,84 @@ const ReviewCard: React.FC<ReviewCardProps> = ({
   );
 };
 
+const MAX_COMMENT_LENGTH = 500;
+
+// ============ Submit Review Form ============
+interface SubmitReviewFormProps {
+  accountantId: number;
+  onSuccess?: () => void;
+}
+
+function SubmitReviewForm({ accountantId, onSuccess }: SubmitReviewFormProps) {
+  const theme = useTheme();
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [createReview, { isLoading }] = useCreateReviewMutation();
+
+  const handleSubmit = async () => {
+    if (rating < 1 || rating > 5) return;
+    try {
+      await createReview({
+        accountantId,
+        rating,
+        comment: comment.trim() || undefined,
+      }).unwrap();
+      setRating(0);
+      setComment("");
+      onSuccess?.();
+    } catch {
+      // Error handled by API / global handler
+    }
+  };
+
+  return (
+    <StyledPaper>
+      <Typography variant="h6" fontWeight={600} gutterBottom>
+        Partagez votre avis
+      </Typography>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+        <Rating
+          value={rating}
+          onChange={(_, value) => setRating(value ?? 0)}
+          size="large"
+          emptyIcon={<StarIcon style={{ opacity: 0.55 }} fontSize="inherit" />}
+        />
+      </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        Votre commentaire :
+      </Typography>
+      <TextField
+        multiline
+        minRows={3}
+        maxRows={8}
+        fullWidth
+        placeholder="Partagez votre expérience..."
+        value={comment}
+        onChange={(e) =>
+          setComment(e.target.value.slice(0, MAX_COMMENT_LENGTH))
+        }
+        inputProps={{ maxLength: MAX_COMMENT_LENGTH }}
+        sx={{ mb: 1 }}
+      />
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ mb: 2, display: "block" }}
+      >
+        {comment.length}/{MAX_COMMENT_LENGTH} caractères
+      </Typography>
+      <CustomButton
+        variant="contained"
+        color="primary"
+        onClick={handleSubmit}
+        disabled={rating < 1 || isLoading}
+      >
+        Soumettre mon avis
+      </CustomButton>
+    </StyledPaper>
+  );
+}
+
 function computeDistribution(reviews: ReviewItem[]): RatingDistributionItem[] {
   const counts: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
   reviews.forEach((r) => {
@@ -337,13 +416,16 @@ interface ProfileReviewsTabProps {
   accountantId?: number;
   /** When true, current user is the accountant (can respond to reviews) */
   isAccountantView?: boolean;
+  /** When true, show form to submit a new review (client viewing accountant profile) */
+  allowSubmitReview?: boolean;
 }
 
 export default function ProfileReviewsTab({
   accountantId,
   isAccountantView = true,
+  allowSubmitReview = false,
 }: ProfileReviewsTabProps) {
-  const { data, isLoading, isError } = useGetAccountantReviewsQuery(
+  const { data, isLoading, isError, refetch } = useGetAccountantReviewsQuery(
     { accountantId: accountantId!, page: 1, limit: 50 },
     { skip: accountantId == null || accountantId === 0 },
   );
@@ -390,6 +472,13 @@ export default function ProfileReviewsTab({
         totalReviews={totalReviews}
         distribution={distribution}
       />
+
+      {allowSubmitReview && accountantId != null && (
+        <SubmitReviewForm
+          accountantId={accountantId}
+          onSuccess={() => refetch()}
+        />
+      )}
 
       <Box sx={{ p: 2 }}>
         {reviews.length === 0 ? (

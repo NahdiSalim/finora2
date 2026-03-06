@@ -54,6 +54,10 @@ interface AccountantCardProps {
   onMessageClick?: (accountantId: number) => void;
   /** When set, card and Schedule/Message navigate here instead of /accountant/:id (e.g. /dashboard/network/accountant/:id) */
   getProfilePath?: (accountantId: number) => string;
+  /** Label du bouton principal (défaut: "Schedule"). Ex: "Devenir un client" sur la page visiteur */
+  scheduleButtonLabel?: string;
+  /** Si fourni, le bouton Schedule appelle ce callback au lieu de naviguer vers le profil */
+  onScheduleClick?: () => void;
 }
 
 // ----------------------------------------------------------------------
@@ -100,6 +104,8 @@ export function AccountantCard({
   index = 0,
   onMessageClick,
   getProfilePath,
+  scheduleButtonLabel = "Schedule",
+  onScheduleClick,
 }: AccountantCardProps) {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -434,7 +440,11 @@ export function AccountantCard({
                   color="primary"
                   fullWidth
                   startIcon={<CalendarTodayIcon />}
-                  onClick={() => profilePath && navigate(profilePath)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onScheduleClick) onScheduleClick();
+                    else if (profilePath) navigate(profilePath);
+                  }}
                   sx={{
                     borderRadius: 2,
                     textTransform: "none",
@@ -445,7 +455,7 @@ export function AccountantCard({
                     transition: "box-shadow 0.3s ease",
                   }}
                 >
-                  Schedule
+                  {scheduleButtonLabel}
                 </CustomButton>
               </motion.div>
 

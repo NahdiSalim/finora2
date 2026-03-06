@@ -4,6 +4,7 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import CustomInput from "src/components/common/CustomInput";
 import CustomSelect from "src/components/common/CustomSelect";
 import FileUpload from "src/components/common/FileUpload";
+import { SECTOR_TO_SPECIALTIES } from "src/lib/constants/specialties";
 
 export type ProfileInfosTabData = {
   cabinetName?: string;
@@ -21,6 +22,8 @@ export type ProfileInfosFormState = ProfileInfosTabData & {
   rneFile?: File | null;
 };
 
+export { SECTOR_TO_SPECIALTIES };
+
 const SECTOR_OPTIONS = [
   "Expert Comptable",
   "Comptable",
@@ -29,51 +32,6 @@ const SECTOR_OPTIONS = [
   "Audit",
   "Conseil",
 ];
-
-/** Mock: secteurs -> spécialités proposées pour le multiselect */
-export const SECTOR_TO_SPECIALTIES: Record<string, string[]> = {
-  "Expert Comptable": [
-    "Comptabilité générale",
-    "Comptabilité analytique",
-    "Audit légal",
-    "Conseil en gestion",
-    "Fiscalité des entreprises",
-    "Consolidation",
-  ],
-  Comptable: [
-    "Comptabilité générale",
-    "Paie",
-    "TVA",
-    "Déclarations fiscales",
-    "Tenue de livres",
-  ],
-  Fiscaliste: [
-    "Impôt sur les sociétés",
-    "TVA",
-    "Optimisation fiscale",
-    "Fiscalité internationale",
-    "Contrôles fiscaux",
-  ],
-  Finance: [
-    "Analyse financière",
-    "Trésorerie",
-    "Financement",
-    "Due diligence",
-    "Evaluation",
-  ],
-  Audit: [
-    "Audit légal",
-    "Audit interne",
-    "Commissariat aux comptes",
-    "Audit de processus",
-  ],
-  Conseil: [
-    "Conseil en gestion",
-    "Stratégie",
-    "Restructuration",
-    "Acquisition",
-  ],
-};
 
 const COLLABORATORS_OPTIONS = [
   "1-5 collaborateurs",

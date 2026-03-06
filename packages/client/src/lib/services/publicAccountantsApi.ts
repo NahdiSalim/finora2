@@ -89,15 +89,27 @@ export const publicAccountantsApi = createApi({
         search?: string;
         specialty?: string;
         location?: string;
+        reviewMin?: number;
+        reviewMax?: number;
       }
     >({
-      query: ({ page = 1, limit = 20, search, specialty, location } = {}) => {
+      query: ({
+        page = 1,
+        limit = 20,
+        search,
+        specialty,
+        location,
+        reviewMin,
+        reviewMax,
+      } = {}) => {
         const params = new URLSearchParams();
         params.append("page", page.toString());
         params.append("limit", limit.toString());
         if (search) params.append("search", search);
         if (specialty) params.append("specialty", specialty);
         if (location) params.append("location", location);
+        if (reviewMin != null) params.append("reviewMin", reviewMin.toString());
+        if (reviewMax != null) params.append("reviewMax", reviewMax.toString());
 
         return {
           url: `/public/accountants?${params.toString()}`,

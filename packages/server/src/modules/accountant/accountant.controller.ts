@@ -136,20 +136,47 @@ export class PublicAccountantsController {
   @Get()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Browse accountant profiles (public, no auth required)' })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
-  @ApiQuery({ name: 'location', required: false, type: String, description: 'Filter by city' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (max 50)',
+  })
+  @ApiQuery({
+    name: 'location',
+    required: false,
+    type: String,
+    description: 'Filter by city',
+  })
   @ApiQuery({
     name: 'specialty',
     required: false,
     type: String,
-    description: 'Filter by specialty/position',
+    description: 'Filter by company specialty (exact match)',
   })
   @ApiQuery({
     name: 'search',
     required: false,
     type: String,
-    description: 'Search by name or company',
+    description: 'Search by first name, last name, or company name',
+  })
+  @ApiQuery({
+    name: 'reviewMin',
+    required: false,
+    type: Number,
+    description: 'Minimum review rating',
+  })
+  @ApiQuery({
+    name: 'reviewMax',
+    required: false,
+    type: Number,
+    description: 'Maximum review rating',
   })
   @ApiResponse({
     status: 200,
@@ -160,7 +187,9 @@ export class PublicAccountantsController {
     @Query('limit') limit?: string,
     @Query('location') location?: string,
     @Query('specialty') specialty?: string,
-    @Query('search') search?: string
+    @Query('search') search?: string,
+    @Query('reviewMin') reviewMin?: string,
+    @Query('reviewMax') reviewMax?: string
   ) {
     return await this.accountantService.browseAccountants({
       page: page ? parseInt(page) : 1,
@@ -168,6 +197,8 @@ export class PublicAccountantsController {
       location,
       specialty,
       search,
+      reviewMin: reviewMin ? parseFloat(reviewMin) : undefined,
+      reviewMax: reviewMax ? parseFloat(reviewMax) : undefined,
     });
   }
 

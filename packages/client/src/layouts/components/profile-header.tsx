@@ -26,6 +26,8 @@ export interface ProfileHeaderProps {
   onEditCover?: () => void;
   onEditAvatar?: () => void;
   onEditProfile?: () => void;
+  /** Quand true, masque le bouton Modifier (pendant l’édition) */
+  isEditing?: boolean;
   /** Mode visiteur : boutons Schedule et Contacter */
   onSchedule?: () => void;
   onContact?: () => void;
@@ -39,8 +41,9 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   onEditCover,
   onEditAvatar,
   onEditProfile,
-  onSchedule,
   onContact,
+  onSchedule,
+  isEditing = false,
 }) => {
   const theme = useTheme();
   const isVisitorMode = onSchedule != null || onContact != null;
@@ -160,8 +163,8 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             )}
           </Box>
 
-          {/* Edit Profile Button (mode propriétaire) */}
-          {onEditProfile && (
+          {/* Edit Profile Button (mode propriétaire) — masqué pendant l’édition */}
+          {onEditProfile && !isEditing && (
             <CustomButton
               size="large"
               startIcon={<Pencil />}

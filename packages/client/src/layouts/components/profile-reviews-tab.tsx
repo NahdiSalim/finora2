@@ -201,7 +201,7 @@ const ReviewCard: React.FC<ReviewCardProps> = ({
     <Box
       sx={{
         display: "flex",
-        gap: 2,
+        gap: 1,
         backgroundColor: theme.palette.grey[50],
         p: 2,
         mb: 1,
@@ -212,6 +212,8 @@ const ReviewCard: React.FC<ReviewCardProps> = ({
         sx={{
           bgcolor: theme.palette.primary.main,
           color: theme.palette.common.white,
+          width: 35,
+          height: 35,
         }}
       >
         {initial}
@@ -236,19 +238,22 @@ const ReviewCard: React.FC<ReviewCardProps> = ({
               gap: 1,
             }}
           >
-            <Typography variant="subtitle1" fontWeight={600}>
+            <Typography variant="body2" fontWeight={500}>
               {author}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+
+            <Typography variant="caption" fontWeight={500}>
+              •
+            </Typography>
+
+            <Typography variant="caption" color={theme.palette.info.main}>
               {dateStr}
             </Typography>
           </Box>
           <Rating value={item.rating} readOnly size="small" />
         </Box>
 
-        <Typography variant="body2" color="text.primary">
-          {comment}
-        </Typography>
+        <Typography variant="caption">{comment}</Typography>
 
         {hasResponse && (
           <Box
@@ -354,50 +359,72 @@ function SubmitReviewForm({ accountantId, onSuccess }: SubmitReviewFormProps) {
   };
 
   return (
-    <StyledPaper>
-      <Typography variant="h6" fontWeight={600} gutterBottom>
-        Partagez votre avis
-      </Typography>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-        <Rating
-          value={rating}
-          onChange={(_, value) => setRating(value ?? 0)}
-          size="large"
-          emptyIcon={<StarIcon style={{ opacity: 0.55 }} fontSize="inherit" />}
+    <Box px={2}>
+      <StyledPaper
+        sx={{
+          border: `solid 2px`,
+          borderColor: theme.palette.primary.main,
+        }}
+      >
+        <Typography variant="h6" fontWeight={600} gutterBottom>
+          Partagez votre avis
+        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+          <Rating
+            value={rating}
+            onChange={(_, value) => setRating(value ?? 0)}
+            size="large"
+            emptyIcon={
+              <StarIcon style={{ opacity: 0.55 }} fontSize="inherit" />
+            }
+          />
+        </Box>
+        <Typography
+          variant="body2"
+          color={theme.palette.common.black}
+          sx={{ mb: 1 }}
+        >
+          Votre commentaire :
+        </Typography>
+        <TextField
+          multiline
+          minRows={3}
+          maxRows={8}
+          fullWidth
+          placeholder="Partagez votre expérience..."
+          value={comment}
+          onChange={(e) =>
+            setComment(e.target.value.slice(0, MAX_COMMENT_LENGTH))
+          }
+          inputProps={{ maxLength: MAX_COMMENT_LENGTH }}
+          sx={{
+            mb: 1,
+            "& .MuiOutlinedInput-root": {
+              borderRadius: 3,
+              fontSize: 14,
+            },
+            "& .MuiInputBase-input": {
+              fontSize: 14,
+            },
+          }}
         />
-      </Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Votre commentaire :
-      </Typography>
-      <TextField
-        multiline
-        minRows={3}
-        maxRows={8}
-        fullWidth
-        placeholder="Partagez votre expérience..."
-        value={comment}
-        onChange={(e) =>
-          setComment(e.target.value.slice(0, MAX_COMMENT_LENGTH))
-        }
-        inputProps={{ maxLength: MAX_COMMENT_LENGTH }}
-        sx={{ mb: 1 }}
-      />
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{ mb: 2, display: "block" }}
-      >
-        {comment.length}/{MAX_COMMENT_LENGTH} caractères
-      </Typography>
-      <CustomButton
-        variant="contained"
-        color="primary"
-        onClick={handleSubmit}
-        disabled={rating < 1 || isLoading}
-      >
-        Soumettre mon avis
-      </CustomButton>
-    </StyledPaper>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ mb: 2, display: "block" }}
+        >
+          {comment.length}/{MAX_COMMENT_LENGTH} caractères
+        </Typography>
+        <CustomButton
+          variant="contained"
+          color="primary"
+          onClick={handleSubmit}
+          disabled={rating < 1 || isLoading}
+        >
+          Soumettre mon avis
+        </CustomButton>
+      </StyledPaper>
+    </Box>
   );
 }
 

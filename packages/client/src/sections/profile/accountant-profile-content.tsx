@@ -1,31 +1,29 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Box, Card, Typography } from "@mui/material";
-import { ArrowLeft } from "lucide-react";
 
 import { ContactAccountantModal } from "src/components/visitor/ContactAccountantModal";
 import ProfileHeader from "src/layouts/components/profile-header";
 import ProfileTabs from "src/layouts/components/profile-tabs";
 import ContactInfos from "src/layouts/components/profile-contact";
+import { PageHeader } from "src/layouts/components/page-header";
 import { useGetPublicAccountantByIdQuery } from "src/lib/services/publicAccountantsApi";
 
 export type AccountantProfileContentProps = {
   accountantId: number;
-  /** Path or function to navigate back (e.g. "/" or "/dashboard/network") */
+  /** Path to navigate back (e.g. "/" or "/dashboard/network") */
   backTo: string;
-  /** Label for the back link */
-  backLabel?: string;
-  /** Optional caption below the back link */
+  /** Title in the page header */
+  title?: string;
+  /** Caption below the title */
   caption?: string;
 };
 
 export function AccountantProfileContent({
   accountantId,
   backTo,
-  backLabel = "Détails profil",
+  title = "Détails profil",
   caption = "Tout sur votre profil en un seul endroit",
 }: AccountantProfileContentProps) {
-  const navigate = useNavigate();
   const [contactModalOpen, setContactModalOpen] = useState(false);
 
   const { data, isLoading, isError } = useGetPublicAccountantByIdQuery(
@@ -75,7 +73,6 @@ export function AccountantProfileContent({
   return (
     <Box
       sx={{
-        overflowY: "auto",
         py: 2,
         px: { xs: 2, sm: 3 },
         maxWidth: 1440,
@@ -84,32 +81,14 @@ export function AccountantProfileContent({
         bgcolor: "grey.50",
       }}
     >
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-          mb: 2,
-          cursor: "pointer",
-          "&:hover": { opacity: 0.8 },
-        }}
-        onClick={() => navigate(backTo)}
-        role="button"
-        onKeyDown={(e) => e.key === "Enter" && navigate(backTo)}
-        tabIndex={0}
-      >
-        <ArrowLeft size={20} />
-        <Typography variant="body2" fontWeight={600}>
-          {backLabel}
-        </Typography>
-      </Box>
-      {caption && (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          {caption}
-        </Typography>
-      )}
+      <PageHeader
+        title={title}
+        caption={caption}
+        backButton={{ path: backTo }}
+        sx={{ mb: 0 }}
+      />
 
-      <Card sx={{ bgcolor: "white", borderRadius: 3, p: 2 }}>
+      <Card sx={{ bgcolor: "white", borderRadius: 3, p: 2, mt: 1.5 }}>
         <ProfileHeader
           coverImage={data?.coverPhotoUrl ?? undefined}
           avatarImage={data?.photoUrl ?? data?.company?.logoUrl ?? undefined}

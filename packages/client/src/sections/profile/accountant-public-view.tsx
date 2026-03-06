@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom";
-import { Box, Typography, useTheme } from "@mui/material";
+import { Box, Container, Typography, useTheme } from "@mui/material";
 
 import { PublicNavbar } from "src/components/visitor/PublicNavbar";
 import { AccountantProfileContent } from "src/sections/profile/accountant-profile-content";
@@ -31,16 +31,17 @@ export default function AccountantPublicView() {
         height: "100vh",
         display: "flex",
         flexDirection: "column",
-        overflow: "hidden", // stop full page scroll
+        overflow: "hidden",
         backgroundColor: theme.palette.grey[50],
       }}
     >
+      {/* Navbar fixe */}
       <Box
         sx={{
           height: "10vh",
+          minHeight: 56,
           flexShrink: 0,
           display: "flex",
-          flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
           backgroundColor: theme.palette.common.white,
@@ -49,13 +50,31 @@ export default function AccountantPublicView() {
         <PublicNavbar />
       </Box>
 
-      <Box sx={{ flex: 1 }}>
-        <AccountantProfileContent
-          accountantId={accountantId}
-          backTo="/"
-          backLabel="Détails profil"
-          caption="Tout sur votre profil en un seul endroit"
-        />
+      {/* Zone scrollable : seul le contenu défile, pas la navbar */}
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          pb: { xs: 6, md: 8 },
+          pt: 1.5,
+        }}
+      >
+        <Container
+          maxWidth={false}
+          sx={{
+            px: { xs: 2, sm: 3, md: 2 },
+            maxWidth: "1440px",
+            mx: "auto",
+          }}
+        >
+          <AccountantProfileContent
+            accountantId={accountantId}
+            backTo="/"
+            title="Détails profil"
+            caption="Tout sur votre profil en un seul endroit."
+          />
+        </Container>
       </Box>
     </Box>
   );

@@ -18,7 +18,7 @@ export default function NetworkAccountantProfileView() {
     <AccountantProfileContent
       accountantId={accountantId}
       backTo="/dashboard/network"
-      backLabel="Retour au Réseautage"
+      title="Détails profil"
       caption="Profil du comptable"
     />
   );

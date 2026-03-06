@@ -164,7 +164,7 @@ export function VisitorView() {
               <Stack spacing={1.5}>
                 <CustomInput
                   fullWidth
-                  placeholder="Search for accountants ..."
+                  placeholder="Rechercher un comptable ..."
                   value={searchDraft}
                   onChange={(e) => setSearchDraft(e.target.value)}
                   onKeyDown={(e) => {

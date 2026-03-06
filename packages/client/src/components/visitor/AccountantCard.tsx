@@ -16,12 +16,11 @@ import {
 } from "@mui/material";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
-import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
-import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import VerifiedIcon from "@mui/icons-material/Verified";
 import CustomButton from "../common/CustomButton";
 import CustomChip from "../common/CustomChip";
 import { motion } from "framer-motion";
+import { Handshake, MessageCircle } from "lucide-react";
 
 // ----------------------------------------------------------------------
 
@@ -428,67 +427,57 @@ export function AccountantCard({
 
           {/* Action buttons with animations */}
           <Grow in timeout={500}>
-            <Stack direction="row" spacing={1} sx={{ mt: 2.5 }}>
-              <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                style={{ flex: 1 }}
-                onClick={(e: React.MouseEvent) => e.stopPropagation()}
+            <Box
+              width="100%"
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                mt: 2.5,
+                gap: 1,
+              }}
+            >
+              <CustomButton
+                variant="contained"
+                color="primary"
+                fullWidth
+                startIcon={<Handshake />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onScheduleClick) onScheduleClick();
+                  else if (profilePath) navigate(profilePath);
+                }}
+                sx={{
+                  height: 40,
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontWeight: 600,
+                  boxShadow: isHovered
+                    ? `0 8px 16px ${theme.palette.primary.main}40`
+                    : "none",
+                  transition: "box-shadow 0.3s ease",
+                }}
               >
-                <CustomButton
-                  variant="contained"
-                  color="primary"
-                  fullWidth
-                  startIcon={<CalendarTodayIcon />}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onScheduleClick) onScheduleClick();
-                    else if (profilePath) navigate(profilePath);
-                  }}
-                  sx={{
-                    borderRadius: 2,
-                    textTransform: "none",
-                    fontWeight: 600,
-                    boxShadow: isHovered
-                      ? `0 8px 16px ${theme.palette.primary.main}40`
-                      : "none",
-                    transition: "box-shadow 0.3s ease",
-                  }}
-                >
-                  {scheduleButtonLabel}
-                </CustomButton>
-              </motion.div>
+                {scheduleButtonLabel}
+              </CustomButton>
 
-              <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                style={{ flex: 1 }}
-                onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              <CustomButton
+                variant="outlined"
+                color="info"
+                onClick={() => {
+                  if (accountantId == null) return;
+                  if (onMessageClick) onMessageClick(accountantId);
+                  else if (profilePath) navigate(profilePath);
+                }}
+                sx={{
+                  height: 40,
+                  fontWeight: 600,
+                }}
               >
-                <CustomButton
-                  variant="outlined"
-                  color="info"
-                  fullWidth
-                  startIcon={<ChatBubbleOutlineIcon />}
-                  onClick={() => {
-                    if (accountantId == null) return;
-                    if (onMessageClick) onMessageClick(accountantId);
-                    else if (profilePath) navigate(profilePath);
-                  }}
-                  sx={{
-                    borderRadius: 2,
-                    textTransform: "none",
-                    fontWeight: 600,
-                    borderWidth: 2,
-                    "&:hover": {
-                      borderWidth: 2,
-                    },
-                  }}
-                >
-                  Message
-                </CustomButton>
-              </motion.div>
-            </Stack>
+                <MessageCircle Size={14} />
+              </CustomButton>
+            </Box>
           </Grow>
         </CardContent>
       </Card>

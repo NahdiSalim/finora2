@@ -19,6 +19,16 @@ import AuthLayout from "src/sections/auth/sign-in-view/Auth-Layout";
 export const UserPage = lazy(() => import("src/pages/users"));
 export const CollaboratorPage = lazy(() => import("src/pages/collaborators"));
 export const ClientPage = lazy(() => import("src/pages/clients"));
+export const ProfilePage = lazy(() => import("src/pages/profile"));
+export const NetworkPage = lazy(() => import("src/pages/network"));
+export const NetworkAccountantProfilePage = lazy(() =>
+  import("src/pages/network/accountant-profile").then((m) => ({
+    default: m.default,
+  })),
+);
+export const DocumentsPage = lazy(
+  () => import("src/pages/documents/documents"),
+);
 
 export const UserFormPage = lazy(
   () => import("src/sections/user/user-forms/index"),
@@ -28,6 +38,15 @@ export const DocumentValidationPage = lazy(
 );
 export const SignInPage = lazy(() => import("src/pages/sign-in"));
 export const RegisterPage = lazy(() => import("src/pages/register"));
+export const VisitorPage = lazy(() => import("src/pages/visitor"));
+export const EntryPointPage = lazy(() =>
+  import("src/components/entry-point").then((m) => ({ default: m.default })),
+);
+export const AccountantPublicProfilePage = lazy(() =>
+  import("src/sections/profile/accountant-public-view").then((m) => ({
+    default: m.default,
+  })),
+);
 
 export const ForgotPasswordPage = lazy(
   () => import("src/pages/forgot-password"),
@@ -69,6 +88,14 @@ function DashboardWrapper() {
 export const routesSection: RouteObject[] = [
   {
     path: "/",
+    element: (
+      <Suspense fallback={renderFallback()}>
+        <EntryPointPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: "dashboard",
     Component: DashboardWrapper,
     children: [
       {
@@ -76,7 +103,7 @@ export const routesSection: RouteObject[] = [
         element: <DefaultRedirect />,
       },
       {
-        path: "users",
+        path: "archive",
         element: (
           <PermissionGuard requiredPath="/archive">
             <UserPage />
@@ -111,15 +138,7 @@ export const routesSection: RouteObject[] = [
         path: "documents",
         element: (
           <PermissionGuard requiredPath="/documents">
-            <UserPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "documents/:id",
-        element: (
-          <PermissionGuard requiredPath="/documents/:id">
-            <UserPage />
+            <DocumentsPage />
           </PermissionGuard>
         ),
       },
@@ -180,10 +199,20 @@ export const routesSection: RouteObject[] = [
         ),
       },
       {
+        path: "network/accountant/:id",
+        element: (
+          <PermissionGuard requiredPath="/network">
+            <Suspense fallback={renderFallback()}>
+              <NetworkAccountantProfilePage />
+            </Suspense>
+          </PermissionGuard>
+        ),
+      },
+      {
         path: "network",
         element: (
           <PermissionGuard requiredPath="/network">
-            <UserPage />
+            <NetworkPage />
           </PermissionGuard>
         ),
       },
@@ -191,7 +220,7 @@ export const routesSection: RouteObject[] = [
         path: "profile",
         element: (
           <PermissionGuard requiredPath="/profile">
-            <UserPage />
+            <ProfilePage />
           </PermissionGuard>
         ),
       },
@@ -255,7 +284,19 @@ export const routesSection: RouteObject[] = [
     ],
   },
 
-  // Auth routes (sans protection)
+  // Public routes (sans protection)
+  {
+    path: "visitor",
+    element: <VisitorPage />,
+  },
+  {
+    path: "accountant/:id",
+    element: (
+      <Suspense fallback={renderFallback()}>
+        <AccountantPublicProfilePage />
+      </Suspense>
+    ),
+  },
   {
     path: "sign-in",
     element: <AuthLayout />,

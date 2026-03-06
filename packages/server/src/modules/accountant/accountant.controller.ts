@@ -6,13 +6,26 @@ import {
   UseGuards,
   Req,
   Query,
+  Param,
   HttpCode,
   HttpStatus,
+  Patch,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+  ApiConsumes,
+} from '@nestjs/swagger';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AccountantService } from './accountant.service';
 import { CreateCollaboratorDto } from './dto/create-collaborator.dto';
 import { CreateClientDto } from './dto/create-client.dto';
+import { UpdateAccountantProfileDto } from './dto/update-profile.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -123,20 +136,49 @@ export class PublicAccountantsController {
   @Get()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Browse accountant profiles (public, no auth required)' })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
-  @ApiQuery({ name: 'location', required: false, type: String, description: 'Filter by city' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (max 50)',
+  })
+  @ApiQuery({
+    name: 'location',
+    required: false,
+    type: String,
+    description: 'Filter by location (searches in city, address, and postal code)',
+    example: '123',
+  })
   @ApiQuery({
     name: 'specialty',
     required: false,
     type: String,
-    description: 'Filter by specialty/position',
+    description: 'Filter by company specialty (partial match, case insensitive)',
+    example: 'Audit',
   })
   @ApiQuery({
     name: 'search',
     required: false,
     type: String,
-    description: 'Search by name or company',
+    description: 'Search by first name, last name, or company name',
+  })
+  @ApiQuery({
+    name: 'reviewMin',
+    required: false,
+    type: Number,
+    description: 'Minimum review rating',
+  })
+  @ApiQuery({
+    name: 'reviewMax',
+    required: false,
+    type: Number,
+    description: 'Maximum review rating',
   })
   @ApiResponse({
     status: 200,
@@ -147,7 +189,9 @@ export class PublicAccountantsController {
     @Query('limit') limit?: string,
     @Query('location') location?: string,
     @Query('specialty') specialty?: string,
-    @Query('search') search?: string
+    @Query('search') search?: string,
+    @Query('reviewMin') reviewMin?: string,
+    @Query('reviewMax') reviewMax?: string
   ) {
     return await this.accountantService.browseAccountants({
       page: page ? parseInt(page) : 1,
@@ -155,6 +199,8 @@ export class PublicAccountantsController {
       location,
       specialty,
       search,
+      reviewMin: reviewMin ? parseFloat(reviewMin) : undefined,
+      reviewMax: reviewMax ? parseFloat(reviewMax) : undefined,
     });
   }
 
@@ -169,7 +215,7 @@ export class PublicAccountantsController {
     status: 404,
     description: 'Accountant profile not found',
   })
-  async getAccountantProfile(@Query('id') id: string) {
+  async getAccountantProfile(@Param('id') id: string) {
     return await this.accountantService.getAccountantProfile(parseInt(id));
   }
 }
@@ -194,25 +240,31 @@ export class AccountantProfileController {
     return await this.accountantService.getAccountantProfile(accountantId);
   }
 
-  @Post('update')
+  @Patch('update')
   @Roles(RoleCode.ACCOUNTANT)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Update my public profile (accountant only)' })
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'photo', maxCount: 1 },
+      { name: 'coverPhoto', maxCount: 1 },
+    ])
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Update my public profile with photo and cover photo (accountant only)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Profile updated successfully',
   })
   async updateMyProfile(
     @Req() req: AuthRequest,
-    @Body()
-    data: {
-      position?: string;
-      department?: string;
-      phone?: string;
-      diploma?: string;
-    }
+    @Body() data: UpdateAccountantProfileDto,
+    @UploadedFiles() files?: { photo?: Express.Multer.File[]; coverPhoto?: Express.Multer.File[] }
   ) {
     const accountantId = req.user!.id;
-    return await this.accountantService.updateMyProfile(accountantId, data);
+    const photo = files?.photo?.[0];
+    const coverPhoto = files?.coverPhoto?.[0];
+    return await this.accountantService.updateMyProfile(accountantId, data, photo, coverPhoto);
   }
 }

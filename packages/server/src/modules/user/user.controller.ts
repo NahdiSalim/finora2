@@ -13,9 +13,10 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFile,
+  UploadedFiles,
   ParseIntPipe,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { User } from '@prisma/client';
 import {
   ApiBadRequestResponse,
@@ -32,6 +33,7 @@ import { UserService } from './user.serivce';
 import { UpdateUserDto } from './update-user.dto';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
+import { UpdateCompleteProfileDto } from './dto/update-complete-profile.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { SuspendUserDto } from './dto/suspend-user.dto';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
@@ -111,6 +113,96 @@ export class UserController {
     return this.userService.suspendUser(id, dto.reason);
   }
 
+  @Patch('profile/complete')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'photo', maxCount: 1 },
+      { name: 'coverPhoto', maxCount: 1 },
+      { name: 'cinFile', maxCount: 1 },
+      { name: 'diplomaFile', maxCount: 1 },
+      { name: 'companyLogo', maxCount: 1 },
+      { name: 'companyPatentFile', maxCount: 1 },
+      { name: 'companyRneFile', maxCount: 1 },
+    ])
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Update complete profile (user + company + documents) - UNIFIED API' })
+  @ApiOkResponse({ description: 'Profile updated successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'Email already exists or validation error',
+  })
+  async updateCompleteProfile(
+    @Req() req: AuthRequest,
+    @Body() dto: UpdateCompleteProfileDto,
+    @UploadedFiles()
+    files?: {
+      photo?: Express.Multer.File[];
+      coverPhoto?: Express.Multer.File[];
+      cinFile?: Express.Multer.File[];
+      diplomaFile?: Express.Multer.File[];
+      companyLogo?: Express.Multer.File[];
+      companyPatentFile?: Express.Multer.File[];
+      companyRneFile?: Express.Multer.File[];
+    }
+  ) {
+    const userId = req.user!.id;
+    return await this.userService.updateCompleteProfile(userId, dto, files);
+  }
+
+  @Patch('profile')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'photo', maxCount: 1 },
+      { name: 'coverPhoto', maxCount: 1 },
+    ])
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Update user profile with photo and cover photo' })
+  @ApiOkResponse({ description: 'Profile updated successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'Email already exists or validation error',
+  })
+  async updateProfile(
+    @Req() req: AuthRequest,
+    @Body() dto: UpdateUserProfileDto,
+    @UploadedFiles() files?: { photo?: Express.Multer.File[]; coverPhoto?: Express.Multer.File[] }
+  ) {
+    const userId = req.user!.id;
+    const photo = files?.photo?.[0];
+    const coverPhoto = files?.coverPhoto?.[0];
+    return await this.userService.updateProfile(userId, dto, photo, coverPhoto);
+  }
+
+  @Patch('company')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('logo'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Update company information with logo (accountant/client only)' })
+  @ApiOkResponse({ description: 'Company updated successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'User not associated with company',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Only accountants and clients can update company',
+  })
+  async updateCompany(
+    @Req() req: AuthRequest,
+    @Body() dto: UpdateCompanyDto,
+    @UploadedFile() logo?: Express.Multer.File
+  ) {
+    const userId = req.user!.id;
+    return await this.userService.updateCompany(userId, dto, logo);
+  }
+
   @Patch(':id')
   @RequirePermission('edit_user')
   @ApiOkResponse({ description: 'User updated successfully' })
@@ -169,49 +261,5 @@ export class UserController {
   })
   async deleteUser(@Param('id') id: number): Promise<User> {
     return await this.userService.deleteUser(id);
-  }
-
-  @Patch('profile')
-  @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('photo'))
-  @ApiConsumes('multipart/form-data')
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Update user profile with photo' })
-  @ApiOkResponse({ description: 'Profile updated successfully' })
-  @ApiResponse({
-    status: 400,
-    description: 'Email already exists or validation error',
-  })
-  async updateProfile(
-    @Req() req: AuthRequest,
-    @Body() dto: UpdateUserProfileDto,
-    @UploadedFile() photo?: Express.Multer.File
-  ) {
-    const userId = req.user!.id;
-    return await this.userService.updateProfile(userId, dto, photo);
-  }
-
-  @Patch('company')
-  @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('logo'))
-  @ApiConsumes('multipart/form-data')
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Update company information with logo (accountant/client only)' })
-  @ApiOkResponse({ description: 'Company updated successfully' })
-  @ApiResponse({
-    status: 400,
-    description: 'User not associated with company',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Only accountants and clients can update company',
-  })
-  async updateCompany(
-    @Req() req: AuthRequest,
-    @Body() dto: UpdateCompanyDto,
-    @UploadedFile() logo?: Express.Multer.File
-  ) {
-    const userId = req.user!.id;
-    return await this.userService.updateCompany(userId, dto, logo);
   }
 }

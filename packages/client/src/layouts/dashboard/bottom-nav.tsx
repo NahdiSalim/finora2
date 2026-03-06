@@ -20,36 +20,62 @@ import { useNavigation } from "src/hooks/useNavigation";
 
 // ----------------------------------------------------------------------
 
+const DASHBOARD_BASE = "/dashboard";
+
 const SUPERADMIN_TABS = [
-  { label: "Dashboard", path: "/dashboard", icon: <LayoutGrid size={22} /> },
+  {
+    label: "Dashboard",
+    path: `${DASHBOARD_BASE}/dashboard`,
+    icon: <LayoutGrid size={22} />,
+  },
   {
     label: "Collaborateurs",
-    path: "/collaborators",
+    path: `${DASHBOARD_BASE}/collaborators`,
     icon: <Users size={22} />,
   },
-  { label: "Clients", path: "/clients", icon: <User size={22} /> },
+  {
+    label: "Clients",
+    path: `${DASHBOARD_BASE}/clients`,
+    icon: <User size={22} />,
+  },
   {
     label: "Messagerie",
-    path: "/messages",
+    path: `${DASHBOARD_BASE}/messages`,
     icon: <MessageSquareMore size={22} />,
   },
-  { label: "Rendez-vous", path: "/meetings", icon: <Calendar size={22} /> },
+  {
+    label: "Rendez-vous",
+    path: `${DASHBOARD_BASE}/meetings`,
+    icon: <Calendar size={22} />,
+  },
 ];
 
 const DEFAULT_TABS = [
-  { label: "Dashboard", path: "/dashboard", icon: <LayoutGrid size={22} /> },
+  {
+    label: "Dashboard",
+    path: `${DASHBOARD_BASE}/dashboard`,
+    icon: <LayoutGrid size={22} />,
+  },
   {
     label: "Messagerie",
-    path: "/messages",
+    path: `${DASHBOARD_BASE}/messages`,
     icon: <MessageSquareMore size={22} />,
   },
-  { label: "Rendez-vous", path: "/meetings", icon: <Calendar size={22} /> },
+  {
+    label: "Rendez-vous",
+    path: `${DASHBOARD_BASE}/meetings`,
+    icon: <Calendar size={22} />,
+  },
   {
     label: "Collaborateurs",
-    path: "/collaborators",
+    path: `${DASHBOARD_BASE}/collaborators`,
     icon: <Users size={22} />,
   },
-  { label: "Clients", path: "/clients", icon: <User size={22} /> },
+  {
+    label: "Clients",
+    path: `${DASHBOARD_BASE}/clients`,
+    icon: <User size={22} />,
+  },
 ];
 
 // ----------------------------------------------------------------------

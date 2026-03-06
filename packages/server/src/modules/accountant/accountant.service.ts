@@ -3,6 +3,7 @@ import { PrismaService } from 'prisma/prisma.service';
 import { ApiError } from 'src/common/errors/api-error';
 import * as bcrypt from 'bcrypt';
 import { MailService } from '../mail/mail.service';
+import { MinioService } from 'src/common/services/minio.service';
 import { CreateCollaboratorDto } from './dto/create-collaborator.dto';
 import { CreateClientDto } from './dto/create-client.dto';
 import { RoleCode } from 'src/common/enums/role.enum';
@@ -12,7 +13,8 @@ import { UserStatus } from 'src/common/enums/user-status.enum';
 export class AccountantService {
   constructor(
     private prisma: PrismaService,
-    private mailService: MailService
+    private mailService: MailService,
+    private minioService: MinioService
   ) {}
 
   // Create collaborator (by accountant)
@@ -256,7 +258,7 @@ export class AccountantService {
       });
 
       // Create relationship between client company and accounting firm
-      const relationship = await this.prisma.clientAccountingFirmRelationship.create({
+      await this.prisma.clientAccountingFirmRelationship.create({
         data: {
           clientCompanyId: clientCompany.id,
           accountingFirmId: accountant.companyId,
@@ -264,20 +266,6 @@ export class AccountantService {
           status: UserStatus.ACTIVE,
           relationshipStart: new Date(),
         } as any,
-        include: {
-          clientCompany: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          accountingFirm: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
       });
 
       // Send welcome email with password
@@ -501,6 +489,8 @@ export class AccountantService {
     location?: string;
     specialty?: string;
     search?: string;
+    reviewMin?: number;
+    reviewMax?: number;
   }) {
     const page = filters.page || 1;
     const limit = Math.min(filters.limit || 20, 50); // Max 50 per page
@@ -516,23 +506,80 @@ export class AccountantService {
         throw new ApiError('Accountant role not found', 500, 'ROLE_NOT_FOUND');
       }
 
+      // Build company filter
+      const companyFilter: any = {};
+
+      // Filter by review rating range
+      if (filters.reviewMin !== undefined || filters.reviewMax !== undefined) {
+        const ratingCondition: any = {};
+        if (filters.reviewMin !== undefined) {
+          ratingCondition.gte = filters.reviewMin;
+        }
+        if (filters.reviewMax !== undefined) {
+          ratingCondition.lte = filters.reviewMax;
+        }
+        companyFilter.rating = ratingCondition;
+      }
+
       // Build where clause
       const where: any = {
         id_role: accountantRole.id,
         status: UserStatus.ACTIVE,
+        companyId: { not: null }, // Must have a company
       };
 
-      // Filter by location (city)
-      if (filters.location) {
+      // Add company filters if any (except location which needs OR)
+      if (Object.keys(companyFilter).length > 0) {
         where.company = {
-          city: {
-            contains: filters.location,
-            mode: 'insensitive',
-          },
+          is: companyFilter,
         };
       }
 
-      // Search by name, company name, or position
+      // Filter by location (search in city, address, or postalCode)
+      if (filters.location) {
+        const locationConditions = [
+          {
+            company: {
+              is: {
+                city: {
+                  contains: filters.location,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
+          {
+            company: {
+              is: {
+                address: {
+                  contains: filters.location,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
+          {
+            company: {
+              is: {
+                postalCode: {
+                  contains: filters.location,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
+        ];
+
+        // Combine with existing where conditions
+        if (where.OR) {
+          where.AND = [{ OR: where.OR }, { OR: locationConditions }];
+          delete where.OR;
+        } else {
+          where.OR = locationConditions;
+        }
+      }
+
+      // Search by firstName, lastName, or company name
       if (filters.search) {
         where.OR = [
           {
@@ -549,27 +596,15 @@ export class AccountantService {
           },
           {
             company: {
-              name: {
-                contains: filters.search,
-                mode: 'insensitive',
+              is: {
+                name: {
+                  contains: filters.search,
+                  mode: 'insensitive',
+                },
               },
             },
           },
-          {
-            position: {
-              contains: filters.search,
-              mode: 'insensitive',
-            },
-          },
         ];
-      }
-
-      // Filter by specialty (position field)
-      if (filters.specialty) {
-        where.position = {
-          contains: filters.specialty,
-          mode: 'insensitive',
-        };
       }
 
       const [total, data] = await Promise.all([
@@ -585,17 +620,29 @@ export class AccountantService {
             email: true,
             phone: true,
             photo: true,
+            coverPhoto: true,
             position: true,
             department: true,
+            cin: true,
+            diploma: true,
             company: {
               select: {
                 id: true,
                 name: true,
+                description: true,
+                experience: true,
                 city: true,
                 address: true,
                 postalCode: true,
                 phone: true,
                 email: true,
+                siret: true,
+                vatNumber: true,
+                legalForm: true,
+                specialties: true,
+                rating: true,
+                numberOfReviews: true,
+                logo: true,
               },
             },
           },
@@ -605,24 +652,129 @@ export class AccountantService {
         }),
       ]);
 
+      // Filter out incomplete profiles (must have required company fields)
+      const completeProfiles = data.filter((accountant) => {
+        if (!accountant.company) return false;
+
+        // Check required fields
+        const hasName = accountant.company.name && accountant.company.name.trim() !== '';
+        const hasDescription =
+          accountant.company.description && accountant.company.description.trim() !== '';
+        const hasExperience =
+          accountant.company.experience && accountant.company.experience.trim() !== '';
+        const hasAddress = accountant.company.address && accountant.company.address.trim() !== '';
+        const hasSpecialties =
+          accountant.company.specialties && accountant.company.specialties.length > 0;
+
+        if (!hasName || !hasDescription || !hasExperience || !hasAddress || !hasSpecialties) {
+          return false;
+        }
+
+        // Filter by specialty (partial match, case insensitive)
+        if (filters.specialty) {
+          const specialtyLower = filters.specialty.toLowerCase();
+          const hasMatchingSpecialty = accountant.company.specialties.some((s) =>
+            s.toLowerCase().includes(specialtyLower)
+          );
+          if (!hasMatchingSpecialty) return false;
+        }
+
+        return true;
+      });
+
+      // Generate presigned URLs for all accountants with complete profiles
+      const accountantsWithUrls = await Promise.all(
+        completeProfiles.map(async (accountant) => {
+          let photoUrl: string | null = null;
+          if (accountant.photo) {
+            try {
+              photoUrl = await this.minioService.getPresignedUrl(
+                accountant.photo,
+                7 * 24 * 60 * 60
+              );
+            } catch (error) {
+              console.error('Error generating presigned URL for photo:', error);
+              photoUrl = accountant.photo;
+            }
+          }
+
+          let coverPhotoUrl: string | null = null;
+          if (accountant.coverPhoto) {
+            try {
+              coverPhotoUrl = await this.minioService.getPresignedUrl(
+                accountant.coverPhoto,
+                7 * 24 * 60 * 60
+              );
+            } catch (error) {
+              console.error('Error generating presigned URL for cover photo:', error);
+              coverPhotoUrl = accountant.coverPhoto;
+            }
+          }
+
+          let logoUrl: string | null = null;
+          if (accountant.company?.logo) {
+            try {
+              logoUrl = await this.minioService.getPresignedUrl(
+                accountant.company.logo,
+                7 * 24 * 60 * 60
+              );
+            } catch (error) {
+              console.error('Error generating presigned URL for logo:', error);
+              logoUrl = accountant.company.logo;
+            }
+          }
+
+          return {
+            id: accountant.id,
+            name: `${accountant.firstName} ${accountant.lastName}`,
+            firstName: accountant.firstName,
+            lastName: accountant.lastName,
+            email: accountant.email,
+            phone: accountant.phone,
+            photoUrl,
+            coverPhotoUrl,
+            specialty: accountant.position,
+            department: accountant.department,
+            cin: accountant.cin,
+            diploma: accountant.diploma,
+            company: accountant.company
+              ? {
+                  id: accountant.company.id,
+                  name: accountant.company.name,
+                  description: accountant.company.description,
+                  experience: accountant.company.experience,
+                  city: accountant.company.city,
+                  address: accountant.company.address,
+                  postalCode: accountant.company.postalCode,
+                  phone: accountant.company.phone,
+                  email: accountant.company.email,
+                  siret: accountant.company.siret,
+                  vatNumber: accountant.company.vatNumber,
+                  legalForm: accountant.company.legalForm,
+                  logoUrl,
+                  specialties: accountant.company.specialties || [],
+                  rating: accountant.company.rating || 0,
+                  numberOfReviews: accountant.company.numberOfReviews || 0,
+                }
+              : null,
+          };
+        })
+      );
+
       return {
-        data: data.map((accountant) => ({
-          id: accountant.id,
-          name: `${accountant.firstName} ${accountant.lastName}`,
-          firstName: accountant.firstName,
-          lastName: accountant.lastName,
-          email: accountant.email,
-          phone: accountant.phone,
-          photo: accountant.photo,
-          specialty: accountant.position,
-          department: accountant.department,
-          company: accountant.company,
-        })),
+        data: accountantsWithUrls,
         pagination: {
-          total,
+          total: accountantsWithUrls.length, // Use filtered count
           page,
           limit,
-          totalPages: Math.ceil(total / limit),
+          totalPages: Math.ceil(accountantsWithUrls.length / limit),
+        },
+        filters: {
+          location: filters.location || null,
+          specialty: filters.specialty || null,
+          search: filters.search || null,
+          reviewMin: filters.reviewMin !== undefined ? filters.reviewMin : null,
+          reviewMax: filters.reviewMax !== undefined ? filters.reviewMax : null,
         },
       };
     } catch (error) {
@@ -656,6 +808,7 @@ export class AccountantService {
           email: true,
           phone: true,
           photo: true,
+          coverPhoto: true,
           position: true,
           department: true,
           diploma: true,
@@ -663,14 +816,28 @@ export class AccountantService {
             select: {
               id: true,
               name: true,
+              description: true,
+              experience: true,
+              employeeCount: true,
+              sector: true,
               city: true,
               address: true,
               postalCode: true,
               phone: true,
+              numWhatsapp: true,
               email: true,
+              website: true,
               siret: true,
               vatNumber: true,
               legalForm: true,
+              patentNumber: true,
+              patentFile: true,
+              rne: true,
+              rneFile: true,
+              logo: true,
+              specialties: true,
+              rating: true,
+              numberOfReviews: true,
             },
           },
         },
@@ -680,6 +847,73 @@ export class AccountantService {
         throw new ApiError('Accountant profile not found', 404, 'PROFILE_NOT_FOUND');
       }
 
+      // Generate presigned URLs for photo and coverPhoto if they exist
+      let photoUrl: string | null = null;
+      if (accountant.photo) {
+        try {
+          photoUrl = await this.minioService.getPresignedUrl(accountant.photo, 7 * 24 * 60 * 60); // 7 days
+        } catch (error) {
+          console.error('Error generating presigned URL for photo:', error);
+          photoUrl = accountant.photo; // Fallback to path
+        }
+      }
+
+      let coverPhotoUrl: string | null = null;
+      if (accountant.coverPhoto) {
+        try {
+          coverPhotoUrl = await this.minioService.getPresignedUrl(
+            accountant.coverPhoto,
+            7 * 24 * 60 * 60
+          ); // 7 days
+        } catch (error) {
+          console.error('Error generating presigned URL for cover photo:', error);
+          coverPhotoUrl = accountant.coverPhoto; // Fallback to path
+        }
+      }
+
+      // Generate presigned URL for company logo if exists
+      let logoUrl: string | null = null;
+      if (accountant.company?.logo) {
+        try {
+          logoUrl = await this.minioService.getPresignedUrl(
+            accountant.company.logo,
+            7 * 24 * 60 * 60
+          ); // 7 days
+        } catch (error) {
+          console.error('Error generating presigned URL for logo:', error);
+          logoUrl = accountant.company.logo; // Fallback to path
+        }
+      }
+
+      // Generate presigned URL for patent file if exists
+      let patentFileUrl: string | null = null;
+      if (accountant.company?.patentFile) {
+        try {
+          patentFileUrl = await this.minioService.getPresignedUrl(
+            accountant.company.patentFile,
+            7 * 24 * 60 * 60
+          );
+        } catch (error) {
+          console.error('Error generating presigned URL for patent file:', error);
+          patentFileUrl = accountant.company.patentFile;
+        }
+      }
+
+      // Generate presigned URL for RNE file if exists
+      let rneFileUrl: string | null = null;
+      const rneFilePath =
+        accountant.company?.rneFile ||
+        (accountant.company?.rne?.includes('/') ? accountant.company.rne : null);
+
+      if (rneFilePath) {
+        try {
+          rneFileUrl = await this.minioService.getPresignedUrl(rneFilePath, 7 * 24 * 60 * 60);
+        } catch (error) {
+          console.error('Error generating presigned URL for RNE file:', error);
+          rneFileUrl = rneFilePath;
+        }
+      }
+
       return {
         id: accountant.id,
         name: `${accountant.firstName} ${accountant.lastName}`,
@@ -687,11 +921,41 @@ export class AccountantService {
         lastName: accountant.lastName,
         email: accountant.email,
         phone: accountant.phone,
-        photo: accountant.photo,
+        photoUrl: photoUrl, // URL présignée MinIO
+        coverPhotoUrl: coverPhotoUrl, // URL présignée MinIO
         specialty: accountant.position,
         department: accountant.department,
         diploma: accountant.diploma,
-        company: accountant.company,
+        company: accountant.company
+          ? {
+              id: accountant.company.id,
+              name: accountant.company.name,
+              description: accountant.company.description,
+              experience: accountant.company.experience,
+              employeeCount: accountant.company.employeeCount
+                ? String(accountant.company.employeeCount)
+                : null,
+              sector: accountant.company.sector,
+              city: accountant.company.city,
+              address: accountant.company.address,
+              postalCode: accountant.company.postalCode,
+              phone: accountant.company.phone,
+              numWhatsapp: accountant.company.numWhatsapp,
+              email: accountant.company.email,
+              website: accountant.company.website,
+              siret: accountant.company.siret,
+              vatNumber: accountant.company.vatNumber,
+              legalForm: accountant.company.legalForm,
+              patentNumber: accountant.company.patentNumber,
+              patentFileUrl: patentFileUrl,
+              rne: accountant.company.rne?.includes('/') ? null : accountant.company.rne, // Only return if it's a number, not a path
+              rneFileUrl: rneFileUrl,
+              logoUrl: logoUrl,
+              specialties: accountant.company.specialties || [],
+              rating: accountant.company.rating || 0,
+              numberOfReviews: accountant.company.numberOfReviews || 0,
+            }
+          : null,
       };
     } catch (error) {
       console.error('Get accountant profile error:', error);
@@ -703,12 +967,28 @@ export class AccountantService {
   async updateMyProfile(
     accountantId: number,
     data: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
       position?: string;
       department?: string;
       phone?: string;
+      cin?: string;
       diploma?: string;
-    }
+      experience?: string;
+      description?: string;
+      specialties?: string[];
+    },
+    photoFile?: Express.Multer.File,
+    coverPhotoFile?: Express.Multer.File
   ) {
+    console.log('updateMyProfile called');
+    console.log('Photo file:', photoFile ? photoFile.originalname : 'No photo');
+    console.log(
+      'Cover photo file:',
+      coverPhotoFile ? coverPhotoFile.originalname : 'No cover photo'
+    );
+
     try {
       // Verify user is accountant
       const accountant = await this.prisma.user.findUnique({
@@ -720,13 +1000,123 @@ export class AccountantService {
         throw new ApiError('Only accountants can update their profile', 403, 'FORBIDDEN');
       }
 
+      // Check email uniqueness if email is being updated
+      if (data.email && data.email !== accountant.email) {
+        const emailExists = await this.prisma.user.findUnique({
+          where: { email: data.email },
+        });
+
+        if (emailExists) {
+          throw new ApiError('Email already exists', 400, 'EMAIL_EXISTS');
+        }
+      }
+
+      // Handle photo upload to MinIO
+      let photoPath: string | undefined;
+      if (photoFile && accountant.companyId) {
+        try {
+          // Delete old photo from MinIO if exists
+          if (accountant.photo) {
+            try {
+              await this.minioService.deleteFile(accountant.photo);
+            } catch (deleteError) {
+              console.log('Could not delete old photo:', deleteError);
+            }
+          }
+
+          // Upload new photo to MinIO
+          photoPath = await this.minioService.uploadFile(
+            accountant.companyId,
+            'users/photos',
+            photoFile
+          );
+          console.log('Photo uploaded successfully to MinIO:', photoPath);
+        } catch (photoError) {
+          console.error('Photo upload error:', photoError);
+          photoPath = undefined;
+        }
+      }
+
+      // Handle cover photo upload to MinIO
+      let coverPhotoPath: string | undefined;
+      if (coverPhotoFile && accountant.companyId) {
+        try {
+          // Delete old cover photo from MinIO if exists
+          if (accountant.coverPhoto) {
+            try {
+              await this.minioService.deleteFile(accountant.coverPhoto);
+            } catch (deleteError) {
+              console.log('Could not delete old cover photo:', deleteError);
+            }
+          }
+
+          // Upload new cover photo to MinIO
+          coverPhotoPath = await this.minioService.uploadFile(
+            accountant.companyId,
+            'users/cover-photos',
+            coverPhotoFile
+          );
+          console.log('Cover photo uploaded successfully to MinIO:', coverPhotoPath);
+        } catch (coverPhotoError) {
+          console.error('Cover photo upload error:', coverPhotoError);
+          coverPhotoPath = undefined;
+        }
+      }
+
+      // Update company if experience, description, or specialties provided
+      if (
+        accountant.companyId &&
+        (data.experience !== undefined ||
+          data.description !== undefined ||
+          data.specialties !== undefined)
+      ) {
+        const companyUpdateData: any = {};
+
+        if (data.experience !== undefined && data.experience !== null) {
+          // Keep experience as string (can be text like "5 ans" or "Expert depuis 2010")
+          const experienceStr = String(data.experience).trim();
+          if (experienceStr !== '' && experienceStr !== 'null' && experienceStr !== 'undefined') {
+            companyUpdateData.experience = experienceStr;
+            console.log('Experience saved as string:', experienceStr);
+          } else {
+            console.log('Experience is empty or null string');
+          }
+        }
+
+        if (data.description !== undefined) {
+          companyUpdateData.description = data.description;
+        }
+
+        if (data.specialties !== undefined) {
+          // Transform specialties if it's a string (from form-data)
+          let specialtiesArray: string[] = [];
+          if (typeof data.specialties === 'string') {
+            specialtiesArray = (data.specialties as string).split(',').map((s) => s.trim());
+          } else if (Array.isArray(data.specialties)) {
+            specialtiesArray = data.specialties;
+          }
+          companyUpdateData.specialties = specialtiesArray;
+        }
+
+        await this.prisma.company.update({
+          where: { id: accountant.companyId },
+          data: companyUpdateData,
+        });
+      }
+
       const updated = await this.prisma.user.update({
         where: { id: accountantId },
         data: {
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
           position: data.position,
           department: data.department,
           phone: data.phone,
+          cin: data.cin,
           diploma: data.diploma,
+          ...(photoPath && { photo: photoPath }),
+          ...(coverPhotoPath && { coverPhoto: coverPhotoPath }),
         },
         select: {
           id: true,
@@ -735,8 +1125,10 @@ export class AccountantService {
           email: true,
           phone: true,
           photo: true,
+          coverPhoto: true,
           position: true,
           department: true,
+          cin: true,
           diploma: true,
           company: {
             select: {
@@ -747,15 +1139,54 @@ export class AccountantService {
               postalCode: true,
               phone: true,
               email: true,
+              experience: true,
+              description: true,
             },
           },
         },
       });
 
+      // Generate presigned URLs for photos if they exist
+      let photoUrl: string | null = null;
+      if (updated.photo) {
+        try {
+          photoUrl = await this.minioService.getPresignedUrl(updated.photo, 7 * 24 * 60 * 60);
+        } catch (error) {
+          console.error('Error generating presigned URL for photo:', error);
+          photoUrl = updated.photo;
+        }
+      }
+
+      let coverPhotoUrl: string | null = null;
+      if (updated.coverPhoto) {
+        try {
+          coverPhotoUrl = await this.minioService.getPresignedUrl(
+            updated.coverPhoto,
+            7 * 24 * 60 * 60
+          );
+        } catch (error) {
+          console.error('Error generating presigned URL for cover photo:', error);
+          coverPhotoUrl = updated.coverPhoto;
+        }
+      }
+
       return {
         success: true,
         message: 'Profile updated successfully',
-        data: updated,
+        data: {
+          id: updated.id,
+          firstName: updated.firstName,
+          lastName: updated.lastName,
+          email: updated.email,
+          phone: updated.phone,
+          photoUrl,
+          coverPhotoUrl,
+          position: updated.position,
+          department: updated.department,
+          cin: updated.cin,
+          diploma: updated.diploma,
+          company: updated.company,
+        },
       };
     } catch (error) {
       console.error('Update profile error:', error);

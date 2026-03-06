@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
-import { usePermissions } from './usePermissions';
-import type { NavItem } from 'src/layouts/nav-config-dashboard';
-import { NAV_CONFIG } from 'src/layouts/nav-config-dashboard';
+import { useMemo } from "react";
+import { usePermissions } from "./usePermissions";
+import type { NavItem } from "src/layouts/nav-config-dashboard";
+import { NAV_CONFIG } from "src/layouts/nav-config-dashboard";
 
 // ----------------------------------------------------------------------
 
@@ -22,12 +22,16 @@ export function useNavigation() {
 
     const items: NavItem[] = [];
 
+    const dashboardBase = "/dashboard";
     allowedPaths.forEach((path) => {
       const config = NAV_CONFIG[path];
       if (config) {
+        const fullPath = path.startsWith(dashboardBase)
+          ? path
+          : dashboardBase + (path.startsWith("/") ? path : `/${path}`);
         items.push({
           title: config.title,
-          path,
+          path: fullPath,
           icon: config.icon,
         });
       } else {

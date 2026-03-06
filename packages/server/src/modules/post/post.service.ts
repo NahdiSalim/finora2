@@ -406,8 +406,10 @@ export class PostService {
       throw new Error('Post non trouvé ou non autorisé');
     }
 
-    let imageUrls = post.images;
-    if (images && images.length > 0) {
+    let imageUrls = post.images || [];
+
+    // Handle image management
+    if (dto.keepImages !== undefined || (images && images.length > 0)) {
       const user = await this.prisma.user.findUnique({
         where: { id: authorId },
         select: { companyId: true },
@@ -418,11 +420,97 @@ export class PostService {
       }
 
       if (user.companyId) {
-        const uploadPromises = images.map((file) =>
-          this.minioService.uploadFile(user.companyId!, 'posts', file)
+        // Transform keepImages if it's a string (from form-data)
+        let keepImagesArray: string[] = [];
+
+        if (dto.keepImages !== undefined) {
+          // keepImages was explicitly provided
+          if (typeof dto.keepImages === 'string') {
+            // Handle comma-separated string or JSON string
+            if (dto.keepImages.trim() !== '') {
+              try {
+                // Try parsing as JSON array first
+                keepImagesArray = JSON.parse(dto.keepImages);
+              } catch {
+                // If not JSON, treat as comma-separated
+                keepImagesArray = dto.keepImages
+                  .split(',')
+                  .map((img) => img.trim())
+                  .filter(Boolean);
+              }
+            }
+            // If empty string, keepImagesArray stays [] (delete all old images)
+          } else {
+            keepImagesArray = dto.keepImages;
+          }
+        } else {
+          // keepImages not provided: keep all existing images by default
+          keepImagesArray = post.images || [];
+        }
+
+        // Normalize keepImages: extract paths from MinIO URLs if needed
+        const imagesToKeep = keepImagesArray.map((img) => {
+          // If it's a MinIO URL, extract the path
+          if (img.includes('://')) {
+            try {
+              const url = new URL(img);
+              // Extract path after bucket name: /finora-documents/company_1/posts/image.jpg -> company_1/posts/image.jpg
+              const pathParts = url.pathname.split('/');
+              const bucketIndex = pathParts.findIndex((p) => p === 'finora-documents');
+              if (bucketIndex !== -1) {
+                return pathParts.slice(bucketIndex + 1).join('/');
+              }
+              // Fallback: remove leading slash and decode URI
+              return decodeURIComponent(url.pathname.substring(1));
+            } catch (error) {
+              console.error('Error parsing MinIO URL:', error);
+              return img;
+            }
+          }
+          // Already a path - decode if needed
+          return decodeURIComponent(img);
+        });
+
+        // Remove duplicates from imagesToKeep
+        const uniqueImagesToKeep = [...new Set(imagesToKeep)];
+
+        console.log('Images to keep (normalized):', uniqueImagesToKeep);
+
+        // Normalize existing images for comparison
+        const normalizedExistingImages = (post.images || []).map((img) => decodeURIComponent(img));
+
+        // Find images to delete (old images not in keepImages list)
+        const imagesToDelete = normalizedExistingImages.filter(
+          (img) => !uniqueImagesToKeep.includes(img)
         );
-        const newImages = await Promise.all(uploadPromises);
-        imageUrls = [...imageUrls, ...newImages];
+
+        // Delete removed images from MinIO
+        if (imagesToDelete.length > 0) {
+          console.log(`Deleting ${imagesToDelete.length} images from MinIO...`);
+          const deletePromises = imagesToDelete.map((imagePath) =>
+            this.minioService.deleteFile(imagePath).catch((error) => {
+              console.error('Error deleting image from MinIO:', error);
+            })
+          );
+          await Promise.all(deletePromises);
+        }
+
+        // Upload new images to MinIO
+        let newImageUrls: string[] = [];
+        if (images && images.length > 0) {
+          console.log(`Uploading ${images.length} new images...`);
+          const uploadPromises = images.map((file) =>
+            this.minioService.uploadFile(user.companyId!, 'posts', file)
+          );
+          newImageUrls = await Promise.all(uploadPromises);
+        }
+
+        // Combine: kept images + new images, then remove duplicates
+        const combinedImages = [...uniqueImagesToKeep, ...newImageUrls];
+        imageUrls = [...new Set(combinedImages)]; // Remove duplicates
+        console.log(
+          `Final images: ${imageUrls.length} (${uniqueImagesToKeep.length} kept + ${newImageUrls.length} new)`
+        );
       }
     }
 
@@ -436,10 +524,89 @@ export class PostService {
       }
     }
 
-    return this.prisma.post.update({
+    // Remove keepImages from update data (it's not a Post field)
+    delete updateData.keepImages;
+
+    const updatedPost = await this.prisma.post.update({
       where: { id: postId },
       data: updateData,
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
+          },
+        },
+        company: {
+          select: {
+            id: true,
+            name: true,
+            logo: true,
+          },
+        },
+      },
     });
+
+    // Generate presigned URLs for attachments (images)
+    const attachments = await Promise.all(
+      (updatedPost.images || []).map(async (imagePath) => {
+        try {
+          return await this.minioService.getPresignedUrl(imagePath, 7 * 24 * 60 * 60);
+        } catch (error) {
+          console.error('Error generating presigned URL for attachment:', error);
+          return imagePath;
+        }
+      })
+    );
+
+    // Generate presigned URL for author photo
+    let authorPhotoUrl: string | null = null;
+    if (updatedPost.author.photo) {
+      try {
+        authorPhotoUrl = await this.minioService.getPresignedUrl(
+          updatedPost.author.photo,
+          7 * 24 * 60 * 60
+        );
+      } catch (error) {
+        console.error('Error generating presigned URL for author photo:', error);
+        authorPhotoUrl = updatedPost.author.photo;
+      }
+    }
+
+    // Generate presigned URL for company logo
+    let companyLogoUrl: string | null = null;
+    if (updatedPost.company?.logo) {
+      try {
+        companyLogoUrl = await this.minioService.getPresignedUrl(
+          updatedPost.company.logo,
+          7 * 24 * 60 * 60
+        );
+      } catch (error) {
+        console.error('Error generating presigned URL for company logo:', error);
+        companyLogoUrl = updatedPost.company.logo;
+      }
+    }
+
+    // Return formatted response
+    return {
+      ...updatedPost,
+      attachments,
+      author: {
+        id: updatedPost.author.id,
+        firstName: updatedPost.author.firstName,
+        lastName: updatedPost.author.lastName,
+        photoUrl: authorPhotoUrl,
+      },
+      company: updatedPost.company
+        ? {
+            id: updatedPost.company.id,
+            name: updatedPost.company.name,
+            logoUrl: companyLogoUrl,
+          }
+        : null,
+    };
   }
 
   /**

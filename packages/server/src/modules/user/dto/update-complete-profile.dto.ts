@@ -140,6 +140,11 @@ export class UpdateCompleteProfileDto {
   @IsOptional()
   companyPhone?: string;
 
+  @ApiProperty({ example: '+33612345678', description: 'Company WhatsApp number', required: false })
+  @IsString()
+  @IsOptional()
+  companyNumWhatsapp?: string;
+
   @ApiProperty({ example: 'contact@cabinet.fr', description: 'Company email', required: false })
   @IsEmail()
   @IsOptional()
@@ -159,11 +164,10 @@ export class UpdateCompleteProfileDto {
   @IsOptional()
   companyDescription?: string;
 
-  @ApiProperty({ example: 15, description: 'Years of experience', required: false })
-  @Type(() => Number)
-  @IsNumber()
+  @ApiProperty({ example: '15 ans', description: 'Experience description', required: false })
+  @IsString()
   @IsOptional()
-  companyExperience?: number;
+  companyExperience?: string;
 
   @ApiProperty({ example: '6201Z', description: 'Activity code (NAF/APE)', required: false })
   @IsString()

@@ -18,6 +18,8 @@ export interface ContactInfosData {
   address?: string;
   whatsapp?: string;
   website?: string;
+  /** Spécialités du cabinet (affichées en consultation) */
+  specialties?: string[];
 }
 
 export type ContactFormState = ContactInfosData;
@@ -274,13 +276,21 @@ export default function ContactInfos({
           Spécialités
         </Typography>
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}>
-          {specialities.map((speciality) => (
+          {(data?.specialties && data.specialties.length > 0
+            ? data.specialties
+            : []
+          ).map((speciality) => (
             <CustomChip
               key={speciality}
               label={speciality}
               variant={getRandomVariant()}
             />
           ))}
+          {(!data?.specialties || data.specialties.length === 0) && (
+            <Typography variant="body2" color="text.secondary">
+              Aucune spécialité renseignée
+            </Typography>
+          )}
         </Box>
       </Box>
     </Paper>

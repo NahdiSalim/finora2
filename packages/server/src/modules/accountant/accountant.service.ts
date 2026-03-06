@@ -258,7 +258,7 @@ export class AccountantService {
       });
 
       // Create relationship between client company and accounting firm
-      const relationship = await this.prisma.clientAccountingFirmRelationship.create({
+      await this.prisma.clientAccountingFirmRelationship.create({
         data: {
           clientCompanyId: clientCompany.id,
           accountingFirmId: accountant.companyId,
@@ -266,20 +266,6 @@ export class AccountantService {
           status: UserStatus.ACTIVE,
           relationshipStart: new Date(),
         } as any,
-        include: {
-          clientCompany: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          accountingFirm: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
       });
 
       // Send welcome email with password
@@ -748,14 +734,22 @@ export class AccountantService {
               name: true,
               description: true,
               experience: true,
+              employeeCount: true,
+              sector: true,
               city: true,
               address: true,
               postalCode: true,
               phone: true,
+              numWhatsapp: true,
               email: true,
+              website: true,
               siret: true,
               vatNumber: true,
               legalForm: true,
+              patentNumber: true,
+              patentFile: true,
+              rne: true,
+              rneFile: true,
               logo: true,
               specialties: true,
               rating: true,
@@ -807,8 +801,34 @@ export class AccountantService {
         }
       }
 
-      // Remove internal paths and return only presigned URLs
-      const { logo, ...companyData } = accountant.company || {};
+      // Generate presigned URL for patent file if exists
+      let patentFileUrl: string | null = null;
+      if (accountant.company?.patentFile) {
+        try {
+          patentFileUrl = await this.minioService.getPresignedUrl(
+            accountant.company.patentFile,
+            7 * 24 * 60 * 60
+          );
+        } catch (error) {
+          console.error('Error generating presigned URL for patent file:', error);
+          patentFileUrl = accountant.company.patentFile;
+        }
+      }
+
+      // Generate presigned URL for RNE file if exists
+      let rneFileUrl: string | null = null;
+      const rneFilePath =
+        accountant.company?.rneFile ||
+        (accountant.company?.rne?.includes('/') ? accountant.company.rne : null);
+
+      if (rneFilePath) {
+        try {
+          rneFileUrl = await this.minioService.getPresignedUrl(rneFilePath, 7 * 24 * 60 * 60);
+        } catch (error) {
+          console.error('Error generating presigned URL for RNE file:', error);
+          rneFileUrl = rneFilePath;
+        }
+      }
 
       return {
         id: accountant.id,
@@ -822,13 +842,36 @@ export class AccountantService {
         specialty: accountant.position,
         department: accountant.department,
         diploma: accountant.diploma,
-        company: {
-          ...companyData,
-          logoUrl: logoUrl, // URL présignée MinIO
-          specialties: accountant.company?.specialties || [],
-          rating: accountant.company?.rating || 0,
-          numberOfReviews: accountant.company?.numberOfReviews || 0,
-        },
+        company: accountant.company
+          ? {
+              id: accountant.company.id,
+              name: accountant.company.name,
+              description: accountant.company.description,
+              experience: accountant.company.experience,
+              employeeCount: accountant.company.employeeCount
+                ? String(accountant.company.employeeCount)
+                : null,
+              sector: accountant.company.sector,
+              city: accountant.company.city,
+              address: accountant.company.address,
+              postalCode: accountant.company.postalCode,
+              phone: accountant.company.phone,
+              numWhatsapp: accountant.company.numWhatsapp,
+              email: accountant.company.email,
+              website: accountant.company.website,
+              siret: accountant.company.siret,
+              vatNumber: accountant.company.vatNumber,
+              legalForm: accountant.company.legalForm,
+              patentNumber: accountant.company.patentNumber,
+              patentFileUrl: patentFileUrl,
+              rne: accountant.company.rne?.includes('/') ? null : accountant.company.rne, // Only return if it's a number, not a path
+              rneFileUrl: rneFileUrl,
+              logoUrl: logoUrl,
+              specialties: accountant.company.specialties || [],
+              rating: accountant.company.rating || 0,
+              numberOfReviews: accountant.company.numberOfReviews || 0,
+            }
+          : null,
       };
     } catch (error) {
       console.error('Get accountant profile error:', error);
@@ -848,7 +891,7 @@ export class AccountantService {
       phone?: string;
       cin?: string;
       diploma?: string;
-      experience?: number;
+      experience?: string;
       description?: string;
       specialties?: string[];
     },
@@ -945,8 +988,15 @@ export class AccountantService {
       ) {
         const companyUpdateData: any = {};
 
-        if (data.experience !== undefined) {
-          companyUpdateData.experience = data.experience;
+        if (data.experience !== undefined && data.experience !== null) {
+          // Keep experience as string (can be text like "5 ans" or "Expert depuis 2010")
+          const experienceStr = String(data.experience).trim();
+          if (experienceStr !== '' && experienceStr !== 'null' && experienceStr !== 'undefined') {
+            companyUpdateData.experience = experienceStr;
+            console.log('Experience saved as string:', experienceStr);
+          } else {
+            console.log('Experience is empty or null string');
+          }
         }
 
         if (data.description !== undefined) {

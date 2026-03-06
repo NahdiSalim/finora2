@@ -25,9 +25,11 @@ export type Post = {
   companyId: number | null;
   title: string;
   content: string;
-  /** @deprecated préférer imageUrls */
+  /** @deprecated préférer imageUrls / attachments */
   images?: string[];
   imageUrls?: string[];
+  /** URLs présignées des images (retour update/create) */
+  attachments?: string[];
   tags: string[];
   visibility: string;
   status: string;
@@ -96,8 +98,8 @@ function buildPostFormData(payload: {
   if (payload.images?.length) {
     payload.images.forEach((file) => form.append("images", file));
   }
-  if (payload.keepImageUrls && payload.keepImageUrls.length >= 0) {
-    form.append("keepImageUrls", JSON.stringify(payload.keepImageUrls));
+  if (payload.keepImageUrls !== undefined) {
+    form.append("keepImages", JSON.stringify(payload.keepImageUrls ?? []));
   }
   return form;
 }

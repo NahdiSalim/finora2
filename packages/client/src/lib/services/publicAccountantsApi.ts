@@ -12,16 +12,23 @@ export type PublicAccountant = {
   email: string;
   phone: string;
   photo: string | null;
+  /** Presigned photo URL (returned by list endpoint) */
+  photoUrl?: string | null;
   specialty: string | null;
   department: string | null;
   company: {
     id: number;
     name: string;
+    description?: string | null;
+    experience?: string | null;
     city: string | null;
     address: string | null;
     postalCode: string | null;
     phone: string | null;
     email: string | null;
+    specialties?: string[];
+    rating?: number;
+    numberOfReviews?: number;
   };
 };
 
@@ -48,6 +55,8 @@ export type PublicAccountantProfile = {
     postalCode: string | null;
     phone: string | null;
     email: string | null;
+    numWhatsapp?: string | null;
+    website?: string | null;
     siret: string | null;
     vatNumber: string | null;
     legalForm: string | null;

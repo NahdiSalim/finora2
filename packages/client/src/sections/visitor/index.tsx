@@ -17,6 +17,7 @@ import {
   AccountantCard,
   type Accountant,
 } from "src/components/visitor/AccountantCard";
+import { ContactAccountantModal } from "src/components/visitor/ContactAccountantModal";
 import { PageHeader } from "src/layouts/components/page-header";
 import CustomButton from "src/components/common/CustomButton";
 import CustomSelect from "src/components/common/CustomSelect";
@@ -29,6 +30,10 @@ export function VisitorView() {
   const [search, setSearch] = useState<string | undefined>(undefined);
   const [specialty, setSpecialty] = useState<string | undefined>(undefined);
   const [location, setLocation] = useState<string | undefined>(undefined);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [contactAccountantId, setContactAccountantId] = useState<number | null>(
+    null,
+  );
 
   const { data, isLoading } = useGetPublicAccountantsQuery({
     page: 1,
@@ -40,14 +45,10 @@ export function VisitorView() {
 
   const accountants: Accountant[] =
     data?.data.map((item) => {
-      const fullName =
-        item.name && item.name !== "null null"
-          ? item.name
-          : [item.firstName, item.lastName].filter(Boolean).join(" ") ||
-            item.company.name;
+      const companyName = item.company?.name || "Cabinet";
 
       const initials =
-        fullName
+        companyName
           .split(" ")
           .filter(Boolean)
           .map((part) => part[0])
@@ -56,19 +57,21 @@ export function VisitorView() {
           .toUpperCase() || "C";
 
       return {
-        name: fullName,
+        name: companyName,
         initials,
         avatarColor: theme.palette.primary.main,
-        yearsExperience: 12,
-        location: item.company.city || item.company.address || "",
-        rating: 4.8,
-        reviews: 127,
-        tags: ["Fiscaliste", "Expert comptable"],
-        profilePhotoUrl: item.photo ?? undefined,
+        yearsExperience: 0,
+        experienceLabel: item.company?.experience ?? undefined,
+        location:
+          [item.company?.city, item.company?.address]
+            .filter(Boolean)
+            .join(", ") || "",
+        rating: item.company?.rating ?? 0,
+        reviews: item.company?.numberOfReviews ?? 0,
+        tags: item.company?.specialties ?? [],
+        profilePhotoUrl: item.photoUrl ?? item.photo ?? undefined,
         title: item.specialty || "Expert comptable",
-        description:
-          item.company.address ||
-          "Mollit in laborum tempor Lorem incididunt irure.",
+        description: item.company?.description ?? item.company?.address ?? "",
         featured: false,
         accountantId: item.id,
       } as Accountant;
@@ -259,6 +262,10 @@ export function VisitorView() {
                 <AccountantCard
                   key={accountant.name + accountant.location}
                   data={accountant}
+                  onMessageClick={(id) => {
+                    setContactAccountantId(id);
+                    setContactModalOpen(true);
+                  }}
                 />
               ))}
             </Box>
@@ -296,6 +303,14 @@ export function VisitorView() {
           ) : null}
         </Container>
       </MainSection>
+      <ContactAccountantModal
+        open={contactModalOpen}
+        onClose={() => {
+          setContactModalOpen(false);
+          setContactAccountantId(null);
+        }}
+        accountantId={contactAccountantId}
+      />
     </Box>
   );
 }

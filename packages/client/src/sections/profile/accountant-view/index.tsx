@@ -28,6 +28,18 @@ function collaboratorsCountToNumber(s: string): number | undefined {
   return undefined;
 }
 
+/** Map API employeeCount (5|10|15 or string "5"|"10"|"15") to display value for select */
+function employeeCountToCollaboratorsCount(
+  value: number | string | null | undefined,
+): string {
+  if (value == null || value === "") return "";
+  const n = typeof value === "string" ? parseInt(value, 10) : value;
+  if (Number.isNaN(n)) return "";
+  if (n <= 5) return "1-5 collaborateurs";
+  if (n <= 10) return "6-10 collaborateurs";
+  return "+ 10 collaborateurs";
+}
+
 export default function AccountantView() {
   const [isEditing, setIsEditing] = useState(false);
   const [cropModalOpen, setCropModalOpen] = useState(false);
@@ -56,22 +68,30 @@ export default function AccountantView() {
   const subtitle = data?.specialty || "Expert comptable";
 
   const contactData = {
-    phone: data?.company.phone || data?.phone || "",
-    email: data?.company.email || data?.email || "",
+    phone: data?.company?.phone || data?.phone || "",
+    email: data?.company?.email || data?.email || "",
     address:
-      data?.company.address ||
-      [data?.company.postalCode, data?.company.city]
+      data?.company?.address ||
+      [data?.company?.postalCode, data?.company?.city]
         .filter(Boolean)
         .join(" ") ||
       "",
-    whatsapp: "",
-    website: "",
+    whatsapp: data?.company?.numWhatsapp ?? "",
+    website: data?.company?.website ?? "",
+    specialties: data?.company?.specialties ?? [],
   };
 
   const profileInfosData = {
     cabinetName: data?.company?.name ?? "",
-    sector: data?.specialty ?? "",
-    collaboratorsCount: "",
+    sector: data?.company?.sector ?? "",
+    collaboratorsCount: employeeCountToCollaboratorsCount(
+      data?.company?.employeeCount,
+    ),
+    experience: data?.company?.experience ?? "",
+    description: data?.company?.description ?? "",
+    specialties: data?.company?.specialties ?? [],
+    patentFileUrl: data?.company?.patentFileUrl ?? null,
+    rneFileUrl: data?.company?.rneFileUrl ?? null,
   };
 
   const handleProfileInfosChange = useCallback(
@@ -94,8 +114,13 @@ export default function AccountantView() {
   const handleStartEditing = useCallback(() => {
     profileInfosFormRef.current = {
       cabinetName: data?.company?.name ?? "",
-      sector: data?.specialty ?? "",
-      collaboratorsCount: "",
+      sector: data?.company?.sector ?? "",
+      collaboratorsCount: employeeCountToCollaboratorsCount(
+        data?.company?.employeeCount,
+      ),
+      experience: data?.company?.experience ?? "",
+      description: data?.company?.description ?? "",
+      specialties: data?.company?.specialties ?? [],
     };
     contactFormRef.current = {
       phone: data?.company?.phone || data?.phone || "",
@@ -106,18 +131,24 @@ export default function AccountantView() {
           .filter(Boolean)
           .join(" ") ||
         "",
-      whatsapp: "",
-      website: "",
+      whatsapp: data?.company?.numWhatsapp ?? "",
+      website: data?.company?.website ?? "",
     };
     setIsEditing(true);
   }, [
     data?.company?.name,
-    data?.specialty,
+    data?.company?.sector,
+    data?.company?.employeeCount,
     data?.company?.phone,
     data?.company?.email,
     data?.company?.address,
     data?.company?.postalCode,
     data?.company?.city,
+    data?.company?.experience,
+    data?.company?.description,
+    data?.company?.specialties,
+    data?.company?.numWhatsapp,
+    data?.company?.website,
     data?.phone,
     data?.email,
   ]);
@@ -129,6 +160,12 @@ export default function AccountantView() {
     if (form?.cabinetName !== undefined)
       fd.append("companyName", form.cabinetName);
     if (form?.sector !== undefined) fd.append("companySector", form.sector);
+    if (form?.experience !== undefined)
+      fd.append("companyExperience", form.experience);
+    if (form?.description !== undefined)
+      fd.append("companyDescription", form.description);
+    if (form?.specialties !== undefined && form.specialties.length > 0)
+      fd.append("companySpecialties", form.specialties.join(","));
     const empCount = form?.collaboratorsCount
       ? collaboratorsCountToNumber(form.collaboratorsCount)
       : undefined;
@@ -142,6 +179,8 @@ export default function AccountantView() {
       fd.append("companyAddress", contact.address);
     if (contact?.website !== undefined)
       fd.append("companyWebsite", contact.website);
+    if (contact?.whatsapp !== undefined)
+      fd.append("companyNumWhatsapp", contact.whatsapp);
     try {
       await updateCompleteProfile(fd).unwrap();
       await refetchProfile();
@@ -152,56 +191,47 @@ export default function AccountantView() {
   }, [updateCompleteProfile, refetchProfile]);
 
   // ------------------------------------------------------------------
-  // Compute profile strength (percentage + label)
-  // On se base sur plusieurs champs du profil pour éviter d'avoir 100%
-  // alors que des infos importantes manquent encore.
+  // Force du profil = % des champs des onglets "Mes informations" + "Contact".
+  // Uniquement les inputs visibles dans le formulaire. Si 100 %, on n’affiche pas le bloc.
   // ------------------------------------------------------------------
-  const infoFields = [
-    // Identité / cabinet
-    data?.company?.name,
-    data?.name,
-    data?.firstName,
-    data?.lastName,
-    data?.specialty,
-    data?.department,
-    data?.diploma,
-    // Coordonnées directes
-    data?.phone,
-    data?.email,
-    // Coordonnées cabinet
-    data?.company?.phone,
-    data?.company?.email,
-    data?.company?.address,
-    data?.company?.city,
-    data?.company?.postalCode,
-    data?.company?.vatNumber,
-    data?.company?.legalForm,
+  const hasFile = (url: string | null | undefined) =>
+    typeof url === "string" && url.trim().length > 0;
+  const hasEmployeeCount = (): boolean => {
+    const v = data?.company?.employeeCount;
+    if (v == null || v === "") return false;
+    const n = typeof v === "string" ? parseInt(v, 10) : v;
+    return !Number.isNaN(n) && n > 0;
+  };
+  const profileInputs: (string | boolean)[] = [
+    data?.company?.name ?? "",
+    data?.company?.sector ?? "",
+    Array.isArray(data?.company?.specialties) &&
+      (data?.company?.specialties?.length ?? 0) > 0,
+    hasEmployeeCount(),
+    data?.company?.experience ?? "",
+    data?.company?.description ?? "",
+    hasFile(data?.company?.patentFileUrl),
+    hasFile(data?.company?.rneFileUrl),
+    (data?.company?.email || data?.email) ?? "",
+    (data?.company?.phone || data?.phone) ?? "",
+    data?.company?.numWhatsapp ?? "",
+    data?.company?.address ?? "",
+    data?.company?.website ?? "",
   ];
-
-  const filledCount = infoFields.filter(
-    (value) => typeof value === "string" && value.trim().length > 0,
+  const totalFields = profileInputs.length;
+  const filledCount = profileInputs.filter((v) =>
+    typeof v === "boolean" ? v : String(v).trim().length > 0,
   ).length;
-
+  const percentage =
+    totalFields > 0
+      ? Math.min(100, Math.round((filledCount / totalFields) * 100))
+      : 0;
   const totalSteps = 10;
   const completedSteps =
-    filledCount === 0
-      ? 1
-      : Math.min(
-          totalSteps,
-          Math.max(
-            1,
-            Math.round((filledCount / infoFields.length) * totalSteps),
-          ),
-        );
+    percentage <= 0
+      ? 0
+      : Math.min(totalSteps, Math.ceil((percentage / 100) * totalSteps));
 
-  const percentage = Math.round((completedSteps / totalSteps) * 100);
-
-  // Libellés détaillés selon le pourcentage
-  // 0–19%   → Très faible
-  // 20–39%  → Faible
-  // 40–59%  → Moyenne
-  // 60–79%  → Fort
-  // 80–100% → Très fort
   let strengthLabel = "Très faible";
   if (percentage >= 80) strengthLabel = "Très fort";
   else if (percentage >= 60) strengthLabel = "Fort";
@@ -286,6 +316,7 @@ export default function AccountantView() {
           onEditCover={() => openCropFor("cover")}
           onEditAvatar={() => openCropFor("avatar")}
           onEditProfile={handleStartEditing}
+          isEditing={isEditing}
         />
         <ImageCropModal
           open={cropModalOpen}
@@ -299,20 +330,22 @@ export default function AccountantView() {
           loading={isUpdatingProfile}
         />
       </Card>
-      <Card
-        sx={{
-          mt: 1.5,
-          borderRadius: 3,
-        }}
-      >
-        <ProfileStrength
-          icon={ShieldCheck}
-          title={strengthTitle}
-          caption={strengthCaption}
-          completedSteps={completedSteps}
-          totalSteps={totalSteps}
-        />
-      </Card>
+      {percentage < 100 && (
+        <Card
+          sx={{
+            mt: 1.5,
+            borderRadius: 3,
+          }}
+        >
+          <ProfileStrength
+            icon={ShieldCheck}
+            title={strengthTitle}
+            caption={strengthCaption}
+            completedSteps={completedSteps}
+            totalSteps={totalSteps}
+          />
+        </Card>
+      )}
 
       <Box
         width="100%"

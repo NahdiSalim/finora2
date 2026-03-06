@@ -50,6 +50,20 @@ export const reviewsApi = createApi({
       ],
     }),
 
+    createReview: builder.mutation<
+      ReviewItem,
+      { accountantId: number; rating: number; comment?: string }
+    >({
+      query: ({ accountantId, rating, comment }) => ({
+        url: `/reviews/accountant/${accountantId}`,
+        method: "POST",
+        body: { rating, comment },
+      }),
+      invalidatesTags: (_result, _err, { accountantId }) => [
+        { type: "AccountantReviews", id: accountantId },
+      ],
+    }),
+
     respondToReview: builder.mutation<
       ReviewItem,
       { reviewId: number; response: string }
@@ -64,5 +78,8 @@ export const reviewsApi = createApi({
   }),
 });
 
-export const { useGetAccountantReviewsQuery, useRespondToReviewMutation } =
-  reviewsApi;
+export const {
+  useGetAccountantReviewsQuery,
+  useCreateReviewMutation,
+  useRespondToReviewMutation,
+} = reviewsApi;

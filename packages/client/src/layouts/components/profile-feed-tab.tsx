@@ -68,9 +68,9 @@ function postAuthorInitials(post: ApiPost): string {
   return "?";
 }
 
-/** URLs des images/pièces jointes du post (API renvoie imageUrls) */
+/** URLs des images/pièces jointes du post (API renvoie attachments ou imageUrls) */
 function postImageUrls(post: ApiPost): string[] {
-  return post.imageUrls ?? post.images ?? [];
+  return post.attachments ?? post.imageUrls ?? post.images ?? [];
 }
 
 interface PostAttachment {

@@ -53,6 +53,11 @@ export class UpdateCompanyDto {
   @IsOptional()
   phone?: string;
 
+  @ApiProperty({ example: '+33612345678', description: 'WhatsApp number', required: false })
+  @IsString()
+  @IsOptional()
+  numWhatsapp?: string;
+
   @ApiProperty({ example: 'contact@entreprise.fr', description: 'Email', required: false })
   @IsEmail()
   @IsOptional()
@@ -79,11 +84,10 @@ export class UpdateCompanyDto {
   @IsOptional()
   employeeCount?: number;
 
-  @ApiProperty({ example: 15, description: 'Years of experience', required: false })
-  @Type(() => Number)
-  @IsNumber()
+  @ApiProperty({ example: '15 ans', description: 'Experience description', required: false })
+  @IsString()
   @IsOptional()
-  experience?: number;
+  experience?: string;
 
   @ApiProperty({
     example: "Description de l'entreprise",

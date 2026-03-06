@@ -653,6 +653,7 @@ export class UserService {
           postalCode: dto.postalCode,
           country: dto.country,
           phone: dto.phone,
+          numWhatsapp: dto.numWhatsapp,
           email: dto.email,
           website: dto.website,
           activityCode: dto.activityCode,
@@ -716,10 +717,11 @@ export class UserService {
       companyPostalCode?: string;
       companyCountry?: string;
       companyPhone?: string;
+      companyNumWhatsapp?: string;
       companyEmail?: string;
       companyWebsite?: string;
       companyDescription?: string;
-      companyExperience?: number;
+      companyExperience?: string;
       companyActivityCode?: string;
       companySector?: string;
       companyEmployeeCount?: number;
@@ -875,6 +877,9 @@ export class UserService {
         let patentFilePath: string | undefined;
         if (files?.companyPatentFile && files.companyPatentFile[0]) {
           try {
+            if (user.company?.patentFile) {
+              await this.minioService.deleteFile(user.company.patentFile).catch(() => {});
+            }
             patentFilePath = await this.minioService.uploadFile(
               user.companyId,
               'companies/documents/patents',
@@ -888,6 +893,9 @@ export class UserService {
         let rneFilePath: string | undefined;
         if (files?.companyRneFile && files.companyRneFile[0]) {
           try {
+            if (user.company?.rne) {
+              await this.minioService.deleteFile(user.company.rne).catch(() => {});
+            }
             rneFilePath = await this.minioService.uploadFile(
               user.companyId,
               'companies/documents/rne',
@@ -914,6 +922,8 @@ export class UserService {
           companyUpdateData.postalCode = data.companyPostalCode;
         if (data.companyCountry !== undefined) companyUpdateData.country = data.companyCountry;
         if (data.companyPhone !== undefined) companyUpdateData.phone = data.companyPhone;
+        if (data.companyNumWhatsapp !== undefined)
+          companyUpdateData.numWhatsapp = data.companyNumWhatsapp;
         if (data.companyEmail !== undefined) companyUpdateData.email = data.companyEmail;
         if (data.companyWebsite !== undefined) companyUpdateData.website = data.companyWebsite;
         if (data.companyDescription !== undefined)

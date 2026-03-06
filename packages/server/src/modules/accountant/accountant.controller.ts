@@ -6,12 +6,12 @@ import {
   UseGuards,
   Req,
   Query,
+  Param,
   HttpCode,
   HttpStatus,
   Patch,
   UseInterceptors,
   UploadedFiles,
-  Param,
 } from '@nestjs/common';
 import {
   ApiTags,

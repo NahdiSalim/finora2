@@ -95,44 +95,7 @@ export class InvoiceExtractionService {
         throw new Error('API returned empty or invalid response');
       }
 
-      // 5. Save or update metadata in database
-      const metadataData = {
-        msgSenderId: extractedData.invoice_header?.msg_sender_id || null,
-        msgReceiverId: extractedData.invoice_header?.msg_receiver_id || null,
-        invoiceType: extractedData.bgm?.type || null,
-        invoiceNumber: extractedData.bgm?.numero || null,
-        invoiceDate: extractedData.dtm?.[0]?.date_periode
-          ? new Date(extractedData.dtm[0].date_periode)
-          : null,
-        partners: extractedData.partner_section || null,
-        paymentTerms: extractedData.pyt_section || null,
-        totalInWords: extractedData.texte || null,
-        lineItems: extractedData.lin_section || null,
-        amounts: extractedData.invoice_moa || null,
-        taxes: extractedData.invoice_tax || null,
-        rawData: extractedData,
-        extractionStatus: 'success',
-        errorMessage: null,
-      };
-
-      // Check if metadata already exists
-      const existingMetadata = await this.prisma.invoiceMetadata.findUnique({
-        where: { documentId: document.id },
-      });
-
-      const metadata = existingMetadata
-        ? await this.prisma.invoiceMetadata.update({
-            where: { documentId: document.id },
-            data: metadataData,
-          })
-        : await this.prisma.invoiceMetadata.create({
-            data: {
-              documentId: document.id,
-              ...metadataData,
-            },
-          });
-
-      // 6. Update document processing status
+      // 5. Update document status to "traite" (extracted but not saved yet)
       await this.prisma.document.update({
         where: { id: document.id },
         data: { processingStatus: 'traite' },
@@ -141,10 +104,10 @@ export class InvoiceExtractionService {
       return {
         status: 'success',
         code: '200',
-        message: 'Invoice extracted successfully',
+        message: 'Invoice extracted successfully. Please verify and save the data.',
         data: {
           documentId: document.id,
-          metadata,
+          extractedData: extractedData,
         },
       };
     } catch (error) {
@@ -334,5 +297,91 @@ export class InvoiceExtractionService {
       message: 'Document synchronized successfully',
       data: updatedDocument,
     };
+  }
+
+  /**
+   * Save invoice metadata after verification (change status from traite to enregistre)
+   */
+  async saveInvoiceMetadata(documentId: number, companyId: number, extractedData: any) {
+    // 1. Get document from database
+    const document = await this.prisma.document.findFirst({
+      where: {
+        id: documentId,
+        companyId,
+        isFolder: false,
+        status: 'active',
+      },
+    });
+
+    if (!document) {
+      throw new ApiError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
+    }
+
+    // 2. Check if document is in "traite" status
+    if (document.processingStatus !== 'traite') {
+      throw new ApiError(
+        `Document must be in "traite" status to save metadata. Current status: ${document.processingStatus}`,
+        400,
+        'INVALID_STATUS'
+      );
+    }
+
+    try {
+      // 3. Save or update metadata in database
+      const metadataData = {
+        msgSenderId: extractedData.invoice_header?.msg_sender_id || null,
+        msgReceiverId: extractedData.invoice_header?.msg_receiver_id || null,
+        invoiceType: extractedData.bgm?.type || null,
+        invoiceNumber: extractedData.bgm?.numero || null,
+        invoiceDate: extractedData.dtm?.[0]?.date_periode
+          ? new Date(extractedData.dtm[0].date_periode)
+          : null,
+        partners: extractedData.partner_section || null,
+        paymentTerms: extractedData.pyt_section || null,
+        totalInWords: extractedData.texte || null,
+        lineItems: extractedData.lin_section || null,
+        amounts: extractedData.invoice_moa || null,
+        taxes: extractedData.invoice_tax || null,
+        rawData: extractedData,
+        extractionStatus: 'success',
+        errorMessage: null,
+      };
+
+      // Check if metadata already exists
+      const existingMetadata = await this.prisma.invoiceMetadata.findUnique({
+        where: { documentId: document.id },
+      });
+
+      const metadata = existingMetadata
+        ? await this.prisma.invoiceMetadata.update({
+            where: { documentId: document.id },
+            data: metadataData,
+          })
+        : await this.prisma.invoiceMetadata.create({
+            data: {
+              documentId: document.id,
+              ...metadataData,
+            },
+          });
+
+      // 4. Update document status to "enregistre"
+      await this.prisma.document.update({
+        where: { id: documentId },
+        data: { processingStatus: 'enregistre' },
+      });
+
+      return {
+        status: 'success',
+        code: '200',
+        message: 'Invoice metadata saved successfully',
+        data: {
+          documentId: document.id,
+          metadata,
+        },
+      };
+    } catch (error) {
+      console.error('Failed to save invoice metadata:', error);
+      throw new ApiError('Failed to save invoice metadata', 500, 'SAVE_FAILED');
+    }
   }
 }

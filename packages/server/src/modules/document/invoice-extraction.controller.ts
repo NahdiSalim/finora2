@@ -1,4 +1,14 @@
-import { Controller, Post, Get, Param, Query, UseGuards, Req, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Param,
+  Query,
+  UseGuards,
+  Req,
+  Body,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { InvoiceExtractionService } from './invoice-extraction.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -92,7 +102,9 @@ export class InvoiceExtractionController {
 
   @Post('synchronize/:documentId')
   @RequirePermission('UPDATE_DOCUMENT')
-  @ApiOperation({ summary: 'Synchronize a document (change status from traite to synchronise)' })
+  @ApiOperation({
+    summary: 'Synchronize a document (change status from enregistre to synchronise)',
+  })
   @ApiParam({ name: 'documentId', type: Number, description: 'Document ID to synchronize' })
   async synchronizeDocument(
     @Req() req: AuthRequest,
@@ -109,5 +121,35 @@ export class InvoiceExtractionController {
     }
 
     return this.invoiceExtractionService.synchronizeDocument(documentId, companyId);
+  }
+
+  @Post('save/:documentId')
+  @RequirePermission('UPDATE_DOCUMENT')
+  @ApiOperation({
+    summary: 'Save invoice metadata after verification (change status from traite to enregistre)',
+    description:
+      'After extraction, verify the data and call this endpoint to save metadata to database',
+  })
+  @ApiParam({ name: 'documentId', type: Number, description: 'Document ID' })
+  async saveInvoiceMetadata(
+    @Req() req: AuthRequest,
+    @Param('documentId', ParseIntPipe) documentId: number,
+    @Body() body: { extractedData: any }
+  ) {
+    const companyId = req.user!.companyId;
+
+    if (!companyId) {
+      return {
+        status: 'error',
+        code: '400',
+        message: 'User must belong to a company',
+      };
+    }
+
+    return this.invoiceExtractionService.saveInvoiceMetadata(
+      documentId,
+      companyId,
+      body.extractedData
+    );
   }
 }

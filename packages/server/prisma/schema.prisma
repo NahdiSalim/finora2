@@ -404,6 +404,8 @@ model Document {
   mimeType          String?
   size              Int?      // Size in bytes
   url               String
+  category          String?   // Document category (e.g., facture, contrat, rapport)
+  processingStatus  String    @default("pending") // "pending" | "traite" | "enregistre" | "synchronise"
   ownerId           Int
   companyId         Int?
   parentId          Int?      // For folder structure
@@ -423,11 +425,14 @@ model Document {
   childDocuments    Document[] @relation("DocumentChildren")
   
   chatThreads       ChatThread[]
+  invoiceMetadata   InvoiceMetadata?
 
   @@index([ownerId])
   @@index([companyId])
   @@index([parentId])
   @@index([status])
+  @@index([category])
+  @@index([processingStatus])
 }
 
 
@@ -439,6 +444,59 @@ model Feature {
     updatedAt  DateTime     @updatedAt
     pages      Pages[]
     p_features p_features[]
+}
+
+
+// From invoice-metadata.prisma
+model InvoiceMetadata {
+  id                Int       @id @default(autoincrement())
+  documentId        Int       @unique
+  
+  // Invoice Header
+  msgSenderId       String?
+  msgReceiverId     String?
+  
+  // BGM
+  invoiceType       String?   // FACTURE
+  invoiceNumber     String?   // 0099 / 2025
+  
+  // DTM
+  invoiceDate       DateTime?
+  
+  // Partners (stored as JSON)
+  partners          Json?     // Array of partner objects
+  
+  // Payment Terms
+  paymentTerms      Json?     // Array of payment objects
+  
+  // Text
+  totalInWords      String?   // Arrêté la Présente à la Somme de...
+  
+  // Line Items (stored as JSON)
+  lineItems         Json?     // Array of line item objects
+  
+  // Amounts
+  amounts           Json?     // Array of amount objects
+  
+  // Taxes
+  taxes             Json?     // Array of tax objects
+  
+  // Full extracted data (backup)
+  rawData           Json?     // Complete JSON response from API
+  
+  // Processing info
+  extractedAt       DateTime  @default(now())
+  extractionStatus  String    @default("success") // "success" | "failed"
+  errorMessage      String?
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  document          Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  @@index([documentId])
+  @@index([invoiceNumber])
+  @@index([invoiceDate])
 }
 
 

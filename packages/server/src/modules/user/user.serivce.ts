@@ -401,10 +401,6 @@ export class UserService {
     photoFile?: Express.Multer.File,
     coverPhotoFile?: Express.Multer.File
   ) {
-    console.log('updateProfile called for user:', userId);
-    console.log('Photo file:', photoFile ? 'Yes' : 'No');
-    console.log('Cover photo file:', coverPhotoFile ? 'Yes' : 'No');
-
     try {
       // Get current user
       const user = await this.prisma.user.findUnique({
@@ -476,7 +472,6 @@ export class UserService {
             'users/cover-photos',
             coverPhotoFile
           );
-          console.log('Cover photo uploaded successfully to MinIO:', coverPhotoPath);
         } catch (coverPhotoError) {
           console.error('Cover photo upload error:', coverPhotoError);
           // Continue without cover photo if upload fails
@@ -631,7 +626,6 @@ export class UserService {
             'companies/logos',
             logoFile
           );
-          console.log('Logo uploaded successfully to MinIO:', logoPath);
         } catch (logoError) {
           console.error('Logo upload error:', logoError);
           // Continue without logo if upload fails

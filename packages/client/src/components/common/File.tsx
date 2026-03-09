@@ -49,6 +49,8 @@ export interface FileItem {
 
 export interface FileCardProps {
   file: FileItem;
+  /** URL (e.g. blob) to show real document preview in the card (PDF = iframe, image = background) */
+  previewContentUrl?: string | null;
   onClick?: () => void;
   onMenuAction?: (action: string, file: FileItem) => void;
   menuOptions?: { label: string; icon: React.ReactNode; action: string }[];
@@ -84,6 +86,7 @@ const fileTypeColors: Record<FileType, string> = {
 
 export function FileCard({
   file,
+  previewContentUrl,
   onClick,
   onMenuAction,
   menuOptions = [
@@ -102,6 +105,22 @@ export function FileCard({
   onSelect,
   sx,
 }: FileCardProps) {
+  const hasContentPreview = Boolean(
+    previewContentUrl &&
+    (file.type === "pdf" || file.type === "jpg" || file.type === "png"),
+  );
+  const previewBg =
+    hasContentPreview && file.type !== "pdf"
+      ? `url(${previewContentUrl})`
+      : file.thumbnail
+        ? `url(${file.thumbnail})`
+        : "none";
+  const previewBgColor =
+    hasContentPreview && file.type !== "pdf"
+      ? "transparent"
+      : file.thumbnail
+        ? "transparent"
+        : fileTypeColors[file.type];
   const theme = useTheme();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [isHovered, setIsHovered] = useState(false);
@@ -221,12 +240,12 @@ export function FileCard({
         </Box>
       )}
 
-      {/* Preview Area - 80% height */}
+      {/* Preview Area - real document content (Figma) or fallback icon */}
       <Box
         sx={{
           height: 160,
-          bgcolor: file.thumbnail ? "transparent" : fileTypeColors[file.type],
-          backgroundImage: file.thumbnail ? `url(${file.thumbnail})` : "none",
+          bgcolor: previewBgColor,
+          backgroundImage: previewBg,
           backgroundSize: "cover",
           backgroundPosition: "center",
           display: "flex",
@@ -234,10 +253,38 @@ export function FileCard({
           justifyContent: "center",
           position: "relative",
           borderBottom: `1px solid ${theme.palette.divider}`,
+          overflow: "hidden",
         }}
       >
-        {/* Show file type icon if no thumbnail */}
-        {!file.thumbnail && (
+        {/* PDF: show actual content in iframe; overflow hidden to hide scrollbar in card */}
+        {hasContentPreview && file.type === "pdf" && (
+          <Box
+            sx={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              overflow: "hidden",
+            }}
+          >
+            <iframe
+              title={file.name}
+              src={previewContentUrl ?? undefined}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "calc(100% + 20px)",
+                height: "100%",
+                border: "none",
+                background: "white",
+              }}
+            />
+          </Box>
+        )}
+        {/* Show file type icon only when no content preview */}
+        {!hasContentPreview && !file.thumbnail && (
           <Box sx={{ transform: "scale(1.5)" }}>{fileTypeIcons[file.type]}</Box>
         )}
 

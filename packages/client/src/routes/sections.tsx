@@ -147,6 +147,14 @@ export const routesSection: RouteObject[] = [
         ),
       },
       {
+        path: "documents/:clientId",
+        element: (
+          <PermissionGuard requiredPath="/documents">
+            <DocumentDetailsPage />
+          </PermissionGuard>
+        ),
+      },
+      {
         path: "meetings",
         element: (
           <PermissionGuard requiredPath="/meetings">

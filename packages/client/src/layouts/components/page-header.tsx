@@ -25,6 +25,8 @@ import CustomButton from "src/components/common/CustomButton";
 type BreadcrumbItem = {
   label: string;
   path?: string;
+  /** In-page navigation (e.g. folder level); used when path is not set */
+  onClick?: () => void;
 };
 
 type ActionButton = {
@@ -207,7 +209,7 @@ export function PageHeader({
 
                     return isLast ? (
                       <Typography
-                        key={crumb.label}
+                        key={`${crumb.label}-${index}`}
                         variant="body2"
                         sx={{
                           color: theme.palette.text.primary,
@@ -216,9 +218,32 @@ export function PageHeader({
                       >
                         {crumb.label}
                       </Typography>
+                    ) : crumb.onClick ? (
+                      <Link
+                        key={`${crumb.label}-${index}`}
+                        component="button"
+                        variant="body2"
+                        underline="hover"
+                        onClick={(e: React.MouseEvent) => {
+                          e.preventDefault();
+                          crumb.onClick?.();
+                        }}
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: 14,
+                          cursor: "pointer",
+                          border: "none",
+                          background: "none",
+                          p: 0,
+                          fontFamily: "inherit",
+                          "&:hover": { color: theme.palette.primary.main },
+                        }}
+                      >
+                        {crumb.label}
+                      </Link>
                     ) : (
                       <Link
-                        key={crumb.label}
+                        key={`${crumb.label}-${index}`}
                         component={crumb.path ? RouterLink : "span"}
                         to={crumb.path || ""}
                         underline="hover"

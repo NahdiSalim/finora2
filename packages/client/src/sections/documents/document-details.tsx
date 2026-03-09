@@ -1,30 +1,65 @@
-import { Box, Grid, Typography, useTheme } from "@mui/material";
+import {
+  Box,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Grid,
+  IconButton,
+  Typography,
+  useTheme,
+} from "@mui/material";
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
   PointerSensor,
+  KeyboardSensor,
   useSensor,
   useSensors,
   DragOverlay,
+  useDraggable,
+  useDroppable,
 } from "@dnd-kit/core";
 import {
-  arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
-  rectSortingStrategy,
   useSortable,
+  rectSortingStrategy,
+  sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Download, Plus, Search } from "lucide-react";
-import { useState } from "react";
+import {
+  Plus,
+  Search,
+  FolderPlus,
+  FileText,
+  File as FileIcon,
+  X,
+} from "lucide-react";
+import { useState, useEffect } from "react";
+import { useParams, useLocation } from "react-router-dom";
 import { Folder } from "src/components/common/folder";
 import { PageHeader } from "src/layouts/components/page-header";
 import CustomInput from "src/components/common/CustomInput";
-import type { FileItem } from "src/components/common/File";
+import type { FileItem, FileType } from "src/components/common/File";
 import { FileCard } from "src/components/common/File";
+import PdfIcon from "src/components/common/pdfIcon";
+import ImageIcon from "src/components/common/imageIcon";
+import XlsIcon from "src/components/common/xlsIcon";
 import CustomButton from "src/components/common/CustomButton";
+import { CreateFolderModal } from "./CreateFolderModal";
+import { SuccessFolderModal } from "./SuccessFolderModal";
+import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
+import { RenameFolderModal } from "./RenameFolderModal";
+import { ImportDocumentModal } from "./ImportDocumentModal";
+import {
+  useGetDocumentsQuery,
+  useCreateFolderMutation,
+  useUpdateDocumentMutation,
+  useDeleteDocumentMutation,
+  useUploadDocumentMutation,
+  useDownloadDocumentMutation,
+} from "src/lib/services/documentsApi";
+import type { DocumentItem } from "src/lib/services/documentsApi";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -36,28 +71,91 @@ interface FolderItem {
   fileCount?: number;
 }
 
-// ─── Sortable Folder Wrapper ──────────────────────────────────────────────────
-
-interface SortableFolderProps {
-  folder: FolderItem;
+function formatSize(bytes: number | null | undefined): string {
+  if (bytes == null || bytes === 0) return "—";
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function SortableFolder({ folder }: SortableFolderProps) {
+function docToFolderState(item: DocumentItem): FolderItem["state"] {
+  if (item.status === "archived") return "archived";
+  return "empty";
+}
+
+function docToFileType(
+  type?: string | null,
+  mimeType?: string | null,
+): FileItem["type"] {
+  const t = (type || mimeType || "").toLowerCase();
+  if (t.includes("pdf")) return "pdf";
+  if (t.includes("word") || t.includes("doc")) return "docx";
+  if (t.includes("sheet") || t.includes("excel") || t.includes("xls"))
+    return "xls";
+  if (t.includes("jpeg") || t.includes("jpg")) return "jpg";
+  if (t.includes("png")) return "png";
+  return "other";
+}
+
+// ─── Folder with child count (fetches count from API so "hasFiles" is correct) ─
+
+interface SortableDroppableFolderProps {
+  folder: FolderItem;
+  onOpen: () => void;
+  onMenuAction: (action: string) => void;
+}
+
+function FolderWithCount({
+  folder,
+  onOpen,
+  onMenuAction,
+}: SortableDroppableFolderProps) {
+  const { data } = useGetDocumentsQuery(
+    { parentId: folder.id, limit: 500, status: "active" },
+    { skip: folder.id == null },
+  );
+  const fileCount = data?.data?.filter((d) => d.type !== "folder").length ?? 0;
+  const folderWithCount: FolderItem = {
+    ...folder,
+    fileCount,
+    state: fileCount > 0 ? "hasFiles" : "empty",
+  };
+  return (
+    <SortableDroppableFolder
+      folder={folderWithCount}
+      onOpen={onOpen}
+      onMenuAction={onMenuAction}
+    />
+  );
+}
+
+// ─── Sortable + Droppable Folder (drag to reorder, drop files into) ───────────
+
+function SortableDroppableFolder({
+  folder,
+  onOpen,
+  onMenuAction,
+}: SortableDroppableFolderProps) {
   const {
     attributes,
     listeners,
-    setNodeRef,
+    setNodeRef: setSortableRef,
     transform,
     transition,
     isDragging: isSortableDragging,
   } = useSortable({ id: folder.id });
+  const { isOver, setNodeRef: setDroppableRef } = useDroppable({
+    id: folder.id,
+  });
+
+  const setNodeRef = (node: HTMLElement | null) => {
+    setSortableRef(node);
+    setDroppableRef(node);
+  };
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isSortableDragging ? 0.4 : 1,
-    cursor: "grab",
-    outline: "none",
   };
 
   return (
@@ -68,71 +166,382 @@ function SortableFolder({ folder }: SortableFolderProps) {
       {...listeners}
       sx={{
         borderRadius: 2,
+        cursor: "grab",
         "&:active": { cursor: "grabbing" },
+        opacity: isSortableDragging ? 0.4 : 1,
         ...(isSortableDragging && {
           border: "2px dashed",
           borderColor: "primary.main",
         }),
+        ...(isOver &&
+          !isSortableDragging && {
+            border: "2px dashed",
+            borderColor: "primary.main",
+            bgcolor: "action.hover",
+          }),
       }}
     >
       <Folder
         name={folder.name}
         description={folder.description}
         state={folder.state}
-        fileCount={folder.fileCount}
-        onClick={() => console.log(`Open ${folder.name}`)}
-        onMenuAction={(action) => console.log(`${action} ${folder.name}`)}
+        fileCount={folder.fileCount ?? 0}
+        onClick={onOpen}
+        onMenuAction={onMenuAction}
       />
     </Box>
   );
 }
 
-// ─── Static file data (outside component to avoid re-creation on render) ─────
+// ─── Document Preview Modal (aperçu du fichier comme dans la capture) ─────────
 
-const files: FileItem[] = [
-  { id: 1, name: "Document.pdf", type: "pdf", size: "1.2 MB" },
-  { id: 2, name: "Spreadsheet.xls", type: "xls", size: "856 KB" },
-  { id: 3, name: "Image.jpg", type: "jpg", size: "3.2 MB" },
-];
+const previewFileTypeIcons: Record<FileType, React.ReactNode> = {
+  pdf: <PdfIcon />,
+  docx: <FileText size={24} color="#2B5797" />,
+  xls: <XlsIcon />,
+  jpg: <ImageIcon />,
+  png: <ImageIcon />,
+  other: <FileIcon size={24} color="#6B7280" />,
+};
+
+interface DocumentPreviewModalProps {
+  open: boolean;
+  onClose: () => void;
+  documentId: number;
+  fileName: string;
+  fileType: FileType;
+  onDownloadDocument: (id: number, displayName?: string) => void;
+}
+
+function DocumentPreviewModal({
+  open,
+  onClose,
+  documentId,
+  fileName,
+  fileType,
+  onDownloadDocument,
+}: DocumentPreviewModalProps) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [downloadDocument] = useDownloadDocumentMutation();
+  const theme = useTheme();
+
+  useEffect(() => {
+    if (!open || !documentId) {
+      setBlobUrl(null);
+      return undefined;
+    }
+    let revoked = false;
+    downloadDocument(documentId)
+      .unwrap()
+      .then(({ blob }) => {
+        if (!revoked) setBlobUrl(URL.createObjectURL(blob));
+      })
+      .catch(() => {
+        if (!revoked) setBlobUrl(null);
+      });
+    return () => {
+      revoked = true;
+      setBlobUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only refetch when open/documentId change
+  }, [open, documentId]);
+
+  const canPreview =
+    fileType === "pdf" || fileType === "jpg" || fileType === "png";
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="xl"
+      fullWidth
+      PaperProps={{
+        sx: {
+          borderRadius: 3,
+          overflow: "hidden",
+          maxHeight: "95vh",
+          height: "90vh",
+          display: "flex",
+          flexDirection: "column",
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          fontWeight: 600,
+          fontSize: "1.125rem",
+          pb: 0,
+          pt: 2,
+          px: 2,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        Aperçu du document
+        <IconButton
+          size="small"
+          onClick={onClose}
+          sx={{ color: "text.secondary" }}
+        >
+          <X size={20} />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent
+        sx={{
+          p: 0,
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 400,
+            maxHeight: "78vh",
+            bgcolor: "grey.100",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderBottom: `1px solid ${theme.palette.divider}`,
+            overflow: "hidden",
+          }}
+        >
+          {!blobUrl && (
+            <Typography color="text.secondary">
+              Chargement de l&apos;aperçu…
+            </Typography>
+          )}
+          {blobUrl && fileType === "pdf" && (
+            <iframe
+              title={fileName}
+              src={blobUrl}
+              style={{
+                width: "100%",
+                height: "100%",
+                border: "none",
+                background: "white",
+              }}
+            />
+          )}
+          {blobUrl && (fileType === "jpg" || fileType === "png") && (
+            <Box
+              component="img"
+              src={blobUrl}
+              alt={fileName}
+              sx={{
+                maxWidth: "100%",
+                maxHeight: "100%",
+                objectFit: "contain",
+              }}
+            />
+          )}
+          {blobUrl && !canPreview && (
+            <Typography color="text.secondary">
+              Aperçu non disponible pour ce type de fichier.
+            </Typography>
+          )}
+        </Box>
+        <Box
+          sx={{
+            p: 1.5,
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            bgcolor: "background.paper",
+          }}
+        >
+          <Box sx={{ flexShrink: 0 }}>{previewFileTypeIcons[fileType]}</Box>
+          <Typography variant="body2" fontWeight={500} noWrap sx={{ flex: 1 }}>
+            {fileName}
+          </Typography>
+          <CustomButton
+            variant="outlined"
+            size="small"
+            onClick={() => onDownloadDocument(documentId, fileName)}
+          >
+            Télécharger
+          </CustomButton>
+        </Box>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Draggable File ──────────────────────────────────────────────────────────
+
+const FILE_PREFIX = "file-";
+
+interface DraggableFileCardProps {
+  file: FileItem;
+  selectable: boolean;
+  selected: boolean;
+  onSelect: (selected: boolean) => void;
+  onMenuAction: (action: string, file: FileItem) => void;
+  previewContentUrl?: string | null;
+}
+
+function DraggableFileCard({
+  file,
+  selectable,
+  selected,
+  onSelect,
+  onMenuAction,
+  previewContentUrl,
+}: DraggableFileCardProps) {
+  const id = `${FILE_PREFIX}${file.id}`;
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id,
+    data: { type: "file" as const, fileId: file.id },
+  });
+
+  return (
+    <Box
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      sx={{
+        cursor: "grab",
+        "&:active": { cursor: "grabbing" },
+        opacity: isDragging ? 0.5 : 1,
+      }}
+    >
+      <FileCard
+        file={file}
+        previewContentUrl={previewContentUrl}
+        selectable={selectable}
+        selected={selected}
+        onSelect={onSelect}
+        onMenuAction={onMenuAction}
+      />
+    </Box>
+  );
+}
+
+/** Charge l’aperçu du document (PDF/image) et l’affiche sur la carte comme dans le Figma. */
+function FileCardWithPreview(props: DraggableFileCardProps) {
+  const { file } = props;
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [downloadDocument] = useDownloadDocumentMutation();
+  const canPreview =
+    file.type === "pdf" || file.type === "jpg" || file.type === "png";
+
+  useEffect(() => {
+    if (!canPreview || file.id == null) return undefined;
+    let revoked = false;
+    downloadDocument(Number(file.id))
+      .unwrap()
+      .then(({ blob }) => {
+        if (!revoked) setPreviewUrl(URL.createObjectURL(blob));
+      })
+      .catch(() => {
+        if (!revoked) setPreviewUrl(null);
+      });
+    return () => {
+      revoked = true;
+      setPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only refetch when file id/type change
+  }, [file.id, file.type, canPreview]);
+
+  return <DraggableFileCard {...props} previewContentUrl={previewUrl} />;
+}
 
 // ─── Main View ────────────────────────────────────────────────────────────────
 
 export default function DocumentDetailsView() {
+  const { clientId } = useParams<{ clientId: string }>();
+  const location = useLocation();
+  const state = location.state as {
+    clientName?: string;
+    invoiceStats?: { traite: number; pending: number; total: number };
+  } | null;
+  const clientName = state?.clientName;
+  const invoiceStats = state?.invoiceStats ?? {
+    traite: 0,
+    pending: 0,
+    total: 0,
+  };
   const [searchValue, setSearchValue] = useState("");
+  const [parentId, setParentId] = useState<number | null>(null);
+  /** Chemin des dossiers (arborescence) pour le fil d'Ariane */
+  const [folderPath, setFolderPath] = useState<{ id: number; name: string }[]>(
+    [],
+  );
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [successModalOpen, setSuccessModalOpen] = useState(false);
+  const [renameFolder, setRenameFolder] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
+  const [renameFile, setRenameFile] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
+  const [previewFile, setPreviewFile] = useState<{
+    id: number;
+    name: string;
+    type: FileType;
+  } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<
+    | { type: "folder"; id: number; name: string }
+    | { type: "file"; id: number; name: string }
+    | { type: "files"; ids: number[] }
+    | null
+  >(null);
+  const [activeFileId, setActiveFileId] = useState<string | null>(null);
+  const [activeFolderId, setActiveFolderId] = useState<number | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<(string | number)[]>([]);
   const theme = useTheme();
 
-  const [folders, setFolders] = useState<FolderItem[]>([
-    {
-      id: 1,
-      name: "Contracts",
-      description: "Legal documents",
-      state: "hasFiles",
-      fileCount: 15,
-    },
-    {
-      id: 2,
-      name: "Invoices",
-      description: "2024 invoices",
-      state: "hasFiles",
-      fileCount: 8,
-    },
-    {
-      id: 3,
-      name: "Archive",
-      description: "Old projects",
-      state: "archived",
-      fileCount: 23,
-    },
-    { id: 4, name: "New Folder", description: "Empty", state: "empty" },
-  ]);
+  const { data, isLoading, isError, refetch } = useGetDocumentsQuery({
+    parentId: parentId ?? undefined,
+    limit: 100,
+    status: "active",
+  });
+  const [createFolder, { isLoading: isCreating }] = useCreateFolderMutation();
+  const [updateDocument, { isLoading: isUpdating }] =
+    useUpdateDocumentMutation();
+  const [deleteDocument, { isLoading: isDeleting }] =
+    useDeleteDocumentMutation();
+  const [uploadDocument, { isLoading: isUploading }] =
+    useUploadDocumentMutation();
+  const [downloadDocument, { isLoading: isDownloading }] =
+    useDownloadDocumentMutation();
 
-  const [activeId, setActiveId] = useState<number | null>(null);
-  const [selectedFiles, setSelectedFiles] = useState<(string | number)[]>([]);
+  const rawItems: DocumentItem[] = data?.data ?? [];
+  const foldersFromApi: FolderItem[] = rawItems
+    .filter((d) => d.isFolder)
+    .map((d) => ({
+      id: d.id,
+      name: d.name,
+      description: "",
+      state: docToFolderState(d),
+      fileCount: 0,
+    }));
+
+  const folders: FolderItem[] = foldersFromApi;
+
+  const fileItems: FileItem[] = rawItems
+    .filter((d) => !d.isFolder)
+    .map((d) => ({
+      id: d.id,
+      name: d.name,
+      type: docToFileType(d.type, d.mimeType),
+      size: formatSize(d.size),
+    }));
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
@@ -140,34 +549,114 @@ export default function DocumentDetailsView() {
 
   const actions = [
     {
-      label: "Add Document",
-      icon: <Plus size={18} />,
-      onClick: () => console.log("Add document"),
-      variant: "contained" as const,
+      label: "Nouveau dossier",
+      icon: <FolderPlus size={18} />,
+      onClick: () => setCreateModalOpen(true),
+      variant: "outlined" as const,
       color: "primary" as const,
     },
     {
-      label: "Export",
-      icon: <Download size={18} />,
-      onClick: () => console.log("Export"),
-      variant: "outlined" as const,
+      label: "Nouveau document",
+      icon: <Plus size={18} />,
+      onClick: () => setImportModalOpen(true),
+      variant: "contained" as const,
       color: "primary" as const,
     },
   ];
 
+  const handleCreateFolder = async (name: string) => {
+    await createFolder({ name, parentId: parentId ?? undefined }).unwrap();
+    setSuccessModalOpen(true);
+  };
+
+  const handleImportDocument = async (payload: {
+    file: File;
+    documentName?: string;
+    category?: string;
+    parentId?: number | null;
+  }) => {
+    await uploadDocument({
+      file: payload.file,
+      parentId: payload.parentId ?? undefined,
+      category: payload.category,
+    }).unwrap();
+    if (payload.documentName && payload.documentName !== payload.file.name) {
+      // Optional: rename after upload when backend supports it or we get doc id from response
+      // For now the server uses file.originalname; skip rename.
+    }
+  };
+
+  const handleRenameFolder = async (newName: string) => {
+    if (!renameFolder) return;
+    await updateDocument({
+      id: renameFolder.id,
+      dto: { name: newName },
+    }).unwrap();
+    setFolderPath((prev) =>
+      prev.map((step) =>
+        step.id === renameFolder.id ? { ...step, name: newName } : step,
+      ),
+    );
+    setRenameFolder(null);
+  };
+
+  const handleRenameFile = async (newName: string) => {
+    if (!renameFile) return;
+    await updateDocument({
+      id: renameFile.id,
+      dto: { name: newName },
+    }).unwrap();
+    setRenameFile(null);
+  };
+
+  const handleDownloadFile = async (
+    documentId: number,
+    displayName?: string,
+  ) => {
+    try {
+      const { blob, filename } = await downloadDocument(documentId).unwrap();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = displayName ?? filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Error handled by mutation
+    }
+  };
+
   function handleDragStart(event: DragStartEvent) {
-    setActiveId(event.active.id as number);
+    const id = event.active.id;
+    const idStr = String(id);
+    if (idStr.startsWith(FILE_PREFIX)) {
+      setActiveFileId(idStr);
+      setActiveFolderId(null);
+    } else if (typeof id === "number" && folders.some((f) => f.id === id)) {
+      setActiveFolderId(id);
+      setActiveFileId(null);
+    }
   }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    setActiveId(null);
-    if (over && active.id !== over.id) {
-      setFolders((items) => {
-        const oldIndex = items.findIndex((f) => f.id === active.id);
-        const newIndex = items.findIndex((f) => f.id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
-      });
+    setActiveFileId(null);
+    setActiveFolderId(null);
+    if (!over) return;
+    const activeIdStr = String(active.id);
+    if (activeIdStr.startsWith(FILE_PREFIX) && typeof over.id === "number") {
+      const fileId = Number(activeIdStr.slice(FILE_PREFIX.length));
+      if (!Number.isNaN(fileId) && over.id !== fileId) {
+        updateDocument({ id: fileId, dto: { parentId: over.id } });
+      }
+      return;
+    }
+    if (typeof active.id === "number" && typeof over.id === "number") {
+      const folderId = active.id as number;
+      const newParentId = over.id as number;
+      if (folderId !== newParentId) {
+        updateDocument({ id: folderId, dto: { parentId: newParentId } });
+      }
     }
   }
 
@@ -179,25 +668,86 @@ export default function DocumentDetailsView() {
 
   const handleSelectAll = () => {
     setSelectedFiles(
-      selectedFiles.length === files.length ? [] : files.map((f) => f.id),
+      selectedFiles.length === fileItems.length
+        ? []
+        : fileItems.map((f) => f.id),
     );
   };
 
   const handleDeleteSelected = () => {
-    console.log("Delete files:", selectedFiles);
-    setSelectedFiles([]);
+    const ids = selectedFiles
+      .map((s) => Number(s))
+      .filter((id) => !Number.isNaN(id));
+    if (ids.length > 0) setDeleteConfirm({ type: "files", ids });
   };
 
-  const activeFolder = folders.find((f) => f.id === activeId);
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirm) return;
+    try {
+      if (deleteConfirm.type === "folder") {
+        await deleteDocument(deleteConfirm.id).unwrap();
+        if (parentId === deleteConfirm.id) {
+          const newPath = folderPath.slice(0, -1);
+          setFolderPath(newPath);
+          setParentId(
+            newPath.length === 0 ? null : newPath[newPath.length - 1].id,
+          );
+        } else {
+          const index = folderPath.findIndex((p) => p.id === deleteConfirm.id);
+          if (index !== -1) {
+            const newPath = folderPath.slice(0, index);
+            setFolderPath(newPath);
+            setParentId(
+              newPath.length === 0 ? null : newPath[newPath.length - 1].id,
+            );
+          }
+        }
+      } else if (deleteConfirm.type === "file") {
+        await deleteDocument(deleteConfirm.id).unwrap();
+      } else if (deleteConfirm.type === "files") {
+        for (const id of deleteConfirm.ids) {
+          await deleteDocument(id).unwrap();
+        }
+        setSelectedFiles([]);
+      }
+    } catch {
+      // Error handled by mutation
+    }
+    setDeleteConfirm(null);
+  };
+
+  const activeFile = activeFileId
+    ? fileItems.find((f) => `${FILE_PREFIX}${f.id}` === activeFileId)
+    : null;
+  const activeFolder = activeFolderId
+    ? folders.find((f) => f.id === activeFolderId)
+    : null;
 
   return (
     <PageHeader
-      title="Digital Identity"
+      title={
+        clientName ||
+        (clientId ? `Documents client #${clientId}` : "Documents client")
+      }
       breadcrumbs={[
-        { label: "Shared Files", path: "/documents" },
-        { label: "DIGID" },
+        { label: "Documents partagés", path: "/dashboard/documents" },
+        { label: clientName || (clientId ? `Client ${clientId}` : "Détail") },
+        ...folderPath.map((step, i) => ({
+          label: step.name,
+          onClick:
+            i < folderPath.length - 1
+              ? () => {
+                  const newPath = folderPath.slice(0, i + 1);
+                  setFolderPath(newPath);
+                  setParentId(newPath[newPath.length - 1].id);
+                }
+              : undefined,
+        })),
       ]}
-      documentsProcessed={{ processed: 10, total: 15 }}
+      documentsProcessed={{
+        processed: invoiceStats.traite,
+        total: invoiceStats.total,
+      }}
       actions={actions}
     >
       <Box
@@ -216,19 +766,53 @@ export default function DocumentDetailsView() {
             justifyContent: "space-between",
             alignItems: "center",
             mb: 1.5,
+            flexWrap: "wrap",
+            gap: 1,
           }}
         >
-          <Typography variant="h6" fontWeight={500}>
-            Dossiers
-          </Typography>
-          <CustomInput
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-            placeholder="Rechercher..."
-            startIcon={<Search size={20} />}
-            sx={{ width: 300 }}
-          />
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            {parentId != null && (
+              <CustomButton
+                variant="outlined"
+                size="small"
+                onClick={() => {
+                  const newPath = folderPath.slice(0, -1);
+                  setFolderPath(newPath);
+                  setParentId(
+                    newPath.length === 0
+                      ? null
+                      : newPath[newPath.length - 1].id,
+                  );
+                }}
+              >
+                Retour
+              </CustomButton>
+            )}
+            <Typography variant="h6" fontWeight={500}>
+              Dossiers
+            </Typography>
+          </Box>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <CustomInput
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              placeholder="Rechercher..."
+              startIcon={<Search size={20} />}
+              sx={{ width: 300 }}
+            />
+          </Box>
         </Box>
+
+        {isError && (
+          <Typography color="error" sx={{ py: 2 }}>
+            Impossible de charger les dossiers et documents.
+          </Typography>
+        )}
+        {isLoading && (
+          <Typography color="text.secondary" sx={{ py: 2 }}>
+            Chargement…
+          </Typography>
+        )}
 
         <DndContext
           sensors={sensors}
@@ -241,11 +825,33 @@ export default function DocumentDetailsView() {
             strategy={rectSortingStrategy}
           >
             <Grid container spacing={3}>
-              {folders.map((folder) => (
-                <Grid key={folder.id}>
-                  <SortableFolder folder={folder} />
-                </Grid>
-              ))}
+              {!isLoading &&
+                !isError &&
+                folders.map((folder) => (
+                  <Grid key={folder.id}>
+                    <FolderWithCount
+                      folder={folder}
+                      onOpen={() => {
+                        setFolderPath((prev) => [
+                          ...prev,
+                          { id: folder.id, name: folder.name },
+                        ]);
+                        setParentId(folder.id);
+                      }}
+                      onMenuAction={(action) => {
+                        if (action === "edit") {
+                          setRenameFolder({ id: folder.id, name: folder.name });
+                        } else if (action === "delete") {
+                          setDeleteConfirm({
+                            type: "folder",
+                            id: folder.id,
+                            name: folder.name,
+                          });
+                        }
+                      }}
+                    />
+                  </Grid>
+                ))}
             </Grid>
           </SortableContext>
 
@@ -267,11 +873,15 @@ export default function DocumentDetailsView() {
                   onMenuAction={() => {}}
                 />
               </Box>
+            ) : activeFile ? (
+              <Box sx={{ opacity: 0.9, pointerEvents: "none" }}>
+                <FileCard file={activeFile} onMenuAction={() => {}} />
+              </Box>
             ) : null}
           </DragOverlay>
         </DndContext>
 
-        {/* ── Recent documents section ── */}
+        {/* ── Documents (fichiers) ── */}
         <Box sx={{ my: 4 }}>
           <Box
             sx={{
@@ -281,18 +891,12 @@ export default function DocumentDetailsView() {
               mb: 1.5,
             }}
           >
-            <Typography variant="body1">Documents ajoutés récemment</Typography>
-            <CustomInput
-              value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
-              placeholder="Rechercher..."
-              startIcon={<Search size={20} />}
-              sx={{ width: 300 }}
-            />
+            <Typography variant="body1">
+              Documents {parentId != null ? "dans ce dossier" : "à la racine"}
+            </Typography>
           </Box>
 
           <Box sx={{ p: 3 }}>
-            {/* Selection toolbar */}
             {selectedFiles.length > 0 && (
               <Box
                 sx={{
@@ -307,23 +911,22 @@ export default function DocumentDetailsView() {
                 }}
               >
                 <Typography variant="body2" color="primary.main">
-                  {selectedFiles.length} selected
+                  {selectedFiles.length} sélectionné(s)
                 </Typography>
                 <Box sx={{ gap: 2 }}>
                   <CustomButton
                     variant="contained"
                     onClick={handleDeleteSelected}
                   >
-                    Delete
+                    Supprimer
                   </CustomButton>
                   <CustomButton variant="outlined" onClick={handleSelectAll}>
-                    Select All
+                    Tout sélectionner
                   </CustomButton>
                 </Box>
               </Box>
             )}
 
-            {/* Files grid */}
             <Box
               sx={{
                 display: "grid",
@@ -331,22 +934,114 @@ export default function DocumentDetailsView() {
                 gap: 2,
               }}
             >
-              {files.map((file) => (
-                <FileCard
-                  key={file.id}
-                  file={file}
-                  selectable
-                  selected={selectedFiles.includes(file.id)}
-                  onSelect={(selected) => handleSelect(file.id, selected)}
-                  onMenuAction={(action, fileItem) =>
-                    console.log(action, fileItem)
-                  }
-                />
-              ))}
+              {!isLoading &&
+                !isError &&
+                fileItems.map((file) => (
+                  <FileCardWithPreview
+                    key={file.id}
+                    file={file}
+                    selectable
+                    selected={selectedFiles.includes(file.id)}
+                    onSelect={(selected) => handleSelect(file.id, selected)}
+                    onMenuAction={(action, fileItem) => {
+                      if (action === "delete") {
+                        setDeleteConfirm({
+                          type: "file",
+                          id: Number(fileItem.id),
+                          name: fileItem.name,
+                        });
+                      } else if (action === "rename") {
+                        setRenameFile({
+                          id: Number(fileItem.id),
+                          name: fileItem.name,
+                        });
+                      } else if (action === "download") {
+                        handleDownloadFile(Number(fileItem.id), fileItem.name);
+                      } else if (action === "preview") {
+                        setPreviewFile({
+                          id: Number(fileItem.id),
+                          name: fileItem.name,
+                          type: fileItem.type,
+                        });
+                      }
+                    }}
+                  />
+                ))}
             </Box>
+            {!isLoading && !isError && fileItems.length === 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
+                Aucun document dans ce dossier.
+              </Typography>
+            )}
           </Box>
         </Box>
       </Box>
+
+      <CreateFolderModal
+        open={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        onSubmit={handleCreateFolder}
+        isLoading={isCreating}
+      />
+      <ImportDocumentModal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onSubmit={handleImportDocument}
+        defaultParentId={parentId}
+        isLoading={isUploading}
+      />
+      {renameFolder && (
+        <RenameFolderModal
+          open={!!renameFolder}
+          onClose={() => setRenameFolder(null)}
+          onSubmit={handleRenameFolder}
+          initialName={renameFolder.name}
+          isLoading={isUpdating}
+        />
+      )}
+      {renameFile && (
+        <RenameFolderModal
+          open={!!renameFile}
+          onClose={() => setRenameFile(null)}
+          onSubmit={handleRenameFile}
+          initialName={renameFile.name}
+          isLoading={isUpdating}
+          title="Renommer le document"
+          description="Saisissez le nouveau nom du document."
+          inputLabel="Nom du document"
+          inputPlaceholder="Saisir le nom du document"
+        />
+      )}
+      {previewFile && (
+        <DocumentPreviewModal
+          open={!!previewFile}
+          onClose={() => setPreviewFile(null)}
+          documentId={previewFile.id}
+          fileName={previewFile.name}
+          fileType={previewFile.type}
+          onDownloadDocument={handleDownloadFile}
+        />
+      )}
+      <SuccessFolderModal
+        open={successModalOpen}
+        onClose={() => setSuccessModalOpen(false)}
+      />
+      {deleteConfirm && (
+        <ConfirmDeleteModal
+          open={!!deleteConfirm}
+          onClose={() => setDeleteConfirm(null)}
+          onConfirm={handleConfirmDelete}
+          isLoading={isDeleting}
+          title="Confirmer la suppression"
+          message={
+            deleteConfirm.type === "folder"
+              ? `Supprimer le dossier « ${deleteConfirm.name} » ? Son contenu sera également supprimé.`
+              : deleteConfirm.type === "file"
+                ? `Supprimer le document « ${deleteConfirm.name} » ?`
+                : `Supprimer les ${deleteConfirm.ids.length} document(s) sélectionné(s) ?`
+          }
+        />
+      )}
     </PageHeader>
   );
 }

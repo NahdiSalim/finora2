@@ -235,7 +235,9 @@ export function Folder({
                     : "text.primary",
               }}
             >
-              <ListItemIcon sx={{ minWidth: 32, color: "inherit" }}>
+              <ListItemIcon
+                sx={{ minWidth: 32, color: theme.palette.info.main }}
+              >
                 {option.icon}
               </ListItemIcon>
               <ListItemText primary={option.label} />

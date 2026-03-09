@@ -1,4 +1,4 @@
-import { Box, Grid, TextField, Typography } from "@mui/material";
+import { Box, Grid, Typography, useTheme } from "@mui/material";
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import {
   DndContext,
@@ -17,11 +17,14 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Download, Plus } from "lucide-react";
+import { Download, Plus, Search } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Folder } from "src/components/common/folder";
 import { PageHeader } from "src/layouts/components/page-header";
+import CustomInput from "src/components/common/CustomInput";
+import type { FileItem } from "src/components/common/File";
+import { FileCard } from "src/components/common/File";
+import CustomButton from "src/components/common/CustomButton";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -37,10 +40,9 @@ interface FolderItem {
 
 interface SortableFolderProps {
   folder: FolderItem;
-  isDragging?: boolean;
 }
 
-function SortableFolder({ folder, isDragging }: SortableFolderProps) {
+function SortableFolder({ folder }: SortableFolderProps) {
   const {
     attributes,
     listeners,
@@ -67,11 +69,9 @@ function SortableFolder({ folder, isDragging }: SortableFolderProps) {
       sx={{
         borderRadius: 2,
         "&:active": { cursor: "grabbing" },
-        // Highlight border while dragging
         ...(isSortableDragging && {
           border: "2px dashed",
           borderColor: "primary.main",
-          borderRadius: 2,
         }),
       }}
     >
@@ -87,11 +87,19 @@ function SortableFolder({ folder, isDragging }: SortableFolderProps) {
   );
 }
 
+// ─── Static file data (outside component to avoid re-creation on render) ─────
+
+const files: FileItem[] = [
+  { id: 1, name: "Document.pdf", type: "pdf", size: "1.2 MB" },
+  { id: 2, name: "Spreadsheet.xls", type: "xls", size: "856 KB" },
+  { id: 3, name: "Image.jpg", type: "jpg", size: "3.2 MB" },
+];
+
 // ─── Main View ────────────────────────────────────────────────────────────────
 
 export default function DocumentDetailsView() {
   const [searchValue, setSearchValue] = useState("");
-  const navigate = useNavigate();
+  const theme = useTheme();
 
   const [folders, setFolders] = useState<FolderItem[]>([
     {
@@ -119,11 +127,10 @@ export default function DocumentDetailsView() {
   ]);
 
   const [activeId, setActiveId] = useState<number | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<(string | number)[]>([]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      // Require the mouse to move 8px before activating drag
-      // This prevents accidental drags when clicking
       activationConstraint: { distance: 8 },
     }),
     useSensor(KeyboardSensor, {
@@ -155,7 +162,6 @@ export default function DocumentDetailsView() {
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActiveId(null);
-
     if (over && active.id !== over.id) {
       setFolders((items) => {
         const oldIndex = items.findIndex((f) => f.id === active.id);
@@ -164,6 +170,23 @@ export default function DocumentDetailsView() {
       });
     }
   }
+
+  const handleSelect = (fileId: string | number, selected: boolean) => {
+    setSelectedFiles((prev) =>
+      selected ? [...prev, fileId] : prev.filter((id) => id !== fileId),
+    );
+  };
+
+  const handleSelectAll = () => {
+    setSelectedFiles(
+      selectedFiles.length === files.length ? [] : files.map((f) => f.id),
+    );
+  };
+
+  const handleDeleteSelected = () => {
+    console.log("Delete files:", selectedFiles);
+    setSelectedFiles([]);
+  };
 
   const activeFolder = folders.find((f) => f.id === activeId);
 
@@ -186,21 +209,24 @@ export default function DocumentDetailsView() {
           mb: 1.5,
         }}
       >
+        {/* ── Folders section ── */}
         <Box
           sx={{
             display: "flex",
-            flexDirection: "row",
             justifyContent: "space-between",
             alignItems: "center",
             mb: 1.5,
           }}
         >
-          <Typography>Dossiers</Typography>
-          <TextField
+          <Typography variant="h6" fontWeight={500}>
+            Dossiers
+          </Typography>
+          <CustomInput
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
-            placeholder="Search folders..."
-            size="small"
+            placeholder="Rechercher..."
+            startIcon={<Search size={20} />}
+            sx={{ width: 300 }}
           />
         </Box>
 
@@ -223,7 +249,6 @@ export default function DocumentDetailsView() {
             </Grid>
           </SortableContext>
 
-          {/* DragOverlay renders a floating "ghost" while dragging */}
           <DragOverlay>
             {activeFolder ? (
               <Box
@@ -245,6 +270,82 @@ export default function DocumentDetailsView() {
             ) : null}
           </DragOverlay>
         </DndContext>
+
+        {/* ── Recent documents section ── */}
+        <Box sx={{ my: 4 }}>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 1.5,
+            }}
+          >
+            <Typography variant="body1">Documents ajoutés récemment</Typography>
+            <CustomInput
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              placeholder="Rechercher..."
+              startIcon={<Search size={20} />}
+              sx={{ width: 300 }}
+            />
+          </Box>
+
+          <Box sx={{ p: 3 }}>
+            {/* Selection toolbar */}
+            {selectedFiles.length > 0 && (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 2,
+                  mb: 2,
+                  p: 1.5,
+                  bgcolor: theme.palette.primary.light,
+                  borderRadius: 2,
+                }}
+              >
+                <Typography variant="body2" color="primary.main">
+                  {selectedFiles.length} selected
+                </Typography>
+                <Box sx={{ gap: 2 }}>
+                  <CustomButton
+                    variant="contained"
+                    onClick={handleDeleteSelected}
+                  >
+                    Delete
+                  </CustomButton>
+                  <CustomButton variant="outlined" onClick={handleSelectAll}>
+                    Select All
+                  </CustomButton>
+                </Box>
+              </Box>
+            )}
+
+            {/* Files grid */}
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: "repeat(4, 1fr)",
+                gap: 2,
+              }}
+            >
+              {files.map((file) => (
+                <FileCard
+                  key={file.id}
+                  file={file}
+                  selectable
+                  selected={selectedFiles.includes(file.id)}
+                  onSelect={(selected) => handleSelect(file.id, selected)}
+                  onMenuAction={(action, fileItem) =>
+                    console.log(action, fileItem)
+                  }
+                />
+              ))}
+            </Box>
+          </Box>
+        </Box>
       </Box>
     </PageHeader>
   );

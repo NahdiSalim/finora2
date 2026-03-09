@@ -72,13 +72,19 @@ export class DocumentController {
           type: 'number',
           nullable: true,
         },
+        category: {
+          type: 'string',
+          nullable: true,
+          description: 'Document category (e.g., facture, contrat, rapport)',
+        },
       },
     },
   })
   async uploadFile(
     @Req() req: AuthRequest,
     @UploadedFile() file: Express.Multer.File,
-    @Body('parentId') parentId?: string
+    @Body('parentId') parentId?: string,
+    @Body('category') category?: string
   ) {
     const userId = req.user!.id;
     const companyId = req.user!.companyId;
@@ -101,7 +107,7 @@ export class DocumentController {
 
     const parentIdNum = parentId ? parseInt(parentId) : undefined;
 
-    return this.documentService.uploadFile(userId, companyId, file, parentIdNum);
+    return this.documentService.uploadFile(userId, companyId, file, parentIdNum, category);
   }
 
   @Get()

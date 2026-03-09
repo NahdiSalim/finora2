@@ -63,7 +63,8 @@ export class DocumentService {
     userId: number,
     companyId: number,
     file: Express.Multer.File,
-    parentId?: number
+    parentId?: number,
+    category?: string
   ) {
     // Verify parent folder exists if parentId is provided
     let folderPath = '';
@@ -103,6 +104,7 @@ export class DocumentService {
           mimeType: file.mimetype,
           size: file.size,
           url: objectName, // Store MinIO object name
+          category: category || null, // Add category field
           ownerId: userId,
           companyId,
           parentId: parentId || null,

@@ -430,4 +430,145 @@ export class RelationshipService {
 
     return history;
   }
+
+  /**
+   * Get all clients with invoice statistics for the connected accountant
+   */
+  async getClientsWithInvoiceStats(userId: number, page: number = 1, limit: number = 20) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        companyId: true,
+        role: true,
+        company: {
+          select: {
+            type: true,
+          },
+        },
+      },
+    });
+
+    if (!user || !user.companyId) {
+      throw new BadRequestException('Vous devez être associé à une entreprise');
+    }
+
+    // Verify user is from an accounting firm (check both company type and user role)
+    const userType = user.company?.type?.toLowerCase() || '';
+    const userRoleFr = user.role?.nameFr?.toLowerCase() || '';
+    const userRoleEn = user.role?.nameEn?.toLowerCase() || '';
+
+    const isAccountant =
+      userType === 'accounting_firm' ||
+      userType === 'accountant' ||
+      userRoleFr === 'comptable' ||
+      userRoleEn === 'accountant';
+
+    if (!isAccountant) {
+      console.log('User type:', userType, 'User role FR:', userRoleFr, 'User role EN:', userRoleEn);
+      throw new ForbiddenException('Cette API est réservée aux cabinets comptables');
+    }
+
+    const skip = (page - 1) * limit;
+
+    // Get total count of active relationships
+    const totalRelationships = await this.prisma.clientAccountingFirmRelationship.count({
+      where: {
+        accountingFirmId: user.companyId,
+        status: 'active',
+      },
+    });
+
+    // Get paginated active relationships where user's company is the accounting firm
+    const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
+      where: {
+        accountingFirmId: user.companyId,
+        status: 'active',
+      },
+      skip,
+      take: limit,
+      include: {
+        clientCompany: {
+          select: {
+            id: true,
+            name: true,
+            logo: true,
+            email: true,
+            owner: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        relationshipStart: 'desc',
+      },
+    });
+
+    // For each client, get invoice statistics
+    const clientsWithStats = await Promise.all(
+      relationships.map(async (relationship) => {
+        const clientCompanyId = relationship.clientCompanyId;
+
+        // Count invoices by status (category = 'facture')
+        const [traiteCount, pendingCount, totalInvoices] = await Promise.all([
+          this.prisma.document.count({
+            where: {
+              companyId: clientCompanyId,
+              category: 'facture',
+              processingStatus: 'traite',
+              isFolder: false,
+              status: 'active',
+            },
+          }),
+          this.prisma.document.count({
+            where: {
+              companyId: clientCompanyId,
+              category: 'facture',
+              processingStatus: 'pending',
+              isFolder: false,
+              status: 'active',
+            },
+          }),
+          this.prisma.document.count({
+            where: {
+              companyId: clientCompanyId,
+              category: 'facture',
+              isFolder: false,
+              status: 'active',
+            },
+          }),
+        ]);
+
+        return {
+          clientId: relationship.clientCompany.id,
+          clientName: relationship.clientCompany.name,
+          clientLogo: relationship.clientCompany.logo,
+          clientEmail: relationship.clientCompany.email,
+          ownerFirstName: relationship.clientCompany.owner?.firstName || null,
+          ownerLastName: relationship.clientCompany.owner?.lastName || null,
+          invoiceStats: {
+            traite: traiteCount,
+            pending: pendingCount,
+            total: totalInvoices,
+          },
+          relationshipId: relationship.id,
+          relationshipStart: relationship.relationshipStart,
+        };
+      })
+    );
+
+    return {
+      success: true,
+      data: clientsWithStats,
+      pagination: {
+        total: totalRelationships,
+        page,
+        limit,
+        totalPages: Math.ceil(totalRelationships / limit),
+      },
+    };
+  }
 }

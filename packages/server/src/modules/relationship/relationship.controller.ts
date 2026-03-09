@@ -5,11 +5,12 @@ import {
   Put,
   Body,
   Param,
+  Query,
   Request,
   UseGuards,
   ParseIntPipe,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RelationshipService } from './relationship.service';
 import { SendInvitationDto } from './dto/send-invitation.dto';
@@ -78,5 +79,31 @@ export class RelationshipController {
   })
   async getRelationshipHistory(@Request() req) {
     return this.relationshipService.getRelationshipHistory(req.user.id);
+  }
+
+  @Get('clients/invoice-stats')
+  @ApiOperation({
+    summary: 'Obtenir tous les clients avec leurs statistiques de factures (pour comptables)',
+    description:
+      'Retourne la liste des clients avec logo, nom, prénom, email et nombre de factures (traite/pending)',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20)',
+  })
+  async getClientsWithInvoiceStats(
+    @Request() req,
+    @Query('page', new ParseIntPipe({ optional: true })) page?: number,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number
+  ) {
+    return this.relationshipService.getClientsWithInvoiceStats(req.user.id, page || 1, limit || 20);
   }
 }

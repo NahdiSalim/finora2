@@ -117,7 +117,7 @@ export function AccountantCard({
     accountantId != null
       ? getProfilePath
         ? getProfilePath(accountantId)
-        : `/accountant/${accountantId}`
+        : `/documents/${accountantId}`
       : "";
 
   const {

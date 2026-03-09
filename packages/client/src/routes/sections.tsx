@@ -30,6 +30,10 @@ export const DocumentsPage = lazy(
   () => import("src/pages/documents/documents"),
 );
 
+export const DocumentDetailsPage = lazy(
+  () => import("src/pages/documents/documents-details"),
+);
+
 export const UserFormPage = lazy(
   () => import("src/sections/user/user-forms/index"),
 );
@@ -146,7 +150,7 @@ export const routesSection: RouteObject[] = [
         path: "meetings",
         element: (
           <PermissionGuard requiredPath="/meetings">
-            <UserPage />
+            <DocumentDetailsPage />
           </PermissionGuard>
         ),
       },

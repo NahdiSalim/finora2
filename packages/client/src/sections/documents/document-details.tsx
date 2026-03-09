@@ -1,7 +1,5 @@
 import { Box, Grid, TextField, Typography } from "@mui/material";
-import type {
-  DragEndEvent,
-  DragStartEvent} from "@dnd-kit/core";
+import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import {
   DndContext,
   closestCenter,
@@ -171,11 +169,12 @@ export default function DocumentDetailsView() {
 
   return (
     <PageHeader
-      title="Documents"
+      title="Digital Identity"
       breadcrumbs={[
         { label: "Shared Files", path: "/documents" },
         { label: "DIGID" },
       ]}
+      documentsProcessed={{ processed: 10, total: 15 }}
       actions={actions}
     >
       <Box

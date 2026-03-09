@@ -102,53 +102,6 @@ export function PageHeader({
           flexDirection: "column",
         }}
       >
-        {/* Breadcrumbs */}
-        {breadcrumbs && breadcrumbs.length > 0 && (
-          <Breadcrumbs
-            separator={<NavigateNextIcon fontSize="small" />}
-            sx={{
-              mb: 2,
-              "& .MuiBreadcrumbs-separator": {
-                mx: 0.5,
-              },
-            }}
-          >
-            {breadcrumbs.map((crumb, index) => {
-              const isLast = index === breadcrumbs.length - 1;
-
-              return isLast ? (
-                <Typography
-                  key={crumb.label}
-                  variant="body2"
-                  sx={{
-                    color: theme.palette.text.primary,
-                    fontWeight: 500,
-                  }}
-                >
-                  {crumb.label}
-                </Typography>
-              ) : (
-                <Link
-                  key={crumb.label}
-                  component={crumb.path ? RouterLink : "span"}
-                  to={crumb.path || ""}
-                  underline="hover"
-                  sx={{
-                    color: theme.palette.text.secondary,
-                    fontSize: 14,
-                    cursor: crumb.path ? "pointer" : "default",
-                    "&:hover": crumb.path
-                      ? { color: theme.palette.primary.main }
-                      : {},
-                  }}
-                >
-                  {crumb.label}
-                </Link>
-              );
-            })}
-          </Breadcrumbs>
-        )}
-
         {/* Main Header Row */}
         <Box
           sx={{
@@ -221,7 +174,7 @@ export function PageHeader({
                       color: theme.palette.grey[800],
                     }}
                   >
-                    {`${documentsProcessed.processed}/${documentsProcessed.total}`}
+                    {`docs traités: ${documentsProcessed.processed}/${documentsProcessed.total}`}
                   </Box>
                 )}
               </Box>
@@ -239,6 +192,51 @@ export function PageHeader({
               )}
 
               {subheader && <Box sx={{ mt: 1 }}>{subheader}</Box>}
+              {/* Breadcrumbs */}
+              {breadcrumbs && breadcrumbs.length > 0 && (
+                <Breadcrumbs
+                  separator={<NavigateNextIcon fontSize="small" />}
+                  sx={{
+                    "& .MuiBreadcrumbs-separator": {
+                      mx: 0.5,
+                    },
+                  }}
+                >
+                  {breadcrumbs.map((crumb, index) => {
+                    const isLast = index === breadcrumbs.length - 1;
+
+                    return isLast ? (
+                      <Typography
+                        key={crumb.label}
+                        variant="body2"
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontWeight: 500,
+                        }}
+                      >
+                        {crumb.label}
+                      </Typography>
+                    ) : (
+                      <Link
+                        key={crumb.label}
+                        component={crumb.path ? RouterLink : "span"}
+                        to={crumb.path || ""}
+                        underline="hover"
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: 14,
+                          cursor: crumb.path ? "pointer" : "default",
+                          "&:hover": crumb.path
+                            ? { color: theme.palette.primary.main }
+                            : {},
+                        }}
+                      >
+                        {crumb.label}
+                      </Link>
+                    );
+                  })}
+                </Breadcrumbs>
+              )}
             </Box>
           </Box>
 

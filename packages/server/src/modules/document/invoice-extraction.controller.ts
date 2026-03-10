@@ -9,7 +9,7 @@ import {
   Body,
   ParseIntPipe,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiParam, ApiBody } from '@nestjs/swagger';
 import { InvoiceExtractionService } from './invoice-extraction.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
@@ -131,6 +131,33 @@ export class InvoiceExtractionController {
       'After extraction, verify the data and call this endpoint to save metadata to database',
   })
   @ApiParam({ name: 'documentId', type: Number, description: 'Document ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        extractedData: {
+          type: 'object',
+          description: 'Extracted invoice metadata from the extraction API',
+          example: {
+            invoice_header: {
+              msg_sender_id: '123',
+              msg_receiver_id: '456',
+            },
+            bgm: {
+              type: 'INVOICE',
+              numero: 'INV-001',
+            },
+            dtm: [
+              {
+                date_periode: '2025-03-10',
+              },
+            ],
+          },
+        },
+      },
+      required: ['extractedData'],
+    },
+  })
   async saveInvoiceMetadata(
     @Req() req: AuthRequest,
     @Param('documentId', ParseIntPipe) documentId: number,

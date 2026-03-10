@@ -104,15 +104,23 @@ interface SortableDroppableFolderProps {
   folder: FolderItem;
   onOpen: () => void;
   onMenuAction: (action: string) => void;
+  /** Client company ID when accountant consulte l'espace d'un client */
+  clientCompanyId?: number;
 }
 
 function FolderWithCount({
   folder,
   onOpen,
   onMenuAction,
+  clientCompanyId,
 }: SortableDroppableFolderProps) {
   const { data } = useGetDocumentsQuery(
-    { parentId: folder.id, limit: 500, status: "active" },
+    {
+      clientId: clientCompanyId,
+      parentId: folder.id,
+      limit: 500,
+      status: "active",
+    },
     { skip: folder.id == null },
   );
   const fileCount = data?.data?.filter((d) => d.type !== "folder").length ?? 0;
@@ -508,6 +516,7 @@ export default function DocumentDetailsView() {
   const theme = useTheme();
 
   const { data, isLoading, isError, refetch } = useGetDocumentsQuery({
+    clientId: !isMySpace && clientId ? Number(clientId) : undefined,
     parentId: parentId ?? undefined,
     limit: 100,
     status: "active",
@@ -570,7 +579,11 @@ export default function DocumentDetailsView() {
   ];
 
   const handleCreateFolder = async (name: string) => {
-    await createFolder({ name, parentId: parentId ?? undefined }).unwrap();
+    await createFolder({
+      name,
+      parentId: parentId ?? undefined,
+      clientCompanyId: !isMySpace && clientId ? Number(clientId) : undefined,
+    }).unwrap();
     setSuccessModalOpen(true);
   };
 
@@ -579,11 +592,15 @@ export default function DocumentDetailsView() {
     documentName?: string;
     category?: string;
     parentId?: number | null;
+    clientCompanyId?: number | null;
   }) => {
     await uploadDocument({
       file: payload.file,
       parentId: payload.parentId ?? undefined,
       category: payload.category,
+      clientCompanyId:
+        payload.clientCompanyId ??
+        (!isMySpace && clientId ? Number(clientId) : undefined),
     }).unwrap();
     if (payload.documentName && payload.documentName !== payload.file.name) {
       // Optional: rename after upload when backend supports it or we get doc id from response
@@ -841,6 +858,9 @@ export default function DocumentDetailsView() {
                   <Grid key={folder.id}>
                     <FolderWithCount
                       folder={folder}
+                      clientCompanyId={
+                        !isMySpace && clientId ? Number(clientId) : undefined
+                      }
                       onOpen={() => {
                         setFolderPath((prev) => [
                           ...prev,
@@ -1000,6 +1020,7 @@ export default function DocumentDetailsView() {
         onSubmit={handleImportDocument}
         defaultParentId={parentId}
         isLoading={isUploading}
+        clientCompanyId={!isMySpace && clientId ? Number(clientId) : undefined}
       />
       {renameFolder && (
         <RenameFolderModal

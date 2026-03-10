@@ -31,6 +31,8 @@ export interface GetDocumentsResponse {
 export interface CreateFolderInput {
   name: string;
   parentId?: number | null;
+  /** Client company ID when accountant creates folder in client space */
+  clientCompanyId?: number | null;
 }
 
 export interface CreateFolderResponse {
@@ -53,20 +55,28 @@ export const documentsApi = createApi({
     getDocuments: builder.query<
       GetDocumentsResponse,
       {
+        clientId?: number | null;
         parentId?: number | null;
         page?: number;
         limit?: number;
         status?: string;
       }
     >({
-      query: ({ parentId, page = 1, limit = 50, status = "active" } = {}) => {
+      query: ({
+        clientId,
+        parentId,
+        page = 1,
+        limit = 50,
+        status = "active",
+      } = {}) => {
         const params = new URLSearchParams();
+        if (clientId != null) params.append("clientId", String(clientId));
         if (parentId != null) params.append("parentId", String(parentId));
         params.append("page", String(page));
         params.append("limit", String(limit));
         if (status) params.append("status", status);
         return {
-          url: `/documents?${params.toString()}`,
+          url: `/documents/client?${params.toString()}`,
           method: "GET",
         };
       },
@@ -77,9 +87,17 @@ export const documentsApi = createApi({
                 type: "Documents" as const,
                 id: d.id,
               })),
-              { type: "Documents", id: `list-${arg.parentId ?? "root"}` },
+              {
+                type: "Documents",
+                id: `list-${arg.clientId ?? "me"}-${arg.parentId ?? "root"}`,
+              },
             ]
-          : [{ type: "Documents", id: `list-${arg.parentId ?? "root"}` }],
+          : [
+              {
+                type: "Documents",
+                id: `list-${arg.clientId ?? "me"}-${arg.parentId ?? "root"}`,
+              },
+            ],
     }),
 
     createFolder: builder.mutation<CreateFolderResponse, CreateFolderInput>({
@@ -89,10 +107,17 @@ export const documentsApi = createApi({
         body: {
           name: body.name,
           ...(body.parentId != null && { parentId: body.parentId }),
+          ...(body.clientCompanyId != null && {
+            clientCompanyId: body.clientCompanyId,
+          }),
         },
       }),
       invalidatesTags: (_result, _err, arg) => [
-        { type: "Documents", id: `list-${arg.parentId ?? "root"}` },
+        {
+          type: "Documents",
+          id: `list-${arg.clientCompanyId ?? "me"}-${arg.parentId ?? "root"}`,
+        },
+        { type: "Documents" },
       ],
     }),
 
@@ -121,13 +146,21 @@ export const documentsApi = createApi({
 
     uploadDocument: builder.mutation<
       { status: string; data?: DocumentItem; message?: string },
-      { file: File; parentId?: number | null; category?: string }
+      {
+        file: File;
+        parentId?: number | null;
+        category?: string;
+        clientCompanyId?: number | null;
+      }
     >({
-      query: ({ file, parentId, category }) => {
+      query: ({ file, parentId, category, clientCompanyId }) => {
         const formData = new FormData();
         formData.append("file", file);
         if (parentId != null) formData.append("parentId", String(parentId));
         if (category) formData.append("category", category);
+        if (clientCompanyId != null) {
+          formData.append("clientCompanyId", String(clientCompanyId));
+        }
         return {
           url: "/documents/upload",
           method: "POST",

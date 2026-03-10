@@ -210,7 +210,8 @@ export class DocumentService {
     limit: number = 20,
     startDate?: Date,
     endDate?: Date,
-    status: string = 'active'
+    status: string = 'active',
+    search?: string
   ) {
     const skip = (page - 1) * limit;
 
@@ -220,6 +221,14 @@ export class DocumentService {
       parentId: parentId || null,
       status,
     };
+
+    // Add search filter (case-insensitive contains)
+    if (search && search.trim()) {
+      where.name = {
+        contains: search.trim(),
+        mode: 'insensitive',
+      };
+    }
 
     // Add date filters
     if (startDate || endDate) {
@@ -387,7 +396,8 @@ export class DocumentService {
     page: number = 1,
     limit: number = 20,
     startDate?: Date,
-    endDate?: Date
+    endDate?: Date,
+    search?: string
   ) {
     const skip = (page - 1) * limit;
 
@@ -397,6 +407,14 @@ export class DocumentService {
       status: 'archived',
       parentId: parentId || null,
     };
+
+    // Add search filter (case-insensitive contains)
+    if (search && search.trim()) {
+      where.name = {
+        contains: search.trim(),
+        mode: 'insensitive',
+      };
+    }
 
     // Add date filters
     if (startDate || endDate) {

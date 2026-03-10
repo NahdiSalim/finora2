@@ -6,8 +6,9 @@ import {
   Typography,
   IconButton,
 } from "@mui/material";
-import { X, Folder } from "lucide-react";
+import { X } from "lucide-react";
 import { useTheme } from "@mui/material/styles";
+import myGif from "../../../public/assets/folder.gif";
 
 export interface SuccessFolderModalProps {
   open: boolean;
@@ -21,8 +22,6 @@ export function SuccessFolderModal({ open, onClose }: SuccessFolderModalProps) {
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="xs"
-      fullWidth
       PaperProps={{
         sx: {
           borderRadius: 3,
@@ -56,15 +55,9 @@ export function SuccessFolderModal({ open, onClose }: SuccessFolderModalProps) {
             sx={{
               width: 80,
               height: 80,
-              borderRadius: 2,
-              bgcolor: theme.palette.primary.main,
-              color: "white",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
             }}
           >
-            <Folder size={48} strokeWidth={1.5} />
+            <img src={myGif} alt="success folder" />
           </Box>
         </Box>
         <Typography variant="h6" fontWeight={600} sx={{ mb: 1 }}>

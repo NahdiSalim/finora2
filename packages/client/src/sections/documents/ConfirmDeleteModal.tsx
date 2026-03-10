@@ -9,8 +9,9 @@ import {
   IconButton,
   Typography,
 } from "@mui/material";
-import { AlertTriangle, X } from "lucide-react";
+import { X } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
+import trash from "../../../public/assets/trash.gif";
 
 export interface ConfirmDeleteModalProps {
   open: boolean;
@@ -65,24 +66,7 @@ export function ConfirmDeleteModal({
             justifyContent: "space-between",
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <Box
-              sx={{
-                width: 40,
-                height: 40,
-                borderRadius: "50%",
-                bgcolor: "error.lighter",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <AlertTriangle size={20} color="#f44336" />
-            </Box>
-            <Typography variant="h6" fontWeight={600}>
-              {title}
-            </Typography>
-          </Box>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }} />
 
           <IconButton
             size="small"
@@ -102,7 +86,11 @@ export function ConfirmDeleteModal({
         </Box>
       </DialogTitle>
 
-      <DialogContent sx={{ px: 3, py: 2 }}>
+      <DialogContent sx={{ px: 3, py: 2, textAlign: "center" }}>
+        <img src={trash} alt="Loading animation" />
+        <Typography variant="h6" fontWeight={600}>
+          {title}
+        </Typography>
         <DialogContentText
           sx={{
             color: "text.secondary",

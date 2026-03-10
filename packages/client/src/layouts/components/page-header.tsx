@@ -6,8 +6,6 @@ import {
   useTheme,
   Breadcrumbs,
   Link,
-  TextField,
-  InputAdornment,
   IconButton,
 } from "@mui/material";
 
@@ -19,6 +17,7 @@ import { MoveLeft, Search } from "lucide-react";
 
 import { DashboardContent } from "src/layouts/dashboard";
 import CustomButton from "src/components/common/CustomButton";
+import CustomInput from "src/components/common/CustomInput";
 
 // ----------------------------------------------------------------------
 
@@ -278,18 +277,12 @@ export function PageHeader({
           >
             {/* Search */}
             {searchbar && (
-              <TextField
+              <CustomInput
                 size="small"
                 placeholder={searchbar.placeholder || "Search..."}
                 value={searchbar.value}
                 onChange={(e) => searchbar.onChange(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search size={20} />
-                    </InputAdornment>
-                  ),
-                }}
+                startIcon={<Search size={20} />}
                 sx={{
                   minWidth: { xs: "100%", md: 280 },
                   "& .MuiOutlinedInput-root": {

@@ -168,7 +168,7 @@ export function Folder({
           top: 0,
           left: 0,
           right: 0,
-          bottom: 8,
+          bottom: 4,
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
@@ -221,7 +221,7 @@ export function Folder({
                 variant="caption"
                 sx={{
                   color: getStateColor(),
-                  bgcolor: alpha(theme.palette.common.black, 0.2),
+                  bgcolor: alpha(theme.palette.common.white, 0.3),
                   backdropFilter: "blur(4px)",
                   px: 0.5,
                   borderRadius: 0.5,
@@ -232,26 +232,20 @@ export function Folder({
                 {description}
               </Typography>
             )}
-
-            {formatUpdatedAt(updatedAt) && (
-              <Typography
-                variant="caption"
-                sx={{
-                  color: getStateColor(),
-                  opacity: 0.85,
-                  fontWeight: 400,
-                }}
-              >
-                Modifié : {formatUpdatedAt(updatedAt)}
-              </Typography>
-            )}
-
-            {state === "archived" && (
-              <Typography variant="caption" color="text.disabled">
-                Archived
-              </Typography>
-            )}
           </Box>
+
+          {formatUpdatedAt(updatedAt) && (
+            <Typography
+              variant="caption"
+              sx={{
+                color: getStateColor(),
+                opacity: 0.85,
+                fontWeight: 400,
+              }}
+            >
+              Modifié : {formatUpdatedAt(updatedAt)}
+            </Typography>
+          )}
 
           {/* Description */}
           {description && (

@@ -188,6 +188,7 @@ export function FileCard({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       sx={{
+        width: 200,
         position: "relative",
         borderRadius: 2,
         overflow: "hidden",
@@ -196,6 +197,8 @@ export function FileCard({
         transform: isHovered ? "translateY(-2px)" : "none",
         cursor: "pointer",
         border: selected ? `2px solid ${theme.palette.primary.main}` : "none",
+        p: 1,
+        backgroundColor: theme.palette.grey[50],
         ...sx,
       }}
     >
@@ -254,6 +257,7 @@ export function FileCard({
           position: "relative",
           borderBottom: `1px solid ${theme.palette.divider}`,
           overflow: "hidden",
+          borderRadius: 2,
         }}
       >
         {/* PDF: show actual content in iframe; overflow hidden to hide scrollbar in card */}
@@ -356,11 +360,10 @@ export function FileCard({
       {/* Footer */}
       <Box
         sx={{
-          p: 1.5,
+          pt: 1.5,
           display: "flex",
           alignItems: "center",
           gap: 1,
-          bgcolor: "background.paper",
         }}
       >
         {/* File Type Icon */}

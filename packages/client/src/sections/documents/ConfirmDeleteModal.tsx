@@ -7,8 +7,9 @@ import {
   DialogActions,
   Box,
   IconButton,
+  Typography,
 } from "@mui/material";
-import { X } from "lucide-react";
+import { AlertTriangle, X } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
 
 export interface ConfirmDeleteModalProps {
@@ -45,11 +46,18 @@ export function ConfirmDeleteModal({
       onClose={onClose}
       maxWidth="xs"
       fullWidth
-      PaperProps={{ sx: { borderRadius: 3, p: 0, overflow: "hidden" } }}
+      PaperProps={{
+        sx: {
+          borderRadius: 3,
+          p: 0,
+          overflow: "hidden",
+          boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+          backdropFilter: "blur(10px)",
+          bgcolor: "rgba(255,255,255,0.95)",
+        },
+      }}
     >
-      <DialogTitle
-        sx={{ fontWeight: 600, fontSize: "1.125rem", pb: 0, pt: 2, px: 2 }}
-      >
+      <DialogTitle sx={{ p: 3, pb: 1 }}>
         <Box
           sx={{
             display: "flex",
@@ -57,33 +65,96 @@ export function ConfirmDeleteModal({
             justifyContent: "space-between",
           }}
         >
-          {title}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                bgcolor: "error.lighter",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <AlertTriangle size={20} color="#f44336" />
+            </Box>
+            <Typography variant="h6" fontWeight={600}>
+              {title}
+            </Typography>
+          </Box>
+
           <IconButton
             size="small"
             onClick={onClose}
             disabled={isLoading}
-            sx={{ color: "text.secondary" }}
+            sx={{
+              color: "text.disabled",
+              transition: "all 0.2s ease",
+              "&:hover": {
+                color: "text.primary",
+                bgcolor: "grey.100",
+              },
+            }}
           >
             <X size={20} />
           </IconButton>
         </Box>
       </DialogTitle>
-      <DialogContent sx={{ px: 2, pb: 1, pt: 1 }}>
-        <DialogContentText sx={{ color: "text.secondary" }}>
+
+      <DialogContent sx={{ px: 3, py: 2 }}>
+        <DialogContentText
+          sx={{
+            color: "text.secondary",
+            fontSize: "0.95rem",
+            lineHeight: 1.6,
+          }}
+        >
           {message}
         </DialogContentText>
       </DialogContent>
-      <DialogActions sx={{ px: 2, pb: 2, pt: 0 }}>
-        <CustomButton variant="outlined" onClick={onClose} disabled={isLoading}>
+
+      <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+        <CustomButton
+          fullWidth
+          variant="outlined"
+          onClick={onClose}
+          disabled={isLoading}
+          sx={{
+            py: 1.5,
+            borderRadius: 2,
+            textTransform: "none",
+            fontWeight: 600,
+            color: "text.secondary",
+            borderColor: "divider",
+            "&:hover": {
+              borderColor: "text.primary",
+              bgcolor: "transparent",
+            },
+          }}
+        >
           Annuler
         </CustomButton>
+
         <CustomButton
+          fullWidth
           variant="contained"
-          color="error"
           onClick={handleConfirm}
           disabled={isLoading}
+          sx={{
+            py: 1.5,
+            borderRadius: 2,
+            textTransform: "none",
+            fontWeight: 600,
+            bgcolor: "error.main",
+            boxShadow: "none",
+            "&:hover": {
+              bgcolor: "error.dark",
+              boxShadow: "0 8px 16px -8px rgba(244, 67, 54, 0.4)",
+            },
+          }}
         >
-          {confirmLabel}
+          {isLoading ? "Chargement..." : confirmLabel}
         </CustomButton>
       </DialogActions>
     </Dialog>

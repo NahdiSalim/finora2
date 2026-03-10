@@ -34,6 +34,7 @@ import {
   FileText,
   File as FileIcon,
   X,
+  Upload,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useParams, useLocation } from "react-router-dom";
@@ -266,14 +267,13 @@ function DocumentPreviewModal({
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="xl"
+      maxWidth="lg"
       fullWidth
       PaperProps={{
         sx: {
           borderRadius: 3,
           overflow: "hidden",
-          maxHeight: "95vh",
-          height: "90vh",
+          height: "100vh",
           display: "flex",
           flexDirection: "column",
         },
@@ -283,8 +283,7 @@ function DocumentPreviewModal({
         sx={{
           fontWeight: 600,
           fontSize: "1.125rem",
-          pb: 0,
-          pt: 2,
+          py: 1,
           px: 2,
           display: "flex",
           alignItems: "center",
@@ -313,7 +312,7 @@ function DocumentPreviewModal({
           sx={{
             flex: 1,
             minHeight: 400,
-            maxHeight: "78vh",
+            maxHeight: "90vh",
             bgcolor: "grey.100",
             display: "flex",
             alignItems: "center",
@@ -919,7 +918,7 @@ export default function DocumentDetailsView() {
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              mb: 1.5,
+              mb: 2,
             }}
           >
             <Typography variant="body1">
@@ -927,7 +926,7 @@ export default function DocumentDetailsView() {
             </Typography>
           </Box>
 
-          <Box sx={{ p: 3 }}>
+          <Box>
             {selectedFiles.length > 0 && (
               <Box
                 sx={{
@@ -944,7 +943,16 @@ export default function DocumentDetailsView() {
                 <Typography variant="body2" color="primary.main">
                   {selectedFiles.length} sélectionné(s)
                 </Typography>
-                <Box sx={{ gap: 2 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "flex-end",
+                    width: "50%",
+                    gap: 1,
+                  }}
+                >
                   <CustomButton
                     variant="contained"
                     onClick={handleDeleteSelected}
@@ -961,7 +969,7 @@ export default function DocumentDetailsView() {
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: "repeat(4, 1fr)",
+                gridTemplateColumns: "repeat(6, 1fr)",
                 gap: 2,
               }}
             >
@@ -1000,9 +1008,153 @@ export default function DocumentDetailsView() {
                 ))}
             </Box>
             {!isLoading && !isError && fileItems.length === 0 && (
-              <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
-                Aucun document dans ce dossier.
-              </Typography>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  py: 8,
+                  px: 3,
+                  bgcolor: "grey.50",
+                  borderRadius: 4,
+                  border: "1px dashed",
+                  borderColor: "grey.300",
+                  transition: "all 0.2s ease",
+                  "&:hover": {
+                    bgcolor: "grey.100",
+                    borderColor: "primary.main",
+                  },
+                }}
+              >
+                {/* Animated Icon */}
+                <Box
+                  sx={{
+                    position: "relative",
+                    mb: 3,
+                    "&::before": {
+                      content: '""',
+                      position: "absolute",
+                      top: "50%",
+                      left: "50%",
+                      transform: "translate(-50%, -50%)",
+                      width: 80,
+                      height: 80,
+                      borderRadius: "50%",
+                      bgcolor: "primary.lighter",
+                      opacity: 0.5,
+                      animation: "pulse 2s infinite",
+                      "@keyframes pulse": {
+                        "0%": {
+                          transform: "translate(-50%, -50%) scale(0.8)",
+                          opacity: 0.3,
+                        },
+                        "50%": {
+                          transform: "translate(-50%, -50%) scale(1.2)",
+                          opacity: 0.6,
+                        },
+                        "100%": {
+                          transform: "translate(-50%, -50%) scale(0.8)",
+                          opacity: 0.3,
+                        },
+                      },
+                    },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: "50%",
+                      bgcolor: "primary.light",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      position: "relative",
+                      zIndex: 1,
+                    }}
+                  >
+                    <svg
+                      width="32"
+                      height="32"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M4 7C4 5.89543 4.89543 5 6 5H10L12 7H18C19.1046 7 20 7.89543 20 9V17C20 18.1046 19.1046 19 18 19H6C4.89543 19 4 18.1046 4 17V7Z"
+                        fill="white"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M12 15V11M10 13H14"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </Box>
+                </Box>
+
+                {/* Title */}
+                <Typography
+                  variant="h6"
+                  fontWeight={600}
+                  color="text.primary"
+                  sx={{ mb: 1 }}
+                >
+                  Dossier vide
+                </Typography>
+
+                {/* Description */}
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  align="center"
+                  sx={{ maxWidth: 280, mb: 3 }}
+                >
+                  Aucun document ajouté à ce dossier. Commencez par importer des
+                  fichiers.
+                </Typography>
+
+                {/* Action Buttons */}
+                <Box sx={{ display: "flex", gap: 2 }}>
+                  <CustomButton
+                    variant="contained"
+                    color="primary"
+                    startIcon={<Upload size={18} />}
+                    onClick={() => console.log("Upload document")}
+                    sx={{
+                      borderRadius: 2,
+                      textTransform: "none",
+                      fontWeight: 600,
+                      boxShadow: "none",
+                      "&:hover": {
+                        boxShadow: "0 8px 16px rgba(0,0,0,0.1)",
+                      },
+                    }}
+                  >
+                    Importer
+                  </CustomButton>
+                  <CustomButton
+                    variant="outlined"
+                    color="primary"
+                    startIcon={<FolderPlus size={18} />}
+                    onClick={() => console.log("Create folder")}
+                    sx={{
+                      borderRadius: 2,
+                      textTransform: "none",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Nouveau dossier
+                  </CustomButton>
+                </Box>
+              </Box>
             )}
           </Box>
         </Box>

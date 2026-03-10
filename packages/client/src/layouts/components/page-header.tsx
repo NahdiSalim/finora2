@@ -288,6 +288,7 @@ export function PageHeader({
             <Box
               sx={{
                 display: "flex",
+                flexDirection: { xs: "column", sm: "row" },
                 alignItems: "center",
                 gap: 2,
                 flexWrap: "wrap",
@@ -304,6 +305,7 @@ export function PageHeader({
                   size="medium"
                   sx={{
                     flex: { xs: 1, md: "none" },
+                    width: { xs: "100%", sm: "auto" },
                   }}
                 >
                   {action.label}

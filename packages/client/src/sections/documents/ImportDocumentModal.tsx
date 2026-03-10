@@ -36,6 +36,7 @@ interface FolderTreeItemProps {
   onToggleExpand: (id: number) => void;
   selectedId: number | null;
   onSelect: (id: number) => void;
+  clientCompanyId?: number;
 }
 
 function FolderTreeItem({
@@ -46,10 +47,16 @@ function FolderTreeItem({
   onToggleExpand,
   selectedId,
   onSelect,
+  clientCompanyId,
 }: FolderTreeItemProps) {
   const isExpanded = expandedIds.has(folderId);
   const { data } = useGetDocumentsQuery(
-    { parentId: folderId, limit: 100, status: "active" },
+    {
+      clientId: clientCompanyId,
+      parentId: folderId,
+      limit: 100,
+      status: "active",
+    },
     { skip: !isExpanded },
   );
   const childFolders =
@@ -100,6 +107,7 @@ function FolderTreeItem({
             onToggleExpand={onToggleExpand}
             selectedId={selectedId}
             onSelect={onSelect}
+            clientCompanyId={clientCompanyId}
           />
         ))}
     </>
@@ -119,6 +127,8 @@ export interface ImportDocumentModalProps {
   }) => void | Promise<void>;
   defaultParentId?: number | null;
   isLoading?: boolean;
+  /** Client company ID quand le comptable importe dans l'espace d'un client */
+  clientCompanyId?: number;
 }
 
 export function ImportDocumentModal({
@@ -127,6 +137,7 @@ export function ImportDocumentModal({
   onSubmit,
   defaultParentId = null,
   isLoading = false,
+  clientCompanyId,
 }: ImportDocumentModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [documentName, setDocumentName] = useState("");
@@ -142,7 +153,12 @@ export function ImportDocumentModal({
   }, [open, defaultParentId]);
 
   const { data } = useGetDocumentsQuery(
-    { parentId: undefined, limit: 100, status: "active" },
+    {
+      clientId: clientCompanyId,
+      parentId: undefined,
+      limit: 100,
+      status: "active",
+    },
     { skip: !open },
   );
   const rootFolders =
@@ -200,6 +216,8 @@ export function ImportDocumentModal({
         documentName: documentName.trim() || undefined,
         category: category || undefined,
         parentId: parentId ?? undefined,
+        // clientCompanyId sera utilisé côté comptable (ignoré côté client)
+        ...(clientCompanyId != null && { clientCompanyId }),
       });
       resetForm();
       onClose();

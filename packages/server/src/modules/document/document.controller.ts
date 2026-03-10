@@ -124,31 +124,9 @@ export class DocumentController {
     );
   }
 
-  @Get('client/:clientCompanyId')
+  @Get('client')
   @RequirePermission('VIEW_DOCUMENTS')
   @ApiOperation({ summary: 'Get all documents for a client (accountant view)' })
-  @ApiQuery({ name: 'parentId', required: false, type: Number })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Format: YYYY-MM-DD' })
-  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'Format: YYYY-MM-DD' })
-  @ApiQuery({
-    name: 'status',
-    required: false,
-    type: String,
-    enum: ['active', 'archived', 'deleted'],
-  })
-  @Get()
-  @RequirePermission('VIEW_DOCUMENTS')
-  @ApiOperation({
-    summary: 'Get my documents or client documents (with clientId query param for accountants)',
-  })
-  @ApiQuery({
-    name: 'clientId',
-    required: false,
-    type: Number,
-    description: 'Client company ID (for accountants to view client documents)',
-  })
   @ApiQuery({ name: 'parentId', required: false, type: Number })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })

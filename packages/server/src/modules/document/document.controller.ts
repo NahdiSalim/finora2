@@ -195,6 +195,12 @@ export class DocumentController {
   @Get('archived/all')
   @RequirePermission('VIEW_ARCHIVE')
   @ApiOperation({ summary: 'Get archived documents with hierarchical navigation' })
+  @ApiQuery({
+    name: 'clientId',
+    required: false,
+    type: Number,
+    description: 'Client company ID (for accountants to view client archived documents)',
+  })
   @ApiQuery({ name: 'parentId', required: false, type: Number })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -202,15 +208,16 @@ export class DocumentController {
   @ApiQuery({ name: 'endDate', required: false, type: String, description: 'Format: YYYY-MM-DD' })
   async getAllArchivedDocuments(
     @Req() req: AuthRequest,
+    @Query('clientId', new ParseIntPipe({ optional: true })) clientId?: number,
     @Query('parentId', new ParseIntPipe({ optional: true })) parentId?: number,
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string
   ) {
-    const companyId = req.user!.companyId;
+    const userCompanyId = req.user!.companyId;
 
-    if (!companyId) {
+    if (!userCompanyId) {
       return {
         status: 'error',
         code: '400',
@@ -218,11 +225,29 @@ export class DocumentController {
       };
     }
 
+    // If clientId provided, accountant is viewing client's archived documents
+    const targetCompanyId = clientId || userCompanyId;
+
+    // If clientId is different from user's company, validate relationship
+    if (clientId && clientId !== userCompanyId) {
+      const relationship = await this.documentService.validateAccountantClientRelationship(
+        userCompanyId,
+        clientId
+      );
+      if (!relationship) {
+        return {
+          status: 'error',
+          code: '403',
+          message: 'No active relationship with this client',
+        };
+      }
+    }
+
     const startDateObj = startDate ? new Date(startDate) : undefined;
     const endDateObj = endDate ? new Date(endDate) : undefined;
 
     return this.documentService.getArchivedDocumentsHierarchical(
-      companyId,
+      targetCompanyId,
       parentId,
       page || 1,
       limit || 20,
@@ -235,9 +260,9 @@ export class DocumentController {
   @RequirePermission('VIEW_DOCUMENT_DETAIL')
   @ApiOperation({ summary: 'Get document details' })
   async getDocument(@Req() req: AuthRequest, @Param('id', ParseIntPipe) id: number) {
-    const companyId = req.user!.companyId;
+    const userCompanyId = req.user!.companyId;
 
-    if (!companyId) {
+    if (!userCompanyId) {
       return {
         status: 'error',
         code: '400',
@@ -245,15 +270,15 @@ export class DocumentController {
       };
     }
 
-    return this.documentService.getDocument(id, companyId);
+    return this.documentService.getDocument(id, userCompanyId);
   }
 
   @Get(':id/breadcrumb')
   @ApiOperation({ summary: 'Get breadcrumb path for a document' })
   async getBreadcrumb(@Req() req: AuthRequest, @Param('id', ParseIntPipe) id: number) {
-    const companyId = req.user!.companyId;
+    const userCompanyId = req.user!.companyId;
 
-    if (!companyId) {
+    if (!userCompanyId) {
       return {
         status: 'error',
         code: '400',
@@ -261,7 +286,7 @@ export class DocumentController {
       };
     }
 
-    return this.documentService.getBreadcrumb(id, companyId);
+    return this.documentService.getBreadcrumb(id, userCompanyId);
   }
 
   @Get(':id/download')
@@ -271,9 +296,9 @@ export class DocumentController {
     @Param('id', ParseIntPipe) id: number,
     @Res() res: Response
   ) {
-    const companyId = req.user!.companyId;
+    const userCompanyId = req.user!.companyId;
 
-    if (!companyId) {
+    if (!userCompanyId) {
       return res.status(400).json({
         status: 'error',
         code: '400',
@@ -281,7 +306,10 @@ export class DocumentController {
       });
     }
 
-    const { stream, filename, mimeType } = await this.documentService.downloadFile(id, companyId);
+    const { stream, filename, mimeType } = await this.documentService.downloadFile(
+      id,
+      userCompanyId
+    );
 
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -330,9 +358,9 @@ export class DocumentController {
   @RequirePermission('UPDATE_DOCUMENT')
   @ApiOperation({ summary: 'Archive document or folder (with all children)' })
   async archiveDocument(@Req() req: AuthRequest, @Param('id', ParseIntPipe) id: number) {
-    const companyId = req.user!.companyId;
+    const userCompanyId = req.user!.companyId;
 
-    if (!companyId) {
+    if (!userCompanyId) {
       return {
         status: 'error',
         code: '400',
@@ -340,16 +368,16 @@ export class DocumentController {
       };
     }
 
-    return this.documentService.archiveDocument(id, companyId);
+    return this.documentService.archiveDocument(id, userCompanyId);
   }
 
   @Post(':id/unarchive')
   @RequirePermission('UPDATE_DOCUMENT')
   @ApiOperation({ summary: 'Unarchive document or folder (with all children)' })
   async unarchiveDocument(@Req() req: AuthRequest, @Param('id', ParseIntPipe) id: number) {
-    const companyId = req.user!.companyId;
+    const userCompanyId = req.user!.companyId;
 
-    if (!companyId) {
+    if (!userCompanyId) {
       return {
         status: 'error',
         code: '400',
@@ -357,6 +385,6 @@ export class DocumentController {
       };
     }
 
-    return this.documentService.unarchiveDocument(id, companyId);
+    return this.documentService.unarchiveDocument(id, userCompanyId);
   }
 }

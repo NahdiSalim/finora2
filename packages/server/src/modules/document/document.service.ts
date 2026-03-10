@@ -270,9 +270,12 @@ export class DocumentService {
 
     // Add permission flags to each document
     const documentsWithPermissions = documents.map((doc) => {
-      const isCreator = doc.createdByCompanyId === userCompanyId;
+      // If createdByCompanyId is null (old documents), assume it was created by the client
+      const createdByCompanyId = doc.createdByCompanyId || doc.companyId;
+
+      const isCreator = createdByCompanyId === userCompanyId;
       const isAccountantEditingClient =
-        doc.createdByCompanyId === doc.companyId && doc.createdByCompanyId !== userCompanyId;
+        createdByCompanyId === doc.companyId && userCompanyId !== doc.companyId;
 
       return {
         ...doc,
@@ -454,13 +457,9 @@ export class DocumentService {
   /**
    * Get document details
    */
-  async getDocument(id: number, companyId: number) {
-    const document = await this.prisma.document.findFirst({
-      where: {
-        id,
-        companyId,
-        status: 'active',
-      },
+  async getDocument(id: number, userCompanyId: number) {
+    const document = await this.prisma.document.findUnique({
+      where: { id },
       include: {
         owner: {
           select: {
@@ -486,6 +485,16 @@ export class DocumentService {
       );
     }
 
+    // Check if user has access to this document's company
+    const hasAccess =
+      document.companyId === userCompanyId ||
+      (document.companyId &&
+        (await this.validateAccountantClientRelationship(userCompanyId, document.companyId)));
+
+    if (!hasAccess) {
+      throw new ApiError('You do not have access to this document', 403, 'ACCESS_DENIED');
+    }
+
     let downloadUrl: string | undefined;
     if (!document.isFolder) {
       downloadUrl = await this.minioService.getPresignedUrl(document.url);
@@ -506,12 +515,8 @@ export class DocumentService {
    * Permission check: user can only edit if they created it or are accountant editing client's doc
    */
   async updateDocument(id: number, userCompanyId: number, dto: UpdateDocumentDto) {
-    const document = await this.prisma.document.findFirst({
-      where: {
-        id,
-        companyId: userCompanyId,
-        status: 'active',
-      },
+    const document = await this.prisma.document.findUnique({
+      where: { id },
     });
 
     if (!document) {
@@ -522,11 +527,27 @@ export class DocumentService {
       );
     }
 
+    // Check if user has access to this document's company
+    const hasAccess =
+      document.companyId === userCompanyId ||
+      (document.companyId &&
+        (await this.validateAccountantClientRelationship(userCompanyId, document.companyId)));
+
+    if (!hasAccess) {
+      throw new ApiError('You do not have access to this document', 403, 'ACCESS_DENIED');
+    }
+
     // Check permissions
-    const isCreator = document.createdByCompanyId === userCompanyId;
+    // If createdByCompanyId is null (old documents), assume it was created by the client
+    const createdByCompanyId = document.createdByCompanyId || document.companyId;
+
+    // isCreator: user created this document
+    const isCreator = createdByCompanyId === userCompanyId;
+
+    // isAccountantEditingClient: document was created by client (createdByCompanyId === companyId)
+    // and user is NOT the client (user is accountant)
     const isAccountantEditingClient =
-      document.createdByCompanyId === document.companyId &&
-      document.createdByCompanyId !== userCompanyId;
+      createdByCompanyId === document.companyId && userCompanyId !== document.companyId;
 
     if (!isCreator && !isAccountantEditingClient) {
       throw new ApiError(
@@ -541,9 +562,9 @@ export class DocumentService {
       const parent = await this.prisma.document.findFirst({
         where: {
           id: dto.parentId,
-          companyId: userCompanyId,
+          companyId: document.companyId,
           isFolder: true,
-          status: 'active',
+          status: { not: 'deleted' },
         },
       });
 
@@ -583,14 +604,11 @@ export class DocumentService {
   /**
    * Delete document (soft delete)
    * Permission check: user can only delete if they created it or are accountant editing client's doc
+   * For folders: only allow deletion if folder is empty
    */
   async deleteDocument(id: number, userCompanyId: number) {
-    const document = await this.prisma.document.findFirst({
-      where: {
-        id,
-        companyId: userCompanyId,
-        status: 'active',
-      },
+    const document = await this.prisma.document.findUnique({
+      where: { id },
     });
 
     if (!document) {
@@ -601,29 +619,59 @@ export class DocumentService {
       );
     }
 
+    // Check if user has access to this document's company
+    // Either it's their own company OR they're an accountant with active relationship
+    const hasAccess =
+      document.companyId === userCompanyId ||
+      (document.companyId &&
+        (await this.validateAccountantClientRelationship(userCompanyId, document.companyId)));
+
+    if (!hasAccess) {
+      throw new ApiError('You do not have access to this document', 403, 'ACCESS_DENIED');
+    }
+
     // Check permissions
-    const isCreator = document.createdByCompanyId === userCompanyId;
+    // If createdByCompanyId is null (old documents), assume it was created by the client
+    const createdByCompanyId = document.createdByCompanyId || document.companyId;
+
+    // isCreator: user created this document
+    const isCreator = createdByCompanyId === userCompanyId;
+
+    // isAccountantEditingClient: document was created by client (createdByCompanyId === companyId)
+    // and user is NOT the client (user is accountant)
     const isAccountantEditingClient =
-      document.createdByCompanyId === document.companyId &&
-      document.createdByCompanyId !== userCompanyId;
+      createdByCompanyId === document.companyId && userCompanyId !== document.companyId;
 
     if (!isCreator && !isAccountantEditingClient) {
       throw new ApiError(
-        'You do not have permission to delete this document',
+        `You do not have permission to delete this document. createdByCompanyId: ${createdByCompanyId}, userCompanyId: ${userCompanyId}, documentCompanyId: ${document.companyId}`,
         403,
         'PERMISSION_DENIED'
       );
     }
 
-    // If it's a folder, delete all children recursively
+    // If it's a folder, check if it's empty
     if (document.isFolder) {
-      await this.deleteFolderRecursively(id);
+      const childrenCount = await this.prisma.document.count({
+        where: {
+          parentId: id,
+          status: { not: 'deleted' },
+        },
+      });
+
+      if (childrenCount > 0) {
+        throw new ApiError(
+          'Cannot delete folder that contains files or subfolders',
+          400,
+          'FOLDER_NOT_EMPTY'
+        );
+      }
     } else {
       // Delete file from MinIO
       await this.minioService.deleteFile(document.url);
       // TODO: Update storage usage
       // if (document.size) {
-      //   await this.storageService.decrementStorageUsage(companyId, document.size);
+      //   await this.storageService.decrementStorageUsage(userCompanyId, document.size);
       // }
     }
 
@@ -643,13 +691,9 @@ export class DocumentService {
   /**
    * Archive a document or folder (with all children)
    */
-  async archiveDocument(id: number, companyId: number) {
-    const document = await this.prisma.document.findFirst({
-      where: {
-        id,
-        companyId,
-        status: 'active',
-      },
+  async archiveDocument(id: number, userCompanyId: number) {
+    const document = await this.prisma.document.findUnique({
+      where: { id },
     });
 
     if (!document) {
@@ -658,6 +702,16 @@ export class DocumentService {
         errors.NOT_FOUND.code,
         errors.NOT_FOUND.errorCode
       );
+    }
+
+    // Check if user has access to this document's company
+    const hasAccess =
+      document.companyId === userCompanyId ||
+      (document.companyId &&
+        (await this.validateAccountantClientRelationship(userCompanyId, document.companyId)));
+
+    if (!hasAccess) {
+      throw new ApiError('You do not have access to this document', 403, 'ACCESS_DENIED');
     }
 
     // If it's a folder, archive all children recursively
@@ -686,17 +740,23 @@ export class DocumentService {
   /**
    * Unarchive a document or folder (with all children)
    */
-  async unarchiveDocument(id: number, companyId: number) {
-    const document = await this.prisma.document.findFirst({
-      where: {
-        id,
-        companyId,
-        status: 'archived',
-      },
+  async unarchiveDocument(id: number, userCompanyId: number) {
+    const document = await this.prisma.document.findUnique({
+      where: { id },
     });
 
     if (!document) {
       throw new ApiError('Document not found or not archived', 404, 'NOT_FOUND');
+    }
+
+    // Check if user has access to this document's company
+    const hasAccess =
+      document.companyId === userCompanyId ||
+      (document.companyId &&
+        (await this.validateAccountantClientRelationship(userCompanyId, document.companyId)));
+
+    if (!hasAccess) {
+      throw new ApiError('You do not have access to this document', 403, 'ACCESS_DENIED');
     }
 
     // If it's a folder, unarchive all children recursively
@@ -725,21 +785,36 @@ export class DocumentService {
   /**
    * Download a file
    */
-  async downloadFile(id: number, companyId: number) {
-    const document = await this.prisma.document.findFirst({
-      where: {
-        id,
-        companyId,
-        isFolder: false,
-        status: 'active',
-      },
+  async downloadFile(id: number, userCompanyId: number) {
+    const document = await this.prisma.document.findUnique({
+      where: { id },
     });
 
-    if (!document) {
+    if (!document || document.isFolder) {
       throw new ApiError(
         errors.NOT_FOUND.message,
         errors.NOT_FOUND.code,
         errors.NOT_FOUND.errorCode
+      );
+    }
+
+    // Check if user has access to this document's company
+    const hasAccess =
+      document.companyId === userCompanyId ||
+      (document.companyId &&
+        (await this.validateAccountantClientRelationship(userCompanyId, document.companyId)));
+
+    if (!hasAccess) {
+      throw new ApiError('You do not have access to this document', 403, 'ACCESS_DENIED');
+    }
+
+    // Check if file exists in MinIO
+    const fileExists = await this.minioService.fileExists(document.url);
+    if (!fileExists) {
+      throw new ApiError(
+        'File not found in storage. The file may have been deleted.',
+        404,
+        'FILE_NOT_FOUND'
       );
     }
 
@@ -755,21 +830,42 @@ export class DocumentService {
   /**
    * Get breadcrumb path for a document
    */
-  async getBreadcrumb(id: number, companyId: number) {
+  async getBreadcrumb(id: number, userCompanyId: number) {
+    // First, get the document to check access
+    const document = await this.prisma.document.findUnique({
+      where: { id },
+      select: { companyId: true },
+    });
+
+    if (!document) {
+      throw new ApiError(
+        errors.NOT_FOUND.message,
+        errors.NOT_FOUND.code,
+        errors.NOT_FOUND.errorCode
+      );
+    }
+
+    // Check if user has access to this document's company
+    const hasAccess =
+      document.companyId === userCompanyId ||
+      (document.companyId &&
+        (await this.validateAccountantClientRelationship(userCompanyId, document.companyId)));
+
+    if (!hasAccess) {
+      throw new ApiError('You do not have access to this document', 403, 'ACCESS_DENIED');
+    }
+
     const breadcrumb: Array<{ id: number; name: string }> = [];
     let currentId: number | null = id;
 
     while (currentId) {
-      const doc = await this.prisma.document.findFirst({
-        where: {
-          id: currentId,
-          companyId,
-          status: 'active',
-        },
+      const doc = await this.prisma.document.findUnique({
+        where: { id: currentId },
         select: {
           id: true,
           name: true,
           parentId: true,
+          companyId: true,
         },
       });
 

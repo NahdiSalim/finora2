@@ -133,6 +133,12 @@ export class DocumentController {
     type: String,
     description: 'Search by folder or file name',
   })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    type: String,
+    description: 'Filter by file category (e.g., facture, contrat, rapport)',
+  })
   @ApiQuery({ name: 'parentId', required: false, type: Number })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -148,6 +154,7 @@ export class DocumentController {
     @Req() req: AuthRequest,
     @Query('clientId', new ParseIntPipe({ optional: true })) clientId?: number,
     @Query('search') search?: string,
+    @Query('category') category?: string,
     @Query('parentId', new ParseIntPipe({ optional: true })) parentId?: number,
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
@@ -196,7 +203,8 @@ export class DocumentController {
       startDateObj,
       endDateObj,
       status || 'active',
-      search
+      search,
+      category
     );
   }
 
@@ -215,6 +223,12 @@ export class DocumentController {
     type: String,
     description: 'Search by folder or file name',
   })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    type: String,
+    description: 'Filter by file category (e.g., facture, contrat, rapport)',
+  })
   @ApiQuery({ name: 'parentId', required: false, type: Number })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -224,6 +238,7 @@ export class DocumentController {
     @Req() req: AuthRequest,
     @Query('clientId', new ParseIntPipe({ optional: true })) clientId?: number,
     @Query('search') search?: string,
+    @Query('category') category?: string,
     @Query('parentId', new ParseIntPipe({ optional: true })) parentId?: number,
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
@@ -268,7 +283,8 @@ export class DocumentController {
       limit || 20,
       startDateObj,
       endDateObj,
-      search
+      search,
+      category
     );
   }
 

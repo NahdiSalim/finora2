@@ -211,7 +211,8 @@ export class DocumentService {
     startDate?: Date,
     endDate?: Date,
     status: string = 'active',
-    search?: string
+    search?: string,
+    category?: string
   ) {
     const skip = (page - 1) * limit;
 
@@ -226,6 +227,14 @@ export class DocumentService {
     if (search && search.trim()) {
       where.name = {
         contains: search.trim(),
+        mode: 'insensitive',
+      };
+    }
+
+    // Add category filter (only for files, not folders)
+    if (category && category.trim()) {
+      where.category = {
+        contains: category.trim(),
         mode: 'insensitive',
       };
     }
@@ -397,7 +406,8 @@ export class DocumentService {
     limit: number = 20,
     startDate?: Date,
     endDate?: Date,
-    search?: string
+    search?: string,
+    category?: string
   ) {
     const skip = (page - 1) * limit;
 
@@ -412,6 +422,14 @@ export class DocumentService {
     if (search && search.trim()) {
       where.name = {
         contains: search.trim(),
+        mode: 'insensitive',
+      };
+    }
+
+    // Add category filter (only for files, not folders)
+    if (category && category.trim()) {
+      where.category = {
+        contains: category.trim(),
         mode: 'insensitive',
       };
     }

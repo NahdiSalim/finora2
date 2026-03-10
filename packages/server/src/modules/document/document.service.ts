@@ -17,14 +17,43 @@ export class DocumentService {
 
   /**
    * Create a new folder
+   * - CLIENT: creates in their own space (user.companyId)
+   * - ACCOUNTANT: must provide clientCompanyId and have active relationship
    */
-  async createFolder(userId: number, companyId: number, dto: CreateFolderDto) {
+  async createFolder(userId: number, userCompanyId: number, dto: CreateFolderDto) {
+    // Determine target company and creator company
+    let targetCompanyId = userCompanyId; // Default: client's own company
+    let createdByCompanyId = userCompanyId;
+
+    // If clientCompanyId provided, user is accountant creating in client's space
+    if (dto.clientCompanyId) {
+      targetCompanyId = dto.clientCompanyId;
+      createdByCompanyId = userCompanyId; // Accountant's company
+
+      // Validate accountant has active relationship with client
+      const relationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
+        where: {
+          clientCompanyId: targetCompanyId,
+          accountingFirmId: userCompanyId,
+          status: 'active',
+        },
+      });
+
+      if (!relationship) {
+        throw new ApiError(
+          'No active relationship with this client',
+          403,
+          'NO_ACTIVE_RELATIONSHIP'
+        );
+      }
+    }
+
     // Verify parent folder exists if parentId is provided
     if (dto.parentId) {
       const parent = await this.prisma.document.findFirst({
         where: {
           id: dto.parentId,
-          companyId,
+          companyId: targetCompanyId,
           isFolder: true,
           status: 'active',
         },
@@ -42,7 +71,9 @@ export class DocumentService {
         isFolder: true,
         url: '', // Folders don't have URLs
         ownerId: userId,
-        companyId,
+        companyId: targetCompanyId,
+        createdBy: userId,
+        createdByCompanyId,
         parentId: dto.parentId || null,
         status: 'active',
       },
@@ -58,21 +89,51 @@ export class DocumentService {
 
   /**
    * Upload a file
+   * - CLIENT: uploads in their own space (user.companyId)
+   * - ACCOUNTANT: must provide clientCompanyId and have active relationship
    */
   async uploadFile(
     userId: number,
-    companyId: number,
+    userCompanyId: number,
     file: Express.Multer.File,
     parentId?: number,
-    category?: string
+    category?: string,
+    clientCompanyId?: number
   ) {
+    // Determine target company and creator company
+    let targetCompanyId = userCompanyId; // Default: client's own company
+    let createdByCompanyId = userCompanyId;
+
+    // If clientCompanyId provided, user is accountant creating in client's space
+    if (clientCompanyId) {
+      targetCompanyId = clientCompanyId;
+      createdByCompanyId = userCompanyId; // Accountant's company
+
+      // Validate accountant has active relationship with client
+      const relationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
+        where: {
+          clientCompanyId: targetCompanyId,
+          accountingFirmId: userCompanyId,
+          status: 'active',
+        },
+      });
+
+      if (!relationship) {
+        throw new ApiError(
+          'No active relationship with this client',
+          403,
+          'NO_ACTIVE_RELATIONSHIP'
+        );
+      }
+    }
+
     // Verify parent folder exists if parentId is provided
     let folderPath = '';
     if (parentId) {
       const parent = await this.prisma.document.findFirst({
         where: {
           id: parentId,
-          companyId,
+          companyId: targetCompanyId,
           isFolder: true,
           status: 'active',
         },
@@ -88,10 +149,10 @@ export class DocumentService {
 
     try {
       // TODO: Check storage quota before upload
-      // await this.storageService.incrementStorageUsage(companyId, file.size);
+      // await this.storageService.incrementStorageUsage(targetCompanyId, file.size);
 
       // Upload file to MinIO
-      const objectName = await this.minioService.uploadFile(companyId, folderPath, file);
+      const objectName = await this.minioService.uploadFile(targetCompanyId, folderPath, file);
 
       // Get presigned URL
       const url = await this.minioService.getPresignedUrl(objectName);
@@ -106,7 +167,9 @@ export class DocumentService {
           url: objectName, // Store MinIO object name
           category: category || null, // Add category field
           ownerId: userId,
-          companyId,
+          companyId: targetCompanyId,
+          createdBy: userId,
+          createdByCompanyId,
           parentId: parentId || null,
           isFolder: false,
           status: 'active',
@@ -137,9 +200,11 @@ export class DocumentService {
 
   /**
    * Get documents in a folder (or root if parentId is null) with pagination and filters
+   * Includes canEdit and canDelete flags based on user permissions
    */
   async getDocuments(
-    companyId: number,
+    userCompanyId: number,
+    userId: number,
     parentId?: number,
     page: number = 1,
     limit: number = 20,
@@ -151,7 +216,7 @@ export class DocumentService {
 
     // Build where clause with filters
     const where: any = {
-      companyId,
+      companyId: userCompanyId,
       parentId: parentId || null,
       status,
     };
@@ -190,6 +255,9 @@ export class DocumentService {
         status: true,
         createdAt: true,
         updatedAt: true,
+        createdBy: true,
+        createdByCompanyId: true,
+        companyId: true,
         owner: {
           select: {
             id: true,
@@ -200,10 +268,23 @@ export class DocumentService {
       },
     });
 
+    // Add permission flags to each document
+    const documentsWithPermissions = documents.map((doc) => {
+      const isCreator = doc.createdByCompanyId === userCompanyId;
+      const isAccountantEditingClient =
+        doc.createdByCompanyId === doc.companyId && doc.createdByCompanyId !== userCompanyId;
+
+      return {
+        ...doc,
+        canEdit: isCreator || isAccountantEditingClient,
+        canDelete: isCreator || isAccountantEditingClient,
+      };
+    });
+
     return {
       status: 'success',
       code: '200',
-      data: documents,
+      data: documentsWithPermissions,
       pagination: {
         currentPage: page,
         totalPages,
@@ -422,12 +503,13 @@ export class DocumentService {
 
   /**
    * Update document (rename or move)
+   * Permission check: user can only edit if they created it or are accountant editing client's doc
    */
-  async updateDocument(id: number, companyId: number, dto: UpdateDocumentDto) {
+  async updateDocument(id: number, userCompanyId: number, dto: UpdateDocumentDto) {
     const document = await this.prisma.document.findFirst({
       where: {
         id,
-        companyId,
+        companyId: userCompanyId,
         status: 'active',
       },
     });
@@ -440,12 +522,26 @@ export class DocumentService {
       );
     }
 
+    // Check permissions
+    const isCreator = document.createdByCompanyId === userCompanyId;
+    const isAccountantEditingClient =
+      document.createdByCompanyId === document.companyId &&
+      document.createdByCompanyId !== userCompanyId;
+
+    if (!isCreator && !isAccountantEditingClient) {
+      throw new ApiError(
+        'You do not have permission to edit this document',
+        403,
+        'PERMISSION_DENIED'
+      );
+    }
+
     // Verify new parent folder exists if parentId is provided
     if (dto.parentId !== undefined && dto.parentId !== null) {
       const parent = await this.prisma.document.findFirst({
         where: {
           id: dto.parentId,
-          companyId,
+          companyId: userCompanyId,
           isFolder: true,
           status: 'active',
         },
@@ -486,12 +582,13 @@ export class DocumentService {
 
   /**
    * Delete document (soft delete)
+   * Permission check: user can only delete if they created it or are accountant editing client's doc
    */
-  async deleteDocument(id: number, companyId: number) {
+  async deleteDocument(id: number, userCompanyId: number) {
     const document = await this.prisma.document.findFirst({
       where: {
         id,
-        companyId,
+        companyId: userCompanyId,
         status: 'active',
       },
     });
@@ -501,6 +598,20 @@ export class DocumentService {
         errors.NOT_FOUND.message,
         errors.NOT_FOUND.code,
         errors.NOT_FOUND.errorCode
+      );
+    }
+
+    // Check permissions
+    const isCreator = document.createdByCompanyId === userCompanyId;
+    const isAccountantEditingClient =
+      document.createdByCompanyId === document.companyId &&
+      document.createdByCompanyId !== userCompanyId;
+
+    if (!isCreator && !isAccountantEditingClient) {
+      throw new ApiError(
+        'You do not have permission to delete this document',
+        403,
+        'PERMISSION_DENIED'
       );
     }
 
@@ -847,5 +958,60 @@ export class DocumentService {
     if (mimeType.includes('word') || mimeType.includes('document')) return 'word';
     if (mimeType.includes('sheet') || mimeType.includes('excel')) return 'excel';
     return 'other';
+  }
+
+  /**
+   * Check if user can edit/delete a document
+   * - User can edit if they created it (createdByCompanyId = user.companyId)
+   * - Accountant can edit client's documents too
+   */
+  private canEditDocument(document: any, userCompanyId: number, isAccountant: boolean): boolean {
+    // User created it
+    if (document.createdByCompanyId === userCompanyId) {
+      return true;
+    }
+
+    // Accountant can edit client's documents
+    if (isAccountant && document.createdByCompanyId === document.companyId) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if user is an accountant (has active relationship with client)
+   */
+  private async isAccountantForClient(
+    userCompanyId: number,
+    clientCompanyId: number
+  ): Promise<boolean> {
+    const relationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
+      where: {
+        accountingFirmId: userCompanyId,
+        clientCompanyId,
+        status: 'active',
+      },
+    });
+
+    return !!relationship;
+  }
+
+  /**
+   * Validate accountant has active relationship with client
+   */
+  async validateAccountantClientRelationship(
+    accountantCompanyId: number,
+    clientCompanyId: number
+  ): Promise<boolean> {
+    const relationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
+      where: {
+        accountingFirmId: accountantCompanyId,
+        clientCompanyId,
+        status: 'active',
+      },
+    });
+
+    return !!relationship;
   }
 }

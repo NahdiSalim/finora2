@@ -729,6 +729,17 @@ export default function DocumentDetailsView() {
         clientName ||
         (clientId ? `Documents client #${clientId}` : "Documents client")
       }
+      backButton={
+        parentId != null
+          ? () => {
+              const newPath = folderPath.slice(0, -1);
+              setFolderPath(newPath);
+              setParentId(
+                newPath.length === 0 ? null : newPath[newPath.length - 1].id,
+              );
+            }
+          : undefined
+      }
       breadcrumbs={[
         { label: "Documents partagés", path: "/dashboard/documents" },
         { label: clientName || (clientId ? `Client ${clientId}` : "Détail") },
@@ -770,28 +781,9 @@ export default function DocumentDetailsView() {
             gap: 1,
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            {parentId != null && (
-              <CustomButton
-                variant="outlined"
-                size="small"
-                onClick={() => {
-                  const newPath = folderPath.slice(0, -1);
-                  setFolderPath(newPath);
-                  setParentId(
-                    newPath.length === 0
-                      ? null
-                      : newPath[newPath.length - 1].id,
-                  );
-                }}
-              >
-                Retour
-              </CustomButton>
-            )}
-            <Typography variant="h6" fontWeight={500}>
-              Dossiers
-            </Typography>
-          </Box>
+          <Typography variant="h6" fontWeight={500}>
+            Dossiers
+          </Typography>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <CustomInput
               value={searchValue}

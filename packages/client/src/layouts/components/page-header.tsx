@@ -36,10 +36,7 @@ type ActionButton = {
   color?: "primary" | "secondary" | "error" | "warning" | "info" | "success";
 };
 
-type BackButton = {
-  onClick?: () => void;
-  path?: string;
-};
+type BackButton = (() => void) | { onClick?: () => void; path?: string };
 
 export type PageHeaderProps = {
   title: string;
@@ -77,7 +74,8 @@ export function PageHeader({
   const navigate = useNavigate();
 
   const handleBack = () => {
-    if (backButton?.onClick) backButton.onClick();
+    if (typeof backButton === "function") backButton();
+    else if (backButton?.onClick) backButton.onClick();
     else if (backButton?.path) navigate(backButton.path);
     else navigate(-1);
   };
@@ -126,13 +124,7 @@ export function PageHeader({
           >
             {/* Back Button */}
             {backButton && (
-              <IconButton
-                size="small"
-                onClick={handleBack}
-                sx={{
-                  mt: 0.5,
-                }}
-              >
+              <IconButton size="small" onClick={handleBack} sx={{ mt: 0.5 }}>
                 <MoveLeft fontSize="small" />
               </IconButton>
             )}

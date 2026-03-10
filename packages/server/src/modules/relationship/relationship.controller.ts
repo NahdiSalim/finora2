@@ -99,11 +99,57 @@ export class RelationshipController {
     type: Number,
     description: 'Items per page (default: 20)',
   })
+  @Get('clients/invoice-stats')
+  @ApiOperation({
+    summary: 'Obtenir tous les clients avec leurs statistiques de factures (pour comptables)',
+    description:
+      'Retourne la liste des clients avec logo, nom, prénom, email et nombre de factures (traite/pending)',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by company name',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: 'Filter by start date (ISO format: YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: 'Filter by end date (ISO format: YYYY-MM-DD)',
+  })
   async getClientsWithInvoiceStats(
     @Request() req,
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
-    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+    @Query('search') search?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string
   ) {
-    return this.relationshipService.getClientsWithInvoiceStats(req.user.id, page || 1, limit || 20);
+    return this.relationshipService.getClientsWithInvoiceStats(
+      req.user.id,
+      page || 1,
+      limit || 20,
+      search,
+      startDate,
+      endDate
+    );
   }
 }

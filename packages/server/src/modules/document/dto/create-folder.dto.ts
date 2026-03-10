@@ -10,4 +10,11 @@ export class CreateFolderDto {
   @IsOptional()
   @IsInt()
   parentId?: number;
+
+  @ApiPropertyOptional({
+    description: 'Client company ID (required for accountants, ignored for clients)',
+  })
+  @IsOptional()
+  @IsInt()
+  clientCompanyId?: number;
 }

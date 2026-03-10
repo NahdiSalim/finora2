@@ -434,7 +434,14 @@ export class RelationshipService {
   /**
    * Get all clients with invoice statistics for the connected accountant
    */
-  async getClientsWithInvoiceStats(userId: number, page: number = 1, limit: number = 20) {
+  async getClientsWithInvoiceStats(
+    userId: number,
+    page: number = 1,
+    limit: number = 20,
+    search?: string,
+    startDate?: string,
+    endDate?: string
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -470,20 +477,41 @@ export class RelationshipService {
 
     const skip = (page - 1) * limit;
 
-    // Get total count of active relationships
+    // Build where clause with filters
+    const where: any = {
+      accountingFirmId: user.companyId,
+      status: 'active',
+    };
+
+    // Add search filter by company name
+    if (search) {
+      where.clientCompany = {
+        name: {
+          contains: search,
+          mode: 'insensitive',
+        },
+      };
+    }
+
+    // Add date range filter
+    if (startDate || endDate) {
+      where.relationshipStart = {};
+      if (startDate) {
+        where.relationshipStart.gte = new Date(startDate);
+      }
+      if (endDate) {
+        where.relationshipStart.lte = new Date(endDate);
+      }
+    }
+
+    // Get total count of active relationships with filters
     const totalRelationships = await this.prisma.clientAccountingFirmRelationship.count({
-      where: {
-        accountingFirmId: user.companyId,
-        status: 'active',
-      },
+      where,
     });
 
     // Get paginated active relationships where user's company is the accounting firm
     const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
-      where: {
-        accountingFirmId: user.companyId,
-        status: 'active',
-      },
+      where,
       skip,
       take: limit,
       include: {
@@ -568,6 +596,11 @@ export class RelationshipService {
         page,
         limit,
         totalPages: Math.ceil(totalRelationships / limit),
+      },
+      filters: {
+        search: search || null,
+        startDate: startDate || null,
+        endDate: endDate || null,
       },
     };
   }

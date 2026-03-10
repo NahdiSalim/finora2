@@ -32,10 +32,40 @@ export interface FolderProps {
   description?: string;
   state?: FolderState;
   fileCount?: number;
+  /** Dernière date de modification (ISO string ou date formatée) */
+  updatedAt?: string | null;
   onClick?: () => void;
   onMenuAction?: (action: string) => void;
   menuOptions?: { label: string; icon: React.ReactNode; action: string }[];
   sx?: any;
+}
+
+const MONTH_SHORT_FR = [
+  "JAN",
+  "FÉV",
+  "MAR",
+  "AVR",
+  "MAI",
+  "JUN",
+  "JUI",
+  "AOÛ",
+  "SEP",
+  "OCT",
+  "NOV",
+  "DÉC",
+];
+
+function formatUpdatedAt(iso?: string | null): string {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const day = d.getDate();
+    const month = MONTH_SHORT_FR[d.getMonth()] ?? "";
+    return `${day} ${month}`;
+  } catch {
+    return "";
+  }
 }
 
 export function Folder({
@@ -43,6 +73,7 @@ export function Folder({
   description,
   state = "empty",
   fileCount,
+  updatedAt,
   onClick,
   onMenuAction,
   menuOptions = [
@@ -198,6 +229,26 @@ export function Folder({
                 }}
               >
                 {fileCount} {fileCount === 1 ? "Doc" : "Docs"}
+                {description}
+              </Typography>
+            )}
+
+            {formatUpdatedAt(updatedAt) && (
+              <Typography
+                variant="caption"
+                sx={{
+                  color: getStateColor(),
+                  opacity: 0.85,
+                  fontWeight: 400,
+                }}
+              >
+                Modifié : {formatUpdatedAt(updatedAt)}
+              </Typography>
+            )}
+
+            {state === "archived" && (
+              <Typography variant="caption" color="text.disabled">
+                Archived
               </Typography>
             )}
           </Box>

@@ -70,6 +70,7 @@ interface FolderItem {
   description: string;
   state: "hasFiles" | "archived" | "empty";
   fileCount?: number;
+  updatedAt?: string | null;
 }
 
 function formatSize(bytes: number | null | undefined): string {
@@ -187,6 +188,7 @@ function SortableDroppableFolder({
         description={folder.description}
         state={folder.state}
         fileCount={folder.fileCount ?? 0}
+        updatedAt={folder.updatedAt}
         onClick={onOpen}
         onMenuAction={onMenuAction}
       />
@@ -457,7 +459,7 @@ function FileCardWithPreview(props: DraggableFileCardProps) {
 // ─── Main View ────────────────────────────────────────────────────────────────
 
 export default function DocumentDetailsView() {
-  const { clientId } = useParams<{ clientId: string }>();
+  const { clientId } = useParams<{ clientId?: string }>();
   const location = useLocation();
   const state = location.state as {
     clientName?: string;
@@ -469,6 +471,8 @@ export default function DocumentDetailsView() {
     pending: 0,
     total: 0,
   };
+  /** Mode "mon espace" : pas de clientId (client voit ses docs directement). */
+  const isMySpace = clientId == null || clientId === "";
   const [searchValue, setSearchValue] = useState("");
   const [parentId, setParentId] = useState<number | null>(null);
   /** Chemin des dossiers (arborescence) pour le fil d'Ariane */
@@ -526,6 +530,7 @@ export default function DocumentDetailsView() {
       description: "",
       state: docToFolderState(d),
       fileCount: 0,
+      updatedAt: d.updatedAt ?? null,
     }));
 
   const folders: FolderItem[] = foldersFromApi;
@@ -725,8 +730,10 @@ export default function DocumentDetailsView() {
   return (
     <PageHeader
       title={
-        clientName ||
-        (clientId ? `Documents client #${clientId}` : "Documents client")
+        isMySpace
+          ? "Mon espace"
+          : clientName ||
+            (clientId ? `Documents client #${clientId}` : "Documents client")
       }
       backButton={
         parentId != null
@@ -740,8 +747,15 @@ export default function DocumentDetailsView() {
           : undefined
       }
       breadcrumbs={[
-        { label: "Documents partagés", path: "/dashboard/documents" },
-        { label: clientName || (clientId ? `Client ${clientId}` : "Détail") },
+        ...(isMySpace
+          ? [{ label: "Mes documents", path: "/dashboard/documents" }]
+          : [
+              { label: "Documents partagés", path: "/dashboard/documents" },
+              {
+                label:
+                  clientName || (clientId ? `Client ${clientId}` : "Détail"),
+              },
+            ]),
         ...folderPath.map((step, i) => ({
           label: step.name,
           onClick:
@@ -754,10 +768,14 @@ export default function DocumentDetailsView() {
               : undefined,
         })),
       ]}
-      documentsProcessed={{
-        processed: invoiceStats.traite,
-        total: invoiceStats.total,
-      }}
+      documentsProcessed={
+        isMySpace
+          ? undefined
+          : {
+              processed: invoiceStats.traite,
+              total: invoiceStats.total,
+            }
+      }
       actions={actions}
     >
       <Box
@@ -860,6 +878,7 @@ export default function DocumentDetailsView() {
                   description={activeFolder.description}
                   state={activeFolder.state}
                   fileCount={activeFolder.fileCount}
+                  updatedAt={activeFolder.updatedAt}
                   onClick={() => {}}
                   onMenuAction={() => {}}
                 />

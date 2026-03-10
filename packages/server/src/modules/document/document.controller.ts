@@ -43,9 +43,9 @@ export class DocumentController {
   @ApiOperation({ summary: 'Create a new folder' })
   async createFolder(@Req() req: AuthRequest, @Body() dto: CreateFolderDto) {
     const userId = req.user!.id;
-    const companyId = req.user!.companyId;
+    const userCompanyId = req.user!.companyId;
 
-    if (!companyId) {
+    if (!userCompanyId) {
       return {
         status: 'error',
         code: '400',
@@ -53,7 +53,7 @@ export class DocumentController {
       };
     }
 
-    return this.documentService.createFolder(userId, companyId, dto);
+    return this.documentService.createFolder(userId, userCompanyId, dto);
   }
 
   @Post('upload')
@@ -77,6 +77,11 @@ export class DocumentController {
           nullable: true,
           description: 'Document category (e.g., facture, contrat, rapport)',
         },
+        clientCompanyId: {
+          type: 'number',
+          nullable: true,
+          description: 'Client company ID (required for accountants, ignored for clients)',
+        },
       },
     },
   })
@@ -84,12 +89,13 @@ export class DocumentController {
     @Req() req: AuthRequest,
     @UploadedFile() file: Express.Multer.File,
     @Body('parentId') parentId?: string,
-    @Body('category') category?: string
+    @Body('category') category?: string,
+    @Body('clientCompanyId') clientCompanyId?: string
   ) {
     const userId = req.user!.id;
-    const companyId = req.user!.companyId;
+    const userCompanyId = req.user!.companyId;
 
-    if (!companyId) {
+    if (!userCompanyId) {
       return {
         status: 'error',
         code: '400',
@@ -106,13 +112,21 @@ export class DocumentController {
     }
 
     const parentIdNum = parentId ? parseInt(parentId) : undefined;
+    const clientCompanyIdNum = clientCompanyId ? parseInt(clientCompanyId) : undefined;
 
-    return this.documentService.uploadFile(userId, companyId, file, parentIdNum, category);
+    return this.documentService.uploadFile(
+      userId,
+      userCompanyId,
+      file,
+      parentIdNum,
+      category,
+      clientCompanyIdNum
+    );
   }
 
-  @Get()
+  @Get('client')
   @RequirePermission('VIEW_DOCUMENTS')
-  @ApiOperation({ summary: 'Get documents in a folder with pagination and filters' })
+  @ApiOperation({ summary: 'Get all documents for a client (accountant view)' })
   @ApiQuery({ name: 'parentId', required: false, type: Number })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -126,6 +140,7 @@ export class DocumentController {
   })
   async getDocuments(
     @Req() req: AuthRequest,
+    @Query('clientId', new ParseIntPipe({ optional: true })) clientId?: number,
     @Query('parentId', new ParseIntPipe({ optional: true })) parentId?: number,
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
@@ -133,9 +148,10 @@ export class DocumentController {
     @Query('endDate') endDate?: string,
     @Query('status') status?: string
   ) {
-    const companyId = req.user!.companyId;
+    const userId = req.user!.id;
+    const userCompanyId = req.user!.companyId;
 
-    if (!companyId) {
+    if (!userCompanyId) {
       return {
         status: 'error',
         code: '400',
@@ -143,11 +159,30 @@ export class DocumentController {
       };
     }
 
+    // If clientId provided, accountant is viewing client's documents
+    const targetCompanyId = clientId || userCompanyId;
+
+    // If clientId is different from user's company, validate relationship
+    if (clientId && clientId !== userCompanyId) {
+      const relationship = await this.documentService.validateAccountantClientRelationship(
+        userCompanyId,
+        clientId
+      );
+      if (!relationship) {
+        return {
+          status: 'error',
+          code: '403',
+          message: 'No active relationship with this client',
+        };
+      }
+    }
+
     const startDateObj = startDate ? new Date(startDate) : undefined;
     const endDateObj = endDate ? new Date(endDate) : undefined;
 
     return this.documentService.getDocuments(
-      companyId,
+      targetCompanyId,
+      userId,
       parentId,
       page || 1,
       limit || 20,
@@ -261,9 +296,9 @@ export class DocumentController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateDocumentDto
   ) {
-    const companyId = req.user!.companyId;
+    const userCompanyId = req.user!.companyId;
 
-    if (!companyId) {
+    if (!userCompanyId) {
       return {
         status: 'error',
         code: '400',
@@ -271,16 +306,16 @@ export class DocumentController {
       };
     }
 
-    return this.documentService.updateDocument(id, companyId, dto);
+    return this.documentService.updateDocument(id, userCompanyId, dto);
   }
 
   @Delete(':id')
   @RequirePermission('DELETE_DOCUMENT')
   @ApiOperation({ summary: 'Delete document' })
   async deleteDocument(@Req() req: AuthRequest, @Param('id', ParseIntPipe) id: number) {
-    const companyId = req.user!.companyId;
+    const userCompanyId = req.user!.companyId;
 
-    if (!companyId) {
+    if (!userCompanyId) {
       return {
         status: 'error',
         code: '400',
@@ -288,7 +323,7 @@ export class DocumentController {
       };
     }
 
-    return this.documentService.deleteDocument(id, companyId);
+    return this.documentService.deleteDocument(id, userCompanyId);
   }
 
   @Post(':id/archive')

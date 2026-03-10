@@ -53,6 +53,7 @@ model Company {
   
   // Documents
   documents         Document[] @relation("DocumentCompany")
+  createdDocuments  Document[] @relation("DocumentCreatedByCompany")
   
   // Requests
   requests          Request[] @relation("CompanyRequests")

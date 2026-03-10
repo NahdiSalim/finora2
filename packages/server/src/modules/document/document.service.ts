@@ -996,4 +996,22 @@ export class DocumentService {
 
     return !!relationship;
   }
+
+  /**
+   * Validate accountant has active relationship with client
+   */
+  async validateAccountantClientRelationship(
+    accountantCompanyId: number,
+    clientCompanyId: number
+  ): Promise<boolean> {
+    const relationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
+      where: {
+        accountingFirmId: accountantCompanyId,
+        clientCompanyId,
+        status: 'active',
+      },
+    });
+
+    return !!relationship;
+  }
 }

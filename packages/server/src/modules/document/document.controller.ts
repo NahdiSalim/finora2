@@ -124,9 +124,31 @@ export class DocumentController {
     );
   }
 
+  @Get('client/:clientCompanyId')
+  @RequirePermission('VIEW_DOCUMENTS')
+  @ApiOperation({ summary: 'Get all documents for a client (accountant view)' })
+  @ApiQuery({ name: 'parentId', required: false, type: Number })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Format: YYYY-MM-DD' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'Format: YYYY-MM-DD' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    type: String,
+    enum: ['active', 'archived', 'deleted'],
+  })
   @Get()
   @RequirePermission('VIEW_DOCUMENTS')
-  @ApiOperation({ summary: 'Get documents in a folder with pagination and filters' })
+  @ApiOperation({
+    summary: 'Get my documents or client documents (with clientId query param for accountants)',
+  })
+  @ApiQuery({
+    name: 'clientId',
+    required: false,
+    type: Number,
+    description: 'Client company ID (for accountants to view client documents)',
+  })
   @ApiQuery({ name: 'parentId', required: false, type: Number })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -140,6 +162,7 @@ export class DocumentController {
   })
   async getDocuments(
     @Req() req: AuthRequest,
+    @Query('clientId', new ParseIntPipe({ optional: true })) clientId?: number,
     @Query('parentId', new ParseIntPipe({ optional: true })) parentId?: number,
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
@@ -158,11 +181,29 @@ export class DocumentController {
       };
     }
 
+    // If clientId provided, accountant is viewing client's documents
+    const targetCompanyId = clientId || userCompanyId;
+
+    // If clientId is different from user's company, validate relationship
+    if (clientId && clientId !== userCompanyId) {
+      const relationship = await this.documentService.validateAccountantClientRelationship(
+        userCompanyId,
+        clientId
+      );
+      if (!relationship) {
+        return {
+          status: 'error',
+          code: '403',
+          message: 'No active relationship with this client',
+        };
+      }
+    }
+
     const startDateObj = startDate ? new Date(startDate) : undefined;
     const endDateObj = endDate ? new Date(endDate) : undefined;
 
     return this.documentService.getDocuments(
-      userCompanyId,
+      targetCompanyId,
       userId,
       parentId,
       page || 1,

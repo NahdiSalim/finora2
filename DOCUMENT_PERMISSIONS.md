@@ -151,7 +151,19 @@ const canDelete = isCreator || isAccountantEditingClient;
 
 ## API Response Format
 
-### GET /api/documents?page=1&limit=20
+### GET /api/documents (Client view - my documents)
+
+```
+GET /api/documents?page=1&limit=20
+```
+
+### GET /api/documents (Accountant view - client documents)
+
+```
+GET /api/documents?clientId=123&page=1&limit=20
+```
+
+Response:
 
 ```json
 {
@@ -176,8 +188,8 @@ const canDelete = isCreator || isAccountantEditingClient;
       "createdByCompanyId": 789,
       "createdBy": 999,
       "isFolder": true,
-      "canEdit": false, // Client cannot edit
-      "canDelete": false, // Client cannot delete
+      "canEdit": false,
+      "canDelete": false,
       "createdAt": "2025-03-10T11:00:00Z"
     }
   ],

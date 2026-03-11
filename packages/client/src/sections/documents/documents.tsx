@@ -14,6 +14,7 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { CalendarDays } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useDashboardBase } from "src/hooks/useDashboardBase";
 import ClientCard from "src/components/common/ClientCard";
 import CustomButton from "src/components/common/CustomButton";
 import { PageHeader } from "src/layouts/components/page-header";
@@ -69,12 +70,13 @@ export default function DocumentsView() {
     console.log(`Deactivate ${clientName}`);
   };
 
+  const dashboardBase = useDashboardBase();
   const handleClientClick = (
     clientId: string | number,
     clientName: string,
     invoiceStats: { traite: number; pending: number; total: number },
   ) => {
-    navigate(`/dashboard/documents/${clientId}`, {
+    navigate(`${dashboardBase}/documents/${clientId}`, {
       state: { clientName, invoiceStats },
     });
   };

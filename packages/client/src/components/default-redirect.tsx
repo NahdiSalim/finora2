@@ -1,10 +1,11 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { usePermissions } from "src/hooks/usePermissions";
 
-const DASHBOARD_BASE = "/dashboard";
-
 export default function DefaultRedirect() {
+  const { roleSlug } = useParams<{ roleSlug?: string }>();
   const { features } = usePermissions();
+
+  const base = roleSlug ? `/dashboard/${roleSlug}` : "/dashboard";
 
   const firstAccessiblePath = (() => {
     if (!features || features.length === 0) {
@@ -14,10 +15,8 @@ export default function DefaultRedirect() {
     for (const feature of features) {
       if (feature.pages && feature.pages.length > 0) {
         const route = feature.pages[0].route;
-        if (route.startsWith(DASHBOARD_BASE)) return route;
-        return route.startsWith("/")
-          ? DASHBOARD_BASE + route
-          : `${DASHBOARD_BASE}/${route}`;
+        const path = route.startsWith("/") ? route.slice(1) : route;
+        return path ? `${base}/${path}` : base;
       }
     }
 

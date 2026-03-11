@@ -4,7 +4,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Folder } from "src/components/common/folder";
 import { useGetDocumentsQuery } from "src/lib/services/documentsApi";
-import type { FolderItem } from "./document-details-types";
+import type { FolderItem } from "../../types/document-details-types";
 
 /** Préfixe des droppables pour déposer un document dans un dossier (évite conflit avec sortable). */
 export const FOLDER_DROP_PREFIX = "drop-folder-";

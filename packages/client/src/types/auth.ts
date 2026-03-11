@@ -9,10 +9,26 @@ export interface Role {
   updated_at?: string;
 }
 
+/** Company as returned by /auth/me (accountant firm or client company) */
+export interface UserCompany {
+  id: number;
+  name: string;
+  description?: string | null;
+  experience?: string | null;
+  logoUrl?: string | null;
+  city?: string | null;
+  address?: string | null;
+  postalCode?: string | null;
+  phone?: string | null;
+  email?: string | null;
+}
+
 export interface User {
   id: string;
   email: string;
   full_name: string;
+  firstName?: string;
+  lastName?: string;
   sex: string | null;
   dateOfBirth: string | null;
   status: string;
@@ -24,6 +40,10 @@ export interface User {
   updated_at?: string;
   role: Role | string;
   organization?: Organization | null;
+  /** Company (cabinet or client company) as returned by API */
+  company?: UserCompany | null;
+  /** Profile photo URL (presigned) as returned by API */
+  photoUrl?: string | null;
   documents?: Document[];
 }
 

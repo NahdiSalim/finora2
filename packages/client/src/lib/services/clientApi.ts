@@ -19,12 +19,16 @@ export interface Client {
   updated_at: string;
 }
 
-export interface ClientsResponse {
-  data: Client[];
+export interface ClientsPagination {
+  total: number;
   page: number;
   limit: number;
-  total: number;
   totalPages: number;
+}
+
+export interface ClientsResponse {
+  data: Client[];
+  pagination: ClientsPagination;
 }
 
 export const clientsApi = createApi({

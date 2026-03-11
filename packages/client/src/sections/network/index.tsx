@@ -19,6 +19,7 @@ import { PageHeader } from "src/layouts/components/page-header";
 import CustomButton from "src/components/common/CustomButton";
 import CustomSelect from "src/components/common/CustomSelect";
 import CustomInput from "src/components/common/CustomInput";
+import { useDashboardBase } from "src/hooks/useDashboardBase";
 import { useGetPublicAccountantsQuery } from "src/lib/services/publicAccountantsApi";
 import {
   ALL_SPECIALTIES_FOR_FILTER,
@@ -28,6 +29,7 @@ import { Search } from "lucide-react";
 
 export default function NetworkView() {
   const theme = useTheme();
+  const dashboardBase = useDashboardBase();
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState<string | undefined>(undefined);
   const [specialty, setSpecialty] = useState<string | undefined>(undefined);
@@ -256,7 +258,9 @@ export default function NetworkView() {
               <AccountantCard
                 key={accountant.accountantId}
                 data={accountant}
-                getProfilePath={(id) => `/dashboard/network/accountant/${id}`}
+                getProfilePath={(id) =>
+                  `${dashboardBase}/network/accountant/${id}`
+                }
                 onMessageClick={(id) => {
                   setContactAccountantId(id);
                   setContactModalOpen(true);

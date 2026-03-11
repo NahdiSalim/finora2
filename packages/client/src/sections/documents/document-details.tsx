@@ -41,6 +41,7 @@ import {
 import { useState } from "react";
 import type { Dayjs } from "dayjs";
 import { useParams, useLocation } from "react-router-dom";
+import { useDashboardBase } from "src/hooks/useDashboardBase";
 import { Folder } from "src/components/common/folder";
 import { PageHeader } from "src/layouts/components/page-header";
 import CustomInput from "src/components/common/CustomInput";
@@ -49,15 +50,21 @@ import MenuItem from "@mui/material/MenuItem";
 import type { FileItem, FileType } from "src/components/common/File";
 import { FileCard } from "src/components/common/File";
 import CustomButton from "src/components/common/CustomButton";
-import { CreateFolderModal } from "./CreateFolderModal";
-import { SuccessFolderModal } from "./SuccessFolderModal";
-import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
-import { RenameFolderModal } from "./RenameFolderModal";
-import { ImportDocumentModal } from "./ImportDocumentModal";
-import { DocumentPreviewModal } from "./DocumentPreviewModal";
-import { MoveDocumentModal } from "./MoveDocumentModal";
-import { FolderWithCount, FOLDER_DROP_PREFIX } from "./SortableDroppableFolder";
-import { FileCardWithPreview, FILE_PREFIX } from "./SortableFileCard";
+import { CreateFolderModal } from "../../components/document/CreateFolderModal";
+import { SuccessFolderModal } from "../../components/document/SuccessFolderModal";
+import { ConfirmDeleteModal } from "../../components/document/ConfirmDeleteModal";
+import { RenameFolderModal } from "../../components/document/RenameFolderModal";
+import { ImportDocumentModal } from "../../components/document/ImportDocumentModal";
+import { DocumentPreviewModal } from "../../components/document/DocumentPreviewModal";
+import { MoveDocumentModal } from "../../components/document/MoveDocumentModal";
+import {
+  FolderWithCount,
+  FOLDER_DROP_PREFIX,
+} from "../../components/document/SortableDroppableFolder";
+import {
+  FileCardWithPreview,
+  FILE_PREFIX,
+} from "../../components/document/SortableFileCard";
 import {
   useGetDocumentsQuery,
   useCreateFolderMutation,
@@ -72,13 +79,14 @@ import {
   formatSize,
   docToFolderState,
   docToFileType,
-} from "./document-details-types";
+} from "../../types/document-details-types";
 
 // ─── Main View ────────────────────────────────────────────────────────────────
 
 export default function DocumentDetailsView() {
   const { clientId } = useParams<{ clientId?: string }>();
   const location = useLocation();
+  const dashboardBase = useDashboardBase();
   const state = location.state as {
     clientName?: string;
     invoiceStats?: { traite: number; pending: number; total: number };
@@ -472,9 +480,12 @@ export default function DocumentDetailsView() {
       }
       breadcrumbs={[
         ...(isMySpace
-          ? [{ label: "Mes documents", path: "/dashboard/documents" }]
+          ? [{ label: "Mes documents", path: `${dashboardBase}/documents` }]
           : [
-              { label: "Documents partagés", path: "/dashboard/documents" },
+              {
+                label: "Documents partagés",
+                path: `${dashboardBase}/documents`,
+              },
               {
                 label:
                   clientName || (clientId ? `Client ${clientId}` : "Détail"),

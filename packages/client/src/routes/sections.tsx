@@ -10,6 +10,7 @@ import { DashboardLayout } from "src/layouts/dashboard";
 import AuthGuard from "src/guard/AuthGuard";
 import PermissionGuard from "src/guard/PermissionGuard";
 import DefaultRedirect from "src/components/default-redirect";
+import DashboardRoleRedirect from "src/components/dashboard-role-redirect";
 import RoleView from "src/sections/roles";
 import RoleFormRouter from "src/sections/roles/RoleFormRouter";
 import AuthLayout from "src/sections/auth/sign-in-view/Auth-Layout";
@@ -102,198 +103,208 @@ export const routesSection: RouteObject[] = [
   },
   {
     path: "dashboard",
-    Component: DashboardWrapper,
+    element: <Outlet />,
     children: [
       {
         index: true,
-        element: <DefaultRedirect />,
+        element: <DashboardRoleRedirect />,
       },
       {
-        path: "archive",
-        element: (
-          <PermissionGuard requiredPath="/archive">
-            <ArchivePage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "collaborators",
-        element: (
-          <PermissionGuard requiredPath="/collaborators">
-            <CollaboratorPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "clients",
-        element: (
-          <PermissionGuard requiredPath="/clients">
-            <ClientPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "dashboard",
-        element: (
-          <PermissionGuard requiredPath="/dashboard">
-            <UserPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "documents",
-        element: (
-          <PermissionGuard requiredPath="/documents">
-            <DocumentsPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "documents/:clientId",
-        element: (
-          <PermissionGuard requiredPath="/documents">
-            <DocumentDetailsPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "meetings",
-        element: (
-          <PermissionGuard requiredPath="/meetings">
-            <DocumentDetailsPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "meetings/:id",
-        element: (
-          <PermissionGuard requiredPath="/meetings/:id">
-            <UserPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "requests",
-        element: (
-          <PermissionGuard requiredPath="/requests">
-            <UserPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "requests/:id",
-        element: (
-          <PermissionGuard requiredPath="/requests/:id">
-            <UserPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "messages",
-        element: (
-          <PermissionGuard requiredPath="/messages">
-            <UserPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "messages/:id",
-        element: (
-          <PermissionGuard requiredPath="/messages/:id">
-            <UserPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "banks",
-        element: (
-          <PermissionGuard requiredPath="/banks">
-            <UserPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "network/accountant/:id",
-        element: (
-          <PermissionGuard requiredPath="/network">
-            <Suspense fallback={renderFallback()}>
-              <NetworkAccountantProfilePage />
-            </Suspense>
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "network",
-        element: (
-          <PermissionGuard requiredPath="/network">
-            <NetworkPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "profile",
-        element: (
-          <PermissionGuard requiredPath="/profile">
-            <ProfilePage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "profile/edit",
-        element: (
-          <PermissionGuard requiredPath="/profile/edit">
-            <UserPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "user/new",
-        element: (
-          <PermissionGuard requiredPath="/users">
-            <UserFormPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "user/edit/:id",
-        element: (
-          <PermissionGuard requiredPath="/users">
-            <UserFormPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "user/:id/documents",
+        path: ":roleSlug",
+        Component: DashboardWrapper,
+        children: [
+          {
+            index: true,
+            element: <DefaultRedirect />,
+          },
+          {
+            path: "archive",
+            element: (
+              <PermissionGuard requiredPath="/archive">
+                <ArchivePage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "collaborators",
+            element: (
+              <PermissionGuard requiredPath="/collaborators">
+                <CollaboratorPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "clients",
+            element: (
+              <PermissionGuard requiredPath="/clients">
+                <ClientPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "dashboard",
+            element: (
+              <PermissionGuard requiredPath="/dashboard">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "documents",
+            element: (
+              <PermissionGuard requiredPath="/documents">
+                <DocumentsPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "documents/:clientId",
+            element: (
+              <PermissionGuard requiredPath="/documents">
+                <DocumentDetailsPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "meetings",
+            element: (
+              <PermissionGuard requiredPath="/meetings">
+                <DocumentDetailsPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "meetings/:id",
+            element: (
+              <PermissionGuard requiredPath="/meetings/:id">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "requests",
+            element: (
+              <PermissionGuard requiredPath="/requests">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "requests/:id",
+            element: (
+              <PermissionGuard requiredPath="/requests/:id">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "messages",
+            element: (
+              <PermissionGuard requiredPath="/messages">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "messages/:id",
+            element: (
+              <PermissionGuard requiredPath="/messages/:id">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "banks",
+            element: (
+              <PermissionGuard requiredPath="/banks">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "network/accountant/:id",
+            element: (
+              <PermissionGuard requiredPath="/network">
+                <Suspense fallback={renderFallback()}>
+                  <NetworkAccountantProfilePage />
+                </Suspense>
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "network",
+            element: (
+              <PermissionGuard requiredPath="/network">
+                <NetworkPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "profile",
+            element: (
+              <PermissionGuard requiredPath="/profile">
+                <ProfilePage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "profile/edit",
+            element: (
+              <PermissionGuard requiredPath="/profile/edit">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "user/new",
+            element: (
+              <PermissionGuard requiredPath="/users">
+                <UserFormPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "user/edit/:id",
+            element: (
+              <PermissionGuard requiredPath="/users">
+                <UserFormPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "user/:id/documents",
 
-        element: (
-          <PermissionGuard requiredPath="/users">
-            <DocumentValidationPage />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "roles",
-        element: (
-          <PermissionGuard requiredPath="/roles">
-            <RoleView />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "role/new",
-        element: (
-          <PermissionGuard requiredPath="/roles">
-            <RoleFormRouter />
-          </PermissionGuard>
-        ),
-      },
-      {
-        path: "role/edit/:id",
-        element: (
-          <PermissionGuard requiredPath="/roles">
-            <RoleFormRouter />
-          </PermissionGuard>
-        ),
+            element: (
+              <PermissionGuard requiredPath="/users">
+                <DocumentValidationPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "roles",
+            element: (
+              <PermissionGuard requiredPath="/roles">
+                <RoleView />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "role/new",
+            element: (
+              <PermissionGuard requiredPath="/roles">
+                <RoleFormRouter />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "role/edit/:id",
+            element: (
+              <PermissionGuard requiredPath="/roles">
+                <RoleFormRouter />
+              </PermissionGuard>
+            ),
+          },
+        ],
       },
     ],
   },

@@ -60,6 +60,10 @@ export const documentsApi = createApi({
         page?: number;
         limit?: number;
         status?: string;
+        search?: string;
+        category?: string;
+        startDate?: string;
+        endDate?: string;
       }
     >({
       query: ({
@@ -68,6 +72,10 @@ export const documentsApi = createApi({
         page = 1,
         limit = 50,
         status = "active",
+        search,
+        category,
+        startDate,
+        endDate,
       } = {}) => {
         const params = new URLSearchParams();
         if (clientId != null) params.append("clientId", String(clientId));
@@ -75,6 +83,11 @@ export const documentsApi = createApi({
         params.append("page", String(page));
         params.append("limit", String(limit));
         if (status) params.append("status", status);
+        if (search && search.trim()) params.append("search", search.trim());
+        if (category && category.trim())
+          params.append("category", category.trim());
+        if (startDate) params.append("startDate", startDate);
+        if (endDate) params.append("endDate", endDate);
         return {
           url: `/documents/client?${params.toString()}`,
           method: "GET",

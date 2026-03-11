@@ -201,6 +201,7 @@ export class DocumentService {
   /**
    * Get documents in a folder (or root if parentId is null) with pagination and filters
    * Includes canEdit and canDelete flags based on user permissions
+   * Search works across entire document tree (recursive)
    */
   async getDocuments(
     userCompanyId: number,
@@ -219,16 +220,20 @@ export class DocumentService {
     // Build where clause with filters
     const where: any = {
       companyId: userCompanyId,
-      parentId: parentId || null,
       status,
     };
 
-    // Add search filter (case-insensitive contains)
+    // If search is provided, search across entire tree (ignore parentId)
+    // Otherwise, filter by parentId for hierarchical view
     if (search && search.trim()) {
       where.name = {
         contains: search.trim(),
         mode: 'insensitive',
       };
+      // When searching, don't filter by parentId - search entire tree
+    } else {
+      // Only filter by parentId when not searching
+      where.parentId = parentId || null;
     }
 
     // Add category filter (only for files, not folders)
@@ -287,20 +292,43 @@ export class DocumentService {
     });
 
     // Add permission flags to each document
-    const documentsWithPermissions = documents.map((doc) => {
-      // If createdByCompanyId is null (old documents), assume it was created by the client
-      const createdByCompanyId = doc.createdByCompanyId || doc.companyId;
+    const documentsWithPermissions = await Promise.all(
+      documents.map(async (doc) => {
+        // If createdByCompanyId is null (old documents), assume it was created by the client
+        const createdByCompanyId = doc.createdByCompanyId || doc.companyId;
 
-      const isCreator = createdByCompanyId === userCompanyId;
-      const isAccountantEditingClient =
-        createdByCompanyId === doc.companyId && userCompanyId !== doc.companyId;
+        const isCreator = createdByCompanyId === userCompanyId;
+        const isAccountantEditingClient =
+          createdByCompanyId === doc.companyId && userCompanyId !== doc.companyId;
 
-      return {
-        ...doc,
-        canEdit: isCreator || isAccountantEditingClient,
-        canDelete: isCreator || isAccountantEditingClient,
-      };
-    });
+        // If it's a folder, count subfolders and files separately
+        let foldersCount = 0;
+        let filesCount = 0;
+        if (doc.isFolder) {
+          foldersCount = await this.prisma.document.count({
+            where: {
+              parentId: doc.id,
+              isFolder: true,
+              status: { not: 'deleted' },
+            },
+          });
+          filesCount = await this.prisma.document.count({
+            where: {
+              parentId: doc.id,
+              isFolder: false,
+              status: { not: 'deleted' },
+            },
+          });
+        }
+
+        return {
+          ...doc,
+          canEdit: isCreator || isAccountantEditingClient,
+          canDelete: isCreator || isAccountantEditingClient,
+          ...(doc.isFolder && { foldersCount, filesCount }),
+        };
+      })
+    );
 
     return {
       status: 'success',
@@ -398,6 +426,7 @@ export class DocumentService {
   /**
    * Get archived documents with hierarchical navigation (like normal documents but archived)
    * Shows only root archived items or children of an archived parent
+   * Search works across entire tree (recursive)
    */
   async getArchivedDocumentsHierarchical(
     companyId: number,
@@ -415,15 +444,19 @@ export class DocumentService {
     const where: any = {
       companyId,
       status: 'archived',
-      parentId: parentId || null,
     };
 
-    // Add search filter (case-insensitive contains)
+    // If search is provided, search across entire tree (ignore parentId)
+    // Otherwise, filter by parentId for hierarchical view
     if (search && search.trim()) {
       where.name = {
         contains: search.trim(),
         mode: 'insensitive',
       };
+      // When searching, don't filter by parentId - search entire tree
+    } else {
+      // Only filter by parentId when not searching
+      where.parentId = parentId || null;
     }
 
     // Add category filter (only for files, not folders)
@@ -477,10 +510,39 @@ export class DocumentService {
       },
     });
 
+    // Add children count for folders
+    const documentsWithCounts = await Promise.all(
+      documents.map(async (doc) => {
+        let foldersCount = 0;
+        let filesCount = 0;
+        if (doc.isFolder) {
+          foldersCount = await this.prisma.document.count({
+            where: {
+              parentId: doc.id,
+              isFolder: true,
+              status: { not: 'deleted' },
+            },
+          });
+          filesCount = await this.prisma.document.count({
+            where: {
+              parentId: doc.id,
+              isFolder: false,
+              status: { not: 'deleted' },
+            },
+          });
+        }
+
+        return {
+          ...doc,
+          ...(doc.isFolder && { foldersCount, filesCount }),
+        };
+      })
+    );
+
     return {
       status: 'success',
       code: '200',
-      data: documents,
+      data: documentsWithCounts,
       pagination: {
         currentPage: page,
         totalPages,

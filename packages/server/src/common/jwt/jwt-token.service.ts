@@ -10,25 +10,25 @@ export class JwtTokenService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private readonly hashService: HashService,
-    private readonly prisma: PrismaService,
+    private readonly prisma: PrismaService
   ) {}
 
   // Generate tokens
-  public generateTokens(payload: { sub: number; email: string }) {
+  public generateTokens(payload: {
+    sub: number;
+    email: string;
+    roleCode?: string;
+    companyId?: number | null;
+  }) {
     const jwtSecret = this.configService.get<string>('JWT_SECRET');
-    const jwtRefreshSecret =
-      this.configService.get<string>('JWT_REFRESH_SECRET');
+    const jwtRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
 
     if (!jwtSecret) {
-      throw new Error(
-        'JWT_SECRET is not configured. Please set it in your .env file.',
-      );
+      throw new Error('JWT_SECRET is not configured. Please set it in your .env file.');
     }
 
     if (!jwtRefreshSecret) {
-      throw new Error(
-        'JWT_REFRESH_SECRET is not configured. Please set it in your .env file.',
-      );
+      throw new Error('JWT_REFRESH_SECRET is not configured. Please set it in your .env file.');
     }
 
     const accessToken = this.jwtService.sign(payload, {
@@ -49,9 +49,7 @@ export class JwtTokenService {
     const jwtSecret = this.configService.get<string>('JWT_SECRET');
 
     if (!jwtSecret) {
-      throw new Error(
-        'JWT_SECRET is not configured. Please set it in your .env file.',
-      );
+      throw new Error('JWT_SECRET is not configured. Please set it in your .env file.');
     }
 
     return this.jwtService.sign(payload, {

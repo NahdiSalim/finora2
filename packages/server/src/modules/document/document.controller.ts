@@ -31,6 +31,7 @@ import { RequirePermission } from '../auth/decorators/require-permission.decorat
 import type { AuthRequest } from '../auth/types/user-type';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
+import { RoleCode } from '../../common/enums/role.enum';
 
 @ApiTags('documents')
 @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -164,6 +165,7 @@ export class DocumentController {
   ) {
     const userId = req.user!.id;
     const userCompanyId = req.user!.companyId;
+    const userRole = req.user!.role?.code;
 
     if (!userCompanyId) {
       return {
@@ -173,21 +175,31 @@ export class DocumentController {
       };
     }
 
-    // If clientId provided, accountant is viewing client's documents
-    const targetCompanyId = clientId || userCompanyId;
+    // Determine target company
+    let targetCompanyId = userCompanyId;
 
-    // If clientId is different from user's company, validate relationship
+    // Only process clientId if it's provided and different from user's company
+    // AND user is an accountant (clients always see their own company)
     if (clientId && clientId !== userCompanyId) {
-      const relationship = await this.documentService.validateAccountantClientRelationship(
-        userCompanyId,
-        clientId
-      );
-      if (!relationship) {
-        return {
-          status: 'error',
-          code: '403',
-          message: 'No active relationship with this client',
-        };
+      // Only accountants can view other companies' documents
+      if (userRole !== RoleCode.ACCOUNTANT) {
+        // For clients, ignore clientId and use their own company
+        targetCompanyId = userCompanyId;
+      } else {
+        // Validate accountant has active relationship with client
+        const relationship = await this.documentService.validateAccountantClientRelationship(
+          userCompanyId,
+          clientId
+        );
+
+        if (!relationship) {
+          return {
+            status: 'error',
+            code: '403',
+            message: 'No active relationship with this client',
+          };
+        }
+        targetCompanyId = clientId;
       }
     }
 
@@ -229,11 +241,6 @@ export class DocumentController {
     type: String,
     description: 'Filter by file category (e.g., facture, contrat, rapport)',
   })
-  @ApiQuery({ name: 'parentId', required: false, type: Number })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Format: YYYY-MM-DD' })
-  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'Format: YYYY-MM-DD' })
   async getAllArchivedDocuments(
     @Req() req: AuthRequest,
     @Query('clientId', new ParseIntPipe({ optional: true })) clientId?: number,
@@ -246,6 +253,11 @@ export class DocumentController {
     @Query('endDate') endDate?: string
   ) {
     const userCompanyId = req.user!.companyId;
+    const userRole = req.user!.role?.code;
+
+    console.log('[getAllArchivedDocuments] userCompanyId:', userCompanyId);
+    console.log('[getAllArchivedDocuments] userRole:', userRole);
+    console.log('[getAllArchivedDocuments] clientId:', clientId);
 
     if (!userCompanyId) {
       return {
@@ -255,23 +267,52 @@ export class DocumentController {
       };
     }
 
-    // If clientId provided, accountant is viewing client's archived documents
-    const targetCompanyId = clientId || userCompanyId;
+    // Determine target company
+    let targetCompanyId = userCompanyId;
 
-    // If clientId is different from user's company, validate relationship
+    console.log(
+      '[getAllArchivedDocuments] Checking: clientId && clientId !== userCompanyId:',
+      clientId && clientId !== userCompanyId
+    );
+
+    // Only process clientId if it's provided and different from user's company
+    // AND user is an accountant (clients always see their own company)
     if (clientId && clientId !== userCompanyId) {
-      const relationship = await this.documentService.validateAccountantClientRelationship(
-        userCompanyId,
-        clientId
-      );
-      if (!relationship) {
-        return {
-          status: 'error',
-          code: '403',
-          message: 'No active relationship with this client',
-        };
+      console.log('[getAllArchivedDocuments] clientId is different from userCompanyId');
+
+      // Only accountants can view other companies' documents
+      if (userRole !== RoleCode.ACCOUNTANT) {
+        console.log('[getAllArchivedDocuments] User is not ACCOUNTANT, role is:', userRole);
+        console.log(
+          '[getAllArchivedDocuments] Clients can only view their own company documents. Ignoring clientId and using userCompanyId.'
+        );
+        // For clients, ignore clientId and use their own company
+        targetCompanyId = userCompanyId;
+      } else {
+        console.log('[getAllArchivedDocuments] User is ACCOUNTANT, validating relationship');
+
+        // Validate accountant has active relationship with client
+        const relationship = await this.documentService.validateAccountantClientRelationship(
+          userCompanyId,
+          clientId
+        );
+
+        console.log('[getAllArchivedDocuments] Relationship validation result:', relationship);
+
+        if (!relationship) {
+          return {
+            status: 'error',
+            code: '403',
+            message: 'No active relationship with this client',
+          };
+        }
+        targetCompanyId = clientId;
       }
+    } else {
+      console.log('[getAllArchivedDocuments] Using userCompanyId as targetCompanyId');
     }
+
+    console.log('[getAllArchivedDocuments] Final targetCompanyId:', targetCompanyId);
 
     const startDateObj = startDate ? new Date(startDate) : undefined;
     const endDateObj = endDate ? new Date(endDate) : undefined;

@@ -86,7 +86,12 @@ export class AuthService {
         );
       }
 
-      const payload = { sub: user.id, email: user.email };
+      const payload = {
+        sub: user.id,
+        email: user.email,
+        roleCode: user.role?.code,
+        companyId: user.companyId,
+      };
       const { accessToken, refreshToken } = this.jwtTokenService.generateTokens(payload);
 
       await this.jwtTokenService.storeRefreshToken(user.id, refreshToken);
@@ -134,7 +139,7 @@ export class AuthService {
         );
       }
 
-      const { sub, email } = decoded as unknown as JwtPayload;
+      const { sub, email, roleCode, companyId } = decoded as unknown as JwtPayload;
 
       const storedRefreshToken = await this.jwtTokenService.findValidRefreshToken(sub);
 
@@ -150,6 +155,8 @@ export class AuthService {
       const { accessToken, refreshToken } = this.jwtTokenService.generateTokens({
         sub,
         email,
+        roleCode,
+        companyId,
       });
 
       await this.jwtTokenService.deleteOldRefreshToken(storedRefreshToken.id);

@@ -15,12 +15,15 @@ export interface SortableDroppableFolderProps {
   onMenuAction: (action: string) => void;
   /** Client company ID when accountant consulte l'espace d'un client */
   clientCompanyId?: number;
+  /** Options du menu contextuel (ex. Déplacer après recherche) */
+  menuOptions?: { label: string; icon: React.ReactNode; action: string }[];
 }
 
 function SortableDroppableFolderInner({
   folder,
   onOpen,
   onMenuAction,
+  menuOptions,
 }: Omit<SortableDroppableFolderProps, "clientCompanyId">) {
   const {
     attributes,
@@ -78,6 +81,7 @@ function SortableDroppableFolderInner({
           updatedAt={folder.updatedAt}
           onClick={onOpen}
           onMenuAction={onMenuAction}
+          menuOptions={menuOptions}
         />
       </Box>
     </Box>
@@ -90,6 +94,7 @@ export function FolderWithCount({
   onOpen,
   onMenuAction,
   clientCompanyId,
+  menuOptions,
 }: SortableDroppableFolderProps) {
   const { data } = useGetDocumentsQuery(
     {
@@ -111,6 +116,7 @@ export function FolderWithCount({
       folder={folderWithCount}
       onOpen={onOpen}
       onMenuAction={onMenuAction}
+      menuOptions={menuOptions}
     />
   );
 }

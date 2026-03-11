@@ -127,9 +127,10 @@ export default function DocumentDetailsView() {
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [activeFolderId, setActiveFolderId] = useState<number | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<(string | number)[]>([]);
-  const [moveFile, setMoveFile] = useState<{
+  const [moveItem, setMoveItem] = useState<{
     id: number;
     name: string;
+    type: "file" | "folder";
   } | null>(null);
   const theme = useTheme();
 
@@ -154,13 +155,17 @@ export default function DocumentDetailsView() {
       limit: 200,
       status: "active",
     },
-    { skip: !moveFile },
+    { skip: !moveItem },
   );
-  const moveFoldersList: { id: number | null; name: string }[] = moveFile
+  const moveFoldersList: { id: number | null; name: string }[] = moveItem
     ? [
         { id: null, name: "Racine" },
         ...(moveFoldersData?.data ?? [])
-          .filter((d) => d.isFolder)
+          .filter(
+            (d) =>
+              d.isFolder &&
+              (moveItem.type !== "folder" || d.id !== moveItem.id),
+          )
           .map((d) => ({ id: d.id, name: d.name })),
       ]
     : [];
@@ -216,6 +221,17 @@ export default function DocumentDetailsView() {
         ...fileCardMenuOptionsBase.slice(3),
       ]
     : fileCardMenuOptionsBase;
+
+  const folderMenuOptions = hasSearchOrFilter
+    ? [
+        { label: "Déplacer", icon: <Move size={16} />, action: "move" },
+        { label: "Renommer", icon: <Edit size={16} />, action: "edit" },
+        { label: "Supprimer", icon: <Trash2 size={16} />, action: "delete" },
+      ]
+    : [
+        { label: "Renommer", icon: <Edit size={16} />, action: "edit" },
+        { label: "Supprimer", icon: <Trash2 size={16} />, action: "delete" },
+      ];
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -842,6 +858,7 @@ export default function DocumentDetailsView() {
                       clientCompanyId={
                         !isMySpace && clientId ? Number(clientId) : undefined
                       }
+                      menuOptions={folderMenuOptions}
                       onOpen={() => {
                         setFolderPath((prev) => [
                           ...prev,
@@ -857,6 +874,12 @@ export default function DocumentDetailsView() {
                             type: "folder",
                             id: folder.id,
                             name: folder.name,
+                          });
+                        } else if (action === "move" && hasSearchOrFilter) {
+                          setMoveItem({
+                            id: folder.id,
+                            name: folder.name,
+                            type: "folder",
                           });
                         }
                       }}
@@ -983,9 +1006,10 @@ export default function DocumentDetailsView() {
                               mimeType: fileItem.mimeType,
                             });
                           } else if (action === "move" && hasSearchOrFilter) {
-                            setMoveFile({
+                            setMoveItem({
                               id: Number(fileItem.id),
                               name: fileItem.name,
+                              type: "file",
                             });
                           }
                         }}
@@ -1086,16 +1110,18 @@ export default function DocumentDetailsView() {
         />
       )}
       <MoveDocumentModal
-        open={!!moveFile}
-        onClose={() => setMoveFile(null)}
-        moveFile={moveFile}
+        open={!!moveItem}
+        onClose={() => setMoveItem(null)}
+        moveItem={moveItem}
         foldersList={moveFoldersList}
-        onMove={async (documentId, targetParentId) => {
+        clientId={!isMySpace && clientId ? Number(clientId) : undefined}
+        excludeFolderId={moveItem?.type === "folder" ? moveItem.id : undefined}
+        onMove={async (itemId, targetParentId) => {
           await updateDocument({
-            id: documentId,
+            id: itemId,
             dto: { parentId: targetParentId },
           }).unwrap();
-          setMoveFile(null);
+          setMoveItem(null);
         }}
         isLoading={isUpdating}
       />

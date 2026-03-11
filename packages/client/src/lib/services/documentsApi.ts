@@ -215,6 +215,7 @@ export const documentsApi = createApi({
 
 export const {
   useGetDocumentsQuery,
+  useLazyGetDocumentsQuery,
   useCreateFolderMutation,
   useUpdateDocumentMutation,
   useDeleteDocumentMutation,

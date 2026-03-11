@@ -440,7 +440,8 @@ export class RelationshipService {
     limit: number = 20,
     search?: string,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    isArchived?: boolean
   ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -505,7 +506,7 @@ export class RelationshipService {
     }
 
     // Get total count of active relationships with filters
-    const totalRelationships = await this.prisma.clientAccountingFirmRelationship.count({
+    let totalRelationships = await this.prisma.clientAccountingFirmRelationship.count({
       where,
     });
 
@@ -536,7 +537,7 @@ export class RelationshipService {
     });
 
     // For each client, get invoice statistics
-    const clientsWithStats = await Promise.all(
+    let clientsWithStats: any[] = await Promise.all(
       relationships.map(async (relationship) => {
         const clientCompanyId = relationship.clientCompanyId;
 
@@ -587,6 +588,39 @@ export class RelationshipService {
         };
       })
     );
+
+    // Filter by isArchived if provided
+    if (isArchived !== undefined) {
+      clientsWithStats = await Promise.all(
+        clientsWithStats.map(async (client) => {
+          // Count archived documents for this client
+          const archivedCount = await this.prisma.document.count({
+            where: {
+              companyId: client.clientId,
+              status: 'archived',
+            },
+          });
+
+          // Include hasArchived flag
+          return {
+            ...client,
+            hasArchived: archivedCount > 0,
+          };
+        })
+      );
+
+      // Filter clients based on isArchived parameter
+      if (isArchived === true) {
+        // Only return clients that have archived files
+        clientsWithStats = clientsWithStats.filter((client: any) => client.hasArchived);
+      } else if (isArchived === false) {
+        // Only return clients that don't have archived files
+        clientsWithStats = clientsWithStats.filter((client: any) => !client.hasArchived);
+      }
+
+      // Recalculate total after filtering
+      totalRelationships = clientsWithStats.length;
+    }
 
     return {
       success: true,

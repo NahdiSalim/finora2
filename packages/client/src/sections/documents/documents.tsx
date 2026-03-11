@@ -2,28 +2,48 @@ import {
   alpha,
   Box,
   Grid,
+  IconButton,
+  Popover,
   Skeleton,
   Typography,
   useTheme,
 } from "@mui/material";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { CalendarDays } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ClientCard from "src/components/common/ClientCard";
 import CustomButton from "src/components/common/CustomButton";
 import { PageHeader } from "src/layouts/components/page-header";
 import { CustomPagination } from "src/layouts/components/table-pagination";
 import { useGetClientsInvoiceStatsQuery } from "src/lib/services/relationshipsApi";
+import type { Dayjs } from "dayjs";
 
 const ROWS_PER_PAGE = 8;
+const SEARCH_DEBOUNCE_MS = 300;
 const DEFAULT_COVER =
   "https://images.unsplash.com/photo-1557682250-33bd709cbe85";
 
 export default function DocumentsView() {
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(0);
+  const [startDate, setStartDate] = useState<Dayjs | null>(null);
+  const [endDate, setEndDate] = useState<Dayjs | null>(null);
+  const [dateAnchor, setDateAnchor] = useState<HTMLElement | null>(null);
   const theme = useTheme();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedSearch, startDate, endDate]);
 
   const uploadsUrl =
     import.meta.env.VITE_UPLOADS_URL || import.meta.env.VITE_API_URL || "";
@@ -31,6 +51,9 @@ export default function DocumentsView() {
   const { data, isLoading, isError } = useGetClientsInvoiceStatsQuery({
     page: page + 1,
     limit: ROWS_PER_PAGE,
+    search: debouncedSearch || undefined,
+    startDate: startDate ? startDate.format("YYYY-MM-DD") : undefined,
+    endDate: endDate ? endDate.format("YYYY-MM-DD") : undefined,
   });
 
   const clients = data?.data ?? [];
@@ -94,31 +117,79 @@ export default function DocumentsView() {
           }}
         >
           <Typography>{totalCount} clients</Typography>
-          <CustomButton
-            variant="outlined"
+          <IconButton
+            onClick={(e) => setDateAnchor(e.currentTarget)}
             sx={{
-              position: "relative",
-              minWidth: 44,
-              height: 44,
-              p: 0,
-              borderRadius: 1.5,
+              border: "1px solid",
               borderColor: theme.palette.divider,
-              backgroundColor: theme.palette.background.paper,
-              color: theme.palette.grey[600],
-              transition: theme.transitions.create([
-                "border-color",
-                "background-color",
-                "color",
-              ]),
+              borderRadius: 1.5,
+              color:
+                dateAnchor || startDate || endDate
+                  ? theme.palette.primary.main
+                  : theme.palette.grey[600],
+              backgroundColor:
+                dateAnchor || startDate || endDate
+                  ? alpha(theme.palette.primary.main, 0.08)
+                  : theme.palette.background.paper,
               "&:hover": {
                 borderColor: theme.palette.primary.main,
                 backgroundColor: alpha(theme.palette.primary.main, 0.08),
                 color: theme.palette.primary.main,
               },
             }}
+            aria-label="Filtrer par date"
           >
-            <CalendarDays />
-          </CustomButton>
+            <CalendarDays size={20} />
+          </IconButton>
+          <Popover
+            open={Boolean(dateAnchor)}
+            anchorEl={dateAnchor}
+            onClose={() => setDateAnchor(null)}
+            anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+            transformOrigin={{ vertical: "top", horizontal: "right" }}
+            slotProps={{ paper: { sx: { p: 2, minWidth: 280 } } }}
+          >
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
+                Filtrer par date de relation
+              </Typography>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <DatePicker
+                  label="Du"
+                  value={startDate}
+                  onChange={(v: Dayjs | null) => setStartDate(v)}
+                  maxDate={endDate ?? undefined}
+                  slotProps={{ textField: { size: "small", fullWidth: true } }}
+                />
+                <DatePicker
+                  label="Au"
+                  value={endDate}
+                  onChange={(v: Dayjs | null) => setEndDate(v)}
+                  minDate={startDate ?? undefined}
+                  slotProps={{ textField: { size: "small", fullWidth: true } }}
+                />
+                <Box sx={{ display: "flex", gap: 1, mt: 0.5 }}>
+                  <CustomButton
+                    size="small"
+                    variant="outlined"
+                    onClick={() => {
+                      setStartDate(null);
+                      setEndDate(null);
+                    }}
+                  >
+                    Réinitialiser
+                  </CustomButton>
+                  <CustomButton
+                    size="small"
+                    variant="contained"
+                    onClick={() => setDateAnchor(null)}
+                  >
+                    Appliquer
+                  </CustomButton>
+                </Box>
+              </Box>
+            </LocalizationProvider>
+          </Popover>
         </Box>
 
         {isError && (

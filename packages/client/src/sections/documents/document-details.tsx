@@ -11,13 +11,12 @@ import {
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import {
   DndContext,
-  closestCenter,
+  rectIntersection,
   PointerSensor,
   KeyboardSensor,
   useSensor,
   useSensors,
   DragOverlay,
-  useDraggable,
   useDroppable,
 } from "@dnd-kit/core";
 import {
@@ -34,7 +33,6 @@ import {
   FileText,
   File as FileIcon,
   X,
-  Upload,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useParams, useLocation } from "react-router-dom";
@@ -154,14 +152,9 @@ function SortableDroppableFolder({
     transition,
     isDragging: isSortableDragging,
   } = useSortable({ id: folder.id });
-  const { isOver, setNodeRef: setDroppableRef } = useDroppable({
-    id: folder.id,
+  const { isOver, setNodeRef: setFileDropRef } = useDroppable({
+    id: `${FOLDER_DROP_PREFIX}${folder.id}`,
   });
-
-  const setNodeRef = (node: HTMLElement | null) => {
-    setSortableRef(node);
-    setDroppableRef(node);
-  };
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -170,7 +163,7 @@ function SortableDroppableFolder({
 
   return (
     <Box
-      ref={setNodeRef}
+      ref={setSortableRef}
       style={style}
       {...attributes}
       {...listeners}
@@ -183,23 +176,32 @@ function SortableDroppableFolder({
           border: "2px dashed",
           borderColor: "primary.main",
         }),
-        ...(isOver &&
-          !isSortableDragging && {
-            border: "2px dashed",
-            borderColor: "primary.main",
-            bgcolor: "action.hover",
-          }),
       }}
     >
-      <Folder
-        name={folder.name}
-        description={folder.description}
-        state={folder.state}
-        fileCount={folder.fileCount ?? 0}
-        updatedAt={folder.updatedAt}
-        onClick={onOpen}
-        onMenuAction={onMenuAction}
-      />
+      <Box
+        ref={setFileDropRef}
+        sx={{
+          height: "100%",
+          minHeight: 80,
+          borderRadius: 2,
+          ...(isOver &&
+            !isSortableDragging && {
+              border: "2px dashed",
+              borderColor: "primary.main",
+              bgcolor: "action.hover",
+            }),
+        }}
+      >
+        <Folder
+          name={folder.name}
+          description={folder.description}
+          state={folder.state}
+          fileCount={folder.fileCount ?? 0}
+          updatedAt={folder.updatedAt}
+          onClick={onOpen}
+          onMenuAction={onMenuAction}
+        />
+      </Box>
     </Box>
   );
 }
@@ -221,6 +223,7 @@ interface DocumentPreviewModalProps {
   documentId: number;
   fileName: string;
   fileType: FileType;
+  mimeType?: string | null;
   onDownloadDocument: (id: number, displayName?: string) => void;
 }
 
@@ -230,6 +233,7 @@ function DocumentPreviewModal({
   documentId,
   fileName,
   fileType,
+  mimeType,
   onDownloadDocument,
 }: DocumentPreviewModalProps) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
@@ -260,8 +264,12 @@ function DocumentPreviewModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only refetch when open/documentId change
   }, [open, documentId]);
 
-  const canPreview =
-    fileType === "pdf" || fileType === "jpg" || fileType === "png";
+  const isPdf = fileType === "pdf";
+  const isImage =
+    fileType === "jpg" ||
+    fileType === "png" ||
+    (mimeType && mimeType.toLowerCase().startsWith("image/"));
+  const canPreview = isPdf || isImage;
 
   return (
     <Dialog
@@ -326,19 +334,20 @@ function DocumentPreviewModal({
               Chargement de l&apos;aperçu…
             </Typography>
           )}
-          {blobUrl && fileType === "pdf" && (
-            <iframe
-              title={fileName}
+          {blobUrl && isPdf && (
+            <embed
               src={blobUrl}
+              type="application/pdf"
               style={{
                 width: "100%",
                 height: "100%",
                 border: "none",
                 background: "white",
               }}
+              title={fileName}
             />
           )}
-          {blobUrl && (fileType === "jpg" || fileType === "png") && (
+          {blobUrl && isImage && (
             <Box
               component="img"
               src={blobUrl}
@@ -385,8 +394,10 @@ function DocumentPreviewModal({
 // ─── Draggable File ──────────────────────────────────────────────────────────
 
 const FILE_PREFIX = "file-";
+/** Id du droppable pour déposer un document dans un dossier (évite conflit avec sortable). */
+const FOLDER_DROP_PREFIX = "drop-folder-";
 
-interface DraggableFileCardProps {
+interface SortableFileCardProps {
   file: FileItem;
   selectable: boolean;
   selected: boolean;
@@ -395,25 +406,39 @@ interface DraggableFileCardProps {
   previewContentUrl?: string | null;
 }
 
-function DraggableFileCard({
+/** Carte document draggable, même pattern que SortableDroppableFolder (useSortable). */
+function SortableFileCard({
   file,
   selectable,
   selected,
   onSelect,
   onMenuAction,
   previewContentUrl,
-}: DraggableFileCardProps) {
+}: SortableFileCardProps) {
   const id = `${FILE_PREFIX}${file.id}`;
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id,
     data: { type: "file" as const, fileId: file.id },
   });
 
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
   return (
     <Box
       ref={setNodeRef}
-      {...listeners}
+      style={style}
       {...attributes}
+      {...listeners}
       sx={{
         cursor: "grab",
         "&:active": { cursor: "grabbing" },
@@ -433,12 +458,16 @@ function DraggableFileCard({
 }
 
 /** Charge l’aperçu du document (PDF/image) et l’affiche sur la carte comme dans le Figma. */
-function FileCardWithPreview(props: DraggableFileCardProps) {
+function FileCardWithPreview(props: SortableFileCardProps) {
   const { file } = props;
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [downloadDocument] = useDownloadDocumentMutation();
-  const canPreview =
-    file.type === "pdf" || file.type === "jpg" || file.type === "png";
+  const isPdf = file.type === "pdf";
+  const isImage =
+    file.type === "jpg" ||
+    file.type === "png" ||
+    (file.mimeType && file.mimeType.toLowerCase().startsWith("image/"));
+  const canPreview = isPdf || isImage;
 
   useEffect(() => {
     if (!canPreview || file.id == null) return undefined;
@@ -458,10 +487,10 @@ function FileCardWithPreview(props: DraggableFileCardProps) {
         return null;
       });
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only refetch when file id/type change
-  }, [file.id, file.type, canPreview]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only refetch when file id/type/mime change
+  }, [file.id, file.type, file.mimeType, canPreview]);
 
-  return <DraggableFileCard {...props} previewContentUrl={previewUrl} />;
+  return <SortableFileCard {...props} previewContentUrl={previewUrl} />;
 }
 
 // ─── Main View ────────────────────────────────────────────────────────────────
@@ -502,6 +531,7 @@ export default function DocumentDetailsView() {
     id: number;
     name: string;
     type: FileType;
+    mimeType?: string | null;
   } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<
     | { type: "folder"; id: number; name: string }
@@ -551,6 +581,7 @@ export default function DocumentDetailsView() {
       name: d.name,
       type: docToFileType(d.type, d.mimeType),
       size: formatSize(d.size),
+      mimeType: d.mimeType ?? undefined,
     }));
 
   const sensors = useSensors(
@@ -665,19 +696,46 @@ export default function DocumentDetailsView() {
     setActiveFolderId(null);
     if (!over) return;
     const activeIdStr = String(active.id);
-    if (activeIdStr.startsWith(FILE_PREFIX) && typeof over.id === "number") {
-      const fileId = Number(activeIdStr.slice(FILE_PREFIX.length));
-      if (!Number.isNaN(fileId) && over.id !== fileId) {
-        updateDocument({ id: fileId, dto: { parentId: over.id } });
+    const overIdStr = String(over.id);
+
+    // Document (file) déposé sur un dossier → déplacer le document dans ce dossier
+    if (activeIdStr.startsWith(FILE_PREFIX)) {
+      let targetFolderId: number | null = null;
+      if (overIdStr.startsWith(FOLDER_DROP_PREFIX)) {
+        targetFolderId = Number(overIdStr.slice(FOLDER_DROP_PREFIX.length));
+      } else {
+        const n = Number(overIdStr);
+        if (!Number.isNaN(n)) targetFolderId = n;
+      }
+      if (
+        targetFolderId != null &&
+        !Number.isNaN(targetFolderId) &&
+        folders.some((f) => f.id === targetFolderId)
+      ) {
+        const fileId = Number(activeIdStr.slice(FILE_PREFIX.length));
+        if (!Number.isNaN(fileId)) {
+          updateDocument({ id: fileId, dto: { parentId: targetFolderId } });
+        }
       }
       return;
     }
-    if (typeof active.id === "number" && typeof over.id === "number") {
-      const folderId = active.id as number;
-      const newParentId = over.id as number;
-      if (folderId !== newParentId) {
-        updateDocument({ id: folderId, dto: { parentId: newParentId } });
-      }
+
+    // Dossier déposé sur un autre dossier → déplacer le dossier (over peut être sortable id ou drop-folder-X)
+    const overId = overIdStr.startsWith(FOLDER_DROP_PREFIX)
+      ? Number(overIdStr.slice(FOLDER_DROP_PREFIX.length))
+      : typeof over.id === "number"
+        ? over.id
+        : Number(over.id);
+    const draggedFolderId =
+      typeof active.id === "number" ? active.id : Number(active.id);
+    if (
+      !Number.isNaN(draggedFolderId) &&
+      !Number.isNaN(overId) &&
+      draggedFolderId !== overId &&
+      folders.some((f) => f.id === draggedFolderId) &&
+      folders.some((f) => f.id === overId)
+    ) {
+      updateDocument({ id: draggedFolderId, dto: { parentId: overId } });
     }
   }
 
@@ -842,7 +900,7 @@ export default function DocumentDetailsView() {
 
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={rectIntersection}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
@@ -884,6 +942,139 @@ export default function DocumentDetailsView() {
             </Grid>
           </SortableContext>
 
+          {/* ── Documents (fichiers) : doit être dans DndContext pour le drag & drop ── */}
+          <Box sx={{ my: 4 }}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                mb: 2,
+              }}
+            >
+              <Typography variant="body1">
+                Documents {parentId != null ? "dans ce dossier" : "à la racine"}
+              </Typography>
+            </Box>
+
+            <Box>
+              {selectedFiles.length > 0 && (
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 2,
+                    mb: 2,
+                    p: 1.5,
+                    bgcolor: theme.palette.primary.light,
+                    borderRadius: 2,
+                  }}
+                >
+                  <Typography variant="body2" color="primary.main">
+                    {selectedFiles.length} sélectionné(s)
+                  </Typography>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "flex-end",
+                      width: "50%",
+                      gap: 1,
+                    }}
+                  >
+                    <CustomButton
+                      variant="contained"
+                      onClick={handleDeleteSelected}
+                    >
+                      Supprimer
+                    </CustomButton>
+                    <CustomButton variant="outlined" onClick={handleSelectAll}>
+                      Tout sélectionner
+                    </CustomButton>
+                  </Box>
+                </Box>
+              )}
+
+              <SortableContext
+                items={fileItems.map((f) => `${FILE_PREFIX}${f.id}`)}
+                strategy={rectSortingStrategy}
+              >
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(6, 1fr)",
+                    gap: 2,
+                  }}
+                >
+                  {!isLoading &&
+                    !isError &&
+                    fileItems.map((file) => (
+                      <FileCardWithPreview
+                        key={file.id}
+                        file={file}
+                        selectable
+                        selected={selectedFiles.includes(file.id)}
+                        onSelect={(selected) => handleSelect(file.id, selected)}
+                        onMenuAction={(action, fileItem) => {
+                          if (action === "delete") {
+                            setDeleteConfirm({
+                              type: "file",
+                              id: Number(fileItem.id),
+                              name: fileItem.name,
+                            });
+                          } else if (action === "rename") {
+                            setRenameFile({
+                              id: Number(fileItem.id),
+                              name: fileItem.name,
+                            });
+                          } else if (action === "download") {
+                            handleDownloadFile(
+                              Number(fileItem.id),
+                              fileItem.name,
+                            );
+                          } else if (action === "preview") {
+                            setPreviewFile({
+                              id: Number(fileItem.id),
+                              name: fileItem.name,
+                              type: fileItem.type,
+                              mimeType: fileItem.mimeType,
+                            });
+                          }
+                        }}
+                      />
+                    ))}
+                </Box>
+              </SortableContext>
+              {!isLoading && !isError && fileItems.length === 0 && (
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    py: 8,
+                    px: 3,
+                    bgcolor: "grey.50",
+                    borderRadius: 4,
+                    border: "1px dashed",
+                    borderColor: "grey.300",
+                    transition: "all 0.2s ease",
+                    "&:hover": {
+                      bgcolor: "grey.100",
+                      borderColor: "primary.main",
+                    },
+                  }}
+                >
+                  <Typography color="text.secondary">
+                    Aucun document. Importez ou glissez-déposez ici.
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </Box>
+
           <DragOverlay>
             {activeFolder ? (
               <Box
@@ -910,254 +1101,6 @@ export default function DocumentDetailsView() {
             ) : null}
           </DragOverlay>
         </DndContext>
-
-        {/* ── Documents (fichiers) ── */}
-        <Box sx={{ my: 4 }}>
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              mb: 2,
-            }}
-          >
-            <Typography variant="body1">
-              Documents {parentId != null ? "dans ce dossier" : "à la racine"}
-            </Typography>
-          </Box>
-
-          <Box>
-            {selectedFiles.length > 0 && (
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 2,
-                  mb: 2,
-                  p: 1.5,
-                  bgcolor: theme.palette.primary.light,
-                  borderRadius: 2,
-                }}
-              >
-                <Typography variant="body2" color="primary.main">
-                  {selectedFiles.length} sélectionné(s)
-                </Typography>
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "flex-end",
-                    width: "50%",
-                    gap: 1,
-                  }}
-                >
-                  <CustomButton
-                    variant="contained"
-                    onClick={handleDeleteSelected}
-                  >
-                    Supprimer
-                  </CustomButton>
-                  <CustomButton variant="outlined" onClick={handleSelectAll}>
-                    Tout sélectionner
-                  </CustomButton>
-                </Box>
-              </Box>
-            )}
-
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: "repeat(6, 1fr)",
-                gap: 2,
-              }}
-            >
-              {!isLoading &&
-                !isError &&
-                fileItems.map((file) => (
-                  <FileCardWithPreview
-                    key={file.id}
-                    file={file}
-                    selectable
-                    selected={selectedFiles.includes(file.id)}
-                    onSelect={(selected) => handleSelect(file.id, selected)}
-                    onMenuAction={(action, fileItem) => {
-                      if (action === "delete") {
-                        setDeleteConfirm({
-                          type: "file",
-                          id: Number(fileItem.id),
-                          name: fileItem.name,
-                        });
-                      } else if (action === "rename") {
-                        setRenameFile({
-                          id: Number(fileItem.id),
-                          name: fileItem.name,
-                        });
-                      } else if (action === "download") {
-                        handleDownloadFile(Number(fileItem.id), fileItem.name);
-                      } else if (action === "preview") {
-                        setPreviewFile({
-                          id: Number(fileItem.id),
-                          name: fileItem.name,
-                          type: fileItem.type,
-                        });
-                      }
-                    }}
-                  />
-                ))}
-            </Box>
-            {!isLoading && !isError && fileItems.length === 0 && (
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  py: 8,
-                  px: 3,
-                  bgcolor: "grey.50",
-                  borderRadius: 4,
-                  border: "1px dashed",
-                  borderColor: "grey.300",
-                  transition: "all 0.2s ease",
-                  "&:hover": {
-                    bgcolor: "grey.100",
-                    borderColor: "primary.main",
-                  },
-                }}
-              >
-                {/* Animated Icon */}
-                <Box
-                  sx={{
-                    position: "relative",
-                    mb: 3,
-                    "&::before": {
-                      content: '""',
-                      position: "absolute",
-                      top: "50%",
-                      left: "50%",
-                      transform: "translate(-50%, -50%)",
-                      width: 80,
-                      height: 80,
-                      borderRadius: "50%",
-                      bgcolor: "primary.lighter",
-                      opacity: 0.5,
-                      animation: "pulse 2s infinite",
-                      "@keyframes pulse": {
-                        "0%": {
-                          transform: "translate(-50%, -50%) scale(0.8)",
-                          opacity: 0.3,
-                        },
-                        "50%": {
-                          transform: "translate(-50%, -50%) scale(1.2)",
-                          opacity: 0.6,
-                        },
-                        "100%": {
-                          transform: "translate(-50%, -50%) scale(0.8)",
-                          opacity: 0.3,
-                        },
-                      },
-                    },
-                  }}
-                >
-                  <Box
-                    sx={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: "50%",
-                      bgcolor: "primary.light",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      position: "relative",
-                      zIndex: 1,
-                    }}
-                  >
-                    <svg
-                      width="32"
-                      height="32"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M4 7C4 5.89543 4.89543 5 6 5H10L12 7H18C19.1046 7 20 7.89543 20 9V17C20 18.1046 19.1046 19 18 19H6C4.89543 19 4 18.1046 4 17V7Z"
-                        fill="white"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M12 15V11M10 13H14"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </Box>
-                </Box>
-
-                {/* Title */}
-                <Typography
-                  variant="h6"
-                  fontWeight={600}
-                  color="text.primary"
-                  sx={{ mb: 1 }}
-                >
-                  Dossier vide
-                </Typography>
-
-                {/* Description */}
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  align="center"
-                  sx={{ maxWidth: 280, mb: 3 }}
-                >
-                  Aucun document ajouté à ce dossier. Commencez par importer des
-                  fichiers.
-                </Typography>
-
-                {/* Action Buttons */}
-                <Box sx={{ display: "flex", gap: 2 }}>
-                  <CustomButton
-                    variant="contained"
-                    color="primary"
-                    startIcon={<Upload size={18} />}
-                    onClick={() => console.log("Upload document")}
-                    sx={{
-                      borderRadius: 2,
-                      textTransform: "none",
-                      fontWeight: 600,
-                      boxShadow: "none",
-                      "&:hover": {
-                        boxShadow: "0 8px 16px rgba(0,0,0,0.1)",
-                      },
-                    }}
-                  >
-                    Importer
-                  </CustomButton>
-                  <CustomButton
-                    variant="outlined"
-                    color="primary"
-                    startIcon={<FolderPlus size={18} />}
-                    onClick={() => console.log("Create folder")}
-                    sx={{
-                      borderRadius: 2,
-                      textTransform: "none",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Nouveau dossier
-                  </CustomButton>
-                </Box>
-              </Box>
-            )}
-          </Box>
-        </Box>
       </Box>
 
       <CreateFolderModal
@@ -1203,6 +1146,7 @@ export default function DocumentDetailsView() {
           documentId={previewFile.id}
           fileName={previewFile.name}
           fileType={previewFile.type}
+          mimeType={previewFile.mimeType}
           onDownloadDocument={handleDownloadFile}
         />
       )}

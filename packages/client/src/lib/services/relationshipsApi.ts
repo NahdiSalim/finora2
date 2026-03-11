@@ -35,12 +35,21 @@ export const relationshipsApi = createApi({
   endpoints: (builder) => ({
     getClientsInvoiceStats: builder.query<
       ClientsInvoiceStatsResponse,
-      { page?: number; limit?: number }
+      {
+        page?: number;
+        limit?: number;
+        search?: string;
+        startDate?: string;
+        endDate?: string;
+      }
     >({
-      query: ({ page = 1, limit = 8 } = {}) => {
+      query: ({ page = 1, limit = 8, search, startDate, endDate } = {}) => {
         const params = new URLSearchParams();
         params.append("page", String(page));
         params.append("limit", String(limit));
+        if (search?.trim()) params.append("search", search.trim());
+        if (startDate) params.append("startDate", startDate);
+        if (endDate) params.append("endDate", endDate);
         return {
           url: `/relationships/clients/invoice-stats?${params.toString()}`,
           method: "GET",

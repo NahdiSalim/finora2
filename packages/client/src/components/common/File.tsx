@@ -45,6 +45,8 @@ export interface FileItem {
   thumbnail?: string;
   starred?: boolean;
   shared?: boolean;
+  /** MIME type from API, used for image preview (e.g. image/jpeg, image/gif) */
+  mimeType?: string | null;
 }
 
 export interface FileCardProps {
@@ -105,18 +107,20 @@ export function FileCard({
   onSelect,
   sx,
 }: FileCardProps) {
-  const hasContentPreview = Boolean(
-    previewContentUrl &&
-    (file.type === "pdf" || file.type === "jpg" || file.type === "png"),
-  );
+  const isPdf = file.type === "pdf";
+  const isImage =
+    file.type === "jpg" ||
+    file.type === "png" ||
+    (file.mimeType && file.mimeType.toLowerCase().startsWith("image/"));
+  const hasContentPreview = Boolean(previewContentUrl && (isPdf || isImage));
   const previewBg =
-    hasContentPreview && file.type !== "pdf"
+    hasContentPreview && isImage
       ? `url(${previewContentUrl})`
       : file.thumbnail
         ? `url(${file.thumbnail})`
         : "none";
   const previewBgColor =
-    hasContentPreview && file.type !== "pdf"
+    hasContentPreview && isImage
       ? "transparent"
       : file.thumbnail
         ? "transparent"
@@ -260,8 +264,8 @@ export function FileCard({
           borderRadius: 2,
         }}
       >
-        {/* PDF: show actual content in iframe; overflow hidden to hide scrollbar in card */}
-        {hasContentPreview && file.type === "pdf" && (
+        {/* PDF: use embed for reliable blob PDF preview in card */}
+        {hasContentPreview && isPdf && previewContentUrl && (
           <Box
             sx={{
               position: "absolute",
@@ -272,17 +276,17 @@ export function FileCard({
               overflow: "hidden",
             }}
           >
-            <iframe
-              title={file.name}
-              src={previewContentUrl ?? undefined}
+            <embed
+              src={previewContentUrl}
+              type="application/pdf"
               style={{
                 position: "absolute",
                 top: 0,
                 left: 0,
-                width: "calc(100% + 20px)",
+                width: "100%",
                 height: "100%",
                 border: "none",
-                background: "white",
+                pointerEvents: "none",
               }}
             />
           </Box>

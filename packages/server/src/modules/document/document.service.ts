@@ -224,15 +224,18 @@ export class DocumentService {
     };
 
     // If search is provided, search across entire tree (ignore parentId)
+    // If category is provided, search across entire tree (ignore parentId)
     // Otherwise, filter by parentId for hierarchical view
-    if (search && search.trim()) {
-      where.name = {
-        contains: search.trim(),
-        mode: 'insensitive',
-      };
-      // When searching, don't filter by parentId - search entire tree
+    if ((search && search.trim()) || (category && category.trim())) {
+      // When searching or filtering by category, search entire tree
+      if (search && search.trim()) {
+        where.name = {
+          contains: search.trim(),
+          mode: 'insensitive',
+        };
+      }
     } else {
-      // Only filter by parentId when not searching
+      // Only filter by parentId when not searching and no category filter
       where.parentId = parentId || null;
     }
 
@@ -447,15 +450,18 @@ export class DocumentService {
     };
 
     // If search is provided, search across entire tree (ignore parentId)
+    // If category is provided, search across entire tree (ignore parentId)
     // Otherwise, filter by parentId for hierarchical view
-    if (search && search.trim()) {
-      where.name = {
-        contains: search.trim(),
-        mode: 'insensitive',
-      };
-      // When searching, don't filter by parentId - search entire tree
+    if ((search && search.trim()) || (category && category.trim())) {
+      // When searching or filtering by category, search entire tree
+      if (search && search.trim()) {
+        where.name = {
+          contains: search.trim(),
+          mode: 'insensitive',
+        };
+      }
     } else {
-      // Only filter by parentId when not searching
+      // Only filter by parentId when not searching and no category filter
       where.parentId = parentId || null;
     }
 

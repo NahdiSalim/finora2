@@ -189,6 +189,7 @@ export function FileCard({
       onMouseLeave={() => setIsHovered(false)}
       sx={{
         width: 200,
+        height: 215,
         position: "relative",
         borderRadius: 2,
         overflow: "hidden",

@@ -104,202 +104,201 @@ export default function NetworkView() {
 
   return (
     <PageHeader
-        title="Networking"
-        caption="Trouvez et connectez-vous avec des comptables qualifiés en quelques clics."
-      >
-        <MainSection>
-          {/* Search Banner */}
+      title="Réseautage"
+      caption="Trouvez et connectez-vous avec des comptables qualifiés en quelques clics."
+    >
+      <MainSection>
+        {/* Search Banner */}
+        <Box
+          sx={(t) => ({
+            mb: 3,
+            borderRadius: 3,
+            p: { xs: 2.5, md: 3 },
+            bgcolor: "#E4E7FB",
+            background: "url('/assets/filterBarBG.svg') center/cover no-repeat",
+            border: `1px solid ${t.palette.divider}`,
+          })}
+        >
+          <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
+            Trouvez votre comptable
+          </Typography>
+
+          <Stack spacing={2}>
+            {/* Search input */}
+            <Stack spacing={1.5}>
+              <CustomInput
+                fullWidth
+                placeholder="Rechercher ..."
+                value={searchDraft}
+                onChange={(e) => setSearchDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSearch();
+                }}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Search sx={{ mr: 1 }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: (
+                      <InputAdornment
+                        position="end"
+                        sx={{ display: { xs: "none", md: "flex" } }}
+                      >
+                        <CustomButton
+                          variant="contained"
+                          onClick={handleSearch}
+                        >
+                          Chercher
+                        </CustomButton>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: 2,
+                    backgroundColor: "common.white",
+                  },
+                }}
+              />
+
+              {/* Mobile search button */}
+              <Box sx={{ display: { xs: "block", md: "none" } }}>
+                <CustomButton
+                  fullWidth
+                  variant="contained"
+                  onClick={handleSearch}
+                >
+                  Chercher
+                </CustomButton>
+              </Box>
+            </Stack>
+
+            {/* Filters */}
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <Box sx={{ flex: 1 }}>
+                <CustomSelect
+                  value={specialty ?? ""}
+                  onChange={(e) =>
+                    setSpecialty((e.target.value as string) || undefined)
+                  }
+                  size="small"
+                  IconComponent={KeyboardArrowDownIcon}
+                  displayEmpty
+                  fullWidth
+                >
+                  <MenuItem value="">Spécialité</MenuItem>
+                  {ALL_SPECIALTIES_FOR_FILTER.map((s) => (
+                    <MenuItem key={s} value={s}>
+                      {s}
+                    </MenuItem>
+                  ))}
+                </CustomSelect>
+              </Box>
+
+              <Box sx={{ flex: 1 }}>
+                <CustomSelect
+                  value={location ?? ""}
+                  onChange={(e) =>
+                    setLocation((e.target.value as string) || undefined)
+                  }
+                  size="small"
+                  IconComponent={KeyboardArrowDownIcon}
+                  displayEmpty
+                  fullWidth
+                >
+                  <MenuItem value="">Adresse / Ville</MenuItem>
+                  <MenuItem value="Tunis">Tunis</MenuItem>
+                  <MenuItem value="Ariana">Ariana</MenuItem>
+                  <MenuItem value="Sousse">Sousse</MenuItem>
+                </CustomSelect>
+              </Box>
+
+              <Box sx={{ flex: 1 }}>
+                <CustomSelect
+                  value={ratingRange ?? ""}
+                  onChange={(e) =>
+                    setRatingRange((e.target.value as string) || undefined)
+                  }
+                  size="small"
+                  IconComponent={KeyboardArrowDownIcon}
+                  displayEmpty
+                  fullWidth
+                >
+                  {RATING_FILTER_OPTIONS.map((opt) => (
+                    <MenuItem key={opt.value || "note"} value={opt.value}>
+                      {opt.label}
+                    </MenuItem>
+                  ))}
+                </CustomSelect>
+              </Box>
+            </Stack>
+          </Stack>
+        </Box>
+
+        {/* Results */}
+        {!isLoading && accountants.length > 0 && (
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                sm: "repeat(2, 1fr)",
+                md: "repeat(3, 1fr)",
+                lg: "repeat(4, 1fr)",
+              },
+              gap: 2.5,
+            }}
+          >
+            {accountants.map((accountant) => (
+              <AccountantCard
+                key={accountant.accountantId}
+                data={accountant}
+                getProfilePath={(id) => `/dashboard/network/accountant/${id}`}
+                onMessageClick={(id) => {
+                  setContactAccountantId(id);
+                  setContactModalOpen(true);
+                }}
+              />
+            ))}
+          </Box>
+        )}
+
+        {/* Empty state */}
+        {!isLoading && accountants.length === 0 && (
           <Box
             sx={(t) => ({
-              mb: 3,
+              mt: 6,
+              p: 6,
+              textAlign: "center",
               borderRadius: 3,
-              p: { xs: 2.5, md: 3 },
-              bgcolor: "#E4E7FB",
-              background:
-                "url('/assets/filterBarBG.svg') center/cover no-repeat",
-              border: `1px solid ${t.palette.divider}`,
+              bgcolor: t.palette.common.white,
+              border: `1px dashed ${t.palette.divider}`,
             })}
           >
-            <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
-              Trouvez votre comptable
+            <Typography variant="h6" fontWeight={600} sx={{ mb: 1 }}>
+              Aucun résultat trouvé
             </Typography>
-
-            <Stack spacing={2}>
-              {/* Search input */}
-              <Stack spacing={1.5}>
-                <CustomInput
-                  fullWidth
-                  placeholder="Rechercher ..."
-                  value={searchDraft}
-                  onChange={(e) => setSearchDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSearch();
-                  }}
-                  slotProps={{
-                    input: {
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Search sx={{ mr: 1 }} />
-                        </InputAdornment>
-                      ),
-                      endAdornment: (
-                        <InputAdornment
-                          position="end"
-                          sx={{ display: { xs: "none", md: "flex" } }}
-                        >
-                          <CustomButton
-                            variant="contained"
-                            onClick={handleSearch}
-                          >
-                            Chercher
-                          </CustomButton>
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                  sx={{
-                    "& .MuiOutlinedInput-root": {
-                      borderRadius: 2,
-                      backgroundColor: "common.white",
-                    },
-                  }}
-                />
-
-                {/* Mobile search button */}
-                <Box sx={{ display: { xs: "block", md: "none" } }}>
-                  <CustomButton
-                    fullWidth
-                    variant="contained"
-                    onClick={handleSearch}
-                  >
-                    Chercher
-                  </CustomButton>
-                </Box>
-              </Stack>
-
-              {/* Filters */}
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                <Box sx={{ flex: 1 }}>
-                  <CustomSelect
-                    value={specialty ?? ""}
-                    onChange={(e) =>
-                      setSpecialty((e.target.value as string) || undefined)
-                    }
-                    size="small"
-                    IconComponent={KeyboardArrowDownIcon}
-                    displayEmpty
-                    fullWidth
-                  >
-                    <MenuItem value="">Spécialité</MenuItem>
-                    {ALL_SPECIALTIES_FOR_FILTER.map((s) => (
-                      <MenuItem key={s} value={s}>
-                        {s}
-                      </MenuItem>
-                    ))}
-                  </CustomSelect>
-                </Box>
-
-                <Box sx={{ flex: 1 }}>
-                  <CustomSelect
-                    value={location ?? ""}
-                    onChange={(e) =>
-                      setLocation((e.target.value as string) || undefined)
-                    }
-                    size="small"
-                    IconComponent={KeyboardArrowDownIcon}
-                    displayEmpty
-                    fullWidth
-                  >
-                    <MenuItem value="">Adresse / Ville</MenuItem>
-                    <MenuItem value="Tunis">Tunis</MenuItem>
-                    <MenuItem value="Ariana">Ariana</MenuItem>
-                    <MenuItem value="Sousse">Sousse</MenuItem>
-                  </CustomSelect>
-                </Box>
-
-                <Box sx={{ flex: 1 }}>
-                  <CustomSelect
-                    value={ratingRange ?? ""}
-                    onChange={(e) =>
-                      setRatingRange((e.target.value as string) || undefined)
-                    }
-                    size="small"
-                    IconComponent={KeyboardArrowDownIcon}
-                    displayEmpty
-                    fullWidth
-                  >
-                    {RATING_FILTER_OPTIONS.map((opt) => (
-                      <MenuItem key={opt.value || "note"} value={opt.value}>
-                        {opt.label}
-                      </MenuItem>
-                    ))}
-                  </CustomSelect>
-                </Box>
-              </Stack>
-            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Aucun comptable ne correspond à vos critères actuels.
+            </Typography>
+            <CustomButton variant="outlined" onClick={handleResetFilters}>
+              Réinitialiser les filtres
+            </CustomButton>
           </Box>
+        )}
+      </MainSection>
 
-          {/* Results */}
-          {!isLoading && accountants.length > 0 && (
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: {
-                  xs: "1fr",
-                  sm: "repeat(2, 1fr)",
-                  md: "repeat(3, 1fr)",
-                  lg: "repeat(4, 1fr)",
-                },
-                gap: 2.5,
-              }}
-            >
-              {accountants.map((accountant) => (
-                <AccountantCard
-                  key={accountant.accountantId}
-                  data={accountant}
-                  getProfilePath={(id) => `/dashboard/network/accountant/${id}`}
-                  onMessageClick={(id) => {
-                    setContactAccountantId(id);
-                    setContactModalOpen(true);
-                  }}
-                />
-              ))}
-            </Box>
-          )}
-
-          {/* Empty state */}
-          {!isLoading && accountants.length === 0 && (
-            <Box
-              sx={(t) => ({
-                mt: 6,
-                p: 6,
-                textAlign: "center",
-                borderRadius: 3,
-                bgcolor: t.palette.common.white,
-                border: `1px dashed ${t.palette.divider}`,
-              })}
-            >
-              <Typography variant="h6" fontWeight={600} sx={{ mb: 1 }}>
-                Aucun résultat trouvé
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Aucun comptable ne correspond à vos critères actuels.
-              </Typography>
-              <CustomButton variant="outlined" onClick={handleResetFilters}>
-                Réinitialiser les filtres
-              </CustomButton>
-            </Box>
-          )}
-        </MainSection>
-
-        <ContactAccountantModal
-          open={contactModalOpen}
-          onClose={() => {
-            setContactModalOpen(false);
-            setContactAccountantId(null);
-          }}
-          accountantId={contactAccountantId}
-        />
-      </PageHeader>
+      <ContactAccountantModal
+        open={contactModalOpen}
+        onClose={() => {
+          setContactModalOpen(false);
+          setContactAccountantId(null);
+        }}
+        accountantId={contactAccountantId}
+      />
+    </PageHeader>
   );
 }

@@ -74,23 +74,12 @@ export function AccountantProfileContent({
   }
 
   return (
-    <Box
-      sx={{
-        py: 2,
-        px: { xs: 2, sm: 3 },
-        maxWidth: 1440,
-        mx: "auto",
-        width: "100%",
-        bgcolor: "grey.50",
-      }}
+    <PageHeader
+      title={title}
+      caption={caption}
+      backButton={{ path: backTo }}
+      sx={{ mb: 0 }}
     >
-      <PageHeader
-        title={title}
-        caption={caption}
-        backButton={{ path: backTo }}
-        sx={{ mb: 0 }}
-      />
-
       <Card sx={{ bgcolor: "white", borderRadius: 3, p: 2, mt: 1.5 }}>
         <ProfileHeader
           coverImage={data?.coverPhotoUrl ?? undefined}
@@ -146,6 +135,6 @@ export function AccountantProfileContent({
         onClose={() => setContactModalOpen(false)}
         accountantId={data?.id ?? null}
       />
-    </Box>
+    </PageHeader>
   );
 }

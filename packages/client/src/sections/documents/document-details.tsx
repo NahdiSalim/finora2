@@ -5,6 +5,8 @@ import {
   IconButton,
   Typography,
   useTheme,
+  Paper,
+  Fade,
 } from "@mui/material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -34,6 +36,7 @@ import {
   Edit,
   Trash2,
   Move,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import type { Dayjs } from "dayjs";
@@ -504,8 +507,45 @@ export default function DocumentDetailsView() {
           }}
         >
           {/* Filtres : gauche = date, centre = catégorie, droite = recherche */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}>
-            {/* Gauche : filtre date */}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              flex: 1,
+              width: "100%",
+            }}
+          >
+            {/* gauche : recherche */}
+            <Box sx={{ marginLeft: "auto" }}>
+              <CustomInput
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                placeholder="Rechercher..."
+                startIcon={<Search size={20} />}
+              />
+            </Box>
+
+            {/* Centre : filtre catégorie (custom select) */}
+            <CustomSelect
+              value={category}
+              onChange={(e) => setCategory(String(e.target.value ?? ""))}
+              displayEmpty
+              sx={{ maxWidth: 160 }}
+              renderValue={(v) =>
+                typeof v === "string" && v ? v : "Catégorie"
+              }
+            >
+              <MenuItem value="">
+                <em>Toutes les catégories</em>
+              </MenuItem>
+              <MenuItem value="facture">Facture</MenuItem>
+              <MenuItem value="contrat">Contrat</MenuItem>
+              <MenuItem value="rapport">Rapport</MenuItem>
+              <MenuItem value="autre">Autre</MenuItem>
+            </CustomSelect>
+
+            {/* droite : filtre date */}
             <IconButton
               onClick={(e) => setDateAnchor(e.currentTarget)}
               sx={{
@@ -530,36 +570,6 @@ export default function DocumentDetailsView() {
             >
               <CalendarDays size={20} />
             </IconButton>
-
-            {/* Centre : filtre catégorie (custom select) */}
-            <CustomSelect
-              value={category}
-              onChange={(e) => setCategory(String(e.target.value ?? ""))}
-              displayEmpty
-              sx={{ minWidth: 140 }}
-              renderValue={(v) =>
-                typeof v === "string" && v ? v : "Catégorie"
-              }
-            >
-              <MenuItem value="">
-                <em>Toutes les catégories</em>
-              </MenuItem>
-              <MenuItem value="facture">Facture</MenuItem>
-              <MenuItem value="contrat">Contrat</MenuItem>
-              <MenuItem value="rapport">Rapport</MenuItem>
-              <MenuItem value="autre">Autre</MenuItem>
-            </CustomSelect>
-
-            {/* Droite : recherche */}
-            <Box sx={{ marginLeft: "auto" }}>
-              <CustomInput
-                value={searchValue}
-                onChange={(e) => setSearchValue(e.target.value)}
-                placeholder="Rechercher..."
-                startIcon={<Search size={20} />}
-                sx={{ width: 260 }}
-              />
-            </Box>
           </Box>
         </Box>
 
@@ -581,60 +591,234 @@ export default function DocumentDetailsView() {
         )}
 
         <LocalizationProvider dateAdapter={AdapterDayjs}>
-          {/* Popover-like inline date filters (simple version) */}
+          {/* Modern Date Picker Overlay */}
           {dateAnchor && (
-            <Box
-              sx={{
-                position: "absolute",
-                mt: 1,
-                right: 24,
-                zIndex: 10,
-                bgcolor: "background.paper",
-                boxShadow: 3,
-                borderRadius: 2,
-                p: 2,
-                minWidth: 260,
-              }}
-            >
-              <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
-                Filtrer par date
-              </Typography>
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <DatePicker
-                  label="Du"
-                  value={startDate}
-                  onChange={(v: Dayjs | null) => setStartDate(v)}
-                  maxDate={endDate ?? undefined}
-                  slotProps={{ textField: { size: "small", fullWidth: true } }}
-                />
-                <DatePicker
-                  label="Au"
-                  value={endDate}
-                  onChange={(v: Dayjs | null) => setEndDate(v)}
-                  minDate={startDate ?? undefined}
-                  slotProps={{ textField: { size: "small", fullWidth: true } }}
-                />
-                <Box sx={{ display: "flex", gap: 1, mt: 0.5 }}>
-                  <CustomButton
+            <Fade in timeout={300}>
+              <Paper
+                elevation={8}
+                sx={{
+                  position: "absolute",
+                  mt: 1,
+                  right: 24,
+                  zIndex: 1300,
+                  borderRadius: 3,
+                  minWidth: 320,
+                  overflow: "hidden",
+                  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                  boxShadow: `0 12px 28px ${alpha(theme.palette.common.black, 0.12)}`,
+                }}
+              >
+                {/* Header */}
+                <Box
+                  sx={{
+                    px: 2.5,
+                    py: 2,
+                    borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.02)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`,
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <CalendarDays
+                      size={18}
+                      color={theme.palette.primary.main}
+                    />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                      Filtrer par date
+                    </Typography>
+                  </Box>
+                  <IconButton
                     size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      setStartDate(null);
-                      setEndDate(null);
+                    onClick={() => setDateAnchor(null)}
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      "&:hover": {
+                        backgroundColor: alpha(
+                          theme.palette.primary.main,
+                          0.08,
+                        ),
+                        color: theme.palette.primary.main,
+                      },
                     }}
                   >
-                    Réinitialiser
-                  </CustomButton>
-                  <CustomButton
-                    size="small"
-                    variant="contained"
-                    onClick={() => setDateAnchor(null)}
-                  >
-                    Appliquer
-                  </CustomButton>
+                    <X size={18} />
+                  </IconButton>
                 </Box>
-              </Box>
-            </Box>
+
+                {/* Date Pickers */}
+                <Box
+                  sx={{
+                    p: 2.5,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 2.5,
+                  }}
+                >
+                  <DatePicker
+                    label="Du"
+                    value={startDate}
+                    onChange={(v: Dayjs | null) => setStartDate(v)}
+                    maxDate={endDate ?? undefined}
+                    slotProps={{
+                      textField: {
+                        size: "small",
+                        fullWidth: true,
+                        sx: {
+                          "& .MuiOutlinedInput-root": {
+                            borderRadius: 2,
+                            backgroundColor: theme.palette.background.paper,
+                            transition: "all 0.2s ease-in-out",
+                            "&:hover": {
+                              backgroundColor: alpha(
+                                theme.palette.primary.main,
+                                0.02,
+                              ),
+                            },
+                            "&.Mui-focused": {
+                              "& .MuiOutlinedInput-notchedOutline": {
+                                borderWidth: 2,
+                                borderColor: theme.palette.primary.main,
+                              },
+                            },
+                          },
+                          "& .MuiInputLabel-root": {
+                            fontWeight: 500,
+                            color: theme.palette.text.secondary,
+                            "&.Mui-focused": {
+                              color: theme.palette.primary.main,
+                              fontWeight: 600,
+                            },
+                          },
+                        },
+                      },
+                    }}
+                  />
+
+                  <DatePicker
+                    label="Au"
+                    value={endDate}
+                    onChange={(v: Dayjs | null) => setEndDate(v)}
+                    minDate={startDate ?? undefined}
+                    slotProps={{
+                      textField: {
+                        size: "small",
+                        fullWidth: true,
+                        sx: {
+                          "& .MuiOutlinedInput-root": {
+                            borderRadius: 2,
+                            backgroundColor: theme.palette.background.paper,
+                            transition: "all 0.2s ease-in-out",
+                            "&:hover": {
+                              backgroundColor: alpha(
+                                theme.palette.primary.main,
+                                0.02,
+                              ),
+                            },
+                            "&.Mui-focused": {
+                              "& .MuiOutlinedInput-notchedOutline": {
+                                borderWidth: 2,
+                                borderColor: theme.palette.primary.main,
+                              },
+                            },
+                          },
+                          "& .MuiInputLabel-root": {
+                            fontWeight: 500,
+                            color: theme.palette.text.secondary,
+                            "&.Mui-focused": {
+                              color: theme.palette.primary.main,
+                              fontWeight: 600,
+                            },
+                          },
+                        },
+                      },
+                    }}
+                  />
+
+                  {/* Active Date Range Indicator */}
+                  {(startDate || endDate) && (
+                    <Box
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 2,
+                        backgroundColor: alpha(
+                          theme.palette.primary.main,
+                          0.04,
+                        ),
+                        border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 0.5,
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        sx={{ color: theme.palette.text.secondary }}
+                      >
+                        Période:
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontWeight: 600,
+                          color: theme.palette.primary.main,
+                        }}
+                      >
+                        {startDate?.format("DD/MM/YYYY") || "..."} -{" "}
+                        {endDate?.format("DD/MM/YYYY") || "..."}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* Action Buttons */}
+                  <Box sx={{ display: "flex", gap: 1.5, mt: 0.5 }}>
+                    <CustomButton
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        setStartDate(null);
+                        setEndDate(null);
+                      }}
+                      sx={{
+                        flex: 1,
+                        borderRadius: 2,
+                        fontSize: "0.8125rem",
+                        fontWeight: 600,
+                        textTransform: "none",
+                        borderWidth: 1.5,
+                        "&:hover": {
+                          borderWidth: 1.5,
+                        },
+                      }}
+                    >
+                      Réinitialiser
+                    </CustomButton>
+                    <CustomButton
+                      size="small"
+                      variant="contained"
+                      onClick={() => setDateAnchor(null)}
+                      sx={{
+                        flex: 1,
+                        borderRadius: 2,
+                        fontSize: "0.8125rem",
+                        fontWeight: 600,
+                        textTransform: "none",
+                        background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+                        boxShadow: `0 4px 10px ${alpha(theme.palette.primary.main, 0.3)}`,
+                        "&:hover": {
+                          background: `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 100%)`,
+                          boxShadow: `0 6px 14px ${alpha(theme.palette.primary.main, 0.4)}`,
+                        },
+                      }}
+                    >
+                      Appliquer
+                    </CustomButton>
+                  </Box>
+                </Box>
+              </Paper>
+            </Fade>
           )}
         </LocalizationProvider>
 
@@ -707,11 +891,15 @@ export default function DocumentDetailsView() {
                     gap: 2,
                     mb: 2,
                     p: 1.5,
-                    bgcolor: theme.palette.primary.light,
+                    bgcolor: alpha(theme.palette.primary.main, 0.04),
                     borderRadius: 2,
+                    border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
                   }}
                 >
-                  <Typography variant="body2" color="primary.main">
+                  <Typography
+                    variant="body2"
+                    sx={{ color: theme.palette.primary.main, fontWeight: 500 }}
+                  >
                     {selectedFiles.length} sélectionné(s)
                   </Typography>
                   <Box
@@ -720,17 +908,29 @@ export default function DocumentDetailsView() {
                       flexDirection: "row",
                       alignItems: "center",
                       justifyContent: "flex-end",
-                      width: "50%",
                       gap: 1,
                     }}
                   >
                     <CustomButton
                       variant="contained"
                       onClick={handleDeleteSelected}
+                      size="small"
+                      sx={{
+                        borderRadius: 2,
+                        textTransform: "none",
+                      }}
                     >
                       Supprimer
                     </CustomButton>
-                    <CustomButton variant="outlined" onClick={handleSelectAll}>
+                    <CustomButton
+                      variant="outlined"
+                      onClick={handleSelectAll}
+                      size="small"
+                      sx={{
+                        borderRadius: 2,
+                        textTransform: "none",
+                      }}
+                    >
                       Tout sélectionner
                     </CustomButton>
                   </Box>
@@ -802,14 +1002,14 @@ export default function DocumentDetailsView() {
                     justifyContent: "center",
                     py: 8,
                     px: 3,
-                    bgcolor: "grey.50",
+                    bgcolor: alpha(theme.palette.grey[500], 0.04),
                     borderRadius: 4,
                     border: "1px dashed",
-                    borderColor: "grey.300",
+                    borderColor: alpha(theme.palette.grey[500], 0.3),
                     transition: "all 0.2s ease",
                     "&:hover": {
-                      bgcolor: "grey.100",
-                      borderColor: "primary.main",
+                      bgcolor: alpha(theme.palette.primary.main, 0.02),
+                      borderColor: theme.palette.primary.main,
                     },
                   }}
                 >

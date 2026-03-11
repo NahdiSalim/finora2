@@ -138,7 +138,7 @@ export function VisitorView() {
         >
           {/* Header */}
           <PageHeader
-            title="Networking"
+            title="Réseautage"
             caption="Trouvez et connectez-vous avec des comptables qualifiés en quelques clics."
             sx={{ mb: 3 }}
           />

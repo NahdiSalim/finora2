@@ -127,29 +127,67 @@ export class DocumentController {
 
   @Get('client')
   @RequirePermission('VIEW_DOCUMENTS')
-  @ApiOperation({ summary: 'Get all documents for a client (accountant view)' })
+  @ApiOperation({
+    summary: 'Get all documents for a client (accountant view)',
+    description:
+      'Retrieve documents with support for recursive search, date filtering, and category filtering across entire document tree',
+  })
+  @ApiQuery({
+    name: 'clientId',
+    required: false,
+    type: Number,
+    description:
+      'Client company ID (for accountants to view client documents). Clients can pass any value - it will be ignored and their own company used',
+  })
   @ApiQuery({
     name: 'search',
     required: false,
     type: String,
-    description: 'Search by folder or file name',
+    description: 'Search by folder or file name (searches entire document tree recursively)',
   })
   @ApiQuery({
     name: 'category',
     required: false,
     type: String,
-    description: 'Filter by file category (e.g., facture, contrat, rapport)',
+    description:
+      'Filter by file category (e.g., facture, contrat, rapport) - searches entire tree when combined with search',
   })
-  @ApiQuery({ name: 'parentId', required: false, type: Number })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Format: YYYY-MM-DD' })
-  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'Format: YYYY-MM-DD' })
+  @ApiQuery({
+    name: 'parentId',
+    required: false,
+    type: Number,
+    description: 'Parent folder ID (ignored when search is provided)',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20)',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: 'Filter by start date (Format: YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: 'Filter by end date (Format: YYYY-MM-DD)',
+  })
   @ApiQuery({
     name: 'status',
     required: false,
     type: String,
     enum: ['active', 'archived', 'deleted'],
+    description: 'Filter by document status (default: active)',
   })
   async getDocuments(
     @Req() req: AuthRequest,

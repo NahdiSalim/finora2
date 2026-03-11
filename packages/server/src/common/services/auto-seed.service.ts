@@ -16,13 +16,13 @@ export class AutoSeedService implements OnModuleInit {
           ' Utilisez MANUAL_ADD_CLIENT_FEATURE.sql pour ajouter manuellement la feature'
         );
       });
-    }, 2000); // Attendre 2 secondes
+    }, 3000); // Attendre 3 secondes
   }
 
   private async ensureClientManagementFeature() {
     try {
       // Vérifier si la feature existe déjà
-      const existingFeature = await this.prisma.feature.findUnique({
+      const existingFeature = await this.prisma.feature.findFirst({
         where: { slug: 'gestion-clients' },
       });
 

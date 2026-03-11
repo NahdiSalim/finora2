@@ -127,6 +127,18 @@ export class DocumentController {
   @Get('client')
   @RequirePermission('VIEW_DOCUMENTS')
   @ApiOperation({ summary: 'Get all documents for a client (accountant view)' })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by folder or file name',
+  })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    type: String,
+    description: 'Filter by file category (e.g., facture, contrat, rapport)',
+  })
   @ApiQuery({ name: 'parentId', required: false, type: Number })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -141,6 +153,8 @@ export class DocumentController {
   async getDocuments(
     @Req() req: AuthRequest,
     @Query('clientId', new ParseIntPipe({ optional: true })) clientId?: number,
+    @Query('search') search?: string,
+    @Query('category') category?: string,
     @Query('parentId', new ParseIntPipe({ optional: true })) parentId?: number,
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
@@ -188,7 +202,9 @@ export class DocumentController {
       limit || 20,
       startDateObj,
       endDateObj,
-      status || 'active'
+      status || 'active',
+      search,
+      category
     );
   }
 
@@ -201,6 +217,18 @@ export class DocumentController {
     type: Number,
     description: 'Client company ID (for accountants to view client archived documents)',
   })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by folder or file name',
+  })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    type: String,
+    description: 'Filter by file category (e.g., facture, contrat, rapport)',
+  })
   @ApiQuery({ name: 'parentId', required: false, type: Number })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -209,6 +237,8 @@ export class DocumentController {
   async getAllArchivedDocuments(
     @Req() req: AuthRequest,
     @Query('clientId', new ParseIntPipe({ optional: true })) clientId?: number,
+    @Query('search') search?: string,
+    @Query('category') category?: string,
     @Query('parentId', new ParseIntPipe({ optional: true })) parentId?: number,
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
@@ -252,7 +282,9 @@ export class DocumentController {
       page || 1,
       limit || 20,
       startDateObj,
-      endDateObj
+      endDateObj,
+      search,
+      category
     );
   }
 

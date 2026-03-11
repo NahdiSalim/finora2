@@ -8,8 +8,17 @@ import {
   CardContent,
   useTheme,
   Tooltip,
+  IconButton,
+  Menu,
+  MenuItem,
 } from "@mui/material";
-import { MessageCircle, Power } from "lucide-react";
+import {
+  MessageCircle,
+  Power,
+  MoreVertical,
+  ArchiveRestore,
+  Trash2,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import CustomButton from "./CustomButton";
 import { useNavigate } from "react-router-dom";
@@ -20,14 +29,228 @@ type UserCardProps = {
   avatar: string;
   name: string;
   email: string;
+  ownerFirstName: string;
+  ownerLastName: string;
   processedDocs: number;
   pendingDocs: number;
-  onChat?: (e: React.MouseEvent) => void; // Updated to accept event
-  onDeactivate?: (e: React.MouseEvent) => void; // Updated to accept event
+  archived?: boolean;
+  onChat?: (e: React.MouseEvent) => void;
+  onDeactivate?: (e: React.MouseEvent) => void;
+  onRestore?: () => void;
+  onDelete?: () => void;
   onCardClick?: () => void;
 };
 
-export default function ClientCard({
+// ─── Archived Card ────────────────────────────────────────────────────────────
+
+function ArchivedCard({
+  avatar,
+  name,
+  email,
+  processedDocs,
+  pendingDocs,
+  ownerFirstName,
+  ownerLastName,
+
+  onRestore,
+  onDelete,
+  onCardClick,
+}: Omit<UserCardProps, "id" | "cover" | "archived">) {
+  const theme = useTheme();
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const totalDocs = processedDocs + pendingDocs;
+
+  const getInitials = (init: string, maxInitials: number = 2): string => {
+    if (!init || typeof init !== "string") return "";
+
+    return init
+      .trim()
+      .split(/\s+/) // Split by any whitespace
+      .map((word) => word.charAt(0))
+      .join("")
+      .toUpperCase()
+      .slice(0, maxInitials);
+  };
+
+  const handleMenuOpen = (e: React.MouseEvent<HTMLElement>) => {
+    e.stopPropagation();
+    setMenuAnchor(e.currentTarget);
+  };
+
+  const handleMenuClose = () => setMenuAnchor(null);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+    >
+      <Card
+        onClick={onCardClick}
+        sx={{
+          borderRadius: 3,
+          bgcolor: theme.palette.grey[50],
+          border: `1px solid ${theme.palette.divider}`,
+          boxShadow: "none",
+          cursor: onCardClick ? "pointer" : "default",
+          position: "relative",
+          overflow: "visible",
+        }}
+      >
+        {/* 3-dot menu — top right */}
+        <Box sx={{ position: "absolute", top: 8, right: 8, zIndex: 1 }}>
+          <IconButton size="small" onClick={handleMenuOpen}>
+            <MoreVertical size={18} color={theme.palette.text.secondary} />
+          </IconButton>
+          <Menu
+            anchorEl={menuAnchor}
+            open={Boolean(menuAnchor)}
+            onClose={handleMenuClose}
+            anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+            transformOrigin={{ vertical: "top", horizontal: "right" }}
+            slotProps={{
+              paper: {
+                elevation: 2,
+                sx: { borderRadius: 2, minWidth: 160 },
+              },
+            }}
+          >
+            <MenuItem
+              onClick={() => {
+                handleMenuClose();
+                onRestore?.();
+              }}
+              sx={{ gap: 1.5 }}
+            >
+              <ArchiveRestore size={16} />
+              <Typography variant="body2">Restaurer</Typography>
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                handleMenuClose();
+                onDelete?.();
+              }}
+              sx={{ gap: 1.5, color: "error.main" }}
+            >
+              <Trash2 size={16} />
+              <Typography variant="body2" color="error.main">
+                Supprimer
+              </Typography>
+            </MenuItem>
+          </Menu>
+        </Box>
+
+        <CardContent
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 1,
+            pt: 3,
+            pb: "16px !important",
+          }}
+        >
+          {/* Avatar */}
+          <Avatar
+            src={avatar}
+            sx={{
+              width: 72,
+              height: 72,
+              border: `3px solid ${theme.palette.background.paper}`,
+              boxShadow: theme.shadows[1],
+              filter: "grayscale(40%)",
+              opacity: 0.85,
+            }}
+          />
+
+          {/* Name */}
+          <Typography
+            variant="body1"
+            fontWeight={600}
+            align="center"
+            sx={{ mt: 0.5 }}
+          >
+            {name}
+          </Typography>
+
+          {/* Email */}
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            align="center"
+            sx={{
+              maxWidth: "100%",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {email}
+          </Typography>
+
+          <Divider sx={{ width: "100%", my: 0.5 }} />
+
+          {/* Stats chips */}
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              gap: 1,
+              width: "100%",
+            }}
+          >
+            {ownerFirstName && ownerFirstName.trim() !== "" && (
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 1,
+                  backgroundColor: theme.palette.grey[200],
+                  width: "100%",
+                }}
+              >
+                <Tooltip
+                  title={`${ownerFirstName} ${ownerLastName || ""}`}
+                  arrow
+                >
+                  <Typography variant="caption">
+                    {`${ownerFirstName} ${ownerLastName ? getInitials(ownerLastName) : ""}`}
+                  </Typography>
+                </Tooltip>
+              </Box>
+            )}
+
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 1,
+                backgroundColor: theme.palette.grey[200],
+                width: "100%",
+              }}
+            >
+              <Tooltip
+                title={`${processedDocs}/${totalDocs} docs traités`}
+                arrow
+              >
+                <Typography variant="caption">{`${processedDocs}/${totalDocs} docs traités`}</Typography>
+              </Tooltip>
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+}
+
+// ─── Default Card ─────────────────────────────────────────────────────────────
+
+function DefaultCard({
   id,
   cover,
   avatar,
@@ -38,29 +261,26 @@ export default function ClientCard({
   onChat,
   onDeactivate,
   onCardClick,
-}: UserCardProps) {
+}: Omit<UserCardProps, "archived" | "onRestore" | "onDelete">) {
   const theme = useTheme();
   const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
 
   const handleCardClick = () => {
-    if (onCardClick) {
-      onCardClick();
-    } else {
-      // Default navigation to details page
-      navigate(`/clients/${id}`);
-    }
+    if (onCardClick) onCardClick();
+    else navigate(`/clients/${id}`);
   };
 
   const handleChatClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onChat) onChat(e); // Pass the event
+    onChat?.(e);
   };
 
   const handleDeactivateClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onDeactivate) onDeactivate(e); // Pass the event
+    onDeactivate?.(e);
   };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -76,12 +296,9 @@ export default function ClientCard({
           borderRadius: 3,
           overflow: "hidden",
           boxShadow: isHovered ? theme.shadows[8] : theme.shadows[2],
-          transition: "box-shadow 0.2s ease, transform 0.2s ease",
-          cursor: "pointer", // Change cursor to indicate clickability
-          position: "relative",
-          "&:active": {
-            transform: "scale(0.98)", // Subtle press effect
-          },
+          transition: "box-shadow 0.2s ease",
+          cursor: "pointer",
+          "&:active": { transform: "scale(0.98)" },
         }}
       >
         {/* Cover */}
@@ -95,13 +312,7 @@ export default function ClientCard({
         />
 
         {/* Avatar */}
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "center",
-            mt: -5,
-          }}
-        >
+        <Box sx={{ display: "flex", justifyContent: "center", mt: -5 }}>
           <Avatar
             src={avatar}
             sx={{
@@ -114,7 +325,6 @@ export default function ClientCard({
         </Box>
 
         <CardContent>
-          {/* Name */}
           <Typography
             variant="body1"
             fontWeight={600}
@@ -124,7 +334,6 @@ export default function ClientCard({
             {name}
           </Typography>
 
-          {/* Email */}
           <Typography variant="body2" color="text.secondary" align="center">
             {email}
           </Typography>
@@ -132,12 +341,7 @@ export default function ClientCard({
           <Divider sx={{ my: 1 }} />
 
           {/* KPI Row */}
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-            }}
-          >
+          <Box sx={{ display: "flex", justifyContent: "space-between" }}>
             <Box textAlign="center" flex={1}>
               <Typography
                 variant="caption"
@@ -169,14 +373,8 @@ export default function ClientCard({
 
           <Divider sx={{ my: 1 }} />
 
-          {/* Action Buttons */}
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "center",
-              gap: 2,
-            }}
-          >
+          {/* Actions */}
+          <Box sx={{ display: "flex", justifyContent: "center", gap: 2 }}>
             <Tooltip title="Message" arrow>
               <CustomButton
                 onClick={handleChatClick}
@@ -194,11 +392,7 @@ export default function ClientCard({
                 variant="outlined"
                 color="error"
                 onClick={handleDeactivateClick}
-                sx={{
-                  position: "relative",
-                  minWidth: 44,
-                  p: 0,
-                }}
+                sx={{ minWidth: 44, p: 0 }}
               >
                 <Power size={20} />
               </CustomButton>
@@ -208,4 +402,16 @@ export default function ClientCard({
       </Card>
     </motion.div>
   );
+}
+
+// ─── Export ───────────────────────────────────────────────────────────────────
+
+export default function ClientCard({
+  archived = false,
+  ...props
+}: UserCardProps) {
+  if (archived) {
+    return <ArchivedCard {...props} />;
+  }
+  return <DefaultCard {...props} />;
 }

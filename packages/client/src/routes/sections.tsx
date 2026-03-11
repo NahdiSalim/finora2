@@ -34,6 +34,8 @@ export const DocumentDetailsPage = lazy(
   () => import("src/pages/documents/documents-details"),
 );
 
+export const ArchivePage = lazy(() => import("src/pages/archive/index"));
+
 export const UserFormPage = lazy(
   () => import("src/sections/user/user-forms/index"),
 );
@@ -110,7 +112,7 @@ export const routesSection: RouteObject[] = [
         path: "archive",
         element: (
           <PermissionGuard requiredPath="/archive">
-            <UserPage />
+            <ArchivePage />
           </PermissionGuard>
         ),
       },

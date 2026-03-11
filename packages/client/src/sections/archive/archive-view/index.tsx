@@ -23,10 +23,8 @@ import type { Dayjs } from "dayjs";
 
 const ROWS_PER_PAGE = 8;
 const SEARCH_DEBOUNCE_MS = 300;
-const DEFAULT_COVER =
-  "https://images.unsplash.com/photo-1557682250-33bd709cbe85";
 
-export default function DocumentsView() {
+export default function ArchiveView() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -59,17 +57,17 @@ export default function DocumentsView() {
   const clients = data?.data ?? [];
   const totalCount = data?.pagination?.total ?? 0;
 
-  const handleChat = (clientName: string, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    console.log(`Chat with ${clientName}`);
+  const handleRestore = (clientId: string | number, clientName: string) => {
+    console.log(`Restore client: ${clientName} (${clientId})`);
+    // TODO: dispatch restore action / call API
   };
 
-  const handleDeactivate = (clientName: string, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    console.log(`Deactivate ${clientName}`);
+  const handleDelete = (clientId: string | number, clientName: string) => {
+    console.log(`Permanently delete client: ${clientName} (${clientId})`);
+    // TODO: dispatch delete action / call API
   };
 
-  const handleClientClick = (
+  const handleCardClick = (
     clientId: string | number,
     clientName: string,
     invoiceStats: { traite: number; pending: number; total: number },
@@ -79,9 +77,7 @@ export default function DocumentsView() {
     });
   };
 
-  const handlePageChange = (_: unknown, newPage: number) => {
-    setPage(newPage);
-  };
+  const handlePageChange = (_: unknown, newPage: number) => setPage(newPage);
 
   const displayName = (item: (typeof clients)[0]) =>
     item.clientName?.trim() ||
@@ -90,12 +86,12 @@ export default function DocumentsView() {
 
   return (
     <PageHeader
-      title="Documents partagés"
-      caption="Consultez les fichiers partagés avec vous."
+      title="Archive"
+      caption="Consultez et gérez les clients archivés."
       searchbar={{
         value: search,
         onChange: setSearch,
-        placeholder: "Rechercher...",
+        placeholder: "Rechercher un client archivé...",
       }}
     >
       <Box
@@ -107,16 +103,21 @@ export default function DocumentsView() {
           mb: 1.5,
         }}
       >
+        {/* Toolbar */}
         <Box
           sx={{
             display: "flex",
-            flexDirection: "row",
             justifyContent: "space-between",
             alignItems: "center",
             mb: 1.5,
           }}
         >
-          <Typography>{totalCount} clients</Typography>
+          <Typography color="text.secondary" variant="body2">
+            {totalCount} Dossier{totalCount !== 1 ? "s" : ""} archivé
+            {totalCount !== 1 ? "s" : ""}
+          </Typography>
+
+          {/* Date filter */}
           <IconButton
             onClick={(e) => setDateAnchor(e.currentTarget)}
             sx={{
@@ -141,6 +142,7 @@ export default function DocumentsView() {
           >
             <CalendarDays size={20} />
           </IconButton>
+
           <Popover
             open={Boolean(dateAnchor)}
             anchorEl={dateAnchor}
@@ -151,7 +153,7 @@ export default function DocumentsView() {
           >
             <LocalizationProvider dateAdapter={AdapterDayjs}>
               <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
-                Filtrer par date de relation
+                Filtrer par date archivage
               </Typography>
               <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <DatePicker
@@ -192,19 +194,21 @@ export default function DocumentsView() {
           </Popover>
         </Box>
 
+        {/* Error */}
         {isError && (
           <Typography color="error" sx={{ py: 2 }}>
-            Impossible de charger les clients.
+            Impossible de charger les clients archivés.
           </Typography>
         )}
 
+        {/* Loading skeletons */}
         {isLoading && (
           <Grid container spacing={3}>
             {Array.from({ length: ROWS_PER_PAGE }).map((_, i) => (
               <Grid key={i} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
                 <Skeleton
                   variant="rectangular"
-                  height={320}
+                  height={240}
                   sx={{ borderRadius: 3 }}
                 />
               </Grid>
@@ -212,6 +216,7 @@ export default function DocumentsView() {
           </Grid>
         )}
 
+        {/* Clients grid */}
         {!isLoading && !isError && (
           <>
             <Grid container spacing={3}>
@@ -221,8 +226,9 @@ export default function DocumentsView() {
                   size={{ xs: 12, sm: 6, md: 4, lg: 3 }}
                 >
                   <ClientCard
+                    archived
                     id={client.clientId}
-                    cover={DEFAULT_COVER}
+                    cover=""
                     avatar={
                       client.clientLogo
                         ? `${uploadsUrl}/${client.clientLogo}`
@@ -234,12 +240,14 @@ export default function DocumentsView() {
                     email={client.clientEmail ?? ""}
                     processedDocs={client.invoiceStats.traite}
                     pendingDocs={client.invoiceStats.pending}
-                    onChat={(e) => handleChat(displayName(client), e)}
-                    onDeactivate={(e) =>
-                      handleDeactivate(displayName(client), e)
+                    onRestore={() =>
+                      handleRestore(client.clientId, displayName(client))
+                    }
+                    onDelete={() =>
+                      handleDelete(client.clientId, displayName(client))
                     }
                     onCardClick={() =>
-                      handleClientClick(
+                      handleCardClick(
                         client.clientId,
                         displayName(client),
                         client.invoiceStats,
@@ -253,7 +261,14 @@ export default function DocumentsView() {
             {clients.length === 0 && (
               <Box sx={{ textAlign: "center", py: 8 }}>
                 <Typography variant="h6" color="text.secondary">
-                  Aucun client pour le moment.
+                  Aucun client archivé.
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 1 }}
+                >
+                  Les clients désactivés apparaîtront ici.
                 </Typography>
               </Box>
             )}

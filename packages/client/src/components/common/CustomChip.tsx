@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Box, useTheme } from "@mui/material";
+import { Box, useTheme, type SxProps, type Theme } from "@mui/material";
 
 type ChipVariant =
   | "primary"
@@ -13,22 +13,16 @@ interface CustomChipProps {
   label: string;
   variant?: ChipVariant;
   icon?: React.ReactNode;
+  sx?: SxProps<Theme>;
 }
 
 const CustomChip = memo(
-  ({ label, variant = "primary", icon }: CustomChipProps) => {
+  ({ label, variant = "primary", icon, sx }: CustomChipProps) => {
     const theme = useTheme();
 
-    // Hardcoded custom colors
     const customColors = {
-      purple: {
-        light: "#F4F3FF",
-        dark: "#5925DC",
-      },
-      brown: {
-        light: "#FFF6ED",
-        dark: "#C4320A",
-      },
+      purple: { light: "#F4F3FF", dark: "#5925DC" },
+      brown: { light: "#FFF6ED", dark: "#C4320A" },
     };
 
     const isThemeVariant =
@@ -59,6 +53,7 @@ const CustomChip = memo(
           backgroundColor: lightColor,
           color: darkColor,
           whiteSpace: "nowrap",
+          ...(sx as object),
         }}
       >
         {icon && <Box sx={{ display: "flex" }}>{icon}</Box>}
@@ -70,4 +65,5 @@ const CustomChip = memo(
 
 CustomChip.displayName = "CustomChip";
 
+export { type CustomChipProps };
 export default CustomChip;

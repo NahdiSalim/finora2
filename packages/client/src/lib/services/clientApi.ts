@@ -4,7 +4,8 @@ import type { ClientFormData } from "src/validations/client/client-validation";
 
 export interface Client {
   id: string;
-  fullName?: string;
+  ownerFirstName?: string;
+  ownerLastName?: string;
   email?: string;
   phone?: string;
   company?: string;

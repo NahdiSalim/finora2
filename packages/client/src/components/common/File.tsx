@@ -17,7 +17,6 @@ import {
 import {
   MoreVertical,
   FileText,
-  File,
   Download,
   Trash2,
   Share2,
@@ -71,7 +70,7 @@ const fileTypeIcons: Record<FileType, React.ReactNode> = {
   xls: <XlsIcon />,
   jpg: <ImageIcon />,
   png: <ImageIcon />,
-  other: <File size={24} color="#6B7280" />,
+  other: <ImageIcon />,
 };
 
 // File type background colors

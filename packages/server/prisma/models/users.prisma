@@ -33,6 +33,7 @@ model User {
   
   // Documents
   documents            Document[] @relation("DocumentOwner")
+  createdDocuments     Document[] @relation("DocumentCreatedBy")
   
   // Notifications
   notifications        Notification[] @relation("NotificationRecipient")

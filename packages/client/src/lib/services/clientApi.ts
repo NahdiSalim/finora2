@@ -4,7 +4,8 @@ import type { ClientFormData } from "src/validations/client/client-validation";
 
 export interface Client {
   id: string;
-  fullName?: string;
+  ownerFirstName?: string;
+  ownerLastName?: string;
   email?: string;
   phone?: string;
   company?: string;
@@ -18,12 +19,16 @@ export interface Client {
   updated_at: string;
 }
 
-export interface ClientsResponse {
-  data: Client[];
+export interface ClientsPagination {
+  total: number;
   page: number;
   limit: number;
-  total: number;
   totalPages: number;
+}
+
+export interface ClientsResponse {
+  data: Client[];
+  pagination: ClientsPagination;
 }
 
 export const clientsApi = createApi({

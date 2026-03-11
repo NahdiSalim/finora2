@@ -6,8 +6,6 @@ import {
   useTheme,
   Breadcrumbs,
   Link,
-  TextField,
-  InputAdornment,
   IconButton,
 } from "@mui/material";
 
@@ -19,12 +17,15 @@ import { MoveLeft, Search } from "lucide-react";
 
 import { DashboardContent } from "src/layouts/dashboard";
 import CustomButton from "src/components/common/CustomButton";
+import CustomInput from "src/components/common/CustomInput";
 
 // ----------------------------------------------------------------------
 
 type BreadcrumbItem = {
   label: string;
   path?: string;
+  /** In-page navigation (e.g. folder level); used when path is not set */
+  onClick?: () => void;
 };
 
 type ActionButton = {
@@ -35,10 +36,7 @@ type ActionButton = {
   color?: "primary" | "secondary" | "error" | "warning" | "info" | "success";
 };
 
-type BackButton = {
-  onClick?: () => void;
-  path?: string;
-};
+type BackButton = (() => void) | { onClick?: () => void; path?: string };
 
 export type PageHeaderProps = {
   title: string;
@@ -76,7 +74,8 @@ export function PageHeader({
   const navigate = useNavigate();
 
   const handleBack = () => {
-    if (backButton?.onClick) backButton.onClick();
+    if (typeof backButton === "function") backButton();
+    else if (backButton?.onClick) backButton.onClick();
     else if (backButton?.path) navigate(backButton.path);
     else navigate(-1);
   };
@@ -84,7 +83,11 @@ export function PageHeader({
   return (
     <DashboardContent
       maxWidth={false}
-      sx={{ pt: 0, pl: { lg: 0 }, pr: { lg: 1.5 } }}
+      sx={{
+        pt: 0,
+        pl: { lg: 0 },
+        pr: { lg: 1.5 },
+      }}
     >
       <Box
         sx={{
@@ -94,62 +97,17 @@ export function PageHeader({
           p: 2,
           mb: 1.5,
           ...sx,
+          display: "flex",
+          flexDirection: "column",
         }}
       >
-        {/* Breadcrumbs */}
-        {breadcrumbs && breadcrumbs.length > 0 && (
-          <Breadcrumbs
-            separator={<NavigateNextIcon fontSize="small" />}
-            sx={{
-              mb: 2,
-              "& .MuiBreadcrumbs-separator": {
-                mx: 0.5,
-              },
-            }}
-          >
-            {breadcrumbs.map((crumb, index) => {
-              const isLast = index === breadcrumbs.length - 1;
-
-              return isLast ? (
-                <Typography
-                  key={crumb.label}
-                  variant="body2"
-                  sx={{
-                    color: theme.palette.text.primary,
-                    fontWeight: 500,
-                  }}
-                >
-                  {crumb.label}
-                </Typography>
-              ) : (
-                <Link
-                  key={crumb.label}
-                  component={crumb.path ? RouterLink : "span"}
-                  to={crumb.path || ""}
-                  underline="hover"
-                  sx={{
-                    color: theme.palette.text.secondary,
-                    fontSize: 14,
-                    cursor: crumb.path ? "pointer" : "default",
-                    "&:hover": crumb.path
-                      ? { color: theme.palette.primary.main }
-                      : {},
-                  }}
-                >
-                  {crumb.label}
-                </Link>
-              );
-            })}
-          </Breadcrumbs>
-        )}
-
         {/* Main Header Row */}
         <Box
           sx={{
             display: "flex",
-            alignItems: "center",
+            flexDirection: { xs: "column", md: "row" },
+            alignItems: { xs: "flex-start", md: "center" },
             justifyContent: "space-between",
-            flexWrap: "wrap",
             gap: 2,
           }}
         >
@@ -161,23 +119,18 @@ export function PageHeader({
               gap: 1.5,
               flex: 1,
               minWidth: 0,
+              width: { xs: "100%", md: "auto" },
             }}
           >
             {/* Back Button */}
             {backButton && (
-              <IconButton
-                size="small"
-                onClick={handleBack}
-                sx={{
-                  mt: 0.5,
-                }}
-              >
+              <IconButton size="small" onClick={handleBack} sx={{ mt: 0.5 }}>
                 <MoveLeft fontSize="small" />
               </IconButton>
             )}
 
             {/* Title + Caption Column */}
-            <Box sx={{ minWidth: 0 }}>
+            <Box sx={{ minWidth: 0, width: "100%" }}>
               <Box
                 sx={{
                   display: "flex",
@@ -214,7 +167,7 @@ export function PageHeader({
                       color: theme.palette.grey[800],
                     }}
                   >
-                    {`${documentsProcessed.processed}/${documentsProcessed.total}`}
+                    {`docs traités: ${documentsProcessed.processed}/${documentsProcessed.total}`}
                   </Box>
                 )}
               </Box>
@@ -232,6 +185,74 @@ export function PageHeader({
               )}
 
               {subheader && <Box sx={{ mt: 1 }}>{subheader}</Box>}
+              {/* Breadcrumbs */}
+              {breadcrumbs && breadcrumbs.length > 0 && (
+                <Breadcrumbs
+                  separator={<NavigateNextIcon fontSize="small" />}
+                  sx={{
+                    "& .MuiBreadcrumbs-separator": {
+                      mx: 0.5,
+                    },
+                  }}
+                >
+                  {breadcrumbs.map((crumb, index) => {
+                    const isLast = index === breadcrumbs.length - 1;
+
+                    return isLast ? (
+                      <Typography
+                        key={`${crumb.label}-${index}`}
+                        variant="body2"
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontWeight: 500,
+                        }}
+                      >
+                        {crumb.label}
+                      </Typography>
+                    ) : crumb.onClick ? (
+                      <Link
+                        key={`${crumb.label}-${index}`}
+                        component="button"
+                        variant="body2"
+                        underline="hover"
+                        onClick={(e: React.MouseEvent) => {
+                          e.preventDefault();
+                          crumb.onClick?.();
+                        }}
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: 14,
+                          cursor: "pointer",
+                          border: "none",
+                          background: "none",
+                          p: 0,
+                          fontFamily: "inherit",
+                          "&:hover": { color: theme.palette.primary.main },
+                        }}
+                      >
+                        {crumb.label}
+                      </Link>
+                    ) : (
+                      <Link
+                        key={`${crumb.label}-${index}`}
+                        component={crumb.path ? RouterLink : "span"}
+                        to={crumb.path || ""}
+                        underline="hover"
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: 14,
+                          cursor: crumb.path ? "pointer" : "default",
+                          "&:hover": crumb.path
+                            ? { color: theme.palette.primary.main }
+                            : {},
+                        }}
+                      >
+                        {crumb.label}
+                      </Link>
+                    );
+                  })}
+                </Breadcrumbs>
+              )}
             </Box>
           </Box>
 
@@ -242,24 +263,20 @@ export function PageHeader({
               alignItems: "center",
               gap: 2,
               flexWrap: "wrap",
+              width: { xs: "100%", md: "auto" },
+              justifyContent: { xs: "flex-start", md: "flex-end" },
             }}
           >
             {/* Search */}
             {searchbar && (
-              <TextField
+              <CustomInput
                 size="small"
                 placeholder={searchbar.placeholder || "Search..."}
                 value={searchbar.value}
                 onChange={(e) => searchbar.onChange(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search size={20} />
-                    </InputAdornment>
-                  ),
-                }}
+                startIcon={<Search size={20} />}
                 sx={{
-                  minWidth: 280,
+                  minWidth: { xs: "100%", md: 280 },
                   "& .MuiOutlinedInput-root": {
                     borderRadius: 2,
                   },
@@ -268,18 +285,33 @@ export function PageHeader({
             )}
 
             {/* Actions */}
-            {actions.map((action, index) => (
-              <CustomButton
-                key={index}
-                variant={action.variant || "contained"}
-                color={action.color || "primary"}
-                startIcon={action.icon}
-                onClick={action.onClick}
-                size="medium"
-              >
-                {action.label}
-              </CustomButton>
-            ))}
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: { xs: "column", sm: "row" },
+                alignItems: "center",
+                gap: 2,
+                flexWrap: "wrap",
+                width: { xs: "100%", md: "auto" },
+              }}
+            >
+              {actions.map((action, index) => (
+                <CustomButton
+                  key={index}
+                  variant={action.variant || "contained"}
+                  color={action.color || "primary"}
+                  startIcon={action.icon}
+                  onClick={action.onClick}
+                  size="medium"
+                  sx={{
+                    flex: { xs: 1, md: "none" },
+                    width: { xs: "100%", sm: "auto" },
+                  }}
+                >
+                  {action.label}
+                </CustomButton>
+              ))}
+            </Box>
           </Box>
         </Box>
       </Box>

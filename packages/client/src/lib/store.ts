@@ -10,6 +10,9 @@ import { accountantProfileApi } from "./services/accountantProfileApi";
 import { postsApi } from "./services/postsApi";
 import { reviewsApi } from "./services/reviewsApi";
 import { contactApi } from "./services/contactApi";
+import { relationshipsApi } from "./services/relationshipsApi";
+
+import { documentsApi } from "./services/documentsApi";
 
 const apiMiddlewares = [
   authApi.middleware,
@@ -22,6 +25,8 @@ const apiMiddlewares = [
   postsApi.middleware,
   reviewsApi.middleware,
   contactApi.middleware,
+  relationshipsApi.middleware,
+  documentsApi.middleware,
 ];
 
 const apiResetters = [
@@ -34,6 +39,8 @@ const apiResetters = [
   accountantProfileApi.util.resetApiState,
   postsApi.util.resetApiState,
   contactApi.util.resetApiState,
+  relationshipsApi.util.resetApiState,
+  documentsApi.util.resetApiState,
 ];
 
 const appReducer = combineReducers({
@@ -48,6 +55,8 @@ const appReducer = combineReducers({
   [postsApi.reducerPath]: postsApi.reducer,
   [reviewsApi.reducerPath]: reviewsApi.reducer,
   [contactApi.reducerPath]: contactApi.reducer,
+  [relationshipsApi.reducerPath]: relationshipsApi.reducer,
+  [documentsApi.reducerPath]: documentsApi.reducer,
 });
 
 const baseStore = configureStore({

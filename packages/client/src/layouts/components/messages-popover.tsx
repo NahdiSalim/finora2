@@ -14,7 +14,6 @@ import { useTheme, alpha } from "@mui/material/styles";
 
 import { Mail } from "lucide-react";
 
-
 import { Iconify } from "src/components/iconify";
 import { Scrollbar } from "src/components/scrollbar";
 

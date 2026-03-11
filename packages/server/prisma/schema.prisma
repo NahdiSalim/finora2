@@ -303,6 +303,7 @@ model Company {
   
   // Documents
   documents         Document[] @relation("DocumentCompany")
+  createdDocuments  Document[] @relation("DocumentCreatedByCompany")
   
   // Requests
   requests          Request[] @relation("CompanyRequests")
@@ -404,8 +405,12 @@ model Document {
   mimeType          String?
   size              Int?      // Size in bytes
   url               String
-  ownerId           Int
-  companyId         Int?
+  category          String?   // Document category (e.g., facture, contrat, rapport)
+  processingStatus  String    @default("pending") // "pending" | "traite" | "enregistre" | "synchronise"
+  ownerId           Int       // Always the client company owner
+  companyId         Int?      // Always the client company
+  createdBy         Int?      // User ID who created this document (client or accountant user)
+  createdByCompanyId Int?     // Company ID who created this document (client or accountant firm)
   parentId          Int?      // For folder structure
   requestId         Int?
   ticketId          Int?
@@ -419,15 +424,22 @@ model Document {
 
   owner             User      @relation("DocumentOwner", fields: [ownerId], references: [id])
   company           Company?  @relation("DocumentCompany", fields: [companyId], references: [id])
+  createdByUser     User?     @relation("DocumentCreatedBy", fields: [createdBy], references: [id])
+  createdByCompany  Company?  @relation("DocumentCreatedByCompany", fields: [createdByCompanyId], references: [id])
   parent            Document? @relation("DocumentChildren", fields: [parentId], references: [id])
   childDocuments    Document[] @relation("DocumentChildren")
   
   chatThreads       ChatThread[]
+  invoiceMetadata   InvoiceMetadata?
 
   @@index([ownerId])
   @@index([companyId])
+  @@index([createdBy])
+  @@index([createdByCompanyId])
   @@index([parentId])
   @@index([status])
+  @@index([category])
+  @@index([processingStatus])
 }
 
 
@@ -439,6 +451,59 @@ model Feature {
     updatedAt  DateTime     @updatedAt
     pages      Pages[]
     p_features p_features[]
+}
+
+
+// From invoice-metadata.prisma
+model InvoiceMetadata {
+  id                Int       @id @default(autoincrement())
+  documentId        Int       @unique
+  
+  // Invoice Header
+  msgSenderId       String?
+  msgReceiverId     String?
+  
+  // BGM
+  invoiceType       String?   // FACTURE
+  invoiceNumber     String?   // 0099 / 2025
+  
+  // DTM
+  invoiceDate       DateTime?
+  
+  // Partners (stored as JSON)
+  partners          Json?     // Array of partner objects
+  
+  // Payment Terms
+  paymentTerms      Json?     // Array of payment objects
+  
+  // Text
+  totalInWords      String?   // Arrêté la Présente à la Somme de...
+  
+  // Line Items (stored as JSON)
+  lineItems         Json?     // Array of line item objects
+  
+  // Amounts
+  amounts           Json?     // Array of amount objects
+  
+  // Taxes
+  taxes             Json?     // Array of tax objects
+  
+  // Full extracted data (backup)
+  rawData           Json?     // Complete JSON response from API
+  
+  // Processing info
+  extractedAt       DateTime  @default(now())
+  extractionStatus  String    @default("success") // "success" | "failed"
+  errorMessage      String?
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  document          Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  @@index([documentId])
+  @@index([invoiceNumber])
+  @@index([invoiceDate])
 }
 
 
@@ -883,6 +948,7 @@ model User {
   
   // Documents
   documents            Document[] @relation("DocumentOwner")
+  createdDocuments     Document[] @relation("DocumentCreatedBy")
   
   // Notifications
   notifications        Notification[] @relation("NotificationRecipient")

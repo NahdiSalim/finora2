@@ -188,7 +188,7 @@ export default function ClientView() {
   });
 
   const clients = data?.data || [];
-  const totalCount = data?.total || 0;
+  const totalCount = data?.pagination?.total ?? 0;
 
   const notFound = !clients.length;
 

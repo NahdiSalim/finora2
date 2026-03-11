@@ -348,7 +348,6 @@ export default function AccountantView() {
       )}
 
       <Box
-        width="100%"
         sx={{
           display: "flex",
           flexDirection: { xs: "column", md: "row" },
@@ -360,7 +359,7 @@ export default function AccountantView() {
       >
         <Card
           sx={{
-            width: { sx: "100%", sm: "100", md: "70%" },
+            width: { xs: "100%", md: "70%" },
           }}
         >
           <ProfileTabs

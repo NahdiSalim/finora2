@@ -140,7 +140,12 @@ export default function NetworkView() {
                   input: {
                     startAdornment: (
                       <InputAdornment position="start">
-                        <Search sx={{ mr: 1 }} />
+                        <Box
+                          component="span"
+                          sx={{ mr: 1, display: "inline-flex" }}
+                        >
+                          <Search size={20} />
+                        </Box>
                       </InputAdornment>
                     ),
                     endAdornment: (

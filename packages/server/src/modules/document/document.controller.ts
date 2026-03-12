@@ -279,13 +279,43 @@ export class DocumentController {
     name: 'search',
     required: false,
     type: String,
-    description: 'Search by folder or file name',
+    description: 'Search by folder or file name (searches entire tree recursively)',
   })
   @ApiQuery({
     name: 'category',
     required: false,
     type: String,
     description: 'Filter by file category (e.g., facture, contrat, rapport)',
+  })
+  @ApiQuery({
+    name: 'parentId',
+    required: false,
+    type: Number,
+    description: 'Parent folder ID (ignored when search is provided)',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20)',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: 'Filter by start date (Format: YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: 'Filter by end date (Format: YYYY-MM-DD)',
   })
   async getAllArchivedDocuments(
     @Req() req: AuthRequest,

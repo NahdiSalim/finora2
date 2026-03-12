@@ -1152,64 +1152,17 @@ export class DocumentService {
    * Mark parent folders as archived if they contain archived items
    */
   private async markParentFoldersAsArchived(parentId: number | null): Promise<void> {
-    if (!parentId) return;
-
-    const parent = await this.prisma.document.findUnique({
-      where: { id: parentId },
-    });
-
-    if (!parent || parent.status === 'archived') return;
-
-    // Check if parent has any archived children
-    const hasArchivedChildren = await this.prisma.document.count({
-      where: {
-        parentId: parent.id,
-        status: 'archived',
-      },
-    });
-
-    if (hasArchivedChildren > 0) {
-      // Mark parent as archived
-      await this.prisma.document.update({
-        where: { id: parent.id },
-        data: { status: 'archived' },
-      });
-
-      // Recursively mark grandparents
-      await this.markParentFoldersAsArchived(parent.parentId);
-    }
+    // Do nothing - folders are never archived, only files are
+    // Folders are hidden from active view if they contain only archived content
+    return;
   }
 
   /**
    * Unmark parent folders from archived if they no longer contain archived items
    */
   private async unmarkParentFoldersIfNoArchivedChildren(parentId: number | null): Promise<void> {
-    if (!parentId) return;
-
-    const parent = await this.prisma.document.findUnique({
-      where: { id: parentId },
-    });
-
-    if (!parent || parent.status !== 'archived') return;
-
-    // Check if parent still has archived children
-    const archivedChildrenCount = await this.prisma.document.count({
-      where: {
-        parentId: parent.id,
-        status: 'archived',
-      },
-    });
-
-    // If no more archived children, unarchive the parent
-    if (archivedChildrenCount === 0) {
-      await this.prisma.document.update({
-        where: { id: parent.id },
-        data: { status: 'active' },
-      });
-
-      // Recursively check grandparents
-      await this.unmarkParentFoldersIfNoArchivedChildren(parent.parentId);
-    }
+    // Do nothing - folders are never archived, so no need to unarchive them
+    return;
   }
 
   private getFileType(mimeType: string): string {

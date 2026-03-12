@@ -468,7 +468,8 @@ export function AccountantCard({
               <CustomButton
                 variant="outlined"
                 color="info"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (accountantId == null) return;
                   if (onMessageClick) onMessageClick(accountantId);
                   else if (profilePath) navigate(profilePath);

@@ -12,8 +12,8 @@ import {
   Camera,
   CameraIcon,
   Pencil,
-  Calendar,
   MessageCircle,
+  Handshake,
 } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
 
@@ -194,8 +194,8 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
               {onSchedule && (
                 <CustomButton
                   size="large"
-                  variant="outlined"
-                  startIcon={<Calendar size={18} />}
+                  variant="contained"
+                  startIcon={<Handshake size={18} />}
                   onClick={onSchedule}
                   sx={{
                     borderRadius: 2,
@@ -203,20 +203,16 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                     fontWeight: 600,
                   }}
                 >
-                  Planifier{" "}
+                  Devenir un client
                 </CustomButton>
               )}
               {onContact && (
                 <CustomButton
                   size="large"
-                  variant="contained"
+                  variant="outlined"
+                  color="info"
                   startIcon={<MessageCircle size={18} />}
                   onClick={onContact}
-                  sx={{
-                    borderRadius: 2,
-                    textTransform: "none",
-                    fontWeight: 600,
-                  }}
                 >
                   Contacter
                 </CustomButton>

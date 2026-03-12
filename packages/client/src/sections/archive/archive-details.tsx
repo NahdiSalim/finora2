@@ -56,7 +56,7 @@ export default function ArchiveDetailsView() {
   /** Mode "mon espace" (client) : pas de clientId dans l’URL. */
   const isMySpace = clientId == null || clientId === "";
   const clientName =
-    state?.clientName ?? (clientId ? `Client ${clientId}` : "Mon archive");
+    state?.clientName ?? (clientId ? `Client ${clientId}` : "");
 
   const [searchValue, setSearchValue] = useState("");
   const [category, setCategory] = useState("");

@@ -37,6 +37,8 @@ export interface FolderProps {
   onClick?: () => void;
   onMenuAction?: (action: string) => void;
   menuOptions?: { label: string; icon: React.ReactNode; action: string }[];
+  /** Si true, le clic ouvre le dossier même quand state === "archived" (ex. page archive) */
+  allowClickWhenArchived?: boolean;
   sx?: any;
 }
 
@@ -76,6 +78,7 @@ export function Folder({
   updatedAt,
   onClick,
   onMenuAction,
+  allowClickWhenArchived = false,
   menuOptions = [
     { label: "Edit", icon: <Edit size={16} />, action: "edit" },
     { label: "Download", icon: <Download size={16} />, action: "download" },
@@ -109,7 +112,7 @@ export function Folder({
   };
 
   const handleFolderClick = () => {
-    if (onClick && state !== "archived") {
+    if (onClick && (state !== "archived" || allowClickWhenArchived)) {
       onClick();
     }
   };
@@ -151,7 +154,10 @@ export function Folder({
         backgroundColor: "transparent",
         borderRadius: 5,
         opacity: state === "archived" ? 0.7 : 1,
-        cursor: state === "archived" ? "default" : "pointer",
+        cursor:
+          state === "archived" && !allowClickWhenArchived
+            ? "default"
+            : "pointer",
         overflow: "hidden",
         ...sx,
       }}

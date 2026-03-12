@@ -16,6 +16,50 @@ export class DocumentService {
   ) {}
 
   /**
+   * Check if a folder has any active content (files or subfolders with active content)
+   * Returns true if folder has at least one active file, active subfolder, or is empty
+   */
+  private async hasActiveContent(folderId: number): Promise<boolean> {
+    // Check for active files directly in this folder
+    const activeFiles = await this.prisma.document.count({
+      where: {
+        parentId: folderId,
+        isFolder: false,
+        status: 'active',
+      },
+    });
+
+    if (activeFiles > 0) {
+      return true;
+    }
+
+    // Check for subfolders and recursively check their content
+    const subfolders = await this.prisma.document.findMany({
+      where: {
+        parentId: folderId,
+        isFolder: true,
+        status: 'active',
+      },
+      select: { id: true },
+    });
+
+    // If folder has active subfolders, it has content
+    if (subfolders.length > 0) {
+      for (const subfolder of subfolders) {
+        const hasContent = await this.hasActiveContent(subfolder.id);
+        if (hasContent) {
+          return true;
+        }
+      }
+    } else {
+      // If folder has no subfolders and no files, it's an empty folder - still show it
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Create a new folder
    * - CLIENT: creates in their own space (user.companyId)
    * - ACCOUNTANT: must provide clientCompanyId and have active relationship
@@ -98,7 +142,8 @@ export class DocumentService {
     file: Express.Multer.File,
     parentId?: number,
     category?: string,
-    clientCompanyId?: number
+    clientCompanyId?: number,
+    customName?: string
   ) {
     // Determine target company and creator company
     let targetCompanyId = userCompanyId; // Default: client's own company
@@ -157,10 +202,13 @@ export class DocumentService {
       // Get presigned URL
       const url = await this.minioService.getPresignedUrl(objectName);
 
+      // Use custom name if provided, otherwise use original filename
+      const fileName = customName && customName.trim() ? customName.trim() : file.originalname;
+
       // Save document metadata to database
       const document = await this.prisma.document.create({
         data: {
-          name: file.originalname,
+          name: fileName,
           type: this.getFileType(file.mimetype),
           mimeType: file.mimetype,
           size: file.size,
@@ -224,15 +272,18 @@ export class DocumentService {
     };
 
     // If search is provided, search across entire tree (ignore parentId)
+    // If category is provided, search across entire tree (ignore parentId)
     // Otherwise, filter by parentId for hierarchical view
-    if (search && search.trim()) {
-      where.name = {
-        contains: search.trim(),
-        mode: 'insensitive',
-      };
-      // When searching, don't filter by parentId - search entire tree
+    if ((search && search.trim()) || (category && category.trim())) {
+      // When searching or filtering by category, search entire tree
+      if (search && search.trim()) {
+        where.name = {
+          contains: search.trim(),
+          mode: 'insensitive',
+        };
+      }
     } else {
-      // Only filter by parentId when not searching
+      // Only filter by parentId when not searching and no category filter
       where.parentId = parentId || null;
     }
 
@@ -292,7 +343,7 @@ export class DocumentService {
     });
 
     // Add permission flags to each document
-    const documentsWithPermissions = await Promise.all(
+    let documentsWithPermissions = await Promise.all(
       documents.map(async (doc) => {
         // If createdByCompanyId is null (old documents), assume it was created by the client
         const createdByCompanyId = doc.createdByCompanyId || doc.companyId;
@@ -301,24 +352,28 @@ export class DocumentService {
         const isAccountantEditingClient =
           createdByCompanyId === doc.companyId && userCompanyId !== doc.companyId;
 
-        // If it's a folder, count subfolders and files separately
+        // If it's a folder, count subfolders and files separately (count all children regardless of status)
         let foldersCount = 0;
         let filesCount = 0;
+        let hasActiveContent = true; // Default true for non-folders
+
         if (doc.isFolder) {
           foldersCount = await this.prisma.document.count({
             where: {
               parentId: doc.id,
               isFolder: true,
-              status: { not: 'deleted' },
+              status: { not: 'deleted' }, // Count all non-deleted folders
             },
           });
           filesCount = await this.prisma.document.count({
             where: {
               parentId: doc.id,
               isFolder: false,
-              status: { not: 'deleted' },
+              status: { not: 'deleted' }, // Count all non-deleted files
             },
           });
+          // Check if folder has active content
+          hasActiveContent = await this.hasActiveContent(doc.id);
         }
 
         return {
@@ -326,9 +381,17 @@ export class DocumentService {
           canEdit: isCreator || isAccountantEditingClient,
           canDelete: isCreator || isAccountantEditingClient,
           ...(doc.isFolder && { foldersCount, filesCount }),
+          _hasActiveContent: hasActiveContent, // Internal flag for filtering
         };
       })
     );
+
+    // Filter out folders that have no active content (only archived/deleted children)
+    if (status === 'active') {
+      documentsWithPermissions = documentsWithPermissions
+        .filter((doc: any) => doc._hasActiveContent)
+        .map(({ _hasActiveContent, ...doc }: any) => doc);
+    }
 
     return {
       status: 'success',
@@ -438,30 +501,28 @@ export class DocumentService {
     search?: string,
     category?: string
   ) {
+    console.log('[getArchivedDocumentsHierarchical] companyId:', companyId);
+    console.log('[getArchivedDocumentsHierarchical] parentId:', parentId);
+
     const skip = (page - 1) * limit;
 
-    // Build where clause
-    const where: any = {
+    // Build where clause for archived documents
+    const archivedWhere: any = {
       companyId,
       status: 'archived',
     };
 
-    // If search is provided, search across entire tree (ignore parentId)
-    // Otherwise, filter by parentId for hierarchical view
+    // Add search filter
     if (search && search.trim()) {
-      where.name = {
+      archivedWhere.name = {
         contains: search.trim(),
         mode: 'insensitive',
       };
-      // When searching, don't filter by parentId - search entire tree
-    } else {
-      // Only filter by parentId when not searching
-      where.parentId = parentId || null;
     }
 
-    // Add category filter (only for files, not folders)
+    // Add category filter
     if (category && category.trim()) {
-      where.category = {
+      archivedWhere.category = {
         contains: category.trim(),
         mode: 'insensitive',
       };
@@ -469,27 +530,56 @@ export class DocumentService {
 
     // Add date filters
     if (startDate || endDate) {
-      where.createdAt = {};
+      archivedWhere.createdAt = {};
       if (startDate) {
-        where.createdAt.gte = startDate;
+        archivedWhere.createdAt.gte = startDate;
       }
       if (endDate) {
-        where.createdAt.lte = endDate;
+        archivedWhere.createdAt.lte = endDate;
       }
     }
 
-    // Count total
-    const totalCount = await this.prisma.document.count({ where });
-    const totalPages = Math.ceil(totalCount / limit);
+    // Get ALL archived documents (entire table)
+    const allArchivedDocuments = await this.prisma.document.findMany({
+      where: archivedWhere,
+      select: {
+        id: true,
+        parentId: true,
+      },
+    });
 
-    const documents = await this.prisma.document.findMany({
-      where,
-      orderBy: [
-        { isFolder: 'desc' }, // Folders first
-        { name: 'asc' },
-      ],
-      skip,
-      take: limit,
+    console.log(
+      '[getArchivedDocumentsHierarchical] Total archived documents:',
+      allArchivedDocuments.length
+    );
+
+    // Collect all document IDs that are part of the archive hierarchy
+    const hierarchyIds = new Set<number>();
+
+    // For each archived document, add it and all its ancestors to the set
+    for (const archivedDoc of allArchivedDocuments) {
+      hierarchyIds.add(archivedDoc.id); // Add the archived document itself
+
+      // Add all parent folders up to root
+      let currentParentId = archivedDoc.parentId;
+      while (currentParentId) {
+        hierarchyIds.add(currentParentId);
+        const parent = await this.prisma.document.findUnique({
+          where: { id: currentParentId },
+          select: { parentId: true },
+        });
+        currentParentId = parent?.parentId || null;
+      }
+    }
+
+    console.log('[getArchivedDocumentsHierarchical] Total hierarchy IDs:', hierarchyIds.size);
+
+    // Get all documents in hierarchy with their full paths
+    const allHierarchyDocuments = await this.prisma.document.findMany({
+      where: {
+        companyId,
+        id: { in: Array.from(hierarchyIds) },
+      },
       select: {
         id: true,
         name: true,
@@ -498,6 +588,7 @@ export class DocumentService {
         size: true,
         isFolder: true,
         status: true,
+        parentId: true,
         createdAt: true,
         updatedAt: true,
         owner: {
@@ -510,26 +601,64 @@ export class DocumentService {
       },
     });
 
+    // Build a map for quick lookup
+    const docMap = new Map(allHierarchyDocuments.map((doc) => [doc.id, doc]));
+
+    // For each document, build its full path
+    const documentsWithPath = allHierarchyDocuments.map((doc) => {
+      const path: any[] = [];
+      let currentId: number | null = doc.id;
+
+      // Build path from document to root
+      while (currentId) {
+        const current = docMap.get(currentId);
+        if (current) {
+          path.unshift({
+            id: current.id,
+            name: current.name,
+            isFolder: current.isFolder,
+            status: current.status,
+          });
+          currentId = current.parentId;
+        } else {
+          break;
+        }
+      }
+
+      return {
+        ...doc,
+        path, // Full path from root to this document
+      };
+    });
+
+    console.log(
+      '[getArchivedDocumentsHierarchical] Documents with path:',
+      documentsWithPath.length
+    );
+
+    // If no parentId, return only root-level documents (with their full paths)
+    // If parentId is provided, return only direct children of that parent
+    const filteredDocuments =
+      parentId === undefined
+        ? documentsWithPath.filter((doc) => doc.parentId === null)
+        : documentsWithPath.filter((doc) => doc.parentId === parentId);
+
+    console.log('[getArchivedDocumentsHierarchical] Filtered documents:', filteredDocuments.length);
+
+    // Pagination
+    const totalCount = filteredDocuments.length;
+    const totalPages = Math.ceil(totalCount / limit);
+    const paginatedDocuments = filteredDocuments.slice(skip, skip + limit);
+
     // Add children count for folders
     const documentsWithCounts = await Promise.all(
-      documents.map(async (doc) => {
+      paginatedDocuments.map(async (doc) => {
         let foldersCount = 0;
         let filesCount = 0;
         if (doc.isFolder) {
-          foldersCount = await this.prisma.document.count({
-            where: {
-              parentId: doc.id,
-              isFolder: true,
-              status: { not: 'deleted' },
-            },
-          });
-          filesCount = await this.prisma.document.count({
-            where: {
-              parentId: doc.id,
-              isFolder: false,
-              status: { not: 'deleted' },
-            },
-          });
+          // Count direct children (archived)
+          foldersCount = await this.countDirectChildren(doc.id, true);
+          filesCount = await this.countDirectChildren(doc.id, false);
         }
 
         return {
@@ -1085,65 +1214,65 @@ export class DocumentService {
   /**
    * Mark parent folders as archived if they contain archived items
    */
-  private async markParentFoldersAsArchived(parentId: number | null): Promise<void> {
-    if (!parentId) return;
-
-    const parent = await this.prisma.document.findUnique({
-      where: { id: parentId },
-    });
-
-    if (!parent || parent.status === 'archived') return;
-
-    // Check if parent has any archived children
-    const hasArchivedChildren = await this.prisma.document.count({
-      where: {
-        parentId: parent.id,
-        status: 'archived',
-      },
-    });
-
-    if (hasArchivedChildren > 0) {
-      // Mark parent as archived
-      await this.prisma.document.update({
-        where: { id: parent.id },
-        data: { status: 'archived' },
+  /**
+   * Count direct children (files and folders) that are part of the archive hierarchy
+   * - Files: count archived files
+   * - Folders: count active folders that contain archived content
+   */
+  private async countDirectChildren(
+    parentId: number,
+    countFolders: boolean = true
+  ): Promise<number> {
+    if (countFolders) {
+      // For folders: count active folders that contain archived content
+      const activeFolders = await this.prisma.document.findMany({
+        where: {
+          parentId,
+          isFolder: true,
+          status: 'active',
+        },
+        select: { id: true },
       });
 
-      // Recursively mark grandparents
-      await this.markParentFoldersAsArchived(parent.parentId);
+      let count = 0;
+      for (const folder of activeFolders) {
+        // Check if this folder contains archived content
+        const hasArchived = await this.prisma.document.count({
+          where: {
+            parentId: folder.id,
+            status: 'archived',
+          },
+        });
+        if (hasArchived > 0) {
+          count++;
+        }
+      }
+      return count;
+    } else {
+      // For files: count archived files directly
+      const count = await this.prisma.document.count({
+        where: {
+          parentId,
+          isFolder: false,
+          status: 'archived',
+        },
+      });
+      return count;
     }
+  }
+
+  private async markParentFoldersAsArchived(_parentId: number | null): Promise<void> {
+    // Do nothing - folders are never archived, only files are
+    // Folders are hidden from active view if they contain only archived content
+    return;
   }
 
   /**
    * Unmark parent folders from archived if they no longer contain archived items
    */
-  private async unmarkParentFoldersIfNoArchivedChildren(parentId: number | null): Promise<void> {
-    if (!parentId) return;
-
-    const parent = await this.prisma.document.findUnique({
-      where: { id: parentId },
-    });
-
-    if (!parent || parent.status !== 'archived') return;
-
-    // Check if parent still has archived children
-    const archivedChildrenCount = await this.prisma.document.count({
-      where: {
-        parentId: parent.id,
-        status: 'archived',
-      },
-    });
-
-    // If no more archived children, unarchive the parent
-    if (archivedChildrenCount === 0) {
-      await this.prisma.document.update({
-        where: { id: parent.id },
-        data: { status: 'active' },
-      });
-
-      // Recursively check grandparents
-      await this.unmarkParentFoldersIfNoArchivedChildren(parent.parentId);
-    }
+  private async unmarkParentFoldersIfNoArchivedChildren(_parentId: number | null): Promise<void> {
+    // Do nothing - folders are never archived, so no need to unarchive them
+    return;
   }
 
   private getFileType(mimeType: string): string {

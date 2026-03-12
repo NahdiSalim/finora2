@@ -7,6 +7,7 @@ import ProfileTabs from "src/layouts/components/profile-tabs";
 import ContactInfos from "src/layouts/components/profile-contact";
 import { PageHeader } from "src/layouts/components/page-header";
 import { useGetPublicAccountantByIdQuery } from "src/lib/services/publicAccountantsApi";
+import { useNavigate } from "react-router";
 
 export type AccountantProfileContentProps = {
   accountantId: number;
@@ -57,8 +58,17 @@ export function AccountantProfileContent({
     specialties: data?.company?.specialties ?? [],
   };
 
+  const isAuthenticated = !!localStorage.getItem("token");
+  const navigate = useNavigate();
+
   const handleSchedule = () => {
-    // TODO: ouvrir prise de RDV ou rediriger
+    if (isAuthenticated) {
+      // Logique pour planifier un rendez-vous
+      navigate("/schedule");
+    } else {
+      // Rediriger vers la page de connexion
+      navigate("/sign-in");
+    }
   };
 
   const handleContact = () => {
@@ -88,6 +98,7 @@ export function AccountantProfileContent({
           subtitle={subtitle}
           onSchedule={handleSchedule}
           onContact={handleContact}
+          isAuthenticated={isAuthenticated}
         />
       </Card>
 

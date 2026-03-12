@@ -53,6 +53,7 @@ export default function ArchiveView() {
     search: debouncedSearch || undefined,
     startDate: startDate ? startDate.format("YYYY-MM-DD") : undefined,
     endDate: endDate ? endDate.format("YYYY-MM-DD") : undefined,
+    isArchived: true,
   });
 
   const clients = data?.data ?? [];
@@ -69,13 +70,9 @@ export default function ArchiveView() {
   };
 
   const dashboardBase = useDashboardBase();
-  const handleCardClick = (
-    clientId: string | number,
-    clientName: string,
-    invoiceStats: { traite: number; pending: number; total: number },
-  ) => {
-    navigate(`${dashboardBase}/documents/${clientId}`, {
-      state: { clientName, invoiceStats },
+  const handleCardClick = (clientId: string | number, clientName: string) => {
+    navigate(`${dashboardBase}/archive/${clientId}`, {
+      state: { clientName },
     });
   };
 
@@ -89,11 +86,11 @@ export default function ArchiveView() {
   return (
     <PageHeader
       title="Archive"
-      caption="Consultez et gérez les clients archivés."
+      caption="Consultez les clients ayant des documents archivés."
       searchbar={{
         value: search,
         onChange: setSearch,
-        placeholder: "Rechercher un client archivé...",
+        placeholder: "Rechercher un client...",
       }}
     >
       <Box
@@ -115,8 +112,8 @@ export default function ArchiveView() {
           }}
         >
           <Typography color="text.secondary" variant="body2">
-            {totalCount} Dossier{totalCount !== 1 ? "s" : ""} archivé
-            {totalCount !== 1 ? "s" : ""}
+            {totalCount} client{totalCount !== 1 ? "s" : ""} avec document
+            {totalCount !== 1 ? "s" : ""} archivé{totalCount !== 1 ? "s" : ""}
           </Typography>
 
           {/* Date filter */}
@@ -249,11 +246,7 @@ export default function ArchiveView() {
                       handleDelete(client.clientId, displayName(client))
                     }
                     onCardClick={() =>
-                      handleCardClick(
-                        client.clientId,
-                        displayName(client),
-                        client.invoiceStats,
-                      )
+                      handleCardClick(client.clientId, displayName(client))
                     }
                   />
                 </Grid>
@@ -263,14 +256,15 @@ export default function ArchiveView() {
             {clients.length === 0 && (
               <Box sx={{ textAlign: "center", py: 8 }}>
                 <Typography variant="h6" color="text.secondary">
-                  Aucun client archivé.
+                  Aucun client avec des documents archivés.
                 </Typography>
                 <Typography
                   variant="body2"
                   color="text.secondary"
                   sx={{ mt: 1 }}
                 >
-                  Les clients désactivés apparaîtront ici.
+                  Les clients ayant au moins un document archivé apparaîtront
+                  ici.
                 </Typography>
               </Box>
             )}

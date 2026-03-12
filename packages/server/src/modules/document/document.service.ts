@@ -544,11 +544,8 @@ export class DocumentService {
       }
     }
 
-    // Count total archived documents
-    const totalCount = await this.prisma.document.count({ where });
-    const totalPages = Math.ceil(totalCount / limit);
-
-    const documents = await this.prisma.document.findMany({
+    // Get archived documents at this level
+    const archivedDocuments = await this.prisma.document.findMany({
       where,
       orderBy: [
         { isFolder: 'desc' }, // Folders first
@@ -577,44 +574,68 @@ export class DocumentService {
       },
     });
 
-    // For each archived document, get its parent folders (even if they're active)
-    // to show the complete hierarchy
-    const documentsWithParents = await Promise.all(
-      documents.map(async (doc) => {
-        const parentFolders: any[] = [];
+    // If parentId is null (root level), also include parent folders that contain archived content
+    let documents = archivedDocuments;
+    if (!parentId && !search && !category) {
+      // Get all parent folders of archived documents
+      const parentFolderIds = new Set<number>();
 
-        // Build the path to this document by getting all parent folders
+      for (const doc of archivedDocuments) {
         let currentParentId = doc.parentId;
         while (currentParentId) {
+          parentFolderIds.add(currentParentId);
           const parent = await this.prisma.document.findUnique({
             where: { id: currentParentId },
-            select: {
-              id: true,
-              name: true,
-              parentId: true,
-              isFolder: true,
-              status: true,
-            },
+            select: { parentId: true },
           });
-
-          if (parent) {
-            parentFolders.unshift(parent); // Add to beginning to maintain order
-            currentParentId = parent.parentId;
-          } else {
-            break;
-          }
+          currentParentId = parent?.parentId || null;
         }
+      }
 
-        return {
-          ...doc,
-          parentFolders, // Include parent folder path
-        };
-      })
-    );
+      // Get root-level parent folders (those with no parent)
+      if (parentFolderIds.size > 0) {
+        const rootParents = await this.prisma.document.findMany({
+          where: {
+            id: { in: Array.from(parentFolderIds) },
+            parentId: null,
+            companyId,
+            isFolder: true,
+            status: 'active', // Parent folders are active
+          },
+          orderBy: { name: 'asc' },
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            mimeType: true,
+            size: true,
+            isFolder: true,
+            status: true,
+            parentId: true,
+            createdAt: true,
+            updatedAt: true,
+            owner: {
+              select: {
+                id: true,
+                username: true,
+                email: true,
+              },
+            },
+          },
+        });
+
+        // Combine root parents with archived documents at root level
+        documents = [...rootParents, ...archivedDocuments];
+      }
+    }
+
+    // Count total
+    const totalCount = documents.length;
+    const totalPages = Math.ceil(totalCount / limit);
 
     // Add children count for folders
     const documentsWithCounts = await Promise.all(
-      documentsWithParents.map(async (doc) => {
+      documents.map(async (doc) => {
         let foldersCount = 0;
         let filesCount = 0;
         if (doc.isFolder) {

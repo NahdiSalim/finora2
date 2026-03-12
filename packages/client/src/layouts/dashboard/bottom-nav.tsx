@@ -17,40 +17,60 @@ import { useAppSelector } from "src/hooks/use-redux";
 import { useBoolean } from "minimal-shared/hooks";
 import { NavMobile } from "./nav";
 import { useNavigation } from "src/hooks/useNavigation";
+import { useDashboardBase } from "src/hooks/useDashboardBase";
 
 // ----------------------------------------------------------------------
 
-const SUPERADMIN_TABS = [
-  { label: "Dashboard", path: "/dashboard", icon: <LayoutGrid size={22} /> },
-  {
-    label: "Collaborateurs",
-    path: "/collaborators",
-    icon: <Users size={22} />,
-  },
-  { label: "Clients", path: "/clients", icon: <User size={22} /> },
-  {
-    label: "Messagerie",
-    path: "/messages",
-    icon: <MessageSquareMore size={22} />,
-  },
-  { label: "Rendez-vous", path: "/meetings", icon: <Calendar size={22} /> },
-];
-
-const DEFAULT_TABS = [
-  { label: "Dashboard", path: "/dashboard", icon: <LayoutGrid size={22} /> },
-  {
-    label: "Messagerie",
-    path: "/messages",
-    icon: <MessageSquareMore size={22} />,
-  },
-  { label: "Rendez-vous", path: "/meetings", icon: <Calendar size={22} /> },
-  {
-    label: "Collaborateurs",
-    path: "/collaborators",
-    icon: <Users size={22} />,
-  },
-  { label: "Clients", path: "/clients", icon: <User size={22} /> },
-];
+function useDashboardTabs() {
+  const base = useDashboardBase();
+  const SUPERADMIN_TABS = [
+    {
+      label: "Dashboard",
+      path: `${base}/dashboard`,
+      icon: <LayoutGrid size={22} />,
+    },
+    {
+      label: "Collaborateurs",
+      path: `${base}/collaborators`,
+      icon: <Users size={22} />,
+    },
+    { label: "Clients", path: `${base}/clients`, icon: <User size={22} /> },
+    {
+      label: "Messagerie",
+      path: `${base}/messages`,
+      icon: <MessageSquareMore size={22} />,
+    },
+    {
+      label: "Rendez-vous",
+      path: `${base}/meetings`,
+      icon: <Calendar size={22} />,
+    },
+  ];
+  const DEFAULT_TABS = [
+    {
+      label: "Dashboard",
+      path: `${base}/dashboard`,
+      icon: <LayoutGrid size={22} />,
+    },
+    {
+      label: "Messagerie",
+      path: `${base}/messages`,
+      icon: <MessageSquareMore size={22} />,
+    },
+    {
+      label: "Rendez-vous",
+      path: `${base}/meetings`,
+      icon: <Calendar size={22} />,
+    },
+    {
+      label: "Collaborateurs",
+      path: `${base}/collaborators`,
+      icon: <Users size={22} />,
+    },
+    { label: "Clients", path: `${base}/clients`, icon: <User size={22} /> },
+  ];
+  return { SUPERADMIN_TABS, DEFAULT_TABS };
+}
 
 // ----------------------------------------------------------------------
 
@@ -64,6 +84,8 @@ export function BottomNav() {
     onTrue: openDrawer,
     onFalse: closeDrawer,
   } = useBoolean();
+
+  const { SUPERADMIN_TABS, DEFAULT_TABS } = useDashboardTabs();
 
   // Determine role — superadmin has access to both /collaborators and /clients
   const features = useAppSelector((state) => state.auth.features);

@@ -9,11 +9,17 @@ import {
 } from "@mui/material";
 import { Close as CloseIcon } from "@mui/icons-material";
 import UploadIcon from "../../../public/assets/upload.svg";
+import { Replace } from "lucide-react";
+import CustomButton from "./CustomButton";
 
 interface FileUploadProps {
   label: string;
   value?: File | null;
   onChange?: (file: File | null) => void;
+  /** When set, shows "fichier actuel" state instead of empty (fichier déjà uploadé) */
+  existingFileUrl?: string | null;
+  /** Nom du fichier existant (sinon dérivé de l'URL) */
+  existingFileName?: string | null;
   error?: boolean;
   helperText?: string;
   maxSize?: number; // in MB
@@ -21,10 +27,22 @@ interface FileUploadProps {
   disabled?: boolean;
 }
 
+function fileNameFromUrl(url: string): string {
+  try {
+    const path = new URL(url).pathname;
+    const segment = path.split("/").filter(Boolean).pop() || "";
+    return decodeURIComponent(segment) || "document";
+  } catch {
+    return "document";
+  }
+}
+
 export default function FileUpload({
   label,
   value = null,
   onChange,
+  existingFileUrl = null,
+  existingFileName = null,
   error = false,
   helperText,
   maxSize = 5,
@@ -36,6 +54,11 @@ export default function FileUpload({
   const [dragActive, setDragActive] = useState(false);
   const [uploadError, setUploadError] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const hasExistingFile = !file && existingFileUrl;
+  const displayName =
+    existingFileName ||
+    (existingFileUrl ? fileNameFromUrl(existingFileUrl) : "");
 
   // Validate and handle file
   const handleFile = useCallback(
@@ -149,8 +172,97 @@ export default function FileUpload({
         {label}
       </Typography>
 
-      {/* Empty State - Drop Zone */}
-      {!file ? (
+      {/* Existing file (URL) - no new file selected */}
+      {hasExistingFile ? (
+        <Box
+          sx={{
+            borderRadius: 3,
+            backgroundColor: theme.palette.grey[50],
+            border: 1,
+            borderColor: theme.palette.grey[200],
+            px: 2,
+            py: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            "&:hover": {
+              backgroundColor: alpha(theme.palette.primary.main, 0.02),
+            },
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 2,
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: 1,
+                backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Typography variant="caption" fontWeight="bold" color="primary">
+                {displayName.split(".").pop()?.toUpperCase() || "PDF"}
+              </Typography>
+            </Box>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography
+                variant="body2"
+                fontWeight={500}
+                noWrap
+                sx={{ overflow: "hidden", textOverflow: "ellipsis" }}
+              >
+                {displayName}
+              </Typography>
+              <Typography
+                component="a"
+                href={existingFileUrl ?? undefined}
+                target="_blank"
+                variant="caption"
+                fontWeight={500}
+                color={theme.palette.primary.main}
+                sx={{
+                  "&:hover": { fontWeight: "600" },
+                }}
+              >
+                Ouvrir le fichier
+              </Typography>
+            </Box>
+          </Box>
+          {!disabled && (
+            <CustomButton
+              variant="contained"
+              color="info"
+              onClick={handleClick}
+              sx={{ ml: 1, textTransform: "none" }}
+            >
+              <Replace />
+            </CustomButton>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            hidden
+            disabled={disabled}
+            accept={acceptedFiles.join(",")}
+            onChange={(e) => {
+              if (e.target.files?.[0]) {
+                handleFile(e.target.files[0]);
+              }
+            }}
+          />
+        </Box>
+      ) : !file ? (
         <Box
           onDrop={handleDrop}
           onDragOver={handleDragOver}
@@ -222,7 +334,7 @@ export default function FileUpload({
             disabled={disabled}
             accept={acceptedFiles.join(",")}
             onChange={(e) => {
-              if (e.target.files && e.target.files[0]) {
+              if (e.target.files?.[0]) {
                 handleFile(e.target.files[0]);
               }
             }}

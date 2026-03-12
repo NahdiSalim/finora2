@@ -1,6 +1,6 @@
 import type { ButtonProps } from "@mui/material/Button";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -15,6 +15,7 @@ import { useTheme, alpha } from "@mui/material/styles";
 import { useRouter, usePathname } from "src/routes/hooks";
 
 import { useVerifyUserQuery } from "src/lib/services/authApi";
+import { useDashboardBase } from "src/hooks/useDashboardBase";
 import { store } from "src/lib/store";
 
 // ----------------------------------------------------------------------
@@ -78,9 +79,47 @@ export function AccountPopover({
       .slice(0, 2);
   };
 
-  const fullName = userData?.full_name || "User";
-  const position = userData?.role || "Member";
+  const role = typeof userData?.role === "object" ? userData.role : null;
+  const roleCode =
+    role?.code ?? (typeof userData?.role === "string" ? userData.role : "");
+  const companyName = userData?.company?.name ?? null;
+  const fullName =
+    userData?.firstName && userData?.lastName
+      ? `${userData.firstName} ${userData.lastName}`.trim()
+      : userData?.full_name || "User";
+
+  const isAccountant =
+    roleCode === "ACCOUNTANT" ||
+    (typeof roleCode === "string" &&
+      roleCode.toLowerCase().includes("comptable"));
+  const isClient =
+    roleCode === "CLIENT" ||
+    (typeof roleCode === "string" && roleCode.toLowerCase() === "client");
+
+  // Comptable : nom = nom du cabinet, sous-titre = "Cabinet de comptabilité"
+  // Client : nom = nom de l'utilisateur, sous-titre = nom de l'entreprise
+  // Autres : nom = nom de l'utilisateur, sous-titre = rôle ou "Member"
+  const displayName = isAccountant && companyName ? companyName : fullName;
+  const subtitle = isAccountant
+    ? "Cabinet de comptabilité"
+    : isClient && companyName
+      ? companyName
+      : (role?.name ?? "Member");
+
   const email = userData?.email || "";
+  const photoUrl = userData?.photoUrl || null;
+  const dashboardBase = useDashboardBase();
+
+  const menuData = useMemo(
+    () =>
+      data.map((opt) => ({
+        ...opt,
+        href: opt.href.startsWith("/dashboard")
+          ? dashboardBase + opt.href.slice("/dashboard".length)
+          : opt.href,
+      })),
+    [data, dashboardBase],
+  );
 
   return (
     <>
@@ -103,8 +142,10 @@ export function AccountPopover({
         }}
         {...other}
       >
-        {/* Avatar - Left */}
+        {/* Avatar - Left (photo de profil si elle existe) */}
         <Avatar
+          src={photoUrl ?? undefined}
+          alt={displayName}
           sx={{
             width: 40,
             height: 40,
@@ -114,7 +155,7 @@ export function AccountPopover({
             fontWeight: 600,
           }}
         >
-          {getInitials(fullName)}
+          {getInitials(displayName)}
         </Avatar>
 
         {/* Name and Position - Right */}
@@ -138,7 +179,7 @@ export function AccountPopover({
               maxWidth: 150,
             }}
           >
-            {fullName}
+            {displayName}
           </Typography>
           <Typography
             variant="caption"
@@ -147,7 +188,7 @@ export function AccountPopover({
               lineHeight: 1.2,
             }}
           >
-            Comptable
+            {subtitle}
           </Typography>
         </Box>
       </Button>
@@ -178,6 +219,8 @@ export function AccountPopover({
           }}
         >
           <Avatar
+            src={photoUrl ?? undefined}
+            alt={displayName}
             sx={{
               width: 48,
               height: 48,
@@ -187,7 +230,7 @@ export function AccountPopover({
               fontWeight: 600,
             }}
           >
-            {getInitials(fullName)}
+            {getInitials(displayName)}
           </Avatar>
 
           <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -200,7 +243,7 @@ export function AccountPopover({
                 whiteSpace: "nowrap",
               }}
             >
-              {fullName}
+              {displayName}
             </Typography>
             <Typography
               variant="caption"
@@ -210,7 +253,7 @@ export function AccountPopover({
                 mb: 0.5,
               }}
             >
-              CEO
+              {subtitle}
             </Typography>
             <Typography
               variant="caption"
@@ -261,7 +304,7 @@ export function AccountPopover({
                 },
               }}
             >
-              {data.map((option) => (
+              {menuData.map((option) => (
                 <MenuItem
                   key={option.label}
                   selected={option.href === pathname}

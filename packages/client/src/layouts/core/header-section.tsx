@@ -16,6 +16,7 @@ import Container from "@mui/material/Container";
 
 import { layoutClasses } from "./classes";
 import { BottomNav } from "../dashboard/bottom-nav";
+import { useAppSelector } from "src/hooks/use-redux";
 
 // ----------------------------------------------------------------------
 
@@ -47,6 +48,7 @@ export function HeaderSection({
   ...other
 }: HeaderSectionProps) {
   const { offsetTop: isOffset } = useScrollOffsetTop();
+  const { isAuth } = useAppSelector((state) => state.auth);
 
   return (
     <HeaderRoot
@@ -77,7 +79,7 @@ export function HeaderSection({
         {slots?.rightArea}
       </HeaderContainer>
       {slots?.bottomArea}
-      <BottomNav /> {/* 👈 add this */}
+      {isAuth && <BottomNav />}
     </HeaderRoot>
   );
 }

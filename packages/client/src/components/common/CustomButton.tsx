@@ -93,15 +93,26 @@ const CustomButton = memo(
         },
         outlined: {
           backgroundColor: "transparent",
-          color: paletteColor.main,
+          color: color === "info" ? theme.palette.info.main : paletteColor.main,
           border: 1.5,
-          borderColor: paletteColor.main,
+          borderColor:
+            color === "info" ? theme.palette.info.lighter : paletteColor.main,
+
           "&:hover": {
-            backgroundColor: alpha(paletteColor.main, 0.08),
-            borderColor: paletteColor.dark,
+            backgroundColor:
+              color === "info"
+                ? alpha(theme.palette.info.main, 0.08)
+                : alpha(paletteColor.main, 0.08),
+
+            borderColor:
+              color === "info" ? theme.palette.grey[100] : paletteColor.dark,
           },
+
           "&:active": {
-            backgroundColor: alpha(paletteColor.main, 0.12),
+            backgroundColor:
+              color === "info"
+                ? alpha(theme.palette.info.main, 0.12)
+                : alpha(paletteColor.main, 0.12),
           },
         },
         text: {

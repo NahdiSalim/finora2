@@ -58,8 +58,7 @@ export function SignInView() {
       localStorage.setItem("token", result.data.accessToken);
       localStorage.setItem("refresh_token", result.data.refreshToken);
 
-      const firstRoute = "/";
-      router.push(firstRoute);
+      router.push("/dashboard");
     } catch (error: unknown) {
       const message =
         (typeof error === "object" &&
@@ -88,7 +87,7 @@ export function SignInView() {
   }
 
   if (isAuth) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return (

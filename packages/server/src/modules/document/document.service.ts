@@ -503,7 +503,7 @@ export class DocumentService {
   ) {
     const skip = (page - 1) * limit;
 
-    // Build where clause
+    // Build where clause - only archived documents
     const where: any = {
       companyId,
       status: 'archived',
@@ -544,7 +544,7 @@ export class DocumentService {
       }
     }
 
-    // Count total
+    // Count total archived documents
     const totalCount = await this.prisma.document.count({ where });
     const totalPages = Math.ceil(totalCount / limit);
 
@@ -564,6 +564,7 @@ export class DocumentService {
         size: true,
         isFolder: true,
         status: true,
+        parentId: true,
         createdAt: true,
         updatedAt: true,
         owner: {
@@ -576,9 +577,44 @@ export class DocumentService {
       },
     });
 
+    // For each archived document, get its parent folders (even if they're active)
+    // to show the complete hierarchy
+    const documentsWithParents = await Promise.all(
+      documents.map(async (doc) => {
+        const parentFolders: any[] = [];
+
+        // Build the path to this document by getting all parent folders
+        let currentParentId = doc.parentId;
+        while (currentParentId) {
+          const parent = await this.prisma.document.findUnique({
+            where: { id: currentParentId },
+            select: {
+              id: true,
+              name: true,
+              parentId: true,
+              isFolder: true,
+              status: true,
+            },
+          });
+
+          if (parent) {
+            parentFolders.unshift(parent); // Add to beginning to maintain order
+            currentParentId = parent.parentId;
+          } else {
+            break;
+          }
+        }
+
+        return {
+          ...doc,
+          parentFolders, // Include parent folder path
+        };
+      })
+    );
+
     // Add children count for folders
     const documentsWithCounts = await Promise.all(
-      documents.map(async (doc) => {
+      documentsWithParents.map(async (doc) => {
         let foldersCount = 0;
         let filesCount = 0;
         if (doc.isFolder) {
@@ -586,14 +622,14 @@ export class DocumentService {
             where: {
               parentId: doc.id,
               isFolder: true,
-              status: { not: 'deleted' }, // Count all non-deleted archived folders
+              status: 'archived', // Only count archived children
             },
           });
           filesCount = await this.prisma.document.count({
             where: {
               parentId: doc.id,
               isFolder: false,
-              status: { not: 'deleted' }, // Count all non-deleted archived files
+              status: 'archived', // Only count archived children
             },
           });
         }

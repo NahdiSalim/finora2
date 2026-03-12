@@ -205,7 +205,6 @@ export class AuthService {
 
   async getCurrentUser(req: AuthRequest) {
     const loggedUserId = req?.user?.id;
-    console.log('getCurrentUser called for user ID:', loggedUserId);
     try {
       const user = await this.prisma.user.findUnique({
         where: { id: Number(loggedUserId) },

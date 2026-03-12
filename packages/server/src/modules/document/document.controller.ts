@@ -83,6 +83,12 @@ export class DocumentController {
           nullable: true,
           description: 'Client company ID (required for accountants, ignored for clients)',
         },
+        name: {
+          type: 'string',
+          nullable: true,
+          description:
+            'Custom name for the file (optional, uses original filename if not provided)',
+        },
       },
     },
   })
@@ -91,7 +97,8 @@ export class DocumentController {
     @UploadedFile() file: Express.Multer.File,
     @Body('parentId') parentId?: string,
     @Body('category') category?: string,
-    @Body('clientCompanyId') clientCompanyId?: string
+    @Body('clientCompanyId') clientCompanyId?: string,
+    @Body('name') name?: string
   ) {
     const userId = req.user!.id;
     const userCompanyId = req.user!.companyId;
@@ -121,7 +128,8 @@ export class DocumentController {
       file,
       parentIdNum,
       category,
-      clientCompanyIdNum
+      clientCompanyIdNum,
+      name
     );
   }
 

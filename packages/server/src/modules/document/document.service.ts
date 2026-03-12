@@ -16,6 +16,44 @@ export class DocumentService {
   ) {}
 
   /**
+   * Check if a folder has any active content (files or subfolders with active content)
+   * Returns true if folder has at least one active file or active subfolder
+   */
+  private async hasActiveContent(folderId: number): Promise<boolean> {
+    // Check for active files directly in this folder
+    const activeFiles = await this.prisma.document.count({
+      where: {
+        parentId: folderId,
+        isFolder: false,
+        status: 'active',
+      },
+    });
+
+    if (activeFiles > 0) {
+      return true;
+    }
+
+    // Check for subfolders and recursively check their content
+    const subfolders = await this.prisma.document.findMany({
+      where: {
+        parentId: folderId,
+        isFolder: true,
+        status: 'active',
+      },
+      select: { id: true },
+    });
+
+    for (const subfolder of subfolders) {
+      const hasContent = await this.hasActiveContent(subfolder.id);
+      if (hasContent) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
    * Create a new folder
    * - CLIENT: creates in their own space (user.companyId)
    * - ACCOUNTANT: must provide clientCompanyId and have active relationship
@@ -98,7 +136,8 @@ export class DocumentService {
     file: Express.Multer.File,
     parentId?: number,
     category?: string,
-    clientCompanyId?: number
+    clientCompanyId?: number,
+    customName?: string
   ) {
     // Determine target company and creator company
     let targetCompanyId = userCompanyId; // Default: client's own company
@@ -157,10 +196,13 @@ export class DocumentService {
       // Get presigned URL
       const url = await this.minioService.getPresignedUrl(objectName);
 
+      // Use custom name if provided, otherwise use original filename
+      const fileName = customName && customName.trim() ? customName.trim() : file.originalname;
+
       // Save document metadata to database
       const document = await this.prisma.document.create({
         data: {
-          name: file.originalname,
+          name: fileName,
           type: this.getFileType(file.mimetype),
           mimeType: file.mimetype,
           size: file.size,
@@ -295,7 +337,7 @@ export class DocumentService {
     });
 
     // Add permission flags to each document
-    const documentsWithPermissions = await Promise.all(
+    let documentsWithPermissions = await Promise.all(
       documents.map(async (doc) => {
         // If createdByCompanyId is null (old documents), assume it was created by the client
         const createdByCompanyId = doc.createdByCompanyId || doc.companyId;
@@ -304,24 +346,28 @@ export class DocumentService {
         const isAccountantEditingClient =
           createdByCompanyId === doc.companyId && userCompanyId !== doc.companyId;
 
-        // If it's a folder, count subfolders and files separately
+        // If it's a folder, count subfolders and files separately (count all children regardless of status)
         let foldersCount = 0;
         let filesCount = 0;
+        let hasActiveContent = true; // Default true for non-folders
+
         if (doc.isFolder) {
           foldersCount = await this.prisma.document.count({
             where: {
               parentId: doc.id,
               isFolder: true,
-              status: { not: 'deleted' },
+              status: { not: 'deleted' }, // Count all non-deleted folders
             },
           });
           filesCount = await this.prisma.document.count({
             where: {
               parentId: doc.id,
               isFolder: false,
-              status: { not: 'deleted' },
+              status: { not: 'deleted' }, // Count all non-deleted files
             },
           });
+          // Check if folder has active content
+          hasActiveContent = await this.hasActiveContent(doc.id);
         }
 
         return {
@@ -329,9 +375,17 @@ export class DocumentService {
           canEdit: isCreator || isAccountantEditingClient,
           canDelete: isCreator || isAccountantEditingClient,
           ...(doc.isFolder && { foldersCount, filesCount }),
+          _hasActiveContent: hasActiveContent, // Internal flag for filtering
         };
       })
     );
+
+    // Filter out folders that have no active content (only archived/deleted children)
+    if (status === 'active') {
+      documentsWithPermissions = documentsWithPermissions
+        .filter((doc: any) => doc._hasActiveContent)
+        .map(({ _hasActiveContent, ...doc }: any) => doc);
+    }
 
     return {
       status: 'success',
@@ -526,14 +580,14 @@ export class DocumentService {
             where: {
               parentId: doc.id,
               isFolder: true,
-              status: { not: 'deleted' },
+              status: { not: 'deleted' }, // Count all non-deleted archived folders
             },
           });
           filesCount = await this.prisma.document.count({
             where: {
               parentId: doc.id,
               isFolder: false,
-              status: { not: 'deleted' },
+              status: { not: 'deleted' }, // Count all non-deleted archived files
             },
           });
         }

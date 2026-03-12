@@ -501,33 +501,28 @@ export class DocumentService {
     search?: string,
     category?: string
   ) {
+    console.log('[getArchivedDocumentsHierarchical] companyId:', companyId);
+    console.log('[getArchivedDocumentsHierarchical] parentId:', parentId);
+
     const skip = (page - 1) * limit;
 
-    // Build where clause - only archived documents
-    const where: any = {
+    // Build where clause for archived documents
+    const archivedWhere: any = {
       companyId,
       status: 'archived',
     };
 
-    // If search is provided, search across entire tree (ignore parentId)
-    // If category is provided, search across entire tree (ignore parentId)
-    // Otherwise, filter by parentId for hierarchical view
-    if ((search && search.trim()) || (category && category.trim())) {
-      // When searching or filtering by category, search entire tree
-      if (search && search.trim()) {
-        where.name = {
-          contains: search.trim(),
-          mode: 'insensitive',
-        };
-      }
-    } else {
-      // Only filter by parentId when not searching and no category filter
-      where.parentId = parentId || null;
+    // Add search filter
+    if (search && search.trim()) {
+      archivedWhere.name = {
+        contains: search.trim(),
+        mode: 'insensitive',
+      };
     }
 
-    // Add category filter (only for files, not folders)
+    // Add category filter
     if (category && category.trim()) {
-      where.category = {
+      archivedWhere.category = {
         contains: category.trim(),
         mode: 'insensitive',
       };
@@ -535,24 +530,56 @@ export class DocumentService {
 
     // Add date filters
     if (startDate || endDate) {
-      where.createdAt = {};
+      archivedWhere.createdAt = {};
       if (startDate) {
-        where.createdAt.gte = startDate;
+        archivedWhere.createdAt.gte = startDate;
       }
       if (endDate) {
-        where.createdAt.lte = endDate;
+        archivedWhere.createdAt.lte = endDate;
       }
     }
 
-    // Get archived documents at this level
-    const archivedDocuments = await this.prisma.document.findMany({
-      where,
-      orderBy: [
-        { isFolder: 'desc' }, // Folders first
-        { name: 'asc' },
-      ],
-      skip,
-      take: limit,
+    // Get ALL archived documents (entire table)
+    const allArchivedDocuments = await this.prisma.document.findMany({
+      where: archivedWhere,
+      select: {
+        id: true,
+        parentId: true,
+      },
+    });
+
+    console.log(
+      '[getArchivedDocumentsHierarchical] Total archived documents:',
+      allArchivedDocuments.length
+    );
+
+    // Collect all document IDs that are part of the archive hierarchy
+    const hierarchyIds = new Set<number>();
+
+    // For each archived document, add it and all its ancestors to the set
+    for (const archivedDoc of allArchivedDocuments) {
+      hierarchyIds.add(archivedDoc.id); // Add the archived document itself
+
+      // Add all parent folders up to root
+      let currentParentId = archivedDoc.parentId;
+      while (currentParentId) {
+        hierarchyIds.add(currentParentId);
+        const parent = await this.prisma.document.findUnique({
+          where: { id: currentParentId },
+          select: { parentId: true },
+        });
+        currentParentId = parent?.parentId || null;
+      }
+    }
+
+    console.log('[getArchivedDocumentsHierarchical] Total hierarchy IDs:', hierarchyIds.size);
+
+    // Get all documents in hierarchy with their full paths
+    const allHierarchyDocuments = await this.prisma.document.findMany({
+      where: {
+        companyId,
+        id: { in: Array.from(hierarchyIds) },
+      },
       select: {
         id: true,
         name: true,
@@ -574,85 +601,64 @@ export class DocumentService {
       },
     });
 
-    // If parentId is null (root level), also include parent folders that contain archived content
-    let documents = archivedDocuments;
-    if (!parentId && !search && !category) {
-      // Get all parent folders of archived documents
-      const parentFolderIds = new Set<number>();
+    // Build a map for quick lookup
+    const docMap = new Map(allHierarchyDocuments.map((doc) => [doc.id, doc]));
 
-      for (const doc of archivedDocuments) {
-        let currentParentId = doc.parentId;
-        while (currentParentId) {
-          parentFolderIds.add(currentParentId);
-          const parent = await this.prisma.document.findUnique({
-            where: { id: currentParentId },
-            select: { parentId: true },
+    // For each document, build its full path
+    const documentsWithPath = allHierarchyDocuments.map((doc) => {
+      const path: any[] = [];
+      let currentId: number | null = doc.id;
+
+      // Build path from document to root
+      while (currentId) {
+        const current = docMap.get(currentId);
+        if (current) {
+          path.unshift({
+            id: current.id,
+            name: current.name,
+            isFolder: current.isFolder,
+            status: current.status,
           });
-          currentParentId = parent?.parentId || null;
+          currentId = current.parentId;
+        } else {
+          break;
         }
       }
 
-      // Get root-level parent folders (those with no parent)
-      if (parentFolderIds.size > 0) {
-        const rootParents = await this.prisma.document.findMany({
-          where: {
-            id: { in: Array.from(parentFolderIds) },
-            parentId: null,
-            companyId,
-            isFolder: true,
-            status: 'active', // Parent folders are active
-          },
-          orderBy: { name: 'asc' },
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            mimeType: true,
-            size: true,
-            isFolder: true,
-            status: true,
-            parentId: true,
-            createdAt: true,
-            updatedAt: true,
-            owner: {
-              select: {
-                id: true,
-                username: true,
-                email: true,
-              },
-            },
-          },
-        });
+      return {
+        ...doc,
+        path, // Full path from root to this document
+      };
+    });
 
-        // Combine root parents with archived documents at root level
-        documents = [...rootParents, ...archivedDocuments];
-      }
-    }
+    console.log(
+      '[getArchivedDocumentsHierarchical] Documents with path:',
+      documentsWithPath.length
+    );
 
-    // Count total
-    const totalCount = documents.length;
+    // If no parentId, return only root-level documents (with their full paths)
+    // If parentId is provided, return only direct children of that parent
+    const filteredDocuments =
+      parentId === undefined
+        ? documentsWithPath.filter((doc) => doc.parentId === null)
+        : documentsWithPath.filter((doc) => doc.parentId === parentId);
+
+    console.log('[getArchivedDocumentsHierarchical] Filtered documents:', filteredDocuments.length);
+
+    // Pagination
+    const totalCount = filteredDocuments.length;
     const totalPages = Math.ceil(totalCount / limit);
+    const paginatedDocuments = filteredDocuments.slice(skip, skip + limit);
 
     // Add children count for folders
     const documentsWithCounts = await Promise.all(
-      documents.map(async (doc) => {
+      paginatedDocuments.map(async (doc) => {
         let foldersCount = 0;
         let filesCount = 0;
         if (doc.isFolder) {
-          foldersCount = await this.prisma.document.count({
-            where: {
-              parentId: doc.id,
-              isFolder: true,
-              status: 'archived', // Only count archived children
-            },
-          });
-          filesCount = await this.prisma.document.count({
-            where: {
-              parentId: doc.id,
-              isFolder: false,
-              status: 'archived', // Only count archived children
-            },
-          });
+          // Count direct children (archived)
+          foldersCount = await this.countDirectChildren(doc.id, true);
+          filesCount = await this.countDirectChildren(doc.id, false);
         }
 
         return {
@@ -1208,7 +1214,54 @@ export class DocumentService {
   /**
    * Mark parent folders as archived if they contain archived items
    */
-  private async markParentFoldersAsArchived(parentId: number | null): Promise<void> {
+  /**
+   * Count direct children (files and folders) that are part of the archive hierarchy
+   * - Files: count archived files
+   * - Folders: count active folders that contain archived content
+   */
+  private async countDirectChildren(
+    parentId: number,
+    countFolders: boolean = true
+  ): Promise<number> {
+    if (countFolders) {
+      // For folders: count active folders that contain archived content
+      const activeFolders = await this.prisma.document.findMany({
+        where: {
+          parentId,
+          isFolder: true,
+          status: 'active',
+        },
+        select: { id: true },
+      });
+
+      let count = 0;
+      for (const folder of activeFolders) {
+        // Check if this folder contains archived content
+        const hasArchived = await this.prisma.document.count({
+          where: {
+            parentId: folder.id,
+            status: 'archived',
+          },
+        });
+        if (hasArchived > 0) {
+          count++;
+        }
+      }
+      return count;
+    } else {
+      // For files: count archived files directly
+      const count = await this.prisma.document.count({
+        where: {
+          parentId,
+          isFolder: false,
+          status: 'archived',
+        },
+      });
+      return count;
+    }
+  }
+
+  private async markParentFoldersAsArchived(_parentId: number | null): Promise<void> {
     // Do nothing - folders are never archived, only files are
     // Folders are hidden from active view if they contain only archived content
     return;
@@ -1217,7 +1270,7 @@ export class DocumentService {
   /**
    * Unmark parent folders from archived if they no longer contain archived items
    */
-  private async unmarkParentFoldersIfNoArchivedChildren(parentId: number | null): Promise<void> {
+  private async unmarkParentFoldersIfNoArchivedChildren(_parentId: number | null): Promise<void> {
     // Do nothing - folders are never archived, so no need to unarchive them
     return;
   }

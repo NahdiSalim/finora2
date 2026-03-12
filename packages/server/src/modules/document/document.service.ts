@@ -17,7 +17,7 @@ export class DocumentService {
 
   /**
    * Check if a folder has any active content (files or subfolders with active content)
-   * Returns true if folder has at least one active file or active subfolder
+   * Returns true if folder has at least one active file, active subfolder, or is empty
    */
   private async hasActiveContent(folderId: number): Promise<boolean> {
     // Check for active files directly in this folder
@@ -43,11 +43,17 @@ export class DocumentService {
       select: { id: true },
     });
 
-    for (const subfolder of subfolders) {
-      const hasContent = await this.hasActiveContent(subfolder.id);
-      if (hasContent) {
-        return true;
+    // If folder has active subfolders, it has content
+    if (subfolders.length > 0) {
+      for (const subfolder of subfolders) {
+        const hasContent = await this.hasActiveContent(subfolder.id);
+        if (hasContent) {
+          return true;
+        }
       }
+    } else {
+      // If folder has no subfolders and no files, it's an empty folder - still show it
+      return true;
     }
 
     return false;

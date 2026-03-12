@@ -14,6 +14,7 @@ import {
   Pencil,
   MessageCircle,
   Handshake,
+  Calendar,
 } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
 
@@ -31,6 +32,8 @@ export interface ProfileHeaderProps {
   /** Mode visiteur : boutons Schedule et Contacter */
   onSchedule?: () => void;
   onContact?: () => void;
+  /** État de connexion de l'utilisateur */
+  isAuthenticated?: boolean;
 }
 
 const ProfileHeader: React.FC<ProfileHeaderProps> = ({
@@ -44,6 +47,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   onContact,
   onSchedule,
   isEditing = false,
+  isAuthenticated = false, // Valeur par défaut à false
 }) => {
   const theme = useTheme();
   const isVisitorMode = onSchedule != null || onContact != null;
@@ -195,7 +199,13 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                 <CustomButton
                   size="large"
                   variant="contained"
-                  startIcon={<Handshake size={18} />}
+                  startIcon={
+                    isAuthenticated ? (
+                      <Calendar size={18} />
+                    ) : (
+                      <Handshake size={18} />
+                    )
+                  }
                   onClick={onSchedule}
                   sx={{
                     borderRadius: 2,
@@ -203,7 +213,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                     fontWeight: 600,
                   }}
                 >
-                  Devenir un client
+                  {isAuthenticated ? "Planifier" : "Devenir un client"}
                 </CustomButton>
               )}
               {onContact && (

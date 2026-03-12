@@ -1,5 +1,6 @@
 import { createApi } from "@reduxjs/toolkit/query/react";
 import { baseQueryWithReauth } from "./baseQueryWithReauth";
+import { relationshipsApi } from "./relationshipsApi";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -181,6 +182,19 @@ export const documentsApi = createApi({
         };
       },
       invalidatesTags: () => [{ type: "Documents" }],
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          // Invalide les stats clients utilisées sur /documents
+          dispatch(
+            relationshipsApi.util.invalidateTags([
+              { type: "ClientsInvoiceStats", id: "LIST" },
+            ]),
+          );
+        } catch {
+          // Ignore les erreurs ici, elles sont déjà gérées par la mutation
+        }
+      },
     }),
 
     downloadDocument: builder.mutation<
@@ -210,6 +224,17 @@ export const documentsApi = createApi({
         return { data: { blob, filename } };
       },
     }),
+
+    archiveDocument: builder.mutation<
+      { status: string; message?: string; data?: { status: string } },
+      number
+    >({
+      query: (id) => ({
+        url: `/documents/${id}/archive`,
+        method: "POST",
+      }),
+      invalidatesTags: () => [{ type: "Documents" }],
+    }),
   }),
 });
 
@@ -221,4 +246,5 @@ export const {
   useDeleteDocumentMutation,
   useUploadDocumentMutation,
   useDownloadDocumentMutation,
+  useArchiveDocumentMutation,
 } = documentsApi;

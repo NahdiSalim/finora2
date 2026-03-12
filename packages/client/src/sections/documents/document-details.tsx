@@ -36,6 +36,7 @@ import {
   Edit,
   Trash2,
   Move,
+  Archive,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -72,6 +73,7 @@ import {
   useDeleteDocumentMutation,
   useUploadDocumentMutation,
   useDownloadDocumentMutation,
+  useArchiveDocumentMutation,
 } from "src/lib/services/documentsApi";
 import type { DocumentItem } from "src/lib/services/documentsApi";
 import {
@@ -187,6 +189,7 @@ export default function DocumentDetailsView() {
     useUploadDocumentMutation();
   const [downloadDocument, { isLoading: isDownloading }] =
     useDownloadDocumentMutation();
+  const [archiveDocument] = useArchiveDocumentMutation();
 
   const rawItems: DocumentItem[] = data?.data ?? [];
   const foldersFromApi: FolderItem[] = rawItems
@@ -220,6 +223,7 @@ export default function DocumentDetailsView() {
     { label: "Aperçu", icon: <Eye size={16} />, action: "preview" },
     { label: "Télécharger", icon: <Download size={16} />, action: "download" },
     { label: "Renommer", icon: <Edit size={16} />, action: "rename" },
+    { label: "Archiver", icon: <Archive size={16} />, action: "archive" },
     { label: "Supprimer", icon: <Trash2 size={16} />, action: "delete" },
   ];
   const fileCardMenuOptions = hasSearchOrFilter
@@ -1022,6 +1026,8 @@ export default function DocumentDetailsView() {
                               name: fileItem.name,
                               type: "file",
                             });
+                          } else if (action === "archive") {
+                            archiveDocument(Number(fileItem.id));
                           }
                         }}
                       />

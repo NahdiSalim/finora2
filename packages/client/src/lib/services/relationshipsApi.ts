@@ -41,15 +41,26 @@ export const relationshipsApi = createApi({
         search?: string;
         startDate?: string;
         endDate?: string;
+        /** true = uniquement les clients ayant des documents archivés, false = sans archivés */
+        isArchived?: boolean;
       }
     >({
-      query: ({ page = 1, limit = 8, search, startDate, endDate } = {}) => {
+      query: ({
+        page = 1,
+        limit = 8,
+        search,
+        startDate,
+        endDate,
+        isArchived,
+      } = {}) => {
         const params = new URLSearchParams();
         params.append("page", String(page));
         params.append("limit", String(limit));
         if (search?.trim()) params.append("search", search.trim());
         if (startDate) params.append("startDate", startDate);
         if (endDate) params.append("endDate", endDate);
+        if (isArchived !== undefined)
+          params.append("isArchived", String(isArchived));
         return {
           url: `/relationships/clients/invoice-stats?${params.toString()}`,
           method: "GET",

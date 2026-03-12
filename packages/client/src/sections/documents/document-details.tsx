@@ -82,8 +82,15 @@ import {
   docToFolderState,
   docToFileType,
 } from "../../types/document-details-types";
+import { useGetClientsInvoiceStatsQuery } from "src/lib/services/relationshipsApi";
 
 // ─── Main View ────────────────────────────────────────────────────────────────
+
+const DEFAULT_INVOICE_STATS = {
+  traite: 0,
+  pending: 0,
+  total: 0,
+};
 
 export default function DocumentDetailsView() {
   const { clientId } = useParams<{ clientId?: string }>();
@@ -94,13 +101,21 @@ export default function DocumentDetailsView() {
     invoiceStats?: { traite: number; pending: number; total: number };
   } | null;
   const clientName = state?.clientName;
-  const invoiceStats = state?.invoiceStats ?? {
-    traite: 0,
-    pending: 0,
-    total: 0,
-  };
   /** Mode "mon espace" : pas de clientId (client voit ses docs directement). */
   const isMySpace = clientId == null || clientId === "";
+
+  const numericClientId = !isMySpace && clientId ? Number(clientId) : undefined;
+  const { data: clientsStatsData } = useGetClientsInvoiceStatsQuery(
+    { limit: 500 },
+    { skip: numericClientId == null },
+  );
+  const currentClientStats = numericClientId
+    ? clientsStatsData?.data?.find((c) => c.clientId === numericClientId)
+    : undefined;
+  const invoiceStats =
+    currentClientStats?.invoiceStats ??
+    state?.invoiceStats ??
+    DEFAULT_INVOICE_STATS;
   const [searchValue, setSearchValue] = useState("");
   const [category, setCategory] = useState("");
   const [startDate, setStartDate] = useState<Dayjs | null>(null);

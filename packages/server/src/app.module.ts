@@ -23,6 +23,7 @@ import { PostModule } from './modules/post/post.module';
 import { ReviewModule } from './modules/review/review.module';
 import { ContactModule } from './modules/contact/contact.module';
 import { RelationshipModule } from './modules/relationship/relationship.module';
+import { LocationModule } from './modules/location/location.module';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { RelationshipModule } from './modules/relationship/relationship.module';
     ReviewModule,
     ContactModule,
     RelationshipModule,
+    LocationModule,
   ],
   controllers: [AppController],
   providers: [

@@ -63,6 +63,8 @@ export class AccountantController {
   @Post('clients')
   @Roles(RoleCode.ACCOUNTANT)
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(FileFieldsInterceptor([{ name: 'patentFile', maxCount: 1 }]))
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Create a client with automatic relationship (accountant only)' })
   @ApiResponse({
     status: 201,
@@ -76,9 +78,14 @@ export class AccountantController {
     status: 403,
     description: 'Only accountants can create clients',
   })
-  async createClient(@Req() req: AuthRequest, @Body() dto: CreateClientDto) {
+  async createClient(
+    @Req() req: AuthRequest,
+    @Body() dto: CreateClientDto,
+    @UploadedFiles() files?: { patentFile?: Express.Multer.File[] }
+  ) {
     const accountantId = req.user!.id;
-    return await this.accountantService.createClient(accountantId, dto);
+    const patentFile = files?.patentFile?.[0];
+    return await this.accountantService.createClient(accountantId, dto, patentFile);
   }
 
   @Get('collaborators')

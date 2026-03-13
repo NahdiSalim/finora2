@@ -136,7 +136,7 @@ export class AccountantService {
   }
 
   // Create client (by accountant) with automatic relationship
-  async createClient(accountantId: number, dto: CreateClientDto) {
+  async createClient(accountantId: number, dto: CreateClientDto, patentFile?: Express.Multer.File) {
     const {
       firstName,
       lastName,
@@ -149,6 +149,7 @@ export class AccountantService {
       address,
       city,
       postalCode,
+      country,
       password,
     } = dto;
 
@@ -208,6 +209,22 @@ export class AccountantService {
       // Generate username from email
       const username = email.split('@')[0];
 
+      // Upload patent file if provided
+      let patentFileUrl: string | null = null;
+      if (patentFile) {
+        try {
+          const path = 'patents';
+          patentFileUrl = await this.minioService.uploadFile(
+            accountant.companyId,
+            path,
+            patentFile
+          );
+        } catch (error) {
+          console.error('Failed to upload patent file:', error);
+          throw new ApiError('Failed to upload patent file', 500, 'UPLOAD_FAILED');
+        }
+      }
+
       // Create client company
       const clientCompany = await this.prisma.company.create({
         data: {
@@ -218,8 +235,10 @@ export class AccountantService {
           address,
           city,
           postalCode,
+          country: country || 'France',
           phone,
           email,
+          patentFile: patentFileUrl,
           type: 'client',
           status: UserStatus.ACTIVE,
         },
@@ -299,6 +318,8 @@ export class AccountantService {
             address: clientCompany.address,
             city: clientCompany.city,
             postalCode: clientCompany.postalCode,
+            country: clientCompany.country,
+            patentFile: clientCompany.patentFile,
             phone: clientCompany.phone,
             email: clientCompany.email,
           },

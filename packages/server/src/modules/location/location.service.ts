@@ -13,6 +13,9 @@ export class LocationService {
   getAllCountries(search?: string) {
     let countries = Country.getAllCountries();
 
+    // Exclude Israel
+    countries = countries.filter((country) => country.isoCode !== 'IL');
+
     // Filter by search if provided
     if (search && search.trim()) {
       const searchLower = search.toLowerCase();

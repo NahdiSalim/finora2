@@ -284,24 +284,16 @@ export class InvoiceExtractionService {
     }
 
     try {
-      console.log('Received extractedData:', typeof extractedData, extractedData);
+      console.log('Received extractedData:', typeof extractedData);
 
-      // 3. Save or update metadata in database with same structure
+      // Validate that extractedData is an object
+      if (!extractedData || typeof extractedData !== 'object') {
+        throw new ApiError('extractedData must be a valid JSON object', 400, 'INVALID_DATA');
+      }
+
+      // 3. Save or update metadata in database - store entire JSON directly
       const metadataData = {
-        msgSenderId: extractedData?.invoice_header?.msg_sender_id || null,
-        msgReceiverId: extractedData?.invoice_header?.msg_receiver_id || null,
-        invoiceType: extractedData?.bgm?.type || null,
-        invoiceNumber: extractedData?.bgm?.numero || null,
-        invoiceDate: extractedData?.dtm?.[0]?.date_periode
-          ? new Date(extractedData.dtm[0].date_periode)
-          : null,
-        partners: extractedData?.partner_section || null,
-        paymentTerms: extractedData?.pyt_section || null,
-        totalInWords: extractedData?.texte || null,
-        lineItems: extractedData?.lin_section || null,
-        amounts: extractedData?.invoice_moa || null,
-        taxes: extractedData?.invoice_tax || null,
-        rawData: extractedData || {},
+        rawData: extractedData,
         extractionStatus: 'success',
         errorMessage: null,
       };
@@ -340,6 +332,9 @@ export class InvoiceExtractionService {
       };
     } catch (error) {
       console.error('Failed to save invoice metadata:', error);
+      if (error instanceof ApiError) {
+        throw error;
+      }
       throw new ApiError('Failed to save invoice metadata', 500, 'SAVE_FAILED');
     }
   }

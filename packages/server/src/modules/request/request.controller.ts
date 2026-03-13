@@ -85,12 +85,55 @@ export class RequestController {
   }
 
   /**
-   * Get all requests (Accountant)
+   * Get my assigned requests (Accountant)
+   */
+  @Get('assigned-to-me')
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Get requests assigned to me' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['pending', 'in_progress', 'resolved', 'rejected', 'cancelled'],
+  })
+  @ApiQuery({
+    name: 'urgency',
+    required: false,
+    enum: ['low', 'normal', 'high', 'urgent'],
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ['urgency', 'createdAt'],
+  })
+  async getMyAssignedRequests(
+    @Req() req: AuthRequest,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('status') status?: string,
+    @Query('urgency') urgency?: string,
+    @Query('sortBy') sortBy?: 'urgency' | 'createdAt'
+  ) {
+    const accountantId = req.user!.id;
+    return this.requestService.getMyAssignedRequests(
+      accountantId,
+      page || 1,
+      limit || 10,
+      status,
+      urgency,
+      sortBy
+    );
+  }
+
+  /**
+   * Get all unassigned requests (Accountant) - Client requests waiting for assignment
    */
   @Get('all')
   @UseGuards(RolesGuard)
   @Roles('ACCOUNTANT')
-  @ApiOperation({ summary: '[Accountant] Get all requests from clients' })
+  @ApiOperation({ summary: '[Accountant] Get all unassigned client requests' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
   @ApiQuery({
@@ -143,15 +186,18 @@ export class RequestController {
    * Update request
    */
   @Put(':id')
-  @ApiOperation({ summary: 'Update request' })
+  @UseInterceptors(FilesInterceptor('attachments', 10))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Update request with optional new attachments' })
   @ApiResponse({ status: 200, description: 'Request updated successfully' })
   async updateRequest(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateRequestDto,
-    @Req() req: AuthRequest
+    @Req() req: AuthRequest,
+    @UploadedFiles() files?: Express.Multer.File[]
   ) {
     const userId = req.user!.id;
-    return this.requestService.updateRequest(id, dto, userId);
+    return this.requestService.updateRequest(id, dto, userId, files);
   }
 
   /**

@@ -17,10 +17,19 @@ export enum RequestUrgency {
 }
 
 export class CreateRequestDto {
-  @ApiProperty({ example: 'Demande de déclaration fiscale', description: 'Request subject' })
+  @ApiProperty({ example: 'Demande de déclaration fiscale', description: 'Request title' })
   @IsString()
   @IsNotEmpty()
   subject: string;
+
+  @ApiProperty({
+    example: 'TVA annuelle',
+    description: 'Request topic/subcategory',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  topic?: string;
 
   @ApiProperty({
     example: "J'ai besoin d'aide pour ma déclaration fiscale annuelle",
@@ -49,6 +58,24 @@ export class CreateRequestDto {
   @IsEnum(RequestUrgency)
   @IsOptional()
   urgency?: RequestUrgency;
+
+  @ApiProperty({
+    example: '2026-03-15',
+    description: 'Desired response date (YYYY-MM-DD)',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  desiredResponseDate?: string;
+
+  @ApiProperty({
+    example: '14:30',
+    description: 'Desired response time (HH:mm)',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  desiredResponseTime?: string;
 
   @ApiProperty({
     type: 'array',

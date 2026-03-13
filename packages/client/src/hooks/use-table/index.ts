@@ -1,28 +1,31 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback } from "react";
 
 export function useTable() {
   const [page, setPage] = useState(0);
-  const [orderBy, setOrderBy] = useState('name');
-  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [orderBy, setOrderBy] = useState("name");
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selected, setSelected] = useState<string[]>([]);
-  const [order, setOrder] = useState<'asc' | 'desc'>('asc');
+  const [order, setOrder] = useState<"asc" | "desc">("asc");
 
   const onSort = useCallback(
     (id: string) => {
-      const isAsc = orderBy === id && order === 'asc';
-      setOrder(isAsc ? 'desc' : 'asc');
+      const isAsc = orderBy === id && order === "asc";
+      setOrder(isAsc ? "desc" : "asc");
       setOrderBy(id);
     },
-    [order, orderBy]
+    [order, orderBy],
   );
 
-  const onSelectAllRows = useCallback((checked: boolean, newSelecteds: string[]) => {
-    if (checked) {
-      setSelected(newSelecteds);
-      return;
-    }
-    setSelected([]);
-  }, []);
+  const onSelectAllRows = useCallback(
+    (checked: boolean, newSelecteds: string[]) => {
+      if (checked) {
+        setSelected(newSelecteds);
+        return;
+      }
+      setSelected([]);
+    },
+    [],
+  );
 
   const onSelectRow = useCallback(
     (inputValue: string) => {
@@ -32,7 +35,7 @@ export function useTable() {
 
       setSelected(newSelected);
     },
-    [selected]
+    [selected],
   );
 
   const onResetPage = useCallback(() => {
@@ -48,7 +51,7 @@ export function useTable() {
       setRowsPerPage(parseInt(event.target.value, 10));
       onResetPage();
     },
-    [onResetPage]
+    [onResetPage],
   );
 
   return {

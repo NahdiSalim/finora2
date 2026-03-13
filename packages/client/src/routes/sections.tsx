@@ -20,6 +20,7 @@ import AuthLayout from "src/sections/auth/sign-in-view/Auth-Layout";
 export const UserPage = lazy(() => import("src/pages/users"));
 export const CollaboratorPage = lazy(() => import("src/pages/collaborators"));
 export const ClientPage = lazy(() => import("src/pages/clients"));
+export const RequestPage = lazy(() => import("src/pages/requests"));
 export const ProfilePage = lazy(() => import("src/pages/profile"));
 export const NetworkPage = lazy(() => import("src/pages/network"));
 export const NetworkAccountantProfilePage = lazy(() =>
@@ -196,7 +197,7 @@ export const routesSection: RouteObject[] = [
             path: "requests",
             element: (
               <PermissionGuard requiredPath="/requests">
-                <UserPage />
+                <RequestPage />
               </PermissionGuard>
             ),
           },
@@ -204,7 +205,7 @@ export const routesSection: RouteObject[] = [
             path: "requests/:id",
             element: (
               <PermissionGuard requiredPath="/requests/:id">
-                <UserPage />
+                <RequestPage />
               </PermissionGuard>
             ),
           },

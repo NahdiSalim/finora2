@@ -5,6 +5,7 @@ import { seedPages } from './seeds/pages.seed';
 import { seedActions } from './seeds/actions.seed';
 import { seedUsers } from './seeds/users.seed';
 import { seedRolePermissions } from './seeds/role-permissions.seed';
+import { seedRequests } from './seeds/requests.seed';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 export const prisma = new PrismaClient({
@@ -23,8 +24,9 @@ async function main() {
     await seedActions(prisma);
     await seedUsers(prisma);
     await seedRolePermissions(prisma);
+    await seedRequests(prisma);
 
-    console.log('\n Database seeding completed successfully!');
+    console.log('\n✅ Database seeding completed successfully!');
   } catch (error) {
     console.error(' Error during seeding:', error);
     throw error;

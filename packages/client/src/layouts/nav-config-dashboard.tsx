@@ -16,6 +16,7 @@ export type NavItem = {
   path: string;
   icon: React.ReactNode;
   info?: React.ReactNode;
+  children?: NavItem[];
 };
 
 export const NAV_CONFIG: Record<

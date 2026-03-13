@@ -42,9 +42,12 @@ export class RequestService {
       const request = await this.prisma.request.create({
         data: {
           subject: dto.subject.trim(),
+          topic: dto.topic?.trim() || null,
           description: dto.description?.trim() || null,
           type: dto.type,
           urgency: dto.urgency || 'normal',
+          desiredResponseDate: dto.desiredResponseDate || null,
+          desiredResponseTime: dto.desiredResponseTime || null,
           clientId,
           companyId: client.companyId,
           attachments: [], // Will be updated after file uploads
@@ -261,6 +264,7 @@ export class RequestService {
     if (status) {
       where.status = status;
     }
+
     const [total, requests] = await Promise.all([
       this.prisma.request.count({ where }),
       this.prisma.request.findMany({
@@ -271,6 +275,15 @@ export class RequestService {
           createdAt: 'desc',
         },
         include: {
+          client: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
           assignedTo: {
             select: {
               id: true,
@@ -319,6 +332,28 @@ export class RequestService {
       })
     );
 
+    // Count by status
+    const statusCounts = await this.prisma.request.groupBy({
+      by: ['status'],
+      where: { clientId },
+      _count: true,
+    });
+
+    const counts = {
+      pending: 0,
+      in_progress: 0,
+      resolved: 0,
+      rejected: 0,
+      cancelled: 0,
+    };
+
+    statusCounts.forEach((item) => {
+      const status = item.status as keyof typeof counts;
+      if (status in counts) {
+        counts[status] = item._count;
+      }
+    });
+
     return {
       success: true,
       data: requestsWithUrls,
@@ -328,11 +363,111 @@ export class RequestService {
         total,
         totalPages: Math.ceil(total / limit),
       },
+      counts,
     };
   }
 
   /**
-   * Get all requests (Accountant)
+   * Get requests assigned to me (Accountant)
+   */
+  async getMyAssignedRequests(
+    accountantId: number,
+    page: number = 1,
+    limit: number = 10,
+    status?: string,
+    urgency?: string,
+    sortBy: 'urgency' | 'createdAt' = 'createdAt'
+  ) {
+    const skip = (page - 1) * limit;
+    const where: any = { assignedToId: accountantId };
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (urgency) {
+      where.urgency = urgency;
+    }
+
+    const orderBy: any = {};
+    if (sortBy === 'urgency') {
+      const urgencyOrder = ['urgent', 'high', 'normal', 'low'];
+      orderBy.urgency = 'asc';
+    } else {
+      orderBy.createdAt = 'desc';
+    }
+
+    const [total, requests, statusCounts] = await Promise.all([
+      this.prisma.request.count({ where }),
+      this.prisma.request.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy,
+        include: {
+          client: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          company: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          assignedTo: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      }),
+      this.prisma.request.groupBy({
+        by: ['status'],
+        where: { assignedToId: accountantId },
+        _count: true,
+      }),
+    ]);
+
+    const counts = {
+      pending: 0,
+      in_progress: 0,
+      resolved: 0,
+      rejected: 0,
+      cancelled: 0,
+    };
+
+    statusCounts.forEach((item) => {
+      const status = item.status as keyof typeof counts;
+      if (status in counts) {
+        counts[status] = item._count;
+      }
+    });
+
+    return {
+      success: true,
+      data: requests,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+      counts,
+    };
+  }
+
+  /**
+   * Get all unassigned requests (Accountant) - Client requests waiting for assignment
    */
   async getAllRequests(
     accountantId: number,
@@ -353,7 +488,10 @@ export class RequestService {
     }
 
     const skip = (page - 1) * limit;
-    const where: any = { companyId: accountant.companyId };
+    const where: any = {
+      companyId: accountant.companyId,
+      assignedToId: null, // Only unassigned requests
+    };
 
     if (status) {
       where.status = status;
@@ -407,10 +545,13 @@ export class RequestService {
       }),
     ]);
 
-    // Count by status
+    // Count by status (only unassigned requests)
     const statusCounts = await this.prisma.request.groupBy({
       by: ['status'],
-      where: { companyId: accountant.companyId },
+      where: {
+        companyId: accountant.companyId,
+        assignedToId: null, // Only count unassigned requests
+      },
       _count: true,
     });
 
@@ -423,7 +564,10 @@ export class RequestService {
     };
 
     statusCounts.forEach((item) => {
-      counts[item.status] = item._count;
+      const status = item.status as keyof typeof counts;
+      if (status in counts) {
+        counts[status] = item._count;
+      }
     });
 
     // Generate presigned URLs for attachments
@@ -563,7 +707,12 @@ export class RequestService {
   /**
    * Update request
    */
-  async updateRequest(requestId: number, dto: UpdateRequestDto, userId: number) {
+  async updateRequest(
+    requestId: number,
+    dto: UpdateRequestDto,
+    userId: number,
+    files?: Express.Multer.File[]
+  ) {
     const request = await this.prisma.request.findUnique({
       where: { id: requestId },
     });
@@ -577,22 +726,98 @@ export class RequestService {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
     }
 
+    // Handle file uploads if provided
+    const attachmentUrls: string[] = [...request.attachments]; // Keep existing attachments
+
+    if (files && files.length > 0) {
+      const client = await this.prisma.user.findUnique({
+        where: { id: request.clientId },
+        select: { companyId: true },
+      });
+
+      if (!client?.companyId) {
+        throw new ApiError('Company not found', 404, 'COMPANY_NOT_FOUND');
+      }
+
+      for (const file of files) {
+        const fileName = `request-${Date.now()}-${file.originalname}`;
+        const filePath = `requests/${fileName}`;
+
+        try {
+          await this.minioService.uploadFile(client.companyId, filePath, file);
+          attachmentUrls.push(filePath);
+        } catch (error) {
+          console.error('MinIO upload error:', error);
+          // Continue without the file if upload fails
+        }
+      }
+    }
+
+    const updateData: any = {};
+    if (dto.subject !== undefined) updateData.subject = dto.subject;
+    if (dto.description !== undefined) updateData.description = dto.description;
+    if (dto.type !== undefined) updateData.type = dto.type;
+    if (dto.urgency !== undefined) updateData.urgency = dto.urgency;
+    if (dto.status !== undefined) updateData.status = dto.status;
+    if (dto.topic !== undefined) updateData.topic = dto.topic;
+    if (dto.desiredResponseDate !== undefined)
+      updateData.desiredResponseDate = dto.desiredResponseDate;
+    if (dto.desiredResponseTime !== undefined)
+      updateData.desiredResponseTime = dto.desiredResponseTime;
+
+    // Handle assignment changes
+    if (dto.assignedToId !== undefined && dto.assignedToId !== null) {
+      // Validate that the assignee is an accountant or collaborator
+      const assignee = await this.prisma.user.findUnique({
+        where: { id: dto.assignedToId },
+        include: {
+          role: {
+            select: {
+              code: true,
+            },
+          },
+        },
+      });
+
+      if (!assignee) {
+        throw new ApiError('Assignee user not found', 404, 'ASSIGNEE_NOT_FOUND');
+      }
+
+      if (assignee.role?.code !== 'ACCOUNTANT' && assignee.role?.code !== 'COLLABORATOR') {
+        throw new ApiError(
+          'Only accountants and collaborators can be assigned to requests',
+          400,
+          'INVALID_ASSIGNEE_ROLE'
+        );
+      }
+
+      updateData.assignedToId = dto.assignedToId;
+      // Note: Status is NOT automatically changed per requirement #5
+    } else if (dto.assignedToId === null || dto.assignedToId === undefined) {
+      // Explicitly allow null to unassign (when sent as null or empty string converted to null)
+      updateData.assignedToId = null;
+    }
+
+    // Update attachments if new files were uploaded
+    if (files && files.length > 0) {
+      updateData.attachments = attachmentUrls;
+    }
+
+    if (dto.status === RequestStatus.RESOLVED) {
+      updateData.resolvedAt = new Date();
+    }
+
     const updatedRequest = await this.prisma.request.update({
       where: { id: requestId },
-      data: {
-        subject: dto.subject,
-        description: dto.description,
-        type: dto.type,
-        urgency: dto.urgency,
-        status: dto.status,
-        resolvedAt: dto.status === RequestStatus.RESOLVED ? new Date() : undefined,
-      },
+      data: updateData,
       include: {
         client: {
           select: {
             id: true,
             username: true,
             email: true,
+            firstName: true,
+            lastName: true,
           },
         },
         assignedTo: {
@@ -600,6 +825,15 @@ export class RequestService {
             id: true,
             username: true,
             email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        convertedToTask: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
           },
         },
       },

@@ -463,30 +463,46 @@ export class AccountantService {
       });
 
       // Transform data to simple format
-      const clients = relationships.map((rel) => {
-        const company = rel.clientCompany;
-        const primaryUser = company.employees[0]; // Get first employee (owner)
+      const clients = await Promise.all(
+        relationships.map(async (rel) => {
+          const company = rel.clientCompany;
+          const primaryUser = company.employees[0]; // Get first employee (owner)
 
-        return {
-          id: company.id,
-          fullName: primaryUser ? `${primaryUser.firstName} ${primaryUser.lastName}` : 'N/A',
-          email: primaryUser?.email || company.email,
-          phone: primaryUser?.phone || company.phone,
-          company: {
-            name: company.name,
-            siret: company.siret,
-            vatNumber: company.vatNumber,
-            legalForm: company.legalForm,
-            address: company.address,
-            city: company.city,
-            postalCode: company.postalCode,
-          },
-          status: company.status,
-          relationshipStatus: rel.status,
-          relationshipStart: rel.relationshipStart,
-          createdAt: company.createdAt,
-        };
-      });
+          // Generate presigned URL for patent file if it exists
+          let patentFileUrl: string | null = null;
+          if (company.patentFile) {
+            try {
+              patentFileUrl = await this.minioService.getPresignedUrl(company.patentFile, 604800); // 7 days
+            } catch (error) {
+              console.error('Error generating presigned URL for patent file:', error);
+              patentFileUrl = null;
+            }
+          }
+
+          return {
+            id: company.id,
+            fullName: primaryUser ? `${primaryUser.firstName} ${primaryUser.lastName}` : 'N/A',
+            email: primaryUser?.email || company.email,
+            phone: primaryUser?.phone || company.phone,
+            company: {
+              name: company.name,
+              siret: company.siret,
+              vatNumber: company.vatNumber,
+              legalForm: company.legalForm,
+              address: company.address,
+              city: company.city,
+              postalCode: company.postalCode,
+              country: company.country,
+              patentFile: company.patentFile,
+              patentFileUrl: patentFileUrl,
+            },
+            status: company.status,
+            relationshipStatus: rel.status,
+            relationshipStart: rel.relationshipStart,
+            createdAt: company.createdAt,
+          };
+        })
+      );
 
       return {
         data: clients,

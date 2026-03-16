@@ -54,6 +54,33 @@ export class MinioService implements OnModuleInit {
   }
 
   /**
+   * Sanitize filename for MinIO (remove special characters and spaces)
+   */
+  private sanitizeFilename(filename: string): string {
+    // Remove or replace special characters
+    return filename
+      .normalize('NFD') // Normalize unicode characters
+      .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+      .replace(/[^\w\s.-]/g, '') // Keep only alphanumeric, spaces, dots, dashes
+      .replace(/\s+/g, '_') // Replace spaces with underscores
+      .replace(/_{2,}/g, '_') // Replace multiple underscores with single
+      .toLowerCase(); // Convert to lowercase for consistency
+  }
+
+  /**
+   * Sanitize path for MinIO (remove special characters from path segments)
+   */
+  private sanitizePath(path: string): string {
+    if (!path || path.trim() === '') return '';
+
+    return path
+      .split('/')
+      .map((segment) => this.sanitizeFilename(segment))
+      .filter((segment) => segment.length > 0)
+      .join('/');
+  }
+
+  /**
    * Upload a file to MinIO
    */
   async uploadFile(companyId: number, path: string, file: Express.Multer.File): Promise<string> {
@@ -63,7 +90,17 @@ export class MinioService implements OnModuleInit {
       );
     }
 
-    const objectName = `company_${companyId}/${path}/${file.originalname}`;
+    const sanitizedPath = this.sanitizePath(path);
+    const sanitizedFilename = this.sanitizeFilename(file.originalname);
+
+    // Build object name with sanitized components
+    const pathParts = [`company_${companyId}`];
+    if (sanitizedPath) {
+      pathParts.push(sanitizedPath);
+    }
+    pathParts.push(sanitizedFilename);
+
+    const objectName = pathParts.join('/');
 
     const metadata = {
       'Content-Type': file.mimetype,
@@ -86,7 +123,17 @@ export class MinioService implements OnModuleInit {
     buffer: Buffer,
     mimeType: string
   ): Promise<string> {
-    const objectName = `company_${companyId}/${path}/${fileName}`;
+    const sanitizedPath = this.sanitizePath(path);
+    const sanitizedFilename = this.sanitizeFilename(fileName);
+
+    // Build object name with sanitized components
+    const pathParts = [`company_${companyId}`];
+    if (sanitizedPath) {
+      pathParts.push(sanitizedPath);
+    }
+    pathParts.push(sanitizedFilename);
+
+    const objectName = pathParts.join('/');
 
     const metadata = {
       'Content-Type': mimeType,
@@ -194,5 +241,39 @@ export class MinioService implements OnModuleInit {
     } catch (error) {
       return false;
     }
+  }
+
+  /**
+   * Get file as buffer (alias for downloadFile)
+   */
+  async getFileBuffer(objectName: string): Promise<Buffer> {
+    return this.downloadFile(objectName);
+  }
+
+  /**
+   * Upload buffer with custom path
+   */
+  async uploadBuffer(
+    companyId: number,
+    fullPath: string,
+    buffer: Buffer,
+    mimeType: string
+  ): Promise<string> {
+    if (!this.minioClient) {
+      throw new Error(
+        'SERVICE_UNAVAILABLE: MinIO storage is not configured. Please contact your administrator.'
+      );
+    }
+
+    const objectName = `company_${companyId}/${fullPath}`;
+
+    const metadata = {
+      'Content-Type': mimeType,
+    };
+
+    await this.minioClient.putObject(this.bucketName, objectName, buffer, buffer.length, metadata);
+
+    this.logger.log(`Buffer uploaded: ${objectName}`);
+    return objectName;
   }
 }

@@ -14,6 +14,7 @@ import { AuthRequest } from './types/user-type';
 import { RegisterClientDto } from './dto/register-client.dto';
 import { RegisterAccountantDto } from './dto/register-accountant.dto';
 import { FileUploadService, FileCategory } from 'src/common/services/file-upload.service';
+import { MinioService } from 'src/common/services/minio.service';
 import { RoleCode } from 'src/common/enums/role.enum';
 import { UserStatus } from 'src/common/enums/user-status.enum';
 
@@ -27,7 +28,8 @@ export class AuthService {
     private jwtTokenService: JwtTokenService,
     private mailService: MailService,
     private configService: ConfigService,
-    private fileUploadService: FileUploadService
+    private fileUploadService: FileUploadService,
+    private minioService: MinioService
   ) {}
 
   // Login
@@ -49,9 +51,19 @@ export class AuthService {
           },
         },
       });
-      console.log(user, 'user');
+      console.log('user', user);
 
-      if (!user || user.status !== UserStatus.ACTIVE) {
+      if (!user) {
+        console.log('User not found');
+        throw new ApiError(
+          errors.BAD_CREDENTIEL.message,
+          errors.BAD_CREDENTIEL.code,
+          errors.BAD_CREDENTIEL.errorCode
+        );
+      }
+
+      if (user.status !== UserStatus.ACTIVE) {
+        console.log('User status is not active:', user.status);
         throw new ApiError(
           errors.BAD_CREDENTIEL.message,
           errors.BAD_CREDENTIEL.code,
@@ -60,7 +72,10 @@ export class AuthService {
       }
 
       const isPasswordValid = await bcrypt.compare(password, user.password);
+      console.log('Password valid:', isPasswordValid);
+
       if (!isPasswordValid) {
+        console.log('Password is invalid');
         throw new ApiError(
           errors.BAD_CREDENTIEL.message,
           errors.BAD_CREDENTIEL.code,
@@ -68,7 +83,12 @@ export class AuthService {
         );
       }
 
-      const payload = { sub: user.id, email: user.email };
+      const payload = {
+        sub: user.id,
+        email: user.email,
+        roleCode: user.role?.code,
+        companyId: user.companyId,
+      };
       const { accessToken, refreshToken } = this.jwtTokenService.generateTokens(payload);
 
       await this.jwtTokenService.storeRefreshToken(user.id, refreshToken);
@@ -116,7 +136,7 @@ export class AuthService {
         );
       }
 
-      const { sub, email } = decoded as unknown as JwtPayload;
+      const { sub, email, roleCode, companyId } = decoded as unknown as JwtPayload;
 
       const storedRefreshToken = await this.jwtTokenService.findValidRefreshToken(sub);
 
@@ -132,6 +152,8 @@ export class AuthService {
       const { accessToken, refreshToken } = this.jwtTokenService.generateTokens({
         sub,
         email,
+        roleCode,
+        companyId,
       });
 
       await this.jwtTokenService.deleteOldRefreshToken(storedRefreshToken.id);
@@ -190,10 +212,33 @@ export class AuthService {
           id: true,
           email: true,
           username: true,
+          firstName: true,
+          lastName: true,
           phone: true,
+          photo: true,
+          coverPhoto: true,
+          position: true,
+          department: true,
+          cin: true,
+          diploma: true,
+          companyId: true,
           status: true,
           createdAt: true,
           updatedAt: true,
+          company: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              experience: true,
+              logo: true,
+              city: true,
+              address: true,
+              postalCode: true,
+              phone: true,
+              email: true,
+            },
+          },
           role: {
             select: {
               id: true,
@@ -309,11 +354,54 @@ export class AuthService {
 
       const features = Array.from(featuresMap.values());
 
+      // Generate presigned URLs for photo and coverPhoto if they exist
+      let photoUrl: string | null = null;
+      if (user.photo) {
+        try {
+          photoUrl = await this.minioService.getPresignedUrl(user.photo, 7 * 24 * 60 * 60); // 7 days
+        } catch (error) {
+          console.error('Error generating presigned URL for photo:', error);
+          photoUrl = user.photo; // Fallback to path
+        }
+      }
+
+      let coverPhotoUrl: string | null = null;
+      if (user.coverPhoto) {
+        try {
+          coverPhotoUrl = await this.minioService.getPresignedUrl(
+            user.coverPhoto,
+            7 * 24 * 60 * 60
+          ); // 7 days
+        } catch (error) {
+          console.error('Error generating presigned URL for cover photo:', error);
+          coverPhotoUrl = user.coverPhoto; // Fallback to path
+        }
+      }
+
+      // Generate presigned URL for company logo if exists
+      let logoUrl: string | null = null;
+      if (user.company?.logo) {
+        try {
+          logoUrl = await this.minioService.getPresignedUrl(user.company.logo, 7 * 24 * 60 * 60); // 7 days
+        } catch (error) {
+          console.error('Error generating presigned URL for company logo:', error);
+          logoUrl = user.company.logo; // Fallback to path
+        }
+      }
+
       // Return structure matching frontend VerifyUserResponse
       return {
         id: String(user.id),
         email: user.email,
         full_name: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        photoUrl: photoUrl, // URL présignée MinIO
+        coverPhotoUrl: coverPhotoUrl, // URL présignée MinIO
+        position: user.position,
+        department: user.department,
+        cin: user.cin,
+        diploma: user.diploma,
         sex: null,
         dateOfBirth: null,
         status: user.status,
@@ -322,6 +410,20 @@ export class AuthService {
         is_active: user.status === UserStatus.ACTIVE,
         created_at: user.createdAt.toISOString(),
         updated_at: user.updatedAt.toISOString(),
+        company: user.company
+          ? {
+              id: user.company.id,
+              name: user.company.name,
+              description: user.company.description,
+              experience: user.company.experience,
+              logoUrl: logoUrl, // URL présignée MinIO
+              city: user.company.city,
+              address: user.company.address,
+              postalCode: user.company.postalCode,
+              phone: user.company.phone,
+              email: user.company.email,
+            }
+          : null,
         role: {
           id: String(role.id),
           name: role.nameEn,

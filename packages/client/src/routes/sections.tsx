@@ -10,6 +10,7 @@ import { DashboardLayout } from "src/layouts/dashboard";
 import AuthGuard from "src/guard/AuthGuard";
 import PermissionGuard from "src/guard/PermissionGuard";
 import DefaultRedirect from "src/components/default-redirect";
+import DashboardRoleRedirect from "src/components/dashboard-role-redirect";
 import RoleView from "src/sections/roles";
 import RoleFormRouter from "src/sections/roles/RoleFormRouter";
 import AuthLayout from "src/sections/auth/sign-in-view/Auth-Layout";
@@ -20,6 +21,25 @@ export const UserPage = lazy(() => import("src/pages/users"));
 export const CollaboratorPage = lazy(() => import("src/pages/collaborators"));
 export const ClientPage = lazy(() => import("src/pages/clients"));
 export const MessagesPage = lazy(() => import("src/pages/messages"));
+export const ProfilePage = lazy(() => import("src/pages/profile"));
+export const NetworkPage = lazy(() => import("src/pages/network"));
+export const NetworkAccountantProfilePage = lazy(() =>
+  import("src/pages/network/accountant-profile").then((m) => ({
+    default: m.default,
+  })),
+);
+export const DocumentsPage = lazy(
+  () => import("src/pages/documents/documents"),
+);
+
+export const DocumentDetailsPage = lazy(
+  () => import("src/pages/documents/documents-details"),
+);
+
+export const ArchivePage = lazy(() => import("src/pages/archive/index"));
+export const ArchiveDetailsPage = lazy(
+  () => import("src/pages/archive/archive-details"),
+);
 
 export const UserFormPage = lazy(
   () => import("src/sections/user/user-forms/index"),
@@ -29,6 +49,15 @@ export const DocumentValidationPage = lazy(
 );
 export const SignInPage = lazy(() => import("src/pages/sign-in"));
 export const RegisterPage = lazy(() => import("src/pages/register"));
+export const VisitorPage = lazy(() => import("src/pages/visitor"));
+export const EntryPointPage = lazy(() =>
+  import("src/components/entry-point").then((m) => ({ default: m.default })),
+);
+export const AccountantPublicProfilePage = lazy(() =>
+  import("src/sections/profile/accountant-public-view").then((m) => ({
+    default: m.default,
+  })),
+);
 
 export const ForgotPasswordPage = lazy(
   () => import("src/pages/forgot-password"),
@@ -70,11 +99,19 @@ function DashboardWrapper() {
 export const routesSection: RouteObject[] = [
   {
     path: "/",
-    Component: DashboardWrapper,
+    element: (
+      <Suspense fallback={renderFallback()}>
+        <EntryPointPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: "dashboard",
+    element: <Outlet />,
     children: [
       {
         index: true,
-        element: <DefaultRedirect />,
+        element: <DashboardRoleRedirect />,
       },
       {
         path: "users",
@@ -251,10 +288,226 @@ export const routesSection: RouteObject[] = [
             <RoleFormRouter />
           </PermissionGuard>
         ),
+        path: ":roleSlug",
+        Component: DashboardWrapper,
+        children: [
+          {
+            index: true,
+            element: <DefaultRedirect />,
+          },
+          {
+            path: "archive",
+            element: (
+              <PermissionGuard requiredPath="/archive">
+                <ArchivePage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "archive/:clientId",
+            element: (
+              <PermissionGuard requiredPath="/archive">
+                <ArchiveDetailsPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "collaborators",
+            element: (
+              <PermissionGuard requiredPath="/collaborators">
+                <CollaboratorPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "clients",
+            element: (
+              <PermissionGuard requiredPath="/clients">
+                <ClientPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "dashboard",
+            element: (
+              <PermissionGuard requiredPath="/dashboard">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "documents",
+            element: (
+              <PermissionGuard requiredPath="/documents">
+                <DocumentsPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "documents/:clientId",
+            element: (
+              <PermissionGuard requiredPath="/documents">
+                <DocumentDetailsPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "meetings",
+            element: (
+              <PermissionGuard requiredPath="/meetings">
+                <DocumentDetailsPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "meetings/:id",
+            element: (
+              <PermissionGuard requiredPath="/meetings/:id">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "requests",
+            element: (
+              <PermissionGuard requiredPath="/requests">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "requests/:id",
+            element: (
+              <PermissionGuard requiredPath="/requests/:id">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "messages",
+            element: (
+              <PermissionGuard requiredPath="/messages">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "messages/:id",
+            element: (
+              <PermissionGuard requiredPath="/messages/:id">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "banks",
+            element: (
+              <PermissionGuard requiredPath="/banks">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "network/accountant/:id",
+            element: (
+              <PermissionGuard requiredPath="/network">
+                <Suspense fallback={renderFallback()}>
+                  <NetworkAccountantProfilePage />
+                </Suspense>
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "network",
+            element: (
+              <PermissionGuard requiredPath="/network">
+                <NetworkPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "profile",
+            element: (
+              <PermissionGuard requiredPath="/profile">
+                <ProfilePage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "profile/edit",
+            element: (
+              <PermissionGuard requiredPath="/profile/edit">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "user/new",
+            element: (
+              <PermissionGuard requiredPath="/users">
+                <UserFormPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "user/edit/:id",
+            element: (
+              <PermissionGuard requiredPath="/users">
+                <UserFormPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "user/:id/documents",
+
+            element: (
+              <PermissionGuard requiredPath="/users">
+                <DocumentValidationPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "roles",
+            element: (
+              <PermissionGuard requiredPath="/roles">
+                <RoleView />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "role/new",
+            element: (
+              <PermissionGuard requiredPath="/roles">
+                <RoleFormRouter />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "role/edit/:id",
+            element: (
+              <PermissionGuard requiredPath="/roles">
+                <RoleFormRouter />
+              </PermissionGuard>
+            ),
+          },
+        ],
       },
     ],
   },
 
+  // Public routes (sans protection)
+  {
+    path: "visitor",
+    element: <VisitorPage />,
+  },
+  {
+    path: "accountant/:id",
+    element: (
+      <Suspense fallback={renderFallback()}>
+        <AccountantPublicProfilePage />
+      </Suspense>
+    ),
+  },
   {
     path: "sign-in",
     element: <AuthLayout />,

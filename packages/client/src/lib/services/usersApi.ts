@@ -79,7 +79,7 @@ type PageParam = {
 export const usersApi = createApi({
   reducerPath: "usersApi",
   baseQuery: baseQueryWithReauth,
-  tagTypes: ["Users", "Roles"],
+  tagTypes: ["Users", "Roles", "AccountantProfile"],
   endpoints: (builder) => ({
     getUsers: builder.query<UsersResponse, GetUsersQueryArg>({
       query: ({
@@ -361,6 +361,15 @@ export const usersApi = createApi({
         };
       },
     }),
+
+    updateCompleteProfile: builder.mutation<unknown, FormData>({
+      query: (formData) => ({
+        url: "/users/profile/complete",
+        method: "PATCH",
+        body: formData,
+      }),
+      invalidatesTags: ["AccountantProfile"],
+    }),
   }),
 });
 
@@ -375,4 +384,5 @@ export const {
   useGetCountriesForSelectInfiniteQuery,
   useGetRegionsForSelectInfiniteQuery,
   useGetUsersForSelectInfiniteQuery,
+  useUpdateCompleteProfileMutation,
 } = usersApi;

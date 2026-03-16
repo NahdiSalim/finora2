@@ -9,7 +9,7 @@ import {
 import { forwardRef } from "react";
 
 export type CustomSelectProps = SelectProps & {
-  label: string;
+  label?: string;
   helperText?: string;
 };
 
@@ -28,30 +28,32 @@ const CustomSelect = forwardRef<HTMLDivElement, CustomSelectProps>(
           ...sx,
         }}
       >
-        <InputLabel
-          shrink
-          sx={{
-            fontFamily: theme.typography.caption.fontFamily,
-            fontSize: theme.typography.caption.fontSize,
-            fontWeight: theme.typography.fontWeightSemiBold,
-            color: theme.palette.grey[800],
-            lineHeight: theme.typography.caption.lineHeight,
-            marginBottom: "6px",
-            position: "static",
-            transform: "none",
+        {label ? (
+          <InputLabel
+            shrink
+            sx={{
+              fontFamily: theme.typography.caption.fontFamily,
+              fontSize: theme.typography.caption.fontSize,
+              fontWeight: theme.typography.fontWeightSemiBold,
+              color: theme.palette.grey[800],
+              lineHeight: theme.typography.caption.lineHeight,
+              marginBottom: "6px",
+              position: "static",
+              transform: "none",
 
-            "& .MuiFormLabel-asterisk": {
-              color: theme.palette.error.main,
-              fontWeight: theme.typography.fontWeightBold,
-            },
+              "& .MuiFormLabel-asterisk": {
+                color: theme.palette.error.main,
+                fontWeight: theme.typography.fontWeightBold,
+              },
 
-            "&.Mui-error": {
-              color: theme.palette.error.main,
-            },
-          }}
-        >
-          {label}
-        </InputLabel>
+              "&.Mui-error": {
+                color: theme.palette.error.main,
+              },
+            }}
+          >
+            {label}
+          </InputLabel>
+        ) : null}
 
         <Select
           {...props}
@@ -99,7 +101,7 @@ const CustomSelect = forwardRef<HTMLDivElement, CustomSelectProps>(
             },
 
             "&.Mui-disabled": {
-              backgroundColor: theme.palette.grey[200],
+              backgroundColor: theme.palette.grey[50],
               "& .MuiOutlinedInput-notchedOutline": {
                 borderColor: theme.palette.grey[200],
               },

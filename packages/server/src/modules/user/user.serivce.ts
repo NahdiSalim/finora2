@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 import { HashService } from 'src/common/crypto/hash.service';
 import { JwtTokenService } from 'src/common/jwt/jwt-token.service';
 import { FileUploadService, FileCategory } from 'src/common/services/file-upload.service';
+import { MinioService } from 'src/common/services/minio.service';
 import { UserStatus } from 'src/common/enums/user-status.enum';
 import * as bcrypt from 'bcrypt';
 import { stringify } from 'csv-stringify/sync';
@@ -20,7 +21,8 @@ export class UserService {
     private prisma: PrismaService,
     private hashService: HashService,
     private jwtTokenService: JwtTokenService,
-    private fileUploadService: FileUploadService
+    private fileUploadService: FileUploadService,
+    private minioService: MinioService
   ) {}
 
   async getAll(page: number = 1, limit: number = 10, search?: string) {
@@ -393,7 +395,12 @@ export class UserService {
   }
 
   // Update user profile with photo
-  async updateProfile(userId: number, dto: UpdateUserProfileDto, photoFile?: Express.Multer.File) {
+  async updateProfile(
+    userId: number,
+    dto: UpdateUserProfileDto,
+    photoFile?: Express.Multer.File,
+    coverPhotoFile?: Express.Multer.File
+  ) {
     try {
       // Get current user
       const user = await this.prisma.user.findUnique({
@@ -403,6 +410,8 @@ export class UserService {
       if (!user) {
         throw new ApiError('User not found', 404, 'USER_NOT_FOUND');
       }
+
+      console.log('User found:', user.email);
 
       // Check email uniqueness if email is being updated
       if (dto.email && dto.email !== user.email) {
@@ -415,20 +424,61 @@ export class UserService {
         }
       }
 
-      // Handle photo upload
+      // Handle photo upload to MinIO
       let photoPath: string | undefined;
-      if (photoFile) {
-        // Delete old photo if exists
-        if (user.photo) {
-          await this.fileUploadService.deleteFile(user.photo);
-        }
+      if (photoFile && user.companyId) {
+        console.log('Processing photo upload to MinIO...');
+        try {
+          // Delete old photo from MinIO if exists
+          if (user.photo) {
+            try {
+              await this.minioService.deleteFile(user.photo);
+            } catch (deleteError) {
+              console.log('Could not delete old photo:', deleteError);
+              // Continue anyway
+            }
+          }
 
-        // Save new photo
-        photoPath = await this.fileUploadService.saveFile(
-          photoFile,
-          FileCategory.USER_PHOTO,
-          `user_${userId}`
-        );
+          // Upload new photo to MinIO
+          photoPath = await this.minioService.uploadFile(user.companyId, 'users/photos', photoFile);
+          console.log('Photo uploaded successfully to MinIO:', photoPath);
+        } catch (photoError) {
+          console.error('Photo upload error:', photoError);
+          // Continue without photo if upload fails
+          photoPath = undefined;
+        }
+      } else if (photoFile && !user.companyId) {
+        console.log('User has no company, cannot upload to MinIO');
+      }
+
+      // Handle cover photo upload to MinIO
+      let coverPhotoPath: string | undefined;
+      if (coverPhotoFile && user.companyId) {
+        console.log('Processing cover photo upload to MinIO...');
+        try {
+          // Delete old cover photo from MinIO if exists
+          if (user.coverPhoto) {
+            try {
+              await this.minioService.deleteFile(user.coverPhoto);
+            } catch (deleteError) {
+              console.log('Could not delete old cover photo:', deleteError);
+              // Continue anyway
+            }
+          }
+
+          // Upload new cover photo to MinIO
+          coverPhotoPath = await this.minioService.uploadFile(
+            user.companyId,
+            'users/cover-photos',
+            coverPhotoFile
+          );
+        } catch (coverPhotoError) {
+          console.error('Cover photo upload error:', coverPhotoError);
+          // Continue without cover photo if upload fails
+          coverPhotoPath = undefined;
+        }
+      } else if (coverPhotoFile && !user.companyId) {
+        console.log('User has no company, cannot upload cover photo to MinIO');
       }
 
       // Update user
@@ -444,6 +494,7 @@ export class UserService {
           cin: dto.cin,
           diploma: dto.diploma,
           ...(photoPath && { photo: photoPath }),
+          ...(coverPhotoPath && { coverPhoto: coverPhotoPath }),
           updatedById: userId,
         },
         include: {
@@ -465,6 +516,31 @@ export class UserService {
         },
       });
 
+      // Generate presigned URL for photo if exists
+      let photoUrl: string | null = null;
+      if (updatedUser.photo) {
+        try {
+          photoUrl = await this.minioService.getPresignedUrl(updatedUser.photo, 7 * 24 * 60 * 60); // 7 days
+        } catch (error) {
+          console.error('Error generating presigned URL:', error);
+          photoUrl = updatedUser.photo; // Fallback to path
+        }
+      }
+
+      // Generate presigned URL for cover photo if exists
+      let coverPhotoUrl: string | null = null;
+      if (updatedUser.coverPhoto) {
+        try {
+          coverPhotoUrl = await this.minioService.getPresignedUrl(
+            updatedUser.coverPhoto,
+            7 * 24 * 60 * 60
+          ); // 7 days
+        } catch (error) {
+          console.error('Error generating presigned URL for cover photo:', error);
+          coverPhotoUrl = updatedUser.coverPhoto; // Fallback to path
+        }
+      }
+
       return {
         success: true,
         message: 'Profile updated successfully',
@@ -479,7 +555,8 @@ export class UserService {
           department: updatedUser.department,
           cin: updatedUser.cin,
           diploma: updatedUser.diploma,
-          photo: updatedUser.photo,
+          photoUrl: photoUrl, // URL présignée MinIO
+          coverPhotoUrl: coverPhotoUrl, // URL présignée MinIO
           role: updatedUser.role,
           company: updatedUser.company,
         },
@@ -515,20 +592,45 @@ export class UserService {
         throw new ApiError('Only accountants and clients can update company', 403, 'FORBIDDEN');
       }
 
-      // Handle logo upload
+      // Check SIRET uniqueness if being updated
+      if (dto.siret && dto.siret !== user.company?.siret) {
+        const siretExists = await this.prisma.company.findFirst({
+          where: {
+            siret: dto.siret,
+            id: { not: user.companyId },
+          },
+        });
+
+        if (siretExists) {
+          throw new ApiError('SIRET number already exists', 400, 'SIRET_EXISTS');
+        }
+      }
+
+      // Handle logo upload to MinIO
       let logoPath: string | undefined;
       if (logoFile) {
-        // Delete old logo if exists
-        if (user.company?.logo) {
-          await this.fileUploadService.deleteFile(user.company.logo);
-        }
+        try {
+          // Delete old logo from MinIO if exists
+          if (user.company?.logo) {
+            try {
+              await this.minioService.deleteFile(user.company.logo);
+            } catch (deleteError) {
+              console.log('Could not delete old logo:', deleteError);
+              // Continue anyway
+            }
+          }
 
-        // Save new logo
-        logoPath = await this.fileUploadService.saveFile(
-          logoFile,
-          FileCategory.COMPANY_LOGO,
-          `company_${user.companyId}`
-        );
+          // Upload new logo to MinIO
+          logoPath = await this.minioService.uploadFile(
+            user.companyId,
+            'companies/logos',
+            logoFile
+          );
+        } catch (logoError) {
+          console.error('Logo upload error:', logoError);
+          // Continue without logo if upload fails
+          logoPath = undefined;
+        }
       }
 
       // Update company
@@ -545,23 +647,441 @@ export class UserService {
           postalCode: dto.postalCode,
           country: dto.country,
           phone: dto.phone,
+          numWhatsapp: dto.numWhatsapp,
           email: dto.email,
           website: dto.website,
           activityCode: dto.activityCode,
           sector: dto.sector,
           employeeCount: dto.employeeCount,
+          experience: dto.experience,
           description: dto.description,
           ...(logoPath && { logo: logoPath }),
         },
       });
 
+      // Generate presigned URL for logo if exists
+      let logoUrl: string | null = null;
+      if (updatedCompany.logo) {
+        try {
+          logoUrl = await this.minioService.getPresignedUrl(updatedCompany.logo, 7 * 24 * 60 * 60); // 7 days
+        } catch (error) {
+          console.error('Error generating presigned URL for logo:', error);
+          logoUrl = updatedCompany.logo; // Fallback to path
+        }
+      }
+
+      // Remove internal logo path and return only the presigned URL
+      const { logo, ...companyData } = updatedCompany;
+
       return {
         success: true,
         message: 'Company updated successfully',
-        data: updatedCompany,
+        data: {
+          ...companyData,
+          logoUrl: logoUrl, // URL présignée MinIO
+        },
       };
     } catch (error) {
       console.error('Update company error:', error);
+      throw error;
+    }
+  }
+
+  // UNIFIED: Update complete profile (user + company + documents)
+  async updateCompleteProfile(
+    userId: number,
+    data: {
+      // User fields
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      phone?: string;
+      position?: string;
+      department?: string;
+      cin?: string;
+      diploma?: string;
+      // Company fields
+      companyName?: string;
+      companyLegalName?: string;
+      companySiret?: string;
+      companyVatNumber?: string;
+      companyLegalForm?: string;
+      companyAddress?: string;
+      companyCity?: string;
+      companyPostalCode?: string;
+      companyCountry?: string;
+      companyPhone?: string;
+      companyNumWhatsapp?: string;
+      companyEmail?: string;
+      companyWebsite?: string;
+      companyDescription?: string;
+      companyExperience?: string;
+      companyActivityCode?: string;
+      companySector?: string;
+      companyEmployeeCount?: number;
+      companySpecialties?: string | string[];
+      companyPatentNumber?: string;
+    },
+    files?: {
+      photo?: Express.Multer.File[];
+      coverPhoto?: Express.Multer.File[];
+      cinFile?: Express.Multer.File[];
+      diplomaFile?: Express.Multer.File[];
+      companyLogo?: Express.Multer.File[];
+      companyPatentFile?: Express.Multer.File[];
+      companyRneFile?: Express.Multer.File[];
+    }
+  ) {
+    try {
+      // Get current user
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        include: { company: true },
+      });
+
+      if (!user) {
+        throw new ApiError('User not found', 404, 'USER_NOT_FOUND');
+      }
+
+      // Check email uniqueness if email is being updated
+      if (data.email && data.email !== user.email) {
+        const emailExists = await this.prisma.user.findUnique({
+          where: { email: data.email },
+        });
+
+        if (emailExists) {
+          throw new ApiError('Email already exists', 400, 'EMAIL_EXISTS');
+        }
+      }
+
+      // ========== UPLOAD USER FILES TO MINIO ==========
+      let photoPath: string | undefined;
+      if (files?.photo && files.photo[0] && user.companyId) {
+        try {
+          if (user.photo) {
+            await this.minioService.deleteFile(user.photo).catch(() => {});
+          }
+          photoPath = await this.minioService.uploadFile(
+            user.companyId,
+            'users/photos',
+            files.photo[0]
+          );
+        } catch (error) {
+          console.error('Photo upload error:', error);
+        }
+      }
+
+      let coverPhotoPath: string | undefined;
+      if (files?.coverPhoto && files.coverPhoto[0] && user.companyId) {
+        try {
+          if (user.coverPhoto) {
+            await this.minioService.deleteFile(user.coverPhoto).catch(() => {});
+          }
+          coverPhotoPath = await this.minioService.uploadFile(
+            user.companyId,
+            'users/cover-photos',
+            files.coverPhoto[0]
+          );
+        } catch (error) {
+          console.error('Cover photo upload error:', error);
+        }
+      }
+
+      let cinFilePath: string | undefined;
+      if (files?.cinFile && files.cinFile[0] && user.companyId) {
+        try {
+          cinFilePath = await this.minioService.uploadFile(
+            user.companyId,
+            'users/documents/cin',
+            files.cinFile[0]
+          );
+        } catch (error) {
+          console.error('CIN file upload error:', error);
+        }
+      }
+
+      let diplomaFilePath: string | undefined;
+      if (files?.diplomaFile && files.diplomaFile[0] && user.companyId) {
+        try {
+          diplomaFilePath = await this.minioService.uploadFile(
+            user.companyId,
+            'users/documents/diplomas',
+            files.diplomaFile[0]
+          );
+        } catch (error) {
+          console.error('Diploma file upload error:', error);
+        }
+      }
+
+      // ========== UPDATE USER ==========
+      const userUpdateData: any = {};
+      if (data.firstName !== undefined) userUpdateData.firstName = data.firstName;
+      if (data.lastName !== undefined) userUpdateData.lastName = data.lastName;
+      if (data.email !== undefined) userUpdateData.email = data.email;
+      if (data.phone !== undefined) userUpdateData.phone = data.phone;
+      if (data.position !== undefined) userUpdateData.position = data.position;
+      if (data.department !== undefined) userUpdateData.department = data.department;
+      if (data.cin !== undefined) userUpdateData.cin = data.cin;
+      if (data.diploma !== undefined) userUpdateData.diploma = data.diploma;
+      if (photoPath) userUpdateData.photo = photoPath;
+      if (coverPhotoPath) userUpdateData.coverPhoto = coverPhotoPath;
+      if (cinFilePath) userUpdateData.cinFile = cinFilePath;
+      if (diplomaFilePath) userUpdateData.diplomaFile = diplomaFilePath;
+      userUpdateData.updatedById = userId;
+
+      const updatedUser = await this.prisma.user.update({
+        where: { id: userId },
+        data: userUpdateData,
+      });
+
+      // ========== UPDATE COMPANY (if user has company) ==========
+      let updatedCompany: any = null;
+      if (user.companyId) {
+        // Check SIRET uniqueness if being updated
+        if (data.companySiret && data.companySiret !== user.company?.siret) {
+          const siretExists = await this.prisma.company.findFirst({
+            where: {
+              siret: data.companySiret,
+              id: { not: user.companyId },
+            },
+          });
+
+          if (siretExists) {
+            throw new ApiError('SIRET number already exists', 400, 'SIRET_EXISTS');
+          }
+        }
+
+        // Upload company files
+        let logoPath: string | undefined;
+        if (files?.companyLogo && files.companyLogo[0]) {
+          try {
+            if (user.company?.logo) {
+              await this.minioService.deleteFile(user.company.logo).catch(() => {});
+            }
+            logoPath = await this.minioService.uploadFile(
+              user.companyId,
+              'companies/logos',
+              files.companyLogo[0]
+            );
+          } catch (error) {
+            console.error('Logo upload error:', error);
+          }
+        }
+
+        let patentFilePath: string | undefined;
+        if (files?.companyPatentFile && files.companyPatentFile[0]) {
+          try {
+            if (user.company?.patentFile) {
+              await this.minioService.deleteFile(user.company.patentFile).catch(() => {});
+            }
+            patentFilePath = await this.minioService.uploadFile(
+              user.companyId,
+              'companies/documents/patents',
+              files.companyPatentFile[0]
+            );
+          } catch (error) {
+            console.error('Patent file upload error:', error);
+          }
+        }
+
+        let rneFilePath: string | undefined;
+        if (files?.companyRneFile && files.companyRneFile[0]) {
+          try {
+            if (user.company?.rne) {
+              await this.minioService.deleteFile(user.company.rne).catch(() => {});
+            }
+            rneFilePath = await this.minioService.uploadFile(
+              user.companyId,
+              'companies/documents/rne',
+              files.companyRneFile[0]
+            );
+          } catch (error) {
+            console.error('RNE file upload error:', error);
+          }
+        }
+
+        // Build company update data
+        const companyUpdateData: any = {};
+        if (data.companyName !== undefined) companyUpdateData.name = data.companyName;
+        if (data.companyLegalName !== undefined)
+          companyUpdateData.legalName = data.companyLegalName;
+        if (data.companySiret !== undefined) companyUpdateData.siret = data.companySiret;
+        if (data.companyVatNumber !== undefined)
+          companyUpdateData.vatNumber = data.companyVatNumber;
+        if (data.companyLegalForm !== undefined)
+          companyUpdateData.legalForm = data.companyLegalForm;
+        if (data.companyAddress !== undefined) companyUpdateData.address = data.companyAddress;
+        if (data.companyCity !== undefined) companyUpdateData.city = data.companyCity;
+        if (data.companyPostalCode !== undefined)
+          companyUpdateData.postalCode = data.companyPostalCode;
+        if (data.companyCountry !== undefined) companyUpdateData.country = data.companyCountry;
+        if (data.companyPhone !== undefined) companyUpdateData.phone = data.companyPhone;
+        if (data.companyNumWhatsapp !== undefined)
+          companyUpdateData.numWhatsapp = data.companyNumWhatsapp;
+        if (data.companyEmail !== undefined) companyUpdateData.email = data.companyEmail;
+        if (data.companyWebsite !== undefined) companyUpdateData.website = data.companyWebsite;
+        if (data.companyDescription !== undefined)
+          companyUpdateData.description = data.companyDescription;
+        if (data.companyExperience !== undefined)
+          companyUpdateData.experience = data.companyExperience;
+        if (data.companyActivityCode !== undefined)
+          companyUpdateData.activityCode = data.companyActivityCode;
+        if (data.companySector !== undefined) companyUpdateData.sector = data.companySector;
+        if (data.companyEmployeeCount !== undefined)
+          companyUpdateData.employeeCount = data.companyEmployeeCount;
+        if (data.companyPatentNumber !== undefined)
+          companyUpdateData.patentNumber = data.companyPatentNumber;
+        if (logoPath) companyUpdateData.logo = logoPath;
+        if (patentFilePath) companyUpdateData.patentFile = patentFilePath;
+        if (rneFilePath) companyUpdateData.rne = rneFilePath;
+
+        // Handle specialties
+        if (data.companySpecialties !== undefined) {
+          let specialtiesArray: string[] = [];
+          if (typeof data.companySpecialties === 'string') {
+            specialtiesArray = data.companySpecialties.split(',').map((s) => s.trim());
+          } else if (Array.isArray(data.companySpecialties)) {
+            specialtiesArray = data.companySpecialties;
+          }
+          companyUpdateData.specialties = specialtiesArray;
+        }
+
+        updatedCompany = await this.prisma.company.update({
+          where: { id: user.companyId },
+          data: companyUpdateData,
+        });
+      }
+
+      // ========== GENERATE PRESIGNED URLS ==========
+      let photoUrl: string | null = null;
+      if (updatedUser.photo) {
+        try {
+          photoUrl = await this.minioService.getPresignedUrl(updatedUser.photo, 7 * 24 * 60 * 60);
+        } catch (error) {
+          console.error('Error generating presigned URL for photo:', error);
+        }
+      }
+
+      let coverPhotoUrl: string | null = null;
+      if (updatedUser.coverPhoto) {
+        try {
+          coverPhotoUrl = await this.minioService.getPresignedUrl(
+            updatedUser.coverPhoto,
+            7 * 24 * 60 * 60
+          );
+        } catch (error) {
+          console.error('Error generating presigned URL for cover photo:', error);
+        }
+      }
+
+      let cinFileUrl: string | null = null;
+      if ((updatedUser as any).cinFile) {
+        try {
+          cinFileUrl = await this.minioService.getPresignedUrl(
+            (updatedUser as any).cinFile,
+            7 * 24 * 60 * 60
+          );
+        } catch (error) {
+          console.error('Error generating presigned URL for CIN file:', error);
+        }
+      }
+
+      let diplomaFileUrl: string | null = null;
+      if ((updatedUser as any).diplomaFile) {
+        try {
+          diplomaFileUrl = await this.minioService.getPresignedUrl(
+            (updatedUser as any).diplomaFile,
+            7 * 24 * 60 * 60
+          );
+        } catch (error) {
+          console.error('Error generating presigned URL for diploma file:', error);
+        }
+      }
+
+      let logoUrl: string | null = null;
+      if (updatedCompany?.logo) {
+        try {
+          logoUrl = await this.minioService.getPresignedUrl(updatedCompany.logo, 7 * 24 * 60 * 60);
+        } catch (error) {
+          console.error('Error generating presigned URL for logo:', error);
+        }
+      }
+
+      let patentFileUrl: string | null = null;
+      if (updatedCompany?.patentFile) {
+        try {
+          patentFileUrl = await this.minioService.getPresignedUrl(
+            updatedCompany.patentFile,
+            7 * 24 * 60 * 60
+          );
+        } catch (error) {
+          console.error('Error generating presigned URL for patent file:', error);
+        }
+      }
+
+      let rneFileUrl: string | null = null;
+      if (updatedCompany?.rne) {
+        try {
+          rneFileUrl = await this.minioService.getPresignedUrl(
+            updatedCompany.rne,
+            7 * 24 * 60 * 60
+          );
+        } catch (error) {
+          console.error('Error generating presigned URL for RNE file:', error);
+        }
+      }
+
+      return {
+        success: true,
+        message: 'Profile updated successfully',
+        data: {
+          user: {
+            id: updatedUser.id,
+            username: updatedUser.username,
+            firstName: updatedUser.firstName,
+            lastName: updatedUser.lastName,
+            email: updatedUser.email,
+            phone: updatedUser.phone,
+            position: updatedUser.position,
+            department: updatedUser.department,
+            cin: updatedUser.cin,
+            diploma: updatedUser.diploma,
+            photoUrl,
+            coverPhotoUrl,
+            cinFileUrl,
+            diplomaFileUrl,
+          },
+          company: updatedCompany
+            ? {
+                id: updatedCompany.id,
+                name: updatedCompany.name,
+                legalName: updatedCompany.legalName,
+                siret: updatedCompany.siret,
+                vatNumber: updatedCompany.vatNumber,
+                legalForm: updatedCompany.legalForm,
+                address: updatedCompany.address,
+                city: updatedCompany.city,
+                postalCode: updatedCompany.postalCode,
+                country: updatedCompany.country,
+                phone: updatedCompany.phone,
+                email: updatedCompany.email,
+                website: updatedCompany.website,
+                description: updatedCompany.description,
+                experience: updatedCompany.experience,
+                activityCode: updatedCompany.activityCode,
+                sector: updatedCompany.sector,
+                employeeCount: updatedCompany.employeeCount,
+                specialties: updatedCompany.specialties,
+                patentNumber: updatedCompany.patentNumber,
+                logoUrl,
+                patentFileUrl,
+                rneFileUrl,
+              }
+            : null,
+        },
+      };
+    } catch (error) {
+      console.error('Update complete profile error:', error);
       throw error;
     }
   }

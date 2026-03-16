@@ -27,16 +27,29 @@ export default function ClientView() {
   const table = useTable();
   const { hasAction } = usePermissions();
   const [openModal, setOpenModal] = useState(false);
-  const [selectedClient, setSelectedClient] = useState<any>(null);
+  /** En mode détail : id du client ; le client affiché est dérivé de la liste pour rester à jour. */
+  const [selectedClientId, setSelectedClientId] = useState<
+    string | number | null
+  >(null);
+  /** Snapshot au moment de l’ouverture (fallback si le client n’est plus sur la page après refetch). */
+  const [selectedClientFallback, setSelectedClientFallback] =
+    useState<any>(null);
 
   const handleOpenModal = (client: any = null) => {
-    setSelectedClient(client);
+    if (client) {
+      setSelectedClientId(client.id);
+      setSelectedClientFallback(client);
+    } else {
+      setSelectedClientId(null);
+      setSelectedClientFallback(null);
+    }
     setOpenModal(true);
   };
 
   const handleCloseModal = () => {
     setOpenModal(false);
-    setSelectedClient(null);
+    setSelectedClientId(null);
+    setSelectedClientFallback(null);
   };
 
   const columns = [
@@ -182,13 +195,21 @@ export default function ClientView() {
 
   // const canCreate = hasAction("/clients", "WRITE");
 
-  const { data, isLoading, isError } = useGetClientsQuery({
+  const clientsResult = useGetClientsQuery({
     page: table.page + 1,
     limit: table.rowsPerPage,
   });
+  const { data, isLoading, isError } = clientsResult;
 
   const clients = data?.data || [];
-  const totalCount = data?.total || 0;
+  const totalCount = data?.pagination?.total ?? 0;
+
+  /** Client passé au modal : priorité à la liste (à jour), sinon fallback (ouverture). */
+  const modalClient =
+    selectedClientId != null
+      ? (clients.find((c: any) => c.id === selectedClientId) ??
+        selectedClientFallback)
+      : null;
 
   const notFound = !clients.length;
 
@@ -241,7 +262,7 @@ export default function ClientView() {
       <ClientModal
         open={openModal}
         onClose={handleCloseModal}
-        client={selectedClient}
+        client={modalClient}
       />
     </PageHeader>
   );

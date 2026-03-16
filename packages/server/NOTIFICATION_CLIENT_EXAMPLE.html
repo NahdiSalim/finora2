@@ -6,211 +6,509 @@
   <title>Notifications WebSocket - Finora</title>
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
     body {
-      font-family: Arial, sans-serif;
-      max-width: 800px;
-      margin: 50px auto;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
       padding: 20px;
-      background: #f5f5f5;
+    }
+    .main-container {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 20px;
+      max-width: 1400px;
+      margin: 0 auto;
     }
     .container {
       background: white;
-      padding: 30px;
-      border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
     }
     h1 {
       color: #333;
-      margin-bottom: 30px;
+      margin-bottom: 25px;
+      font-size: 28px;
+    }
+    h2 {
+      color: #555;
+      font-size: 18px;
+      margin-bottom: 15px;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 10px;
     }
     .status {
-      padding: 10px;
-      border-radius: 5px;
+      padding: 12px 15px;
+      border-radius: 8px;
       margin-bottom: 20px;
       font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
     .status.connected {
       background: #d4edda;
       color: #155724;
+      border: 1px solid #c3e6cb;
     }
     .status.disconnected {
       background: #f8d7da;
       color: #721c24;
+      border: 1px solid #f5c6cb;
     }
-    .notification {
-      padding: 15px;
-      margin: 10px 0;
-      border-radius: 5px;
-      border-left: 4px solid #007bff;
-      background: #f8f9fa;
-      position: relative;
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
     }
-    .notification.unread {
-      background: #e7f3ff;
-      border-left-color: #0056b3;
+    .status.connected .status-indicator {
+      background: #28a745;
     }
-    .notification.high {
-      border-left-color: #dc3545;
+    .status.disconnected .status-indicator {
+      background: #dc3545;
     }
-    .notification.urgent {
-      border-left-color: #ff0000;
-      background: #ffe6e6;
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
     }
-    .notification-header {
+    .section {
+      margin-bottom: 25px;
+    }
+    .controls {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
+      flex-direction: column;
+      gap: 12px;
     }
-    .notification-title {
-      font-weight: bold;
-      color: #333;
-    }
-    .notification-time {
-      font-size: 12px;
-      color: #666;
-    }
-    .notification-message {
-      color: #555;
-      margin-bottom: 10px;
-    }
-    .notification-actions {
+    .control-group {
       display: flex;
       gap: 10px;
     }
+    input, textarea {
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    input[type="text"], input[type="email"], textarea {
+      flex: 1;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
     button {
-      padding: 8px 15px;
+      padding: 10px 16px;
       border: none;
-      border-radius: 5px;
+      border-radius: 6px;
       cursor: pointer;
       font-size: 14px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      white-space: nowrap;
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    button:active {
+      transform: translateY(0);
     }
     .btn-primary {
-      background: #007bff;
+      background: #667eea;
       color: white;
+    }
+    .btn-primary:hover {
+      background: #5568d3;
     }
     .btn-success {
       background: #28a745;
       color: white;
     }
+    .btn-success:hover {
+      background: #218838;
+    }
     .btn-danger {
       background: #dc3545;
       color: white;
+    }
+    .btn-danger:hover {
+      background: #c82333;
     }
     .btn-secondary {
       background: #6c757d;
       color: white;
     }
-    button:hover {
-      opacity: 0.9;
+    .btn-secondary:hover {
+      background: #5a6268;
+    }
+    .btn-warning {
+      background: #ffc107;
+      color: #333;
+    }
+    .btn-warning:hover {
+      background: #e0a800;
+    }
+    .btn-info {
+      background: #17a2b8;
+      color: white;
+    }
+    .btn-info:hover {
+      background: #138496;
+    }
+    .btn-small {
+      padding: 6px 12px;
+      font-size: 12px;
     }
     .unread-badge {
       background: #dc3545;
       color: white;
-      padding: 5px 10px;
-      border-radius: 15px;
-      font-size: 14px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 13px;
       font-weight: bold;
+      display: inline-block;
     }
-    .controls {
-      margin: 20px 0;
+    .notification {
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border-left: 4px solid #007bff;
+      background: #f8f9fa;
+      position: relative;
+      transition: all 0.3s ease;
+    }
+    .notification:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .notification.unread {
+      background: #e7f3ff;
+      border-left-color: #0056b3;
+      font-weight: 500;
+    }
+    .notification.high {
+      border-left-color: #dc3545;
+      background: #fff5f5;
+    }
+    .notification.urgent {
+      border-left-color: #ff0000;
+      background: #ffe6e6;
+      animation: highlight 0.5s ease;
+    }
+    @keyframes highlight {
+      0% { background: #ffcccc; }
+      100% { background: #ffe6e6; }
+    }
+    .notification-header {
       display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
       gap: 10px;
+    }
+    .notification-title {
+      font-weight: bold;
+      color: #333;
+      flex: 1;
+    }
+    .notification-time {
+      font-size: 12px;
+      color: #999;
+      white-space: nowrap;
+    }
+    .notification-type {
+      display: inline-block;
+      background: #667eea;
+      color: white;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    .notification-message {
+      color: #555;
+      margin-bottom: 10px;
+      line-height: 1.4;
+    }
+    .notification-meta {
+      font-size: 12px;
+      color: #999;
+      margin-bottom: 10px;
+    }
+    .notification-actions {
+      display: flex;
+      gap: 8px;
       flex-wrap: wrap;
     }
-    input {
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 5px;
-      flex: 1;
-      min-width: 200px;
-    }
     .notification-list {
-      max-height: 500px;
+      max-height: 600px;
       overflow-y: auto;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .notification-list::-webkit-scrollbar {
+      width: 8px;
+    }
+    .notification-list::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 10px;
+    }
+    .notification-list::-webkit-scrollbar-thumb {
+      background: #667eea;
+      border-radius: 10px;
+    }
+    .notification-list::-webkit-scrollbar-thumb:hover {
+      background: #5568d3;
+    }
+    .empty-state {
+      color: #999;
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 15px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+    }
+    .stat-label {
+      font-size: 12px;
+      opacity: 0.9;
+      margin-top: 5px;
+    }
+    .log-container {
+      background: #1e1e1e;
+      color: #00ff00;
+      padding: 12px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+    .log-entry {
+      margin: 4px 0;
+      padding: 2px 0;
+      border-bottom: 1px solid #333;
+    }
+    .log-entry.error {
+      color: #ff6b6b;
+    }
+    .log-entry.success {
+      color: #51cf66;
+    }
+    .log-entry.info {
+      color: #74c0fc;
+    }
+    .log-entry.warning {
+      color: #ffd43b;
+    }
+    @media (max-width: 1024px) {
+      .main-container {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>🔔 Système de Notifications</h1>
-    
-    <div id="status" class="status disconnected">
-      ❌ Déconnecté
+  <div class="main-container">
+    <!-- Left Panel: Controls -->
+    <div class="container">
+      <h1>🔔 Notifications</h1>
+      
+      <div id="status" class="status disconnected">
+        <div class="status-indicator"></div>
+        <span>❌ Déconnecté</span>
+      </div>
+
+      <div class="section">
+        <h2>Connexion</h2>
+        <div class="controls">
+          <input type="text" id="token" placeholder="Votre JWT Token" />
+          <div class="control-group">
+            <button class="btn-primary" onclick="connect()">Se connecter</button>
+            <button class="btn-secondary" onclick="disconnect()">Se déconnecter</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Envoyer une Notification</h2>
+        <div class="controls">
+          <input type="text" id="notifTitle" placeholder="Titre" value="Test Notification" />
+          <textarea id="notifMessage" placeholder="Message">Ceci est une notification de test</textarea>
+          <select id="notifPriority" style="padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+            <option value="normal">Priorité: Normal</option>
+            <option value="high">Priorité: Haute</option>
+            <option value="urgent">Priorité: Urgente</option>
+          </select>
+          <input type="text" id="notifType" placeholder="Type (ex: document, alert)" value="test" />
+          <button class="btn-success" onclick="sendNotification()">📤 Envoyer Notification</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Statistiques</h2>
+        <div class="stats">
+          <div class="stat-card">
+            <div class="stat-value" id="totalCount">0</div>
+            <div class="stat-label">Total</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="unreadCount">0</div>
+            <div class="stat-label">Non lues</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Actions</h2>
+        <div class="controls">
+          <button class="btn-success" onclick="loadNotifications()">Rafraîchir</button>
+          <button class="btn-warning" onclick="markAllAsRead()">Tout marquer comme lu</button>
+          <button class="btn-danger" onclick="clearAllNotifications()">Supprimer tout</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Logs</h2>
+        <div class="log-container" id="logs"></div>
+      </div>
     </div>
 
-    <div class="controls">
-      <input type="text" id="token" placeholder="Votre JWT Token" />
-      <button class="btn-primary" onclick="connect()">Se connecter</button>
-      <button class="btn-secondary" onclick="disconnect()">Se déconnecter</button>
-      <button class="btn-success" onclick="markAllAsRead()">Tout marquer comme lu</button>
-    </div>
+    <!-- Right Panel: Notifications List -->
+    <div class="container">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0; border: none; padding: 0;">Notifications</h2>
+        <span id="unreadBadge" class="unread-badge">0 non lues</span>
+      </div>
 
-    <div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0;">
-      <h2>Notifications</h2>
-      <span id="unreadBadge" class="unread-badge">0 non lues</span>
-    </div>
-
-    <div id="notifications" class="notification-list">
-      <p style="color: #999; text-align: center;">Aucune notification</p>
+      <div id="notifications" class="notification-list">
+        <div class="empty-state">
+          <div class="empty-state-icon">📭</div>
+          <p>Aucune notification</p>
+        </div>
+      </div>
     </div>
   </div>
 
   <script>
     let socket = null;
     let notifications = [];
+    let token = null;
+    const API_URL = 'http://localhost:3000';
+
+    // Logging utility
+    function addLog(message, type = 'info') {
+      const logsContainer = document.getElementById('logs');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      const timestamp = new Date().toLocaleTimeString('fr-FR');
+      entry.textContent = `[${timestamp}] ${message}`;
+      logsContainer.appendChild(entry);
+      logsContainer.scrollTop = logsContainer.scrollHeight;
+      
+      // Keep only last 50 logs
+      while (logsContainer.children.length > 50) {
+        logsContainer.removeChild(logsContainer.firstChild);
+      }
+    }
 
     function connect() {
-      const token = document.getElementById('token').value;
+      token = document.getElementById('token').value;
       
       if (!token) {
-        alert('Veuillez entrer votre token JWT');
+        addLog('❌ Veuillez entrer votre token JWT', 'error');
         return;
       }
 
+      addLog('🔄 Tentative de connexion...', 'info');
+
       // Connect to notification WebSocket
-      socket = io('http://localhost:3000/notifications', {
+      socket = io(`${API_URL}/notifications`, {
         auth: {
           token: token
+        },
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 5,
+        transports: ['websocket', 'polling']
+      });
+
+      // Écouter TOUS les événements pour déboguer
+      socket.onAny((event, ...args) => {
+        if (event !== 'ping' && event !== 'pong') {
+          console.log(`[WebSocket] Événement: ${event}`, args);
         }
       });
 
       socket.on('connect', () => {
         updateStatus(true);
-        console.log('Connected to notification service');
-        
-        // Subscribe to notifications
-        socket.emit('subscribe');
+        addLog('✅ Connecté au service de notifications', 'success');
+        console.log('Socket connecté avec ID:', socket.id);
         
         // Load existing notifications via REST API
-        loadNotifications(token);
+        loadNotifications();
       });
 
-      socket.on('disconnect', () => {
+      socket.on('disconnect', (reason) => {
         updateStatus(false);
-        console.log('Disconnected from notification service');
+        addLog(`❌ Déconnecté: ${reason}`, 'warning');
       });
 
       socket.on('connected', (data) => {
-        console.log('Connection confirmed:', data);
+        addLog(`✅ Confirmation de connexion: ${JSON.stringify(data)}`, 'success');
       });
 
       socket.on('notification', (notification) => {
-        console.log('New notification received:', notification);
+        addLog(`📬 Nouvelle notification reçue: ${notification.title}`, 'success');
+        console.log('Notification reçue:', notification);
         addNotification(notification);
-        updateUnreadCount();
+        updateStats();
         
         // Show browser notification if supported
         if (Notification.permission === 'granted') {
           new Notification(notification.title, {
             body: notification.message,
-            icon: '/favicon.ico'
+            icon: '/favicon.ico',
+            tag: `notif-${notification.id}`
           });
         }
       });
 
       socket.on('notificationUpdate', (update) => {
-        console.log('Notification update:', update);
+        addLog(`🔄 Mise à jour notification: ${JSON.stringify(update)}`, 'info');
+        console.log('Mise à jour reçue:', update);
         if (update.allRead) {
           notifications.forEach(n => n.read = true);
           renderNotifications();
@@ -221,17 +519,24 @@
             renderNotifications();
           }
         }
-        updateUnreadCount();
+        updateStats();
       });
 
       socket.on('error', (error) => {
+        addLog(`❌ Erreur socket: ${error.message || error}`, 'error');
         console.error('Socket error:', error);
-        alert('Erreur de connexion: ' + error.message);
+      });
+
+      socket.on('connect_error', (error) => {
+        addLog(`❌ Erreur de connexion: ${error.message}`, 'error');
+        console.error('Connect error:', error);
       });
 
       // Request browser notification permission
       if (Notification.permission === 'default') {
-        Notification.requestPermission();
+        Notification.requestPermission().then(permission => {
+          addLog(`🔔 Permission notifications: ${permission}`, 'info');
+        });
       }
     }
 
@@ -239,6 +544,7 @@
       if (socket) {
         socket.disconnect();
         socket = null;
+        addLog('🔌 Déconnecté manuellement', 'info');
       }
     }
 
@@ -246,27 +552,39 @@
       const statusEl = document.getElementById('status');
       if (connected) {
         statusEl.className = 'status connected';
-        statusEl.textContent = '✅ Connecté';
+        statusEl.innerHTML = '<div class="status-indicator"></div><span>✅ Connecté</span>';
       } else {
         statusEl.className = 'status disconnected';
-        statusEl.textContent = '❌ Déconnecté';
+        statusEl.innerHTML = '<div class="status-indicator"></div><span>❌ Déconnecté</span>';
       }
     }
 
-    async function loadNotifications(token) {
+    async function loadNotifications() {
+      if (!token) {
+        addLog('❌ Token manquant', 'error');
+        return;
+      }
+
       try {
-        const response = await fetch('http://localhost:3000/notifications', {
+        addLog('📥 Chargement des notifications...', 'info');
+        const response = await fetch(`${API_URL}/api/notifications`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
         
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
         const data = await response.json();
+        // The API returns { notifications, total, unreadCount }
         notifications = data.notifications || [];
+        addLog(`✅ ${notifications.length} notification(s) chargée(s)`, 'success');
         renderNotifications();
-        updateUnreadCount();
+        updateStats();
       } catch (error) {
-        console.error('Error loading notifications:', error);
+        addLog(`❌ Erreur chargement: ${error.message}`, 'error');
       }
     }
 
@@ -279,7 +597,12 @@
       const container = document.getElementById('notifications');
       
       if (notifications.length === 0) {
-        container.innerHTML = '<p style="color: #999; text-align: center;">Aucune notification</p>';
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <p>Aucune notification</p>
+          </div>
+        `;
         return;
       }
 
@@ -291,95 +614,220 @@
         return `
           <div class="notification ${readClass} ${priorityClass}">
             <div class="notification-header">
-              <span class="notification-title">${notif.title}</span>
+              <div>
+                <div class="notification-title">${escapeHtml(notif.title)}</div>
+                ${notif.type ? `<div class="notification-type">${escapeHtml(notif.type)}</div>` : ''}
+              </div>
               <span class="notification-time">${time}</span>
             </div>
-            <div class="notification-message">${notif.message}</div>
+            <div class="notification-message">${escapeHtml(notif.message)}</div>
+            ${notif.metadata ? `<div class="notification-meta">ID: ${notif.id} | Priorité: ${notif.priority || 'normal'}</div>` : ''}
             <div class="notification-actions">
-              ${!notif.read ? `<button class="btn-primary" onclick="markAsRead(${notif.id})">Marquer comme lu</button>` : ''}
-              ${notif.actionUrl ? `<button class="btn-success" onclick="goToAction('${notif.actionUrl}')">Voir</button>` : ''}
-              <button class="btn-danger" onclick="deleteNotification(${notif.id})">Supprimer</button>
+              ${!notif.read ? `<button class="btn-primary btn-small" onclick="markAsRead(${notif.id})">Marquer comme lu</button>` : ''}
+              ${notif.actionUrl ? `<button class="btn-info btn-small" onclick="goToAction('${escapeHtml(notif.actionUrl)}')">Voir</button>` : ''}
+              <button class="btn-danger btn-small" onclick="deleteNotification(${notif.id})">Supprimer</button>
             </div>
           </div>
         `;
       }).join('');
     }
 
-    function updateUnreadCount() {
-      const unreadCount = notifications.filter(n => !n.read).length;
-      document.getElementById('unreadBadge').textContent = `${unreadCount} non lue${unreadCount > 1 ? 's' : ''}`;
+    function updateStats() {
+      const total = notifications.length;
+      const unread = notifications.filter(n => !n.read).length;
+      
+      document.getElementById('totalCount').textContent = total;
+      document.getElementById('unreadCount').textContent = unread;
+      document.getElementById('unreadBadge').textContent = `${unread} non lue${unread > 1 ? 's' : ''}`;
     }
 
     async function markAsRead(notificationId) {
-      const token = document.getElementById('token').value;
-      
+      if (!token) {
+        addLog('❌ Token manquant', 'error');
+        return;
+      }
+
       try {
-        await fetch(`http://localhost:3000/notifications/${notificationId}/read`, {
+        addLog(`📌 Marquage notification ${notificationId} comme lue...`, 'info');
+        const response = await fetch(`${API_URL}/api/notifications/${notificationId}/read`, {
           method: 'PATCH',
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
         
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
         const notif = notifications.find(n => n.id === notificationId);
         if (notif) {
           notif.read = true;
           renderNotifications();
-          updateUnreadCount();
+          updateStats();
+          addLog(`✅ Notification ${notificationId} marquée comme lue`, 'success');
         }
       } catch (error) {
-        console.error('Error marking as read:', error);
+        addLog(`❌ Erreur marquage: ${error.message}`, 'error');
       }
     }
 
     async function markAllAsRead() {
-      const token = document.getElementById('token').value;
-      
       if (!token) {
-        alert('Veuillez vous connecter d\'abord');
+        addLog('❌ Token manquant', 'error');
         return;
       }
       
       try {
-        await fetch('http://localhost:3000/notifications/mark-all-read', {
+        addLog('📌 Marquage de toutes les notifications comme lues...', 'info');
+        const response = await fetch(`${API_URL}/api/notifications/mark-all-read`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
         
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
         notifications.forEach(n => n.read = true);
         renderNotifications();
-        updateUnreadCount();
+        updateStats();
+        addLog('✅ Toutes les notifications marquées comme lues', 'success');
       } catch (error) {
-        console.error('Error marking all as read:', error);
+        addLog(`❌ Erreur marquage global: ${error.message}`, 'error');
       }
     }
 
     async function deleteNotification(notificationId) {
-      const token = document.getElementById('token').value;
-      
+      if (!token) {
+        addLog('❌ Token manquant', 'error');
+        return;
+      }
+
       try {
-        await fetch(`http://localhost:3000/notifications/${notificationId}`, {
+        addLog(`🗑️ Suppression notification ${notificationId}...`, 'info');
+        const response = await fetch(`${API_URL}/api/notifications/${notificationId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
         
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
         notifications = notifications.filter(n => n.id !== notificationId);
         renderNotifications();
-        updateUnreadCount();
+        updateStats();
+        addLog(`✅ Notification ${notificationId} supprimée`, 'success');
       } catch (error) {
-        console.error('Error deleting notification:', error);
+        addLog(`❌ Erreur suppression: ${error.message}`, 'error');
+      }
+    }
+
+    async function clearAllNotifications() {
+      if (!token) {
+        addLog('❌ Token manquant', 'error');
+        return;
+      }
+
+      if (!confirm('Êtes-vous sûr de vouloir supprimer toutes les notifications ?')) {
+        return;
+      }
+
+      try {
+        addLog('🗑️ Suppression de toutes les notifications...', 'info');
+        let deleted = 0;
+        for (const notif of notifications) {
+          try {
+            await fetch(`${API_URL}/api/notifications/${notif.id}`, {
+              method: 'DELETE',
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            deleted++;
+          } catch (e) {
+            // Continue with next
+          }
+        }
+        notifications = [];
+        renderNotifications();
+        updateStats();
+        addLog(`✅ ${deleted} notification(s) supprimée(s)`, 'success');
+      } catch (error) {
+        addLog(`❌ Erreur suppression globale: ${error.message}`, 'error');
       }
     }
 
     function goToAction(url) {
-      console.log('Navigate to:', url);
-      alert('Navigation vers: ' + url);
+      addLog(`🔗 Navigation vers: ${url}`, 'info');
       // In real app: window.location.href = url;
+      alert('Navigation vers: ' + url);
     }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    async function sendNotification() {
+      if (!token) {
+        addLog('❌ Token manquant - Connectez-vous d\'abord', 'error');
+        return;
+      }
+
+      const title = document.getElementById('notifTitle').value;
+      const message = document.getElementById('notifMessage').value;
+      const priority = document.getElementById('notifPriority').value;
+      const type = document.getElementById('notifType').value;
+
+      if (!title || !message) {
+        addLog('❌ Titre et message requis', 'error');
+        return;
+      }
+
+      try {
+        addLog(`📤 Envoi notification: "${title}"...`, 'info');
+        
+        const response = await fetch(`${API_URL}/api/notifications`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            title: title,
+            message: message,
+            priority: priority,
+            type: type || 'notification'
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.message || `HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+        addLog(`✅ Notification envoyée avec succès (ID: ${result.id || 'N/A'})`, 'success');
+        
+        // Clear form
+        document.getElementById('notifTitle').value = 'Test Notification';
+        document.getElementById('notifMessage').value = 'Ceci est une notification de test';
+        document.getElementById('notifType').value = 'test';
+        
+      } catch (error) {
+        addLog(`❌ Erreur envoi: ${error.message}`, 'error');
+      }
+    }
+
+    // Initialize
+    addLog('🚀 Application chargée', 'success');
   </script>
 </body>
 </html>

@@ -25,6 +25,7 @@ export const clientValidationSchema = yup.object().shape({
   vatNumber: yup.string().required("Le numéro de TVA est obligatoire"),
   legalForm: yup.string().required("La forme juridique est obligatoire"),
   address: yup.string().required("L'adresse est obligatoire"),
+  countryCode: yup.string().required("Le pays est obligatoire"),
   city: yup.string().required("La ville est obligatoire"),
   postalCode: yup.string().required("Le code postal est obligatoire"),
 

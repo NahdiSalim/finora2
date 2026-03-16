@@ -161,7 +161,22 @@ export class InvoiceExtractionController {
   async saveInvoiceMetadata(
     @Req() req: AuthRequest,
     @Param('documentId', ParseIntPipe) documentId: number,
-    @Body() body: { extractedData: any }
+    @Body(
+      new (class {
+        transform(value: any) {
+          // If body is a string, try to parse it
+          if (typeof value === 'string') {
+            try {
+              return JSON.parse(value);
+            } catch (e) {
+              return value;
+            }
+          }
+          return value;
+        }
+      })()
+    )
+    body: any
   ) {
     const companyId = req.user!.companyId;
 
@@ -173,10 +188,9 @@ export class InvoiceExtractionController {
       };
     }
 
-    return this.invoiceExtractionService.saveInvoiceMetadata(
-      documentId,
-      companyId,
-      body.extractedData
-    );
+    // Extract extractedData from body
+    const extractedData = body.extractedData || body;
+
+    return this.invoiceExtractionService.saveInvoiceMetadata(documentId, companyId, extractedData);
   }
 }

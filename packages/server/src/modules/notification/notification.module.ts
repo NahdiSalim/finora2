@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { NotificationService } from './notification.service';
 import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { NotificationController } from './notification.controller';
 import { NotificationGateway } from './notification.gateway';
 import { PrismaModule } from '../../../prisma/prisma.module';
@@ -14,9 +15,14 @@ import { MinioService } from 'src/common/services/minio.service';
 @Module({
   imports: [
     PrismaModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'default-secret',
-      signOptions: { expiresIn: '1d' },
+    ConfigModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET'),
+        signOptions: { expiresIn: '1d' },
+      }),
     }),
   ],
   controllers: [NotificationController],

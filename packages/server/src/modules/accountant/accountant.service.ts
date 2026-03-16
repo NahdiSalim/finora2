@@ -136,7 +136,7 @@ export class AccountantService {
   }
 
   // Create client (by accountant) with automatic relationship
-  async createClient(accountantId: number, dto: CreateClientDto) {
+  async createClient(accountantId: number, dto: CreateClientDto, patentFile?: Express.Multer.File) {
     const {
       firstName,
       lastName,
@@ -149,6 +149,7 @@ export class AccountantService {
       address,
       city,
       postalCode,
+      country,
       password,
     } = dto;
 
@@ -208,6 +209,22 @@ export class AccountantService {
       // Generate username from email
       const username = email.split('@')[0];
 
+      // Upload patent file if provided
+      let patentFileUrl: string | null = null;
+      if (patentFile) {
+        try {
+          const path = 'patents';
+          patentFileUrl = await this.minioService.uploadFile(
+            accountant.companyId,
+            path,
+            patentFile
+          );
+        } catch (error) {
+          console.error('Failed to upload patent file:', error);
+          throw new ApiError('Failed to upload patent file', 500, 'UPLOAD_FAILED');
+        }
+      }
+
       // Create client company
       const clientCompany = await this.prisma.company.create({
         data: {
@@ -218,8 +235,10 @@ export class AccountantService {
           address,
           city,
           postalCode,
+          country: country || 'France',
           phone,
           email,
+          patentFile: patentFileUrl,
           type: 'client',
           status: UserStatus.ACTIVE,
         },
@@ -299,6 +318,8 @@ export class AccountantService {
             address: clientCompany.address,
             city: clientCompany.city,
             postalCode: clientCompany.postalCode,
+            country: clientCompany.country,
+            patentFile: clientCompany.patentFile,
             phone: clientCompany.phone,
             email: clientCompany.email,
           },
@@ -442,30 +463,46 @@ export class AccountantService {
       });
 
       // Transform data to simple format
-      const clients = relationships.map((rel) => {
-        const company = rel.clientCompany;
-        const primaryUser = company.employees[0]; // Get first employee (owner)
+      const clients = await Promise.all(
+        relationships.map(async (rel) => {
+          const company = rel.clientCompany;
+          const primaryUser = company.employees[0]; // Get first employee (owner)
 
-        return {
-          id: company.id,
-          fullName: primaryUser ? `${primaryUser.firstName} ${primaryUser.lastName}` : 'N/A',
-          email: primaryUser?.email || company.email,
-          phone: primaryUser?.phone || company.phone,
-          company: {
-            name: company.name,
-            siret: company.siret,
-            vatNumber: company.vatNumber,
-            legalForm: company.legalForm,
-            address: company.address,
-            city: company.city,
-            postalCode: company.postalCode,
-          },
-          status: company.status,
-          relationshipStatus: rel.status,
-          relationshipStart: rel.relationshipStart,
-          createdAt: company.createdAt,
-        };
-      });
+          // Generate presigned URL for patent file if it exists
+          let patentFileUrl: string | null = null;
+          if (company.patentFile) {
+            try {
+              patentFileUrl = await this.minioService.getPresignedUrl(company.patentFile, 604800); // 7 days
+            } catch (error) {
+              console.error('Error generating presigned URL for patent file:', error);
+              patentFileUrl = null;
+            }
+          }
+
+          return {
+            id: company.id,
+            fullName: primaryUser ? `${primaryUser.firstName} ${primaryUser.lastName}` : 'N/A',
+            email: primaryUser?.email || company.email,
+            phone: primaryUser?.phone || company.phone,
+            company: {
+              name: company.name,
+              siret: company.siret,
+              vatNumber: company.vatNumber,
+              legalForm: company.legalForm,
+              address: company.address,
+              city: company.city,
+              postalCode: company.postalCode,
+              country: company.country,
+              patentFile: company.patentFile,
+              patentFileUrl: patentFileUrl,
+            },
+            status: company.status,
+            relationshipStatus: rel.status,
+            relationshipStart: rel.relationshipStart,
+            createdAt: company.createdAt,
+          };
+        })
+      );
 
       return {
         data: clients,

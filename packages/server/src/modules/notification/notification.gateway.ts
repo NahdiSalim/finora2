@@ -9,6 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 
 @WebSocketGateway({
@@ -25,7 +26,10 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
   private readonly logger = new Logger(NotificationGateway.name);
   private userSockets: Map<number, Set<string>> = new Map();
 
-  constructor(private jwtService: JwtService) {}
+  constructor(
+    private jwtService: JwtService,
+    private configService: ConfigService
+  ) {}
 
   async handleConnection(client: Socket) {
     try {
@@ -34,15 +38,40 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
 
       if (!token) {
         this.logger.warn('Client connection rejected: No token provided');
+        client.emit('error', { message: 'No token provided' });
         client.disconnect();
         return;
       }
 
-      const payload = this.jwtService.verify(token);
-      const userId = payload.sub || payload.userId;
+      let payload;
+      try {
+        // Use the same JWT_SECRET that was used to create the token
+        const jwtSecret = this.configService.get<string>('JWT_SECRET');
+        if (!jwtSecret) {
+          throw new Error('JWT_SECRET not configured');
+        }
+
+        this.logger.debug(`Verifying token with JWT_SECRET: ${jwtSecret}`);
+        this.logger.debug(`Token preview: ${token.substring(0, 50)}...`);
+
+        payload = this.jwtService.verify(token, {
+          secret: jwtSecret,
+        });
+
+        this.logger.debug(`Token verified successfully. Payload: ${JSON.stringify(payload)}`);
+      } catch (jwtError) {
+        this.logger.error('JWT verification failed:', jwtError.message);
+        this.logger.error(`JWT Error details:`, jwtError);
+        client.emit('error', { message: 'Invalid token: ' + jwtError.message });
+        client.disconnect();
+        return;
+      }
+
+      const userId = payload.sub || payload.userId || payload.id;
 
       if (!userId) {
-        this.logger.warn('Client connection rejected: Invalid token');
+        this.logger.warn('Client connection rejected: No userId in token');
+        client.emit('error', { message: 'No userId in token' });
         client.disconnect();
         return;
       }
@@ -65,9 +94,11 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
       client.emit('connected', {
         message: 'Connected to notification service',
         userId,
+        socketId: client.id,
       });
     } catch (error) {
       this.logger.error('Connection error:', error.message);
+      client.emit('error', { message: 'Connection error: ' + error.message });
       client.disconnect();
     }
   }

@@ -13,6 +13,7 @@ import { contactApi } from "./services/contactApi";
 import { relationshipsApi } from "./services/relationshipsApi";
 
 import { documentsApi } from "./services/documentsApi";
+import { locationApi } from "./services/locationApi";
 
 const apiMiddlewares = [
   authApi.middleware,
@@ -27,6 +28,7 @@ const apiMiddlewares = [
   contactApi.middleware,
   relationshipsApi.middleware,
   documentsApi.middleware,
+  locationApi.middleware,
 ];
 
 const apiResetters = [
@@ -41,6 +43,7 @@ const apiResetters = [
   contactApi.util.resetApiState,
   relationshipsApi.util.resetApiState,
   documentsApi.util.resetApiState,
+  locationApi.util.resetApiState,
 ];
 
 const appReducer = combineReducers({
@@ -57,6 +60,7 @@ const appReducer = combineReducers({
   [contactApi.reducerPath]: contactApi.reducer,
   [relationshipsApi.reducerPath]: relationshipsApi.reducer,
   [documentsApi.reducerPath]: documentsApi.reducer,
+  [locationApi.reducerPath]: locationApi.reducer,
 });
 
 const baseStore = configureStore({

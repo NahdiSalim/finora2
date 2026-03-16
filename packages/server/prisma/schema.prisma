@@ -264,6 +264,7 @@ model Company {
   address           String?
   city              String?
   postalCode        String?
+  countryCode       String?   @default("FR") // ISO country code
   country           String?   @default("France")
   phone             String?
   numWhatsapp       String?

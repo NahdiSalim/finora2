@@ -288,6 +288,8 @@ export const routesSection: RouteObject[] = [
             <RoleFormRouter />
           </PermissionGuard>
         ),
+      },
+      {
         path: ":roleSlug",
         Component: DashboardWrapper,
         children: [
@@ -387,7 +389,7 @@ export const routesSection: RouteObject[] = [
             path: "messages",
             element: (
               <PermissionGuard requiredPath="/messages">
-                <UserPage />
+                <MessagesPage />
               </PermissionGuard>
             ),
           },
@@ -395,7 +397,7 @@ export const routesSection: RouteObject[] = [
             path: "messages/:id",
             element: (
               <PermissionGuard requiredPath="/messages/:id">
-                <UserPage />
+                <MessagesPage />
               </PermissionGuard>
             ),
           },
@@ -459,7 +461,6 @@ export const routesSection: RouteObject[] = [
           },
           {
             path: "user/:id/documents",
-
             element: (
               <PermissionGuard requiredPath="/users">
                 <DocumentValidationPage />
@@ -495,7 +496,6 @@ export const routesSection: RouteObject[] = [
     ],
   },
 
-  // Public routes (sans protection)
   {
     path: "visitor",
     element: <VisitorPage />,

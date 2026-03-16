@@ -57,6 +57,19 @@ export class CreateClientDto {
   @IsOptional()
   postalCode?: string;
 
+  @ApiProperty({ example: 'France', description: 'Country name', required: false })
+  @IsString()
+  @IsOptional()
+  country?: string;
+
+  @ApiProperty({
+    type: 'string',
+    format: 'binary',
+    description: 'Patent file (PDF, JPG, PNG)',
+    required: false,
+  })
+  patentFile?: Express.Multer.File;
+
   @ApiProperty({ example: 'SecurePass123!', description: 'Password for the client account' })
   @IsString()
   @IsNotEmpty()

@@ -657,8 +657,8 @@ export class DocumentService {
         let filesCount = 0;
         if (doc.isFolder) {
           // Count direct children (archived)
-          foldersCount = await this.countDirectChildren(doc.id, true);
-          filesCount = await this.countDirectChildren(doc.id, false);
+          foldersCount = await this.countDirectChildren(doc.id, true, 'archived');
+          filesCount = await this.countDirectChildren(doc.id, false, 'archived');
         }
 
         return {
@@ -1221,33 +1221,46 @@ export class DocumentService {
    */
   private async countDirectChildren(
     parentId: number,
-    countFolders: boolean = true
+    countFolders: boolean = true,
+    status: string = 'active'
   ): Promise<number> {
     if (countFolders) {
-      // For folders: count active folders that contain archived content
-      const activeFolders = await this.prisma.document.findMany({
-        where: {
-          parentId,
-          isFolder: true,
-          status: 'active',
-        },
-        select: { id: true },
-      });
-
-      let count = 0;
-      for (const folder of activeFolders) {
-        // Check if this folder contains archived content
-        const hasArchived = await this.prisma.document.count({
+      if (status === 'archived') {
+        // In archived view: count archived folders directly
+        const count = await this.prisma.document.count({
           where: {
-            parentId: folder.id,
+            parentId,
+            isFolder: true,
             status: 'archived',
           },
         });
-        if (hasArchived > 0) {
-          count++;
+        return count;
+      } else {
+        // In active view: count active folders that contain archived content
+        const activeFolders = await this.prisma.document.findMany({
+          where: {
+            parentId,
+            isFolder: true,
+            status: 'active',
+          },
+          select: { id: true },
+        });
+
+        let count = 0;
+        for (const folder of activeFolders) {
+          // Check if this folder contains archived content
+          const hasArchived = await this.prisma.document.count({
+            where: {
+              parentId: folder.id,
+              status: 'archived',
+            },
+          });
+          if (hasArchived > 0) {
+            count++;
+          }
         }
+        return count;
       }
-      return count;
     } else {
       // For files: count archived files directly
       const count = await this.prisma.document.count({

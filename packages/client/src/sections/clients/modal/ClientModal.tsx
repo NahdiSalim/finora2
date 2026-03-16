@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,7 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import type { SubmitHandler } from "react-hook-form";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import {
   X,
@@ -25,8 +26,10 @@ import {
 } from "lucide-react";
 
 import CustomInput from "src/components/common/CustomInput";
+import CustomSelect from "src/components/common/CustomSelect";
 import CustomButton from "src/components/common/CustomButton";
 import PasswordField from "src/components/common/PasswordField";
+import FileUpload from "src/components/common/FileUpload";
 import { useCreateClientMutation } from "src/lib/services/clientApi";
 import { useAlert } from "src/contexts/AlertContext";
 import {
@@ -34,7 +37,12 @@ import {
   type ClientFormData,
 } from "src/validations/client/client-validation";
 import PhoneInput from "src/components/common/PhoneInput";
-import { useEffect } from "react";
+import {
+  useGetCountriesQuery,
+  useGetCitiesQuery,
+} from "src/lib/services/locationApi";
+import { useEffect, useState } from "react";
+import MenuItem from "@mui/material/MenuItem";
 
 interface Props {
   open: boolean;
@@ -47,6 +55,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { showAlert } = useAlert();
   const [createClient, { isLoading }] = useCreateClientMutation();
+  const [patenteFile, setPatenteFile] = useState<File | null>(null);
 
   const isViewMode = !!client;
 
@@ -55,6 +64,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
     handleSubmit,
     control,
     reset,
+    setValue,
     formState: { errors, isDirty, isValid },
   } = useForm<ClientFormData>({
     resolver: yupResolver(clientValidationSchema),
@@ -70,10 +80,27 @@ export default function ClientModal({ open, onClose, client }: Props) {
       vatNumber: "",
       legalForm: "",
       address: "",
+      countryCode: "",
       city: "",
       postalCode: "",
     },
   });
+
+  const { data: countries = [] } = useGetCountriesQuery(undefined);
+  const countryCode = useWatch({
+    control,
+    name: "countryCode",
+    defaultValue: "",
+  });
+  const { data: cities = [] } = useGetCitiesQuery(
+    { countryCode },
+    { skip: !countryCode || countryCode.length !== 2 },
+  );
+
+  useEffect(() => {
+    if (countryCode) return;
+    setValue("city", "");
+  }, [countryCode, setValue]);
 
   useEffect(() => {
     if (client) {
@@ -88,10 +115,15 @@ export default function ClientModal({ open, onClose, client }: Props) {
         siret: client.company?.siret || "",
         vatNumber: client.company?.vatNumber || "",
         legalForm: client.company?.legalForm || "",
-        address: client.company?.address?.address || "",
-        city: client.company?.address?.city || "",
-        postalCode: client.company?.address?.postalCode || "",
+        address:
+          client.company?.address?.address || client.company?.address || "",
+        city: client.company?.city || client.company?.address?.city || "",
+        postalCode:
+          client.company?.postalCode ||
+          client.company?.address?.postalCode ||
+          "",
       });
+      setPatenteFile(null);
     } else {
       reset({
         firstName: "",
@@ -104,17 +136,39 @@ export default function ClientModal({ open, onClose, client }: Props) {
         vatNumber: "",
         legalForm: "",
         address: "",
+        countryCode: "",
         city: "",
         postalCode: "",
       });
+      setPatenteFile(null);
     }
   }, [client, reset]);
 
+  // Quand on est en mode view et qu'on a le nom du pays côté API,
+  // on le convertit en code ISO pour pré-remplir le select « Pays ».
+  useEffect(() => {
+    if (!client || !countries.length) return;
+    const countryName: string | undefined = client.company?.country;
+    if (!countryName) return;
+    const match = countries.find((c) => c.name === countryName);
+    if (match) {
+      setValue("countryCode", match.isoCode);
+    }
+  }, [client, countries, setValue]);
+
   const onSubmit: SubmitHandler<ClientFormData> = async (data) => {
     try {
-      await createClient(data).unwrap();
+      const selectedCountry = countries.find(
+        (c) => c.isoCode === data.countryCode,
+      );
+      await createClient({
+        ...data,
+        patente: patenteFile ?? undefined,
+        country: selectedCountry?.name,
+      }).unwrap();
       showAlert("Client created successfully", "success");
       reset();
+      setPatenteFile(null);
       onClose();
     } catch {
       showAlert("Error creating client", "error");
@@ -270,51 +324,121 @@ export default function ClientModal({ open, onClose, client }: Props) {
               InputProps={{ readOnly: isViewMode }}
             />
           </Box>
+          {isViewMode ? (
+            client?.company?.patentFileUrl ? (
+              <FileUpload
+                label="Patente (document)"
+                existingFileUrl={client.company.patentFileUrl}
+                existingFileName={client.company.patentFile ?? null}
+                disabled
+              />
+            ) : null
+          ) : (
+            <FileUpload
+              label="Patente (document)"
+              value={patenteFile}
+              onChange={setPatenteFile}
+              maxSize={10}
+              acceptedFiles={[".pdf", ".jpg", ".jpeg", ".png"]}
+            />
+          )}
         </Box>
       ),
     },
     {
       id: "address",
-      title: "Address",
+      title: "Adresse",
       icon: <MapPin size={18} />,
       description: "Location details",
       content: (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Controller
+            name="countryCode"
+            control={control}
+            render={({ field }) => (
+              <CustomSelect
+                {...field}
+                label="Pays"
+                displayEmpty
+                fullWidth
+                error={!!errors.countryCode}
+                helperText={errors.countryCode?.message}
+                disabled={isViewMode}
+                renderValue={(v): ReactNode => {
+                  if (!v) return "Sélectionner un pays";
+                  return (
+                    countries.find((c) => c.isoCode === v)?.name ?? String(v)
+                  );
+                }}
+              >
+                <MenuItem value="">
+                  <em>Sélectionner un pays</em>
+                </MenuItem>
+                {countries.map((c) => (
+                  <MenuItem key={c.isoCode} value={c.isoCode}>
+                    {c.name}
+                  </MenuItem>
+                ))}
+              </CustomSelect>
+            )}
+          />
+          <Controller
+            name="city"
+            control={control}
+            render={({ field }) => (
+              <CustomSelect
+                {...field}
+                label="Ville"
+                displayEmpty
+                fullWidth
+                error={!!errors.city}
+                helperText={errors.city?.message}
+                disabled={isViewMode || !countryCode}
+                renderValue={(v): ReactNode => {
+                  if (!v) return "Sélectionner une ville";
+                  const city = cities.find(
+                    (c) => `${c.name} (${c.governorate})` === v || c.name === v,
+                  );
+                  return city
+                    ? `${city.name} (${city.governorate})`
+                    : String(v);
+                }}
+              >
+                <MenuItem value="">
+                  <em>Sélectionner une ville</em>
+                </MenuItem>
+                {cities.map((c) => {
+                  const optionValue = `${c.name} (${c.governorate})`;
+                  return (
+                    <MenuItem
+                      key={`${c.name}-${c.governorateCode}`}
+                      value={optionValue}
+                    >
+                      {c.name} ({c.governorate})
+                    </MenuItem>
+                  );
+                })}
+              </CustomSelect>
+            )}
+          />
           <CustomInput
             {...register("address")}
-            label="Address"
+            label="Adresse"
             placeholder="12 rue de la Paix"
             fullWidth
             error={!!errors.address}
             helperText={errors.address?.message}
             InputProps={{ readOnly: isViewMode }}
           />
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: { xs: "column", sm: "row" },
-              gap: 2,
-            }}
-          >
-            <CustomInput
-              {...register("city")}
-              label="City"
-              placeholder="Paris"
-              fullWidth
-              error={!!errors.city}
-              helperText={errors.city?.message}
-              InputProps={{ readOnly: isViewMode }}
-            />
-            <CustomInput
-              {...register("postalCode")}
-              label="Postal Code"
-              placeholder="75001"
-              fullWidth
-              error={!!errors.postalCode}
-              helperText={errors.postalCode?.message}
-              InputProps={{ readOnly: isViewMode }}
-            />
-          </Box>
+          <CustomInput
+            {...register("postalCode")}
+            label="Postal Code"
+            placeholder="75001"
+            fullWidth
+            error={!!errors.postalCode}
+            helperText={errors.postalCode?.message}
+            InputProps={{ readOnly: isViewMode }}
+          />
         </Box>
       ),
     },

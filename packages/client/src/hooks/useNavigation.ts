@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
-import { usePermissions } from './usePermissions';
-import type { NavItem } from 'src/layouts/nav-config-dashboard';
-import { NAV_CONFIG } from 'src/layouts/nav-config-dashboard';
+import { useMemo } from "react";
+import { usePermissions } from "./usePermissions";
+import type { NavItem } from "src/layouts/nav-config-dashboard";
+import { NAV_CONFIG } from "src/layouts/nav-config-dashboard";
 
 // ----------------------------------------------------------------------
 
@@ -9,16 +9,20 @@ export function useNavigation() {
   const { features } = usePermissions();
 
   const navItems: NavItem[] = useMemo(() => {
-    if (!features || features.length === 0) {
-      return [];
+    const allowedPaths = new Set<string>();
+
+    if (features && features.length > 0) {
+      features.forEach((feature) => {
+        feature.pages.forEach((page) => {
+          allowedPaths.add(page.route);
+        });
+      });
     }
 
-    const allowedPaths = new Set<string>();
-    features.forEach((feature) => {
-      feature.pages.forEach((page) => {
-        allowedPaths.add(page.route);
-      });
-    });
+    // 👇 ajout temporaire pour afficher Messagerie en dev
+    if (import.meta.env.DEV) {
+      allowedPaths.add("/messages");
+    }
 
     const items: NavItem[] = [];
 

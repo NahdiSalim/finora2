@@ -19,6 +19,7 @@ import AuthLayout from "src/sections/auth/sign-in-view/Auth-Layout";
 export const UserPage = lazy(() => import("src/pages/users"));
 export const CollaboratorPage = lazy(() => import("src/pages/collaborators"));
 export const ClientPage = lazy(() => import("src/pages/clients"));
+export const MessagesPage = lazy(() => import("src/pages/messages"));
 
 export const UserFormPage = lazy(
   () => import("src/sections/user/user-forms/index"),
@@ -159,7 +160,7 @@ export const routesSection: RouteObject[] = [
         path: "messages",
         element: (
           <PermissionGuard requiredPath="/messages">
-            <UserPage />
+            <MessagesPage />
           </PermissionGuard>
         ),
       },
@@ -167,7 +168,7 @@ export const routesSection: RouteObject[] = [
         path: "messages/:id",
         element: (
           <PermissionGuard requiredPath="/messages/:id">
-            <UserPage />
+            <MessagesPage />
           </PermissionGuard>
         ),
       },
@@ -221,7 +222,6 @@ export const routesSection: RouteObject[] = [
       },
       {
         path: "user/:id/documents",
-
         element: (
           <PermissionGuard requiredPath="/users">
             <DocumentValidationPage />
@@ -255,7 +255,6 @@ export const routesSection: RouteObject[] = [
     ],
   },
 
-  // Auth routes (sans protection)
   {
     path: "sign-in",
     element: <AuthLayout />,
@@ -286,7 +285,6 @@ export const routesSection: RouteObject[] = [
       },
     ],
   },
-
   {
     path: "forgot-password",
     element: <AuthLayout />,
@@ -307,7 +305,7 @@ export const routesSection: RouteObject[] = [
       },
     ],
   },
-  // Error pages
+
   { path: "403", element: <PageForbidden /> },
   { path: "404", element: <Page404 /> },
   { path: "*", element: <Page404 /> },

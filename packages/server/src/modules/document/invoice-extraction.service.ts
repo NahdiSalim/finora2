@@ -273,10 +273,10 @@ export class InvoiceExtractionService {
         });
       }
 
-      // Update document status
+      // Update document status to 'traite' — stays here until user clicks save
       await this.prisma.document.update({
         where: { id: documentId },
-        data: { processingStatus: 'enregistre', extractionStatus: 'done' },
+        data: { processingStatus: 'traite', extractionStatus: 'done' },
       });
 
       console.log(`✓ Auto-extraction complete for document ${documentId}`);

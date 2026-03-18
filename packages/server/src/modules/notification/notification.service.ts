@@ -218,6 +218,12 @@ export class NotificationService {
         actionUrl: `/tasks/${data.taskId}`,
         priority: 'normal',
       },
+      'task.in_review': {
+        title: 'Tâche en révision',
+        message: `${actorName} a soumis une tâche pour révision`,
+        actionUrl: `/tasks/${data.taskId}`,
+        priority: 'high',
+      },
       'task.comment': {
         title: 'Nouveau commentaire',
         message: `${actorName} a commenté sur une tâche`,

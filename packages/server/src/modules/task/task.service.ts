@@ -482,7 +482,8 @@ export class TaskService {
     taskId: number,
     dto: UpdateTaskDto,
     userId: number,
-    files?: Express.Multer.File[]
+    files?: Express.Multer.File[],
+    userRole?: string
   ) {
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
@@ -495,6 +496,16 @@ export class TaskService {
     // Check access rights
     if (task.assigneeId !== userId && task.createdById !== userId) {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+    }
+
+    // Collaborators cannot set status to 'completed' — only accountants can
+    const isAccountant = userRole === 'ACCOUNTANT' || task.createdById === userId;
+    if (dto.status === TaskStatus.COMPLETED && !isAccountant) {
+      throw new ApiError(
+        'Only accountants can mark a task as completed. Use "in_review" instead.',
+        403,
+        'FORBIDDEN_STATUS'
+      );
     }
 
     // Upload new attachments to MinIO if provided
@@ -629,11 +640,15 @@ export class TaskService {
     // Notify the other party about task update
     const notifyId = userId === task.assigneeId ? task.createdById : task.assigneeId;
     if (notifyId && notifyId !== userId) {
+      let action = 'updated';
+      if (dto.status === TaskStatus.COMPLETED) action = 'completed';
+      else if (dto.status === TaskStatus.IN_REVIEW) action = 'in_review';
+
       this.notificationService
         .notify({
           recipientId: notifyId,
           type: 'task',
-          action: dto.status === TaskStatus.COMPLETED ? 'completed' : 'updated',
+          action,
           actorName: 'Un collaborateur',
           data: { taskId },
         })
@@ -651,10 +666,23 @@ export class TaskService {
   }
 
   /**
-   * Mark task as completed (Collaborator)
+   * Submit task for review (Collaborator) — replaces completeTask for collaborators
+   */
+  async submitForReview(taskId: number, userId: number) {
+    return this.updateTask(taskId, { status: TaskStatus.IN_REVIEW, progress: 90 }, userId);
+  }
+
+  /**
+   * Mark task as completed (Accountant only)
    */
   async completeTask(taskId: number, userId: number) {
-    return this.updateTask(taskId, { status: TaskStatus.COMPLETED, progress: 100 }, userId);
+    return this.updateTask(
+      taskId,
+      { status: TaskStatus.COMPLETED, progress: 100 },
+      userId,
+      undefined,
+      'ACCOUNTANT'
+    );
   }
 
   /**

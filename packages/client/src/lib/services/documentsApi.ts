@@ -17,6 +17,30 @@ export interface DocumentItem {
   owner?: { id: number; username?: string; email?: string };
 }
 
+export interface DocumentDetailItem extends DocumentItem {
+  processingStatus?: string;
+  parentId?: number | null;
+  parent?: { id: number; name: string } | null;
+  downloadUrl?: string;
+}
+
+export interface GetDocumentResponse {
+  status: string;
+  code: string;
+  data: DocumentDetailItem;
+}
+
+export interface BreadcrumbItem {
+  id: number;
+  name: string;
+}
+
+export interface GetBreadcrumbResponse {
+  status: string;
+  code: string;
+  data: BreadcrumbItem[];
+}
+
 export interface GetDocumentsResponse {
   status: string;
   code: string;
@@ -161,6 +185,24 @@ export const documentsApi = createApi({
               { type: "Documents", id: "ARCHIVED_LIST" },
             ]
           : [{ type: "Documents", id: "ARCHIVED_LIST" }],
+    }),
+
+    getDocument: builder.query<GetDocumentResponse, number>({
+      query: (id) => ({
+        url: `/documents/${id}`,
+        method: "GET",
+      }),
+      providesTags: (_result, _err, id) => [{ type: "Documents", id }],
+    }),
+
+    getBreadcrumb: builder.query<GetBreadcrumbResponse, number>({
+      query: (id) => ({
+        url: `/documents/${id}/breadcrumb`,
+        method: "GET",
+      }),
+      providesTags: (_result, _err, id) => [
+        { type: "Documents", id: `breadcrumb-${id}` },
+      ],
     }),
 
     createFolder: builder.mutation<CreateFolderResponse, CreateFolderInput>({
@@ -320,6 +362,8 @@ export const {
   useGetDocumentsQuery,
   useLazyGetDocumentsQuery,
   useGetArchivedDocumentsQuery,
+  useGetDocumentQuery,
+  useGetBreadcrumbQuery,
   useCreateFolderMutation,
   useUpdateDocumentMutation,
   useDeleteDocumentMutation,

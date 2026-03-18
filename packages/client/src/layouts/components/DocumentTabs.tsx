@@ -22,6 +22,8 @@ interface DocumentsTabsProps {
   disabledTabs?: number[];
   variant?: "standard" | "fullWidth" | "scrollable";
   centered?: boolean;
+  /** Label du second onglet (défaut: "Chat") */
+  secondTabLabel?: string;
 }
 
 interface TabPanelProps {
@@ -66,6 +68,7 @@ export function DocumentsTabs({
   disabledTabs = [],
   variant = "standard",
   centered = false,
+  secondTabLabel = "Chat",
 }: DocumentsTabsProps) {
   const theme = useTheme();
   const [value, setValue] = useState(defaultValue);
@@ -159,7 +162,7 @@ export function DocumentsTabs({
               </Badge>
             }
             iconPosition="start"
-            label="Chat"
+            label={secondTabLabel}
             disabled={disabledTabs.includes(1)}
             sx={tabSx}
             {...a11yProps(1)}

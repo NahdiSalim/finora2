@@ -17,6 +17,10 @@ model Request {
   
   companyId   Int?
   company     Company? @relation("CompanyRequests", fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Accounting firm that receives this request
+  accountingFirmId Int?
+  accountingFirm   Company? @relation("AccountingFirmRequests", fields: [accountingFirmId], references: [id], onDelete: SetNull)
   
   // Task conversion
   convertedToTaskId Int?     @unique
@@ -36,6 +40,7 @@ model Request {
   @@index([clientId])
   @@index([assignedToId])
   @@index([companyId])
+  @@index([accountingFirmId])
   @@index([status])
   @@index([convertedToTaskId])
   @@map("requests")

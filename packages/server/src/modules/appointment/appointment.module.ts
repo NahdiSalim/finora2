@@ -9,6 +9,9 @@ import { FileUploadService } from 'src/common/services/file-upload.service';
 import { AuthService } from '../auth/auth.service';
 import { MailService } from '../mail/mail.service';
 import { MinioService } from 'src/common/services/minio.service';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationGateway } from '../notification/notification.gateway';
+import { ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [PrismaModule],
@@ -22,6 +25,9 @@ import { MinioService } from 'src/common/services/minio.service';
     FileUploadService,
     JwtService,
     MinioService,
+    NotificationService,
+    NotificationGateway,
+    ConfigService,
   ],
   exports: [AppointmentService],
 })

@@ -1,0 +1,83 @@
+import React, { useId } from "react";
+
+interface FolderHoverSVGProps {
+  size?: number;
+  className?: string;
+}
+
+const FolderHoverSVG: React.FC<FolderHoverSVGProps> = ({ className = "" }) => {
+  const id = useId();
+  const filterId = `filter_hover_${id}`;
+  const gradientId = `gradient_hover_${id}`;
+
+  return (
+    <div className={`inline-block ${className}`}>
+      <svg
+        width="100%"
+        height="100%"
+        viewBox="0 0 195 131"
+        preserveAspectRatio="xMidYMid meet"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <rect width="195" height="87.6345" rx="20" fill="#1A57D0" />
+        <g filter={`url(#${filterId})`}>
+          <path
+            d="M0 60.3616C0 49.3526 0 43.848 2.1425 39.6431C4.0271 35.9444 7.03426 32.9373 10.733 31.0527C14.9379 28.9102 20.4424 28.9102 31.4514 28.9102H72.5219C74.57 28.9102 75.594 28.9102 76.6064 29.0153C77.5059 29.1087 78.3979 29.264 79.276 29.4803C80.2643 29.7236 81.228 30.0698 83.1555 30.7623L110.94 40.7439C112.867 41.4364 113.831 41.7826 114.819 42.026C115.697 42.2422 116.589 42.3976 117.489 42.491C118.501 42.5961 119.525 42.5961 121.574 42.5961H163.549C174.558 42.5961 180.062 42.5961 184.267 44.7386C187.966 46.6232 190.973 49.6303 192.858 53.3291C195 57.534 195 63.0385 195 74.0475L195 99.5484C195 110.557 195 116.062 192.857 120.267C190.973 123.966 187.966 126.973 184.267 128.857C180.062 131 174.558 131 163.549 131H31.4514C20.4424 131 14.9379 131 10.733 128.857C7.03426 126.973 4.0271 123.966 2.1425 120.267C0 116.062 0 110.557 0 99.5484V60.3616Z"
+            fill={`url(#${gradientId})`}
+          />
+        </g>
+        <defs>
+          <filter
+            id={filterId}
+            x="0"
+            y="28.9102"
+            width="195"
+            height="103.09"
+            filterUnits="userSpaceOnUse"
+            colorInterpolationFilters="sRGB"
+          >
+            <feFlood floodOpacity="0" result="BackgroundImageFix" />
+            <feBlend
+              mode="normal"
+              in="SourceGraphic"
+              in2="BackgroundImageFix"
+              result="shape"
+            />
+            <feColorMatrix
+              in="SourceAlpha"
+              type="matrix"
+              values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
+              result="hardAlpha"
+            />
+            <feOffset dy="1" />
+            <feGaussianBlur stdDeviation="0.5" />
+            <feComposite in2="hardAlpha" operator="arithmetic" k2="-1" k3="1" />
+            <feColorMatrix
+              type="matrix"
+              values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.25 0"
+            />
+            <feBlend
+              mode="normal"
+              in2="shape"
+              result="effect1_innerShadow_820_40879"
+            />
+          </filter>
+          <linearGradient
+            id={gradientId}
+            x1="97.5"
+            y1="28.9102"
+            x2="97.5"
+            y2="131"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop stopColor="#4D85FF" />
+            <stop offset="1" stopColor="#155DFC" />
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+  );
+};
+
+export default FolderHoverSVG;

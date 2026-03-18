@@ -291,6 +291,20 @@ export class NotificationService {
         priority: 'normal',
       },
 
+      // Invoice extraction
+      'invoice.extracted': {
+        title: 'Extraction terminée',
+        message: `L'extraction de la facture "${data.fileName || 'fichier'}" est terminée avec succès`,
+        actionUrl: data.fileUrl || `/documents/${data.documentId}`,
+        priority: 'normal',
+      },
+      'invoice.extraction_failed': {
+        title: 'Extraction échouée',
+        message: `L'extraction de la facture "${data.fileName || 'fichier'}" a échoué. Vous pouvez réessayer manuellement.`,
+        actionUrl: data.fileUrl || `/documents/${data.documentId}`,
+        priority: 'high',
+      },
+
       // Relationships
       'relationship.invitation_received': {
         title: 'Nouvelle invitation de relation',

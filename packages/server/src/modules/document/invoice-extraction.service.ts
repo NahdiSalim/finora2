@@ -1,10 +1,11 @@
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { MinioService } from '../../common/services/minio.service';
 import { ApiError } from '../../common/errors/api-error';
 import { Prisma } from '@prisma/client';
 import axios from 'axios';
 import FormData from 'form-data';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class InvoiceExtractionService {
@@ -13,7 +14,8 @@ export class InvoiceExtractionService {
 
   constructor(
     private prisma: PrismaService,
-    private minioService: MinioService
+    private minioService: MinioService,
+    private notificationService: NotificationService
   ) {}
 
   async extractInvoiceMetadata(documentId: number, companyId: number) {
@@ -175,19 +177,212 @@ export class InvoiceExtractionService {
     }
   }
 
+  /**
+   * Empty invoice JSON structure returned when extraction fails
+   */
+  private emptyInvoiceJson() {
+    return {
+      invoice_header: { msg_sender_id: null, msg_receiver_id: null },
+      bgm: { type: null, numero: null },
+      dtm: [],
+      partner_section: [],
+      loc_section: null,
+      pyt_section: [],
+      texte: null,
+      special_conditions: null,
+      lin_section: [],
+      invoice_moa: [],
+      invoice_tax: [],
+      invoice_alc: null,
+      additional_documents: null,
+      ref_ttn_val: null,
+    };
+  }
+
+  /**
+   * Extract invoice and auto-save to DB (used after upload).
+   * - Success → saves real data, processingStatus = 'enregistre'
+   * - Failure → saves empty JSON, extractionStatus = 'failed'
+   */
+  async extractAndSaveInvoice(documentId: number, companyId: number) {
+    const document = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      select: {
+        id: true,
+        isFolder: true,
+        status: true,
+        url: true,
+        name: true,
+        mimeType: true,
+        createdBy: true,
+      },
+    });
+    if (!document || document.isFolder || document.status !== 'active') return;
+
+    try {
+      // Download from MinIO
+      const fileStream = await this.minioService.getFileStream(document.url);
+      const chunks: Buffer[] = [];
+      for await (const chunk of fileStream) chunks.push(chunk);
+      const fileBuffer = Buffer.concat(chunks);
+
+      // Call extraction API
+      const formData = new FormData();
+      formData.append('files', fileBuffer, {
+        filename: document.name,
+        contentType: document.mimeType || 'application/pdf',
+      });
+
+      const response = await axios.post(this.extractionApiUrl, formData, {
+        headers: { ...formData.getHeaders() },
+        timeout: 120000,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      });
+
+      const extractedData = response.data;
+      if (!extractedData || typeof extractedData !== 'object') {
+        throw new Error('API returned empty or invalid response');
+      }
+
+      // Recalculate totals
+      const recalculated = this.recalculateInvoice(extractedData);
+      const parsedFields = this.parseExtractedData(recalculated);
+
+      // Upsert metadata
+      const existing = await this.prisma.invoiceMetadata.findUnique({ where: { documentId } });
+      if (existing) {
+        await this.prisma.invoiceMetadata.update({
+          where: { documentId },
+          data: {
+            rawData: recalculated,
+            extractionStatus: 'success',
+            errorMessage: null,
+            ...parsedFields,
+          },
+        });
+      } else {
+        await this.prisma.invoiceMetadata.create({
+          data: {
+            documentId,
+            rawData: recalculated,
+            extractionStatus: 'success',
+            errorMessage: null,
+            ...parsedFields,
+          },
+        });
+      }
+
+      // Update document status
+      await this.prisma.document.update({
+        where: { id: documentId },
+        data: { processingStatus: 'enregistre', extractionStatus: 'done' },
+      });
+
+      console.log(`✓ Auto-extraction complete for document ${documentId}`);
+
+      // Notify the user who uploaded the document
+      if (document.createdBy) {
+        const fileUrl = await this.minioService
+          .getPresignedUrl(document.url, 7 * 24 * 60 * 60)
+          .catch(() => null);
+        this.notificationService
+          .notify({
+            recipientId: document.createdBy,
+            type: 'invoice',
+            action: 'extracted',
+            data: { fileName: document.name, fileUrl },
+          })
+          .catch(() => {});
+      }
+    } catch (error) {
+      console.error(`✗ Auto-extraction failed for document ${documentId}:`, error);
+
+      // Save empty JSON so GET returns 'failed' instead of 'pending'
+      const emptyJson = this.emptyInvoiceJson();
+      const existing = await this.prisma.invoiceMetadata
+        .findUnique({ where: { documentId } })
+        .catch(() => null);
+      if (existing) {
+        await this.prisma.invoiceMetadata
+          .update({
+            where: { documentId },
+            data: {
+              rawData: emptyJson,
+              extractionStatus: 'failed',
+              errorMessage: error.message || 'Unknown error',
+            },
+          })
+          .catch(() => {});
+      } else {
+        await this.prisma.invoiceMetadata
+          .create({
+            data: {
+              documentId,
+              rawData: emptyJson,
+              extractionStatus: 'failed',
+              errorMessage: error.message || 'Unknown error',
+            },
+          })
+          .catch(() => {});
+      }
+
+      await this.prisma.document
+        .update({
+          where: { id: documentId },
+          data: { processingStatus: 'traite', extractionStatus: 'failed' },
+        })
+        .catch(() => {});
+
+      // Notify the user who uploaded the document
+      if (document.createdBy) {
+        const fileUrl = await this.minioService
+          .getPresignedUrl(document.url, 7 * 24 * 60 * 60)
+          .catch(() => null);
+        this.notificationService
+          .notify({
+            recipientId: document.createdBy,
+            type: 'invoice',
+            action: 'extraction_failed',
+            data: { documentId, fileName: document.name, fileUrl },
+          })
+          .catch(() => {});
+      }
+    }
+  }
+
+  /**
+   * Get invoice metadata by documentId.
+   * Returns extractionStatus: 'done' | 'pending' | 'failed' from Document.extractionStatus
+   */
   async getInvoiceMetadata(documentId: number, companyId: number) {
-    const metadata = await this.prisma.invoiceMetadata.findUnique({
-      where: { documentId },
+    const document = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      select: { id: true, extractionStatus: true },
     });
 
-    if (!metadata) {
-      throw new ApiError('Invoice metadata not found', 404, 'METADATA_NOT_FOUND');
+    if (!document) {
+      throw new ApiError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
     }
+
+    const extractionStatus = document.extractionStatus || 'pending';
+
+    // If pending, no metadata yet
+    if (extractionStatus === 'pending') {
+      return {
+        status: 'success',
+        code: '200',
+        data: { documentId, extractionStatus: 'pending', metadata: null },
+      };
+    }
+
+    // done or failed — return metadata (real or empty JSON)
+    const metadata = await this.prisma.invoiceMetadata.findUnique({ where: { documentId } });
 
     return {
       status: 'success',
       code: '200',
-      data: metadata,
+      data: { documentId, extractionStatus, metadata: metadata ?? null },
     };
   }
 

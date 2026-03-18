@@ -483,55 +483,56 @@ export class InvoiceExtractionService {
 
     if (lines.length === 0) return result;
 
-    // Recalculate each line: line_total = qty * unit_price * (1 - discount/100)
-    let subtotalHT = 0;
+    // Each line: lin_moa.rff = unit price HT, lin_qty = quantity, lin_alc.pcd = discount %
+    // Line total HT = qty * unit_price * (1 - discount/100)
+    let totalHT = 0;
     result.lin_section = lines.map((line: any) => {
       const qty = parseFloat(line.lin_qty) || 0;
       const unitPrice = parseFloat(line.lin_moa?.rff) || 0;
       const discountPct = parseFloat(line.lin_alc?.pcd) || 0;
 
       const lineTotal = parseFloat((qty * unitPrice * (1 - discountPct / 100)).toFixed(3));
-      subtotalHT += lineTotal;
+      totalHT += lineTotal;
 
       return {
         ...line,
         lin_qty: qty.toString(),
         lin_moa: {
           ...line.lin_moa,
-          rff: unitPrice.toFixed(3), // prix unitaire brut (inchangé)
-          lin_total: lineTotal.toFixed(3), // total ligne calculé = qty × prix × (1 - remise%)
+          rff: unitPrice.toFixed(3), // prix unitaire brut
+          lin_total: lineTotal.toFixed(3), // total ligne HT après remise
         },
       };
     });
 
-    subtotalHT = parseFloat(subtotalHT.toFixed(3));
+    totalHT = parseFloat(totalHT.toFixed(3));
 
-    // Extract TVA rate from label e.g. "TVA 19%" → 0.19
-    let tvaRate = 0;
-    const taxEntry = Array.isArray(result.invoice_tax) ? result.invoice_tax[0] : null;
-    if (taxEntry?.tax) {
-      const match = taxEntry.tax.match(/(\d+(?:\.\d+)?)\s*%/);
-      if (match) tvaRate = parseFloat(match[1]) / 100;
+    // Recalculate each tax entry from invoice_tax (supports multiple tax rates)
+    // TVA amount = totalHT * tvaRate for each entry
+    let totalTVA = 0;
+    if (Array.isArray(result.invoice_tax)) {
+      result.invoice_tax = result.invoice_tax.map((taxEntry: any) => {
+        let tvaRate = 0;
+        if (taxEntry?.tax) {
+          const match = taxEntry.tax.match(/(\d+(?:\.\d+)?)\s*%/);
+          if (match) tvaRate = parseFloat(match[1]) / 100;
+        }
+        const tvaAmount = parseFloat((totalHT * tvaRate).toFixed(3));
+        totalTVA += tvaAmount;
+        return { ...taxEntry, moa: tvaAmount.toFixed(3) };
+      });
     }
 
-    const tvaAmount = parseFloat((subtotalHT * tvaRate).toFixed(3));
-    const totalTTC = parseFloat((subtotalHT + tvaAmount).toFixed(3));
+    totalTVA = parseFloat(totalTVA.toFixed(3));
+    const totalTTC = parseFloat((totalHT + totalTVA).toFixed(3));
 
-    // Update invoice_moa: [0]=HT, [1]=TVA, [2]=TTC
+    // Update invoice_moa: [0]=HT, [1]=TVA total, [2]=TTC
     if (Array.isArray(result.invoice_moa)) {
       const moa = [...result.invoice_moa];
-      if (moa[0]) moa[0] = { ...moa[0], moa: subtotalHT.toFixed(3) };
-      if (moa[1]) moa[1] = { ...moa[1], moa: tvaAmount.toFixed(3) };
+      if (moa[0]) moa[0] = { ...moa[0], moa: totalHT.toFixed(3) };
+      if (moa[1]) moa[1] = { ...moa[1], moa: totalTVA.toFixed(3) };
       if (moa[2]) moa[2] = { ...moa[2], moa: totalTTC.toFixed(3) };
       result.invoice_moa = moa;
-    }
-
-    // Update invoice_tax amount
-    if (Array.isArray(result.invoice_tax) && result.invoice_tax[0]) {
-      result.invoice_tax = [
-        { ...result.invoice_tax[0], moa: tvaAmount.toFixed(3) },
-        ...result.invoice_tax.slice(1),
-      ];
     }
 
     return result;

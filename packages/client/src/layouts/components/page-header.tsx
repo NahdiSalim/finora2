@@ -34,6 +34,7 @@ type ActionButton = {
   onClick: () => void;
   variant?: "contained" | "outlined" | "text";
   color?: "primary" | "secondary" | "error" | "warning" | "info" | "success";
+  sx?: any;
 };
 
 type BackButton = (() => void) | { onClick?: () => void; path?: string };
@@ -306,6 +307,7 @@ export function PageHeader({
                   sx={{
                     flex: { xs: 1, md: "none" },
                     width: { xs: "100%", sm: "auto" },
+                    ...action.sx,
                   }}
                 >
                   {action.label}

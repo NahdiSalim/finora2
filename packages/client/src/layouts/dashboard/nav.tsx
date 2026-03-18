@@ -189,12 +189,30 @@ export function NavContent({ data, slots, sx }: NavContentProps) {
             }}
           >
             {data.map((item) => {
-              const isActived =
-                item.path === pathname ||
-                (item.children &&
-                  item.children.some((child) =>
-                    pathname.startsWith(child.path.split("?")[0]),
-                  ));
+              // Check if any child is active (more precise check)
+              const hasActiveChild = item.children?.some((child) => {
+                const [basePath, queryString] = child.path.split("?");
+                const isBasePathActive =
+                  pathname === basePath || pathname.startsWith(basePath + "/");
+
+                if (!isBasePathActive) return false;
+
+                // If child has query params, check them
+                if (queryString) {
+                  const params = new URLSearchParams(queryString);
+                  const tabParam = params.get("tab");
+                  const currentSearchParams = new URLSearchParams(
+                    location.search,
+                  );
+                  const currentTab = currentSearchParams.get("tab");
+                  return tabParam === currentTab;
+                }
+
+                return true;
+              });
+
+              // Parent is only active if pathname exactly matches the parent path AND no child is active
+              const isActived = !hasActiveChild && item.path === pathname;
               const isExpanded = expandedItems[item.title] ?? false;
               const hasChildren = item.children && item.children.length > 0;
 
@@ -298,8 +316,16 @@ export function NavContent({ data, slots, sx }: NavContentProps) {
                       >
                         {item.children!.map((child) => {
                           const [basePath, queryString] = child.path.split("?");
-                          const isBasePathActive =
-                            pathname.startsWith(basePath);
+
+                          // If child path is the same as parent path, only match exactly
+                          // Otherwise, match if pathname starts with basePath + "/"
+                          const isChildPathSameAsParent =
+                            basePath === item.path;
+                          const isExactMatch = pathname === basePath;
+                          const isSubPath =
+                            !isChildPathSameAsParent &&
+                            pathname.startsWith(basePath + "/");
+                          const isBasePathActive = isExactMatch || isSubPath;
 
                           // Get current search params from URL
                           const currentSearchParams = new URLSearchParams(
@@ -315,7 +341,9 @@ export function NavContent({ data, slots, sx }: NavContentProps) {
                               const currentTab = currentSearchParams.get("tab");
                               isChildActive = tabParam === currentTab;
                             } else {
-                              isChildActive = true;
+                              // For children with same path as parent, only match exactly
+                              // For children with sub-paths, match if it's a proper sub-path
+                              isChildActive = isExactMatch || isSubPath;
                             }
                           }
 

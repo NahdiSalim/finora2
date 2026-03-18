@@ -32,12 +32,27 @@ export function useNavigation() {
     const isAccountant =
       userRoleUpper === ROLE_CODES.ACCOUNTANT ||
       userRoleUpper === ROLE_CODES.ADMINISTRATOR ||
-      userRoleUpper === ROLE_CODES.COLLABORATOR ||
       userRoleUpper === "COMPTABLE"; // Fallback for old format
+    const isCollaboratorOnly =
+      userRoleUpper === ROLE_CODES.COLLABORATOR ||
+      userRoleUpper === "COLLABORATEUR";
 
     const items: NavItem[] = [];
 
     allowedPaths.forEach((path) => {
+      // Collaborator dashboard: single "Mes tasks" entry (reuses task-management components)
+      if (path === "/collaborators" && isCollaboratorOnly) {
+        const mesTasksConfig = NAV_CONFIG["/tasks"];
+        if (mesTasksConfig) {
+          items.push({
+            title: mesTasksConfig.title,
+            path: `${dashboardBase}/tasks`,
+            icon: mesTasksConfig.icon,
+          });
+        }
+        return;
+      }
+
       const config = NAV_CONFIG[path];
       if (config) {
         const segment = path.startsWith("/") ? path.slice(1) : path;
@@ -65,6 +80,23 @@ export function useNavigation() {
           ];
         }
 
+        // Change "Collaborateurs" to "Gestion des collaborateurs" with children for accountants
+        if (path === "/collaborators" && isAccountant) {
+          title = "G. des collaborateurs";
+          children = [
+            {
+              title: "Mes collaborateurs",
+              path: fullPath,
+              icon: config.icon,
+            },
+            {
+              title: "Gestion des tâches",
+              path: `${fullPath}/task-management`,
+              icon: config.icon,
+            },
+          ];
+        }
+
         items.push({
           title,
           path: fullPath,
@@ -75,6 +107,23 @@ export function useNavigation() {
         console.warn(`No navigation config found for path: ${path}`);
       }
     });
+
+    // Collaborators always see "Mes tasks" (allowed by role even without /collaborators permission)
+    if (isCollaboratorOnly) {
+      const hasTasksEntry = items.some(
+        (item) => item.path === `${dashboardBase}/tasks`,
+      );
+      if (!hasTasksEntry) {
+        const tasksConfig = NAV_CONFIG["/tasks"];
+        if (tasksConfig) {
+          items.push({
+            title: tasksConfig.title,
+            path: `${dashboardBase}/tasks`,
+            icon: tasksConfig.icon,
+          });
+        }
+      }
+    }
 
     return items;
   }, [features, dashboardBase, user]);

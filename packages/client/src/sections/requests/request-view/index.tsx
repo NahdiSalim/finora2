@@ -10,10 +10,10 @@ import {
 } from "@mui/material";
 import { Plus, Search, Eye, Trash2 } from "lucide-react";
 
-import { Scrollbar } from "src/components/scrollbar";
 import { useTable } from "src/hooks/use-table";
 import { DataTable, type Column } from "src/layouts/components/custom-table";
 import { CustomPagination } from "src/layouts/components/table-pagination";
+import { FolderTabNavigation } from "src/layouts/components/folder-tab-navigation";
 import {
   useGetMyAssignedRequestsQuery,
   useGetAllRequestsQuery,
@@ -502,268 +502,112 @@ export default function RequestView() {
           : []
       }
     >
-      <Box sx={{ mb: 3 }}>
+      {/* Tabs and Table Card Container */}
+      <Box>
         {/* Status Tabs */}
-        <Box
+        <FolderTabNavigation
+          tabs={[
+            {
+              id: "all",
+              label: "Toutes",
+              count: totalRequests,
+            },
+            {
+              id: "pending",
+              label: "En attente",
+              count: counts.pending,
+            },
+            {
+              id: "in_progress",
+              label: "En cours",
+              count: counts.in_progress,
+            },
+            {
+              id: "resolved",
+              label: "Terminés",
+              count: counts.resolved,
+            },
+          ]}
+          activeTab={selectedTab}
+          onTabChange={(tabId) => {
+            setSelectedTab(tabId);
+            table.onResetPage();
+          }}
+        />
+
+        {/* Table Card - Merged with tabs */}
+        <Card
           sx={{
-            display: "flex",
-            gap: 1.5,
-            mb: 3,
-            flexWrap: "wrap",
+            bgcolor: "white",
+            borderTopLeftRadius: 0,
+            borderTopRightRadius: 0,
+            borderBottomLeftRadius: 12,
+            borderBottomRightRadius: 12,
+            boxShadow: "none",
+            border: `1px solid ${theme.palette.grey[200]}`,
+            borderTop: "none",
+            mt: 0,
           }}
         >
+          {/* Search Bar */}
           <Box
-            onClick={() => {
-              setSelectedTab("all");
-              table.onResetPage();
-            }}
             sx={{
-              px: 3,
-              py: 1.5,
-              borderRadius: "10px",
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: 14,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 1,
-              bgcolor:
-                selectedTab === "all" ? "#3B82F6" : theme.palette.grey[100],
-              color:
-                selectedTab === "all" ? "#FFFFFF" : theme.palette.text.primary,
-              border:
-                selectedTab === "all"
-                  ? "none"
-                  : `1px solid ${theme.palette.grey[300]}`,
-              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-              boxShadow:
-                selectedTab === "all"
-                  ? "0 4px 12px rgba(59, 130, 246, 0.25)"
-                  : "none",
-              "&:hover": {
-                bgcolor:
-                  selectedTab === "all"
-                    ? "#2563EB"
-                    : alpha(theme.palette.primary.main, 0.08),
-                borderColor:
-                  selectedTab === "all" ? "none" : theme.palette.primary.main,
-                transform: "translateY(-2px)",
-                boxShadow:
-                  selectedTab === "all"
-                    ? "0 6px 16px rgba(59, 130, 246, 0.35)"
-                    : "0 2px 8px rgba(0, 0, 0, 0.08)",
-              },
+              p: 3,
+              pb: 2,
+              borderBottom: `1px solid ${theme.palette.grey[200]}`,
+              display: "flex",
+              justifyContent: "flex-start",
             }}
           >
-            Toutes ({totalRequests})
+            <Box
+              sx={{
+                width: { xs: "100%", sm: "40%", md: "30%", lg: "20%" },
+                minWidth: "200px",
+              }}
+            >
+              <CustomInput
+                fullWidth
+                placeholder="Rechercher ..."
+                value={searchValue}
+                onChange={(e) => {
+                  setSearchValue(e.target.value);
+                  table.onResetPage();
+                }}
+                startIcon={<Search size={20} />}
+              />
+            </Box>
           </Box>
 
-          <Box
-            onClick={() => {
-              setSelectedTab("pending");
-              table.onResetPage();
-            }}
-            sx={{
-              px: 3,
-              py: 1.5,
-              borderRadius: "10px",
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: 14,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 1,
-              bgcolor:
-                selectedTab === "pending" ? "#3B82F6" : theme.palette.grey[100],
-              color:
-                selectedTab === "pending"
-                  ? "#FFFFFF"
-                  : theme.palette.text.primary,
-              border:
-                selectedTab === "pending"
-                  ? "none"
-                  : `1px solid ${theme.palette.grey[300]}`,
-              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-              boxShadow:
-                selectedTab === "pending"
-                  ? "0 4px 12px rgba(59, 130, 246, 0.25)"
-                  : "none",
-              "&:hover": {
-                bgcolor:
-                  selectedTab === "pending"
-                    ? "#2563EB"
-                    : alpha(theme.palette.primary.main, 0.08),
-                borderColor:
-                  selectedTab === "pending"
-                    ? "none"
-                    : theme.palette.primary.main,
-                transform: "translateY(-2px)",
-                boxShadow:
-                  selectedTab === "pending"
-                    ? "0 6px 16px rgba(59, 130, 246, 0.35)"
-                    : "0 2px 8px rgba(0, 0, 0, 0.08)",
-              },
-            }}
-          >
-            En attente ({counts.pending})
-          </Box>
-
-          <Box
-            onClick={() => {
-              setSelectedTab("in_progress");
-              table.onResetPage();
-            }}
-            sx={{
-              px: 3,
-              py: 1.5,
-              borderRadius: "10px",
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: 14,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 1,
-              bgcolor:
-                selectedTab === "in_progress"
-                  ? "#3B82F6"
-                  : theme.palette.grey[100],
-              color:
-                selectedTab === "in_progress"
-                  ? "#FFFFFF"
-                  : theme.palette.text.primary,
-              border:
-                selectedTab === "in_progress"
-                  ? "none"
-                  : `1px solid ${theme.palette.grey[300]}`,
-              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-              boxShadow:
-                selectedTab === "in_progress"
-                  ? "0 4px 12px rgba(59, 130, 246, 0.25)"
-                  : "none",
-              "&:hover": {
-                bgcolor:
-                  selectedTab === "in_progress"
-                    ? "#2563EB"
-                    : alpha(theme.palette.primary.main, 0.08),
-                borderColor:
-                  selectedTab === "in_progress"
-                    ? "none"
-                    : theme.palette.primary.main,
-                transform: "translateY(-2px)",
-                boxShadow:
-                  selectedTab === "in_progress"
-                    ? "0 6px 16px rgba(59, 130, 246, 0.35)"
-                    : "0 2px 8px rgba(0, 0, 0, 0.08)",
-              },
-            }}
-          >
-            En cours ({counts.in_progress})
-          </Box>
-
-          <Box
-            onClick={() => {
-              setSelectedTab("resolved");
-              table.onResetPage();
-            }}
-            sx={{
-              px: 3,
-              py: 1.5,
-              borderRadius: "10px",
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: 14,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 1,
-              bgcolor:
-                selectedTab === "resolved"
-                  ? "#3B82F6"
-                  : theme.palette.grey[100],
-              color:
-                selectedTab === "resolved"
-                  ? "#FFFFFF"
-                  : theme.palette.text.primary,
-              border:
-                selectedTab === "resolved"
-                  ? "none"
-                  : `1px solid ${theme.palette.grey[300]}`,
-              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-              boxShadow:
-                selectedTab === "resolved"
-                  ? "0 4px 12px rgba(59, 130, 246, 0.25)"
-                  : "none",
-              "&:hover": {
-                bgcolor:
-                  selectedTab === "resolved"
-                    ? "#2563EB"
-                    : alpha(theme.palette.primary.main, 0.08),
-                borderColor:
-                  selectedTab === "resolved"
-                    ? "none"
-                    : theme.palette.primary.main,
-                transform: "translateY(-2px)",
-                boxShadow:
-                  selectedTab === "resolved"
-                    ? "0 6px 16px rgba(59, 130, 246, 0.35)"
-                    : "0 2px 8px rgba(0, 0, 0, 0.08)",
-              },
-            }}
-          >
-            Terminés ({counts.resolved})
-          </Box>
-        </Box>
-
-        {/* Search Bar */}
-        <CustomInput
-          fullWidth
-          placeholder="Rechercher ..."
-          value={searchValue}
-          onChange={(e) => {
-            setSearchValue(e.target.value);
-            table.onResetPage(); // Reset to first page when searching
-          }}
-          startIcon={<Search size={20} />}
-          sx={{ mb: 2 }}
-        />
-      </Box>
-
-      {/* Table Card */}
-      <Card
-        sx={{
-          bgcolor: "white",
-          borderRadius: 3,
-          overflow: "hidden",
-          border: `1px solid ${theme.palette.grey[200]}`,
-        }}
-      >
-        <Scrollbar>
-          <DataTable
-            columns={columns}
-            data={requests}
-            isLoading={isLoading}
-            isError={isError}
-            emptyMessage="Aucune demande trouvée"
-            minWidth={800}
-            rowKey={(request) => request.id.toString()}
-          />
-        </Scrollbar>
-
-        {/* Pagination */}
-        {!isLoading && !isError && requests.length > 0 && (
-          <Box
-            sx={{
-              borderTop: `1px solid ${theme.palette.grey[200]}`,
-            }}
-          >
-            <CustomPagination
-              page={table.page}
-              count={totalCount}
-              rowsPerPage={table.rowsPerPage}
-              onPageChange={table.onChangePage}
+          {/* Table Container */}
+          <Box sx={{ width: "100%", overflow: "auto" }}>
+            <DataTable
+              columns={columns}
+              data={requests}
+              isLoading={isLoading}
+              isError={isError}
+              emptyMessage="Aucune demande trouvée"
+              minWidth={800}
+              rowKey={(request) => request.id.toString()}
             />
           </Box>
-        )}
-      </Card>
+
+          {/* Pagination */}
+          {!isLoading && !isError && requests.length > 0 && (
+            <Box
+              sx={{
+                borderTop: `1px solid ${theme.palette.grey[200]}`,
+              }}
+            >
+              <CustomPagination
+                page={table.page}
+                count={totalCount}
+                rowsPerPage={table.rowsPerPage}
+                onPageChange={table.onChangePage}
+              />
+            </Box>
+          )}
+        </Card>
+      </Box>
 
       <RequestModal open={openModal} onClose={handleCloseModal} />
       <ViewRequestDrawer

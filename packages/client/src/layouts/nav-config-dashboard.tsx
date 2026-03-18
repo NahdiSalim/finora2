@@ -2,6 +2,7 @@ import {
   Archive,
   Calendar,
   FileText,
+  Folder,
   HandCoins,
   LayoutGrid,
   List,
@@ -28,7 +29,7 @@ export const NAV_CONFIG: Record<
     icon: <Archive />,
   },
   "/dashboard": {
-    title: "Dashboard",
+    title: "Tableau de bord",
     icon: <LayoutGrid />,
   },
   "/collaborators": {
@@ -73,5 +74,10 @@ export const NAV_CONFIG: Record<
   "/profile": {
     title: "Mon profil",
     icon: <User />,
+  },
+
+  "/tasks": {
+    title: "Mes tâches",
+    icon: <Folder />,
   },
 };

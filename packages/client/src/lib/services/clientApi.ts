@@ -4,19 +4,35 @@ import type { ClientFormData } from "src/validations/client/client-validation";
 
 export interface Client {
   id: string;
+  fullName?: string;
   ownerFirstName?: string;
   ownerLastName?: string;
   email?: string;
   phone?: string;
-  company?: string;
+  company?:
+    | string
+    | {
+        name: string;
+        siret?: string;
+        vatNumber?: string;
+        legalForm?: string;
+        address?: string;
+        city?: string;
+        postalCode?: string;
+      };
   siret?: string;
   vatNumber?: string;
   legalForm?: string;
   address?: string;
   city?: string;
   postalCode?: string;
-  created_at: string;
-  updated_at: string;
+  status?: string;
+  relationshipStatus?: string;
+  relationshipStart?: string;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
 }
 
 export interface ClientsPagination {

@@ -58,6 +58,7 @@ model Company {
   
   // Requests
   requests          Request[] @relation("CompanyRequests")
+  accountingFirmRequests Request[] @relation("AccountingFirmRequests")
   
   // Appointments
   appointments      Appointment[] @relation("CompanyAppointments")

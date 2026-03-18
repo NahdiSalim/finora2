@@ -542,12 +542,13 @@ export class RelationshipService {
         const clientCompanyId = relationship.clientCompanyId;
 
         // Count invoices by status (category = 'facture')
+        // traite = extracted (includes traite, enregistre, synchronise)
         const [traiteCount, pendingCount, totalInvoices] = await Promise.all([
           this.prisma.document.count({
             where: {
               companyId: clientCompanyId,
               category: 'facture',
-              processingStatus: 'traite',
+              processingStatus: { in: ['traite', 'enregistre', 'synchronise'] },
               isFolder: false,
               status: 'active',
             },

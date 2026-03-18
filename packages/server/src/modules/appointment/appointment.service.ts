@@ -5,10 +5,14 @@ import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto, AppointmentStatus } from './dto/update-appointment.dto';
 import { RespondAppointmentDto, AppointmentAction } from './dto/respond-appointment.dto';
 import { RescheduleAppointmentDto } from './dto/reschedule-appointment.dto';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class AppointmentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService
+  ) {}
 
   /**
    * Create a new appointment (Client)
@@ -72,6 +76,23 @@ export class AppointmentService {
           },
         },
       });
+
+      // Notify accountant about new appointment request
+      if (dto.accountantId) {
+        const clientUser = await this.prisma.user.findUnique({
+          where: { id: clientId },
+          select: { firstName: true, lastName: true },
+        });
+        this.notificationService
+          .notify({
+            recipientId: dto.accountantId,
+            type: 'appointment',
+            action: 'created',
+            actorName: clientUser ? `${clientUser.firstName} ${clientUser.lastName}` : 'Un client',
+            data: { appointmentId: appointment.id },
+          })
+          .catch(() => {});
+      }
 
       return {
         success: true,
@@ -396,6 +417,17 @@ export class AppointmentService {
       },
     });
 
+    // Notify client about accountant's response
+    this.notificationService
+      .notify({
+        recipientId: updatedAppointment.client.id,
+        type: 'appointment',
+        action: isConfirmed ? 'confirmed' : 'rejected',
+        actorName: 'Votre comptable',
+        data: { appointmentId },
+      })
+      .catch(() => {});
+
     return {
       success: true,
       message: isConfirmed ? 'Appointment confirmed successfully' : 'Appointment rejected',
@@ -478,14 +510,26 @@ export class AppointmentService {
       },
     });
 
+    // Notify the other party about rescheduling
+    const recipientId =
+      userId === appointment.clientId ? appointment.accountantId : appointment.clientId;
+    if (recipientId) {
+      this.notificationService
+        .notify({
+          recipientId,
+          type: 'appointment',
+          action: 'rescheduled',
+          actorName: userId === appointment.clientId ? 'Le client' : 'Votre comptable',
+          data: { appointmentId: newAppointment.id },
+        })
+        .catch(() => {});
+    }
+
     return {
       success: true,
       message: 'Appointment rescheduled successfully',
       data: {
-        originalAppointment: {
-          id: appointment.id,
-          status: 'rescheduled',
-        },
+        originalAppointment: { id: appointment.id, status: 'rescheduled' },
         newAppointment,
       },
     };
@@ -516,16 +560,27 @@ export class AppointmentService {
       },
     });
 
+    // Notify the other party about cancellation
+    const recipientId =
+      userId === appointment.clientId ? appointment.accountantId : appointment.clientId;
+    if (recipientId) {
+      this.notificationService
+        .notify({
+          recipientId,
+          type: 'appointment',
+          action: 'cancelled',
+          actorName: userId === appointment.clientId ? 'Le client' : 'Votre comptable',
+          data: { appointmentId },
+        })
+        .catch(() => {});
+    }
+
     return {
       success: true,
       message: 'Appointment cancelled successfully',
       data: updatedAppointment,
     };
   }
-
-  /**
-   * Delete appointment
-   */
   async deleteAppointment(appointmentId: number, userId: number) {
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },

@@ -6,6 +6,7 @@ import { UpdateTaskDto, TaskStatus } from './dto/update-task.dto';
 import { AddCommentDto } from './dto/add-comment.dto';
 import { ValidateTaskDto, ValidationAction } from './dto/validate-task.dto';
 import { MinioService } from '../../common/services/minio.service';
+import { NotificationService } from '../notification/notification.service';
 
 export interface TaskComment {
   id: string;
@@ -20,7 +21,8 @@ export interface TaskComment {
 export class TaskService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly minioService: MinioService
+    private readonly minioService: MinioService,
+    private readonly notificationService: NotificationService
   ) {}
 
   /**
@@ -103,23 +105,34 @@ export class TaskService {
                     lastName: true,
                   },
                 },
-                createdBy: {
-                  select: {
-                    id: true,
-                    username: true,
-                    email: true,
-                  },
-                },
-                company: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
+                createdBy: { select: { id: true, username: true, email: true } },
+                company: { select: { id: true, name: true } },
               },
             })
           )
         );
+
+        // Notify each assignee
+        const creator = await this.prisma.user.findUnique({
+          where: { id: createdById },
+          select: { firstName: true, lastName: true },
+        });
+        const actorName = creator
+          ? `${creator.firstName} ${creator.lastName}`
+          : 'Votre responsable';
+        for (const t of tasks) {
+          if (t.assignee) {
+            this.notificationService
+              .notify({
+                recipientId: t.assignee.id,
+                type: 'task',
+                action: 'assigned',
+                actorName,
+                data: { taskId: t.id },
+              })
+              .catch(() => {});
+          }
+        }
 
         return {
           success: true,
@@ -167,6 +180,23 @@ export class TaskService {
           },
         },
       });
+
+      // Notify single assignee
+      const creatorUser = await this.prisma.user.findUnique({
+        where: { id: createdById },
+        select: { firstName: true, lastName: true },
+      });
+      this.notificationService
+        .notify({
+          recipientId: task.assignee!.id,
+          type: 'task',
+          action: 'assigned',
+          actorName: creatorUser
+            ? `${creatorUser.firstName} ${creatorUser.lastName}`
+            : 'Votre responsable',
+          data: { taskId: task.id },
+        })
+        .catch(() => {});
 
       return {
         success: true,
@@ -596,16 +626,26 @@ export class TaskService {
       },
     });
 
+    // Notify the other party about task update
+    const notifyId = userId === task.assigneeId ? task.createdById : task.assigneeId;
+    if (notifyId && notifyId !== userId) {
+      this.notificationService
+        .notify({
+          recipientId: notifyId,
+          type: 'task',
+          action: dto.status === TaskStatus.COMPLETED ? 'completed' : 'updated',
+          actorName: 'Un collaborateur',
+          data: { taskId },
+        })
+        .catch(() => {});
+    }
+
     return {
       success: true,
       message: 'Task updated successfully',
       data: updatedTask,
     };
   }
-
-  /**
-   * Mark task as in progress (Collaborator)
-   */
   async startTask(taskId: number, userId: number) {
     return this.updateTask(taskId, { status: TaskStatus.IN_PROGRESS, progress: 10 }, userId);
   }
@@ -742,6 +782,19 @@ export class TaskService {
     // Add validation comment
     if (dto.comment) {
       await this.addComment(taskId, { comment: `[VALIDATION] ${dto.comment}` }, userId);
+    }
+
+    // Notify assignee about validation result
+    if (updatedTask.assignee) {
+      this.notificationService
+        .notify({
+          recipientId: updatedTask.assignee.id,
+          type: 'task',
+          action: 'validated',
+          actorName: 'Votre responsable',
+          data: { taskId },
+        })
+        .catch(() => {});
     }
 
     return {

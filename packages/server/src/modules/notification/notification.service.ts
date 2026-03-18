@@ -202,9 +202,21 @@ export class NotificationService {
       },
       'task.completed': {
         title: 'Tâche terminée',
-        message: `${actorName} a terminé une tâche`,
+        message: `${actorName} a terminé la tâche`,
+        actionUrl: `/tasks/${data.taskId}`,
+        priority: 'normal',
+      },
+      'task.updated': {
+        title: 'Tâche mise à jour',
+        message: `${actorName} a mis à jour une tâche`,
         actionUrl: `/tasks/${data.taskId}`,
         priority: 'low',
+      },
+      'task.validated': {
+        title: 'Tâche validée',
+        message: `${actorName} a validé votre tâche`,
+        actionUrl: `/tasks/${data.taskId}`,
+        priority: 'normal',
       },
       'task.comment': {
         title: 'Nouveau commentaire',
@@ -217,6 +229,18 @@ export class NotificationService {
       'request.created': {
         title: 'Nouvelle demande',
         message: `${actorName} a créé une nouvelle demande`,
+        actionUrl: `/requests/${data.requestId}`,
+        priority: 'high',
+      },
+      'request.updated': {
+        title: 'Demande mise à jour',
+        message: `${actorName} a mis à jour une demande`,
+        actionUrl: `/requests/${data.requestId}`,
+        priority: 'normal',
+      },
+      'request.responded': {
+        title: 'Réponse à votre demande',
+        message: `${actorName} a répondu à votre demande`,
         actionUrl: `/requests/${data.requestId}`,
         priority: 'high',
       },
@@ -236,9 +260,27 @@ export class NotificationService {
       },
       'appointment.confirmed': {
         title: 'Rendez-vous confirmé',
-        message: `Votre rendez-vous a été confirmé`,
+        message: `Votre rendez-vous a été confirmé par ${actorName}`,
         actionUrl: `/appointments/${data.appointmentId}`,
         priority: 'normal',
+      },
+      'appointment.rejected': {
+        title: 'Rendez-vous refusé',
+        message: `Votre rendez-vous a été refusé par ${actorName}`,
+        actionUrl: `/appointments/${data.appointmentId}`,
+        priority: 'high',
+      },
+      'appointment.rescheduled': {
+        title: 'Rendez-vous reprogrammé',
+        message: `${actorName} a reprogrammé le rendez-vous`,
+        actionUrl: `/appointments/${data.appointmentId}`,
+        priority: 'normal',
+      },
+      'appointment.cancelled': {
+        title: 'Rendez-vous annulé',
+        message: `${actorName} a annulé le rendez-vous`,
+        actionUrl: `/appointments/${data.appointmentId}`,
+        priority: 'high',
       },
 
       // Messages

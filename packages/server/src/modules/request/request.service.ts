@@ -6,12 +6,14 @@ import { UpdateRequestDto, RequestStatus } from './dto/update-request.dto';
 import { RespondRequestDto } from './dto/respond-request.dto';
 import { ConvertToTaskDto } from './dto/convert-to-task.dto';
 import { MinioService } from '../../common/services/minio.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class RequestService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly minioService: MinioService
+    private readonly minioService: MinioService,
+    private readonly notificationService: NotificationService
   ) {}
 
   /**
@@ -38,6 +40,25 @@ export class RequestService {
         throw new ApiError('Client must belong to a company', 400, 'NO_COMPANY');
       }
 
+      // Find the accountant's firm linked to this client
+      let accountingFirmId: number | null = null;
+
+      if (dto.accountantId) {
+        // Use the explicitly provided accountant's company
+        const accountant = await this.prisma.user.findUnique({
+          where: { id: dto.accountantId },
+          select: { companyId: true },
+        });
+        accountingFirmId = accountant?.companyId ?? null;
+      } else {
+        // Auto-detect from active relationship
+        const relationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
+          where: { clientCompanyId: client.companyId, status: 'active' },
+          select: { accountingFirmId: true },
+        });
+        accountingFirmId = relationship?.accountingFirmId ?? null;
+      }
+
       // Create request first to get the ID
       const request = await this.prisma.request.create({
         data: {
@@ -50,7 +71,8 @@ export class RequestService {
           desiredResponseTime: dto.desiredResponseTime || null,
           clientId,
           companyId: client.companyId,
-          attachments: [], // Will be updated after file uploads
+          accountingFirmId: accountingFirmId,
+          attachments: [],
         },
       });
 
@@ -240,12 +262,38 @@ export class RequestService {
         }
       }
 
+      // Notify accountant's firm about new request
+      if (accountingFirmId) {
+        const accountants = await this.prisma.user.findMany({
+          where: { companyId: accountingFirmId },
+          select: { id: true, firstName: true, lastName: true },
+        });
+        const clientUser = await this.prisma.user.findUnique({
+          where: { id: clientId },
+          select: { firstName: true, lastName: true },
+        });
+        const actorName = clientUser
+          ? `${clientUser.firstName} ${clientUser.lastName}`
+          : 'Un client';
+        for (const accountant of accountants) {
+          this.notificationService
+            .notify({
+              recipientId: accountant.id,
+              type: 'request',
+              action: 'created',
+              actorName,
+              data: { requestId: request.id },
+            })
+            .catch(() => {});
+        }
+      }
+
       return {
         success: true,
         message: 'Request created successfully',
         data: {
           ...updatedRequest,
-          attachmentUrls: attachmentPresignedUrls, // URLs présignées MinIO
+          attachmentUrls: attachmentPresignedUrls,
         },
       };
     } catch (error) {
@@ -488,10 +536,7 @@ export class RequestService {
     }
 
     const skip = (page - 1) * limit;
-    const where: any = {
-      companyId: accountant.companyId,
-      assignedToId: null, // Only unassigned requests
-    };
+    const where: any = { accountingFirmId: accountant.companyId };
 
     if (status) {
       where.status = status;
@@ -548,10 +593,7 @@ export class RequestService {
     // Count by status (only unassigned requests)
     const statusCounts = await this.prisma.request.groupBy({
       by: ['status'],
-      where: {
-        companyId: accountant.companyId,
-        assignedToId: null, // Only count unassigned requests
-      },
+      where: { accountingFirmId: accountant.companyId },
       _count: true,
     });
 
@@ -839,16 +881,28 @@ export class RequestService {
       },
     });
 
+    // Notify the other party about the update
+    const recipientId =
+      userId === request.clientId ? updatedRequest.assignedTo?.id : updatedRequest.client.id;
+
+    if (recipientId) {
+      this.notificationService
+        .notify({
+          recipientId,
+          type: 'request',
+          action: dto.status ? 'status_changed' : 'updated',
+          actorName: userId === request.clientId ? 'Le client' : 'Votre comptable',
+          data: { requestId, status: dto.status },
+        })
+        .catch(() => {});
+    }
+
     return {
       success: true,
       message: 'Request updated successfully',
       data: updatedRequest,
     };
   }
-
-  /**
-   * Respond to request (Accountant)
-   */
   async respondToRequest(requestId: number, dto: RespondRequestDto, accountantId: number) {
     const request = await this.prisma.request.findUnique({
       where: { id: requestId },
@@ -883,6 +937,17 @@ export class RequestService {
         },
       },
     });
+
+    // Notify client about accountant's response
+    this.notificationService
+      .notify({
+        recipientId: updatedRequest.client.id,
+        type: 'request',
+        action: 'responded',
+        actorName: 'Votre comptable',
+        data: { requestId },
+      })
+      .catch(() => {});
 
     return {
       success: true,

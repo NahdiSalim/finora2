@@ -143,7 +143,8 @@ export class TaskController {
     @UploadedFiles() files?: Express.Multer.File[]
   ) {
     const userId = req.user!.id;
-    return this.taskService.updateTask(id, dto, userId, files);
+    const userRole = req.user!.role?.code;
+    return this.taskService.updateTask(id, dto, userId, files, userRole);
   }
 
   /**
@@ -158,10 +159,23 @@ export class TaskController {
   }
 
   /**
-   * Complete task
+   * Submit task for review (Collaborator)
+   */
+  @Put(':id/review')
+  @ApiOperation({ summary: '[Collaborator] Submit task for review' })
+  @ApiResponse({ status: 200, description: 'Task submitted for review' })
+  async submitForReview(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
+    const userId = req.user!.id;
+    return this.taskService.submitForReview(id, userId);
+  }
+
+  /**
+   * Complete task (Accountant only)
    */
   @Put(':id/complete')
-  @ApiOperation({ summary: '[Collaborator] Mark task as completed' })
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Mark task as completed' })
   @ApiResponse({ status: 200, description: 'Task completed' })
   async completeTask(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
     const userId = req.user!.id;

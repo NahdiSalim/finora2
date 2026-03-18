@@ -7,8 +7,11 @@ import {
   Param,
   Query,
   Request,
+  Body,
   UseGuards,
   ParseIntPipe,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { NotificationService } from './notification.service';
@@ -59,6 +62,41 @@ export class NotificationController {
   @ApiOperation({ summary: 'Get unread notifications count' })
   async getUnreadCount(@Request() req) {
     return this.notificationService.getUnreadCount(req.user.userId);
+  }
+
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create and send a notification' })
+  async createNotification(
+    @Request() req,
+    @Body()
+    body: {
+      userId?: number;
+      recipientId?: number;
+      title: string;
+      message: string;
+      type?: string;
+      priority?: string;
+      data?: any;
+      actionUrl?: string;
+    }
+  ) {
+    // Support both userId and recipientId for flexibility
+    const recipientId = body.userId || body.recipientId;
+
+    if (!recipientId) {
+      throw new Error('userId or recipientId is required');
+    }
+
+    return this.notificationService.createNotification({
+      recipientId,
+      type: body.type || 'notification',
+      title: body.title,
+      message: body.message,
+      data: body.data,
+      actionUrl: body.actionUrl,
+      priority: body.priority || 'normal',
+    });
   }
 
   @Patch(':id/read')

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsInt } from 'class-validator';
 
 export enum RequestType {
   ACCOUNTING = 'accounting',
@@ -94,4 +94,14 @@ export class CreateRequestDto {
   })
   @IsOptional()
   existingDocumentIds?: number[];
+
+  @ApiProperty({
+    example: 5,
+    description: 'ID of the accountant (user) to send the request to',
+    required: false,
+    type: Number,
+  })
+  @IsInt()
+  @IsOptional()
+  accountantId?: number;
 }

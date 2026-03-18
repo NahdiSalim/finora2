@@ -14,6 +14,7 @@ model Company {
   address           String?
   city              String?
   postalCode        String?
+  countryCode       String?   @default("FR") // ISO country code
   country           String?   @default("France")
   phone             String?
   numWhatsapp       String?
@@ -57,6 +58,7 @@ model Company {
   
   // Requests
   requests          Request[] @relation("CompanyRequests")
+  accountingFirmRequests Request[] @relation("AccountingFirmRequests")
   
   // Appointments
   appointments      Appointment[] @relation("CompanyAppointments")

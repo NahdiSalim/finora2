@@ -8,7 +8,6 @@ import {
   Link,
   Chip,
   Grid,
-  CircularProgress,
   alpha,
   Table,
   TableBody,
@@ -50,7 +49,8 @@ import {
   documentsApi,
   useGetDocumentQuery,
   useGetBreadcrumbQuery,
- useGetDocumentsQuery } from "src/lib/services/documentsApi";
+  useGetDocumentsQuery,
+} from "src/lib/services/documentsApi";
 import { relationshipsApi } from "src/lib/services/relationshipsApi";
 import {
   useGetInvoiceMetadataQuery,
@@ -59,6 +59,8 @@ import {
   useSynchronizeDocumentMutation,
 } from "src/lib/services/invoicesApi";
 import type { ProcessingStatus } from "src/lib/services/invoicesApi";
+import ExtractionAnim from "../../../public/assets/Animations/extraction.json";
+import Lottie from "lottie-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -657,8 +659,6 @@ function DocumentDetailsPanel({
           sx={{
             width: 80,
             height: 80,
-            borderRadius: "50%",
-            bgcolor: alpha(theme.palette.primary.main, 0.15),
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -666,7 +666,11 @@ function DocumentDetailsPanel({
             mb: 2,
           }}
         >
-          <CircularProgress size={40} />
+          <Lottie
+            animationData={ExtractionAnim}
+            loop
+            style={{ width: 200, height: 200 }}
+          />
         </Box>
         <Typography variant="subtitle1" fontWeight={600} gutterBottom>
           Extraction en cours

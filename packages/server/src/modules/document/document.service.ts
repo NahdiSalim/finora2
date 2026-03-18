@@ -215,8 +215,9 @@ export class DocumentService {
           type: this.getFileType(file.mimetype),
           mimeType: file.mimetype,
           size: file.size,
-          url: objectName, // Store MinIO object name
-          category: category || null, // Add category field
+          url: objectName,
+          category: category || null,
+          extractionStatus: category === 'facture' ? 'pending' : null,
           ownerId: userId,
           companyId: targetCompanyId,
           createdBy: userId,
@@ -227,10 +228,10 @@ export class DocumentService {
         },
       });
 
-      // Auto-extract if category is 'facture' (fire-and-forget)
+      // Auto-extract if category is 'facture' (fire-and-forget, saves automatically)
       if (category === 'facture') {
         this.invoiceExtractionService
-          .extractInvoiceMetadata(document.id, targetCompanyId)
+          .extractAndSaveInvoice(document.id, targetCompanyId)
           .catch((err) =>
             console.error(`Auto-extraction failed for document ${document.id}:`, err)
           );
@@ -242,6 +243,7 @@ export class DocumentService {
         data: {
           ...document,
           downloadUrl: url,
+          fileExtractionStatus: category === 'facture' ? 'pending' : null,
         },
         message: 'File uploaded successfully',
       };

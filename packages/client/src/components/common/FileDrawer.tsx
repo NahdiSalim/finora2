@@ -166,6 +166,16 @@ function FolderTreeItem({
 function formatDateAdded(dateStr: string | undefined): string {
   if (!dateStr) return "";
   // Supports ISO dates (2024-12-21) and short FR dates like "19-déc-24"
+  const parseFrSlash = (s: string): Date | null => {
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+    if (!m) return null;
+    const day = Number(m[1]);
+    const month = Number(m[2]) - 1;
+    const year = 2000 + Number(m[3]);
+    const d = new Date(year, month, day);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
   const parseFrShort = (s: string): Date | null => {
     const m = s.match(/^(\d{1,2})-([a-zA-Zéû]+)-(\d{2})$/);
     if (!m) return null;
@@ -201,7 +211,7 @@ function formatDateAdded(dateStr: string | undefined): string {
     return Number.isNaN(d.getTime()) ? null : d;
   };
 
-  const d = parseFrShort(dateStr) ?? new Date(dateStr);
+  const d = parseFrSlash(dateStr) ?? parseFrShort(dateStr) ?? new Date(dateStr);
   if (Number.isNaN(d.getTime())) return "";
   const day = String(d.getDate()).padStart(2, "0");
   const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -292,8 +302,11 @@ function DocumentDetailsPanel({
   const processingStatus =
     (document?.processingStatus as ProcessingStatus | undefined) || "pending";
   const breadcrumb = breadcrumbResponse?.data ?? [];
-  const metadata =
-    hasMetadata && metadataResponse?.data ? metadataResponse.data : null;
+  const invoiceMetadata = useMemo(() => {
+    if (!hasMetadata || !metadataResponse?.data) return null;
+    const d: any = metadataResponse.data as any;
+    return d && typeof d === "object" && d.metadata ? (d.metadata as any) : d;
+  }, [hasMetadata, metadataResponse]);
 
   const clientCompanyIdForDocs: number | undefined =
     typeof (document as any)?.companyId === "number"
@@ -303,17 +316,17 @@ function DocumentDetailsPanel({
   const [lastExtractedData, setLastExtractedData] = useState<unknown>(null);
 
   const extractedObject = useMemo(() => {
-    // View-mode should rely on persisted metadata.rawData when available
+    // Inputs must reflect GET /invoices/metadata/:id (persisted rawData) when available.
+    const fromMetadata =
+      invoiceMetadata?.rawData && typeof invoiceMetadata.rawData === "object"
+        ? (invoiceMetadata.rawData as Record<string, any>)
+        : null;
     const fromLast =
       lastExtractedData && typeof lastExtractedData === "object"
         ? (lastExtractedData as Record<string, any>)
         : null;
-    const fromMetadata =
-      metadata?.rawData && typeof metadata.rawData === "object"
-        ? (metadata.rawData as Record<string, any>)
-        : null;
-    return fromLast ?? fromMetadata ?? null;
-  }, [lastExtractedData, metadata?.rawData]);
+    return fromMetadata ?? fromLast ?? null;
+  }, [lastExtractedData, invoiceMetadata?.rawData]);
 
   const derivedVendor = useMemo(() => {
     const headerSender = extractedObject?.invoice_header?.msg_sender_id;
@@ -332,21 +345,21 @@ function DocumentDetailsPanel({
       extractedObject?.bgm?.numero ??
       extractedObject?.bgm?.invoiceNumber ??
       extractedObject?.invoice_number ??
-      metadata?.invoiceNumber ??
+      invoiceMetadata?.invoiceNumber ??
       ""
     );
-  }, [extractedObject, metadata?.invoiceNumber]);
+  }, [extractedObject, invoiceMetadata?.invoiceNumber]);
 
   const derivedInvoiceDate = useMemo(() => {
     const raw =
       extractedObject?.dtm?.[0]?.date_periode ??
       extractedObject?.invoice_date ??
-      metadata?.invoiceDate ??
+      invoiceMetadata?.invoiceDate ??
       null;
     if (!raw) return "";
     if (typeof raw === "string") return formatDateAdded(raw);
     return "";
-  }, [extractedObject, metadata?.invoiceDate]);
+  }, [extractedObject, invoiceMetadata?.invoiceDate]);
 
   const derivedTotals = useMemo(() => {
     const moa = extractedObject?.invoice_moa;
@@ -397,7 +410,7 @@ function DocumentDetailsPanel({
         typeof l?.lin_dtm === "string" ? formatDateAdded(l.lin_dtm) : "";
       const description = l?.lin_imd ?? "";
       const unitPrice = l?.lin_moa?.rff ?? "";
-      const total = unitPrice ?? "";
+      const total = l?.lin_moa?.lin_total ?? "";
       return {
         id: String(idx),
         date,
@@ -534,10 +547,13 @@ function DocumentDetailsPanel({
   const extractedDataForSave = useMemo(() => {
     if (lastExtractedData && typeof lastExtractedData === "object")
       return lastExtractedData as Record<string, unknown>;
-    if (!metadata?.rawData || typeof metadata.rawData !== "object")
-      return (metadata?.rawData ?? {}) as Record<string, unknown>;
-    return metadata.rawData as Record<string, unknown>;
-  }, [metadata, lastExtractedData]);
+    if (
+      !invoiceMetadata?.rawData ||
+      typeof invoiceMetadata.rawData !== "object"
+    )
+      return (invoiceMetadata?.rawData ?? {}) as Record<string, unknown>;
+    return invoiceMetadata.rawData as Record<string, unknown>;
+  }, [invoiceMetadata, lastExtractedData]);
 
   const handleExtract = async () => {
     if (!documentId) return;
@@ -576,7 +592,7 @@ function DocumentDetailsPanel({
         lin_imd: r.description,
         lin_qty: r.qty,
         lin_dtm: r.date,
-        lin_moa: { rff: r.unitPrice, dtm: null },
+        lin_moa: { rff: r.unitPrice, lin_total: r.total, dtm: null },
         lin_alc: null,
         lin_tax: null,
         lin_ftx: null,
@@ -651,8 +667,18 @@ function DocumentDetailsPanel({
       processingStatus === "enregistre" ||
       processingStatus === "synchronise");
 
+  // Poll document status when extraction is running server-side (upload-time)
+  useEffect(() => {
+    if (!hasDocumentId) return undefined;
+    if (processingStatus !== "pending") return undefined;
+    const id = window.setInterval(() => {
+      void refetchDocument();
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [hasDocumentId, processingStatus, refetchDocument]);
+
   // État "Extraction en cours"
-  if (isExtracting) {
+  if (processingStatus === "pending" || isExtracting) {
     return (
       <Box sx={{ py: 4, px: 2, textAlign: "center" }}>
         <Box
@@ -1240,20 +1266,7 @@ function DocumentDetailsPanel({
         </>
       )}
 
-      {/* Bouton Extraire (à droite, affiché quand statut = pending) */}
-      {processingStatus === "pending" && hasDocumentId && (
-        <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
-          <CustomButton
-            variant="contained"
-            color="primary"
-            startIcon={<FileText size={18} />}
-            onClick={handleExtract}
-            disabled={loading}
-          >
-            Extraire
-          </CustomButton>
-        </Box>
-      )}
+      {/* Extraction se fait lors de l'upload : pas de bouton "Extraire" */}
     </Box>
   );
 }

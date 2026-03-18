@@ -51,7 +51,13 @@ export interface InvoiceMetadataDto {
 export interface GetInvoiceMetadataResponse {
   status: string;
   code: string;
-  data: InvoiceMetadataDto;
+  data:
+    | InvoiceMetadataDto
+    | {
+        documentId: number;
+        extractionStatus: string;
+        metadata: InvoiceMetadataDto;
+      };
 }
 
 export interface ExtractInvoiceResponse {

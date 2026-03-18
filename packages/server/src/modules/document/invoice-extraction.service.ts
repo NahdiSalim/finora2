@@ -151,6 +151,19 @@ export class InvoiceExtractionService {
           ? JSON.stringify(error.response.data)
           : error.message;
 
+        // Check if it's an AWS credentials error
+        if (
+          errorDetails.includes('UnrecognizedClientException') ||
+          errorDetails.includes('security token') ||
+          errorDetails.includes('invalid')
+        ) {
+          throw new ApiError(
+            'Extraction API AWS credentials error. Please check the API configuration.',
+            503,
+            'EXTRACTION_API_UNAVAILABLE'
+          );
+        }
+
         throw new ApiError(
           `Extraction API error: ${errorDetails}`,
           error.response?.status || 500,
@@ -264,6 +277,105 @@ export class InvoiceExtractionService {
     }
   }
 
+  /**
+   * Recalculate invoice totals from line items and update the JSON in place.
+   * Keeps the same JSON structure, only updates computed values.
+   */
+  private recalculateInvoice(data: any): any {
+    const result = { ...data };
+
+    const lines: any[] = Array.isArray(result.lin_section) ? result.lin_section : [];
+
+    if (lines.length === 0) return result;
+
+    // Recalculate each line: line_total = qty * unit_price * (1 - discount/100)
+    let subtotalHT = 0;
+    result.lin_section = lines.map((line: any) => {
+      const qty = parseFloat(line.lin_qty) || 0;
+      const unitPrice = parseFloat(line.lin_moa?.rff) || 0;
+      const discountPct = parseFloat(line.lin_alc?.pcd) || 0;
+
+      const lineTotal = parseFloat((qty * unitPrice * (1 - discountPct / 100)).toFixed(3));
+      subtotalHT += lineTotal;
+
+      return {
+        ...line,
+        lin_qty: qty.toString(),
+        lin_moa: {
+          ...line.lin_moa,
+          rff: unitPrice.toFixed(3), // prix unitaire brut (inchangé)
+          lin_total: lineTotal.toFixed(3), // total ligne calculé = qty × prix × (1 - remise%)
+        },
+      };
+    });
+
+    subtotalHT = parseFloat(subtotalHT.toFixed(3));
+
+    // Extract TVA rate from label e.g. "TVA 19%" → 0.19
+    let tvaRate = 0;
+    const taxEntry = Array.isArray(result.invoice_tax) ? result.invoice_tax[0] : null;
+    if (taxEntry?.tax) {
+      const match = taxEntry.tax.match(/(\d+(?:\.\d+)?)\s*%/);
+      if (match) tvaRate = parseFloat(match[1]) / 100;
+    }
+
+    const tvaAmount = parseFloat((subtotalHT * tvaRate).toFixed(3));
+    const totalTTC = parseFloat((subtotalHT + tvaAmount).toFixed(3));
+
+    // Update invoice_moa: [0]=HT, [1]=TVA, [2]=TTC
+    if (Array.isArray(result.invoice_moa)) {
+      const moa = [...result.invoice_moa];
+      if (moa[0]) moa[0] = { ...moa[0], moa: subtotalHT.toFixed(3) };
+      if (moa[1]) moa[1] = { ...moa[1], moa: tvaAmount.toFixed(3) };
+      if (moa[2]) moa[2] = { ...moa[2], moa: totalTTC.toFixed(3) };
+      result.invoice_moa = moa;
+    }
+
+    // Update invoice_tax amount
+    if (Array.isArray(result.invoice_tax) && result.invoice_tax[0]) {
+      result.invoice_tax = [
+        { ...result.invoice_tax[0], moa: tvaAmount.toFixed(3) },
+        ...result.invoice_tax.slice(1),
+      ];
+    }
+
+    return result;
+  }
+
+  /**
+   * Parse structured fields from the raw extracted JSON
+   * Maps API response fields to InvoiceMetadata columns
+   */
+  private parseExtractedData(extractedData: any) {
+    const data = Array.isArray(extractedData) ? extractedData[0] : extractedData;
+    if (!data || typeof data !== 'object') return {};
+
+    const header = data.invoice_header || {};
+    const bgm = data.bgm || {};
+    const dtm = Array.isArray(data.dtm) ? data.dtm : [];
+
+    const invoiceDateEntry = dtm[0];
+    let invoiceDate: Date | null = null;
+    if (invoiceDateEntry?.date_periode) {
+      const parsed = new Date(invoiceDateEntry.date_periode);
+      if (!isNaN(parsed.getTime())) invoiceDate = parsed;
+    }
+
+    return {
+      msgSenderId: header.msg_sender_id?.toString() || null,
+      msgReceiverId: header.msg_receiver_id?.toString() || null,
+      invoiceType: bgm.type || null,
+      invoiceNumber: bgm.numero || null,
+      invoiceDate,
+      partners: data.partner_section || null,
+      paymentTerms: data.pyt_section || null,
+      totalInWords: data.texte || null,
+      lineItems: data.lin_section || null,
+      amounts: data.invoice_moa || null,
+      taxes: data.invoice_tax || null,
+    };
+  }
+
   async saveInvoiceMetadata(documentId: number, companyId: number, extractedData: any) {
     // 1. Get document directly by ID (only accountants can save)
     const document = await this.prisma.document.findUnique({
@@ -274,31 +386,34 @@ export class InvoiceExtractionService {
       throw new ApiError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
     }
 
-    // 2. Check if document is in "traite" status
-    if (document.processingStatus !== 'traite') {
+    // 2. Check if document is in "traite" or "enregistre" status (allow re-save)
+    if (!['traite', 'enregistre'].includes(document.processingStatus)) {
       throw new ApiError(
-        `Document must be in "traite" status to save metadata. Current status: ${document.processingStatus}`,
+        `Document must be in "traite" or "enregistre" status to save metadata. Current status: ${document.processingStatus}`,
         400,
         'INVALID_STATUS'
       );
     }
 
     try {
-      console.log('Received extractedData:', typeof extractedData);
-
-      // Validate that extractedData is an object
       if (!extractedData || typeof extractedData !== 'object') {
         throw new ApiError('extractedData must be a valid JSON object', 400, 'INVALID_DATA');
       }
 
-      // 3. Save or update metadata in database - store entire JSON directly
+      // 3. Recalculate totals from line items (in case user modified lines/prices)
+      const recalculated = this.recalculateInvoice(extractedData);
+
+      // 4. Parse structured fields from recalculated data
+      const parsedFields = this.parseExtractedData(recalculated);
+
       const metadataData = {
-        rawData: extractedData,
+        rawData: recalculated, // save recalculated JSON
         extractionStatus: 'success',
         errorMessage: null,
+        ...parsedFields,
       };
 
-      // Check if metadata already exists
+      // 4. Upsert metadata (create or update if already exists)
       const existingMetadata = await this.prisma.invoiceMetadata.findUnique({
         where: { documentId: document.id },
       });
@@ -309,13 +424,10 @@ export class InvoiceExtractionService {
             data: metadataData,
           })
         : await this.prisma.invoiceMetadata.create({
-            data: {
-              documentId: document.id,
-              ...metadataData,
-            },
+            data: { documentId: document.id, ...metadataData },
           });
 
-      // 4. Update document status to "enregistre"
+      // 5. Update document status to "enregistre"
       await this.prisma.document.update({
         where: { id: documentId },
         data: { processingStatus: 'enregistre' },
@@ -332,9 +444,7 @@ export class InvoiceExtractionService {
       };
     } catch (error) {
       console.error('Failed to save invoice metadata:', error);
-      if (error instanceof ApiError) {
-        throw error;
-      }
+      if (error instanceof ApiError) throw error;
       throw new ApiError('Failed to save invoice metadata', 500, 'SAVE_FAILED');
     }
   }

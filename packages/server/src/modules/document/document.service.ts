@@ -1,17 +1,20 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, forwardRef, Inject } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { MinioService } from '../../common/services/minio.service';
 import { ApiError } from '../../common/errors/api-error';
 import { errors } from '../../common/errors/errors';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
+import { InvoiceExtractionService } from './invoice-extraction.service';
 // import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class DocumentService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly minioService: MinioService
+    private readonly minioService: MinioService,
+    @Inject(forwardRef(() => InvoiceExtractionService))
+    private readonly invoiceExtractionService: InvoiceExtractionService
     // private readonly storageService: StorageService,
   ) {}
 
@@ -223,6 +226,15 @@ export class DocumentService {
           status: 'active',
         },
       });
+
+      // Auto-extract if category is 'facture' (fire-and-forget)
+      if (category === 'facture') {
+        this.invoiceExtractionService
+          .extractInvoiceMetadata(document.id, targetCompanyId)
+          .catch((err) =>
+            console.error(`Auto-extraction failed for document ${document.id}:`, err)
+          );
+      }
 
       return {
         status: 'success',

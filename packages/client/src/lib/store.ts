@@ -15,6 +15,7 @@ import { relationshipsApi } from "./services/relationshipsApi";
 import { documentsApi } from "./services/documentsApi";
 import { invoicesApi } from "./services/invoicesApi";
 import { locationApi } from "./services/locationApi";
+import { chatApi } from "./services/chatApi";
 
 const apiMiddlewares = [
   authApi.middleware,
@@ -31,6 +32,7 @@ const apiMiddlewares = [
   documentsApi.middleware,
   invoicesApi.middleware,
   locationApi.middleware,
+  chatApi.middleware,
 ];
 
 const apiResetters = [
@@ -47,6 +49,7 @@ const apiResetters = [
   documentsApi.util.resetApiState,
   invoicesApi.util.resetApiState,
   locationApi.util.resetApiState,
+  chatApi.util.resetApiState,
 ];
 
 const appReducer = combineReducers({
@@ -65,6 +68,7 @@ const appReducer = combineReducers({
   [documentsApi.reducerPath]: documentsApi.reducer,
   [invoicesApi.reducerPath]: invoicesApi.reducer,
   [locationApi.reducerPath]: locationApi.reducer,
+  [chatApi.reducerPath]: chatApi.reducer,
 });
 
 const baseStore = configureStore({

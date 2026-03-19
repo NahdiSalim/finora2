@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 
-import { conversations, messageRequests } from "../data/mock";
-import type { Message, MessageRequest } from "../data/types";
+import { messageRequests } from "../data/mock";
+import type { Conversation, Message, MessageRequest } from "../data/types";
 import ChatHeader from "../components/ChatHeader";
 import MessageInput from "../components/MessageInput";
 import MessageBubble from "../components/MessageBubble";
@@ -13,6 +13,7 @@ import MessagesDateDivider from "../components/MessagesDateDivider";
 
 type ChatWindowProps = {
   conversationId: number;
+  conversation?: Conversation;
   messages: Message[];
   isCommunicationConfirmed: boolean;
   onMessagesChange: (messages: Message[]) => void;
@@ -33,6 +34,7 @@ function hasFlagNode(html: string) {
 
 export default function ChatWindow({
   conversationId,
+  conversation,
   messages,
   isCommunicationConfirmed,
   onMessagesChange,
@@ -42,10 +44,7 @@ export default function ChatWindow({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
-  const currentConversation = useMemo(
-    () => conversations.find((c) => c.id === conversationId),
-    [conversationId],
-  );
+  const currentConversation = conversation;
 
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);

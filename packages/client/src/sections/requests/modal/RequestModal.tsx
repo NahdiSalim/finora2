@@ -33,6 +33,7 @@ interface Props {
 export default function RequestModal({ open, onClose }: Props) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const isMedium = useMediaQuery(theme.breakpoints.down("md"));
   const { showAlert } = useAlert();
   const [createRequest, { isLoading }] = useCreateRequestMutation();
 
@@ -121,6 +122,14 @@ export default function RequestModal({ open, onClose }: Props) {
       }}
       sx={{
         zIndex: theme.zIndex.modal,
+        "& .MuiDialog-paper": {
+          margin: { xs: 0, sm: 2, md: 4 },
+          maxHeight: {
+            xs: "100%",
+            sm: "calc(100% - 32px)",
+            md: "calc(100% - 64px)",
+          },
+        },
       }}
       PaperProps={{
         sx: {
@@ -182,11 +191,15 @@ export default function RequestModal({ open, onClose }: Props) {
       </Box>
 
       {/* Content */}
-      <DialogContent sx={{ p: { xs: 2, sm: 3 } }}>
+      <DialogContent sx={{ p: { xs: 1.5, sm: 2.5, md: 3 } }}>
         <Box
           component="form"
           onSubmit={handleSubmit(onSubmit)}
-          sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            gap: { xs: 2, sm: 2.5 },
+          }}
         >
           {/* Title and Priority Row */}
           <Box

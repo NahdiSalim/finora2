@@ -97,14 +97,12 @@ export default function TaskManagementView() {
     const columnMap: Record<KanbanColumn["id"], Task[]> = {
       todo: [],
       in_progress: [],
-      needs_review: [],
-      done: [],
+      in_review: [],
+      completed: [],
     };
 
     filteredTasks.forEach((task: Task) => {
-      if (task.status === "completed") {
-        columnMap.done.push(task);
-      } else if (task.status in columnMap) {
+      if (task.status in columnMap) {
         columnMap[task.status as KanbanColumn["id"]].push(task);
       }
     });
@@ -112,8 +110,8 @@ export default function TaskManagementView() {
     const columnOrder: KanbanColumn["id"][] = [
       "todo",
       "in_progress",
-      "needs_review",
-      "done",
+      "in_review",
+      "completed",
     ];
 
     return columnOrder.map((id) => ({

@@ -1,15 +1,19 @@
 import { useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Box, Card, useTheme, CircularProgress, Alert } from "@mui/material";
-import { Loader2, Check } from "lucide-react";
+import { Loader2, Check, Send } from "lucide-react";
 import { PageHeader } from "src/layouts/components/page-header";
 import { useDashboardBase } from "src/hooks/useDashboardBase";
+import { useAppSelector } from "src/hooks/use-redux";
+import { ROLE_CODES } from "src/constants/roles";
 import { SimpleTabs } from "./simple-tabs";
 import { TaskDetailsContent } from "./task-details-content";
 import { DocumentsContent } from "./documents-content";
+import { EchangesContent } from "./echanges-content";
 import {
   useGetTaskByIdQuery,
   useStartTaskMutation,
+  useSubmitForReviewMutation,
   useCompleteTaskMutation,
 } from "src/lib/services/tasksApi";
 
@@ -19,6 +23,7 @@ export default function TaskDetailsView() {
   const location = useLocation();
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState("details");
+  const { user } = useAppSelector((state) => state.auth);
 
   const {
     data: taskData,
@@ -27,6 +32,8 @@ export default function TaskDetailsView() {
     refetch,
   } = useGetTaskByIdQuery(Number(taskId), { skip: !taskId });
   const [startTask, { isLoading: isStarting }] = useStartTaskMutation();
+  const [submitForReview, { isLoading: isSubmitting }] =
+    useSubmitForReviewMutation();
   const [completeTask, { isLoading: isCompleting }] = useCompleteTaskMutation();
 
   const task = taskData?.data;
@@ -39,6 +46,18 @@ export default function TaskDetailsView() {
     ? "tasks"
     : "collaborators/task-management";
 
+  const userRole =
+    typeof user?.role === "object" ? user?.role?.code : user?.role;
+  const userRoleUpper = userRole?.toUpperCase();
+  const isCollaborator =
+    userRoleUpper === ROLE_CODES.COLLABORATOR ||
+    userRoleUpper === "COLLABORATEUR";
+  const isAccountant =
+    userRoleUpper === ROLE_CODES.ACCOUNTANT ||
+    userRoleUpper === "COMPTABLE" ||
+    userRoleUpper === ROLE_CODES.ADMINISTRATOR ||
+    userRoleUpper === "ADMINISTRATEUR";
+
   const handleBack = () => {
     navigate(`${dashboardBase}/${tasksBase}`);
   };
@@ -50,6 +69,16 @@ export default function TaskDetailsView() {
       refetch();
     } catch (err) {
       console.error("Failed to start task:", err);
+    }
+  };
+
+  const handleSubmitForReview = async () => {
+    if (!task) return;
+    try {
+      await submitForReview(task.id).unwrap();
+      refetch();
+    } catch (err) {
+      console.error("Failed to submit task for review:", err);
     }
   };
 
@@ -82,7 +111,29 @@ export default function TaskDetailsView() {
           },
         },
       };
-    } else if (task.status === "in_progress") {
+    }
+
+    if (task.status === "in_progress") {
+      if (isCollaborator) {
+        return {
+          label: "Soumettre pour révision",
+          icon: <Send size={18} />,
+          onClick: handleSubmitForReview,
+          variant: "contained" as const,
+          color: "primary" as const,
+          disabled: isSubmitting,
+          sx: {
+            borderRadius: 1.5,
+            bgcolor: "#8B5CF6",
+            "&:hover": {
+              bgcolor: "#7C3AED",
+            },
+          },
+        };
+      }
+    }
+
+    if (task.status === "in_review" && isAccountant) {
       return {
         label: "Marquer comme terminé",
         icon: <Check size={18} />,
@@ -99,6 +150,7 @@ export default function TaskDetailsView() {
         },
       };
     }
+
     return undefined;
   };
 
@@ -146,54 +198,97 @@ export default function TaskDetailsView() {
       backButton={handleBack}
       actions={actionButton ? [actionButton] : []}
     >
-      {/* Tabs and Content Container - Rounded Square */}
-      <Card
+      {/* Two Column Layout */}
+      <Box
         sx={{
-          bgcolor: "white",
-          borderRadius: 1.5,
-          overflow: "hidden",
-          border: `1px solid ${theme.palette.grey[200]}`,
           display: "flex",
-          flexDirection: "column",
-          minHeight: "calc(100vh - 300px)",
+          gap: 2,
+          flexDirection: { xs: "column", lg: "row" },
           height: "100%",
+          width: "100%",
         }}
       >
-        {/* Status Tabs */}
-        <SimpleTabs
-          tabs={[
-            {
-              id: "details",
-              label: "Détails de la tâche",
-            },
-            {
-              id: "documents",
-              label: "Documents",
-            },
-          ]}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-        />
-
-        {/* Content - Full Width */}
+        {/* Left Column - Main Content */}
         <Box
           sx={{
-            p: { xs: 2, sm: 3 },
-            flex: 1,
-            overflowY: "auto",
+            flex: { xs: "1 1 100%", lg: "1 1 65%" },
+            minWidth: 0,
           }}
         >
-          {activeTab === "details" && (
-            <TaskDetailsContent
-              task={task}
-              isCollaboratorView={isCollaboratorView}
+          <Card
+            sx={{
+              bgcolor: "white",
+              borderRadius: 1.5,
+              overflow: "hidden",
+              border: `1px solid ${theme.palette.grey[200]}`,
+              display: "flex",
+              flexDirection: "column",
+              minHeight: { xs: "auto", lg: "calc(100vh - 300px)" },
+              height: "100%",
+              width: "100%",
+            }}
+          >
+            {/* Status Tabs */}
+            <SimpleTabs
+              tabs={[
+                {
+                  id: "details",
+                  label: "Détails de la tâche",
+                },
+                {
+                  id: "documents",
+                  label: "Documents",
+                },
+              ]}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
             />
-          )}
-          {activeTab === "documents" && (
-            <DocumentsContent task={task} onUpdate={refetch} />
-          )}
+
+            {/* Content */}
+            <Box
+              sx={{
+                p: { xs: 2, sm: 3 },
+                flex: 1,
+                overflowY: "auto",
+              }}
+            >
+              {activeTab === "details" && (
+                <TaskDetailsContent
+                  task={task}
+                  isCollaboratorView={isCollaboratorView}
+                />
+              )}
+              {activeTab === "documents" && (
+                <DocumentsContent task={task} onUpdate={refetch} />
+              )}
+            </Box>
+          </Card>
         </Box>
-      </Card>
+
+        {/* Right Column - Echanges Panel */}
+        <Box
+          sx={{
+            flex: { xs: "1 1 100%", lg: "1 1 35%" },
+            minWidth: { xs: 0, lg: 320 },
+          }}
+        >
+          <Card
+            sx={{
+              bgcolor: "white",
+              borderRadius: 1.5,
+              border: `1px solid ${theme.palette.grey[200]}`,
+              p: 3,
+              height: { xs: "auto", lg: "calc(100vh - 300px)" },
+              minHeight: { xs: 400, lg: "calc(100vh - 300px)" },
+              display: "flex",
+              flexDirection: "column",
+              width: "100%",
+            }}
+          >
+            <EchangesContent task={task} onCommentAdded={refetch} />
+          </Card>
+        </Box>
+      </Box>
     </PageHeader>
   );
 }

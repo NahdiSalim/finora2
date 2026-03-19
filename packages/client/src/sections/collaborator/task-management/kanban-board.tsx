@@ -78,7 +78,7 @@ export function KanbanBoard({
         });
 
         remainingTasks.forEach((task) => {
-          orderedTasks.push(task);
+          orderedTasks.unshift(task);
         });
 
         return { ...col, tasks: orderedTasks };
@@ -138,7 +138,7 @@ export function KanbanBoard({
 
     if (
       typeof overId === "string" &&
-      ["todo", "in_progress", "needs_review", "done"].includes(overId)
+      ["todo", "in_progress", "in_review", "completed"].includes(overId)
     ) {
       targetColumn = localColumns.find((col) => col.id === overId);
     } else {
@@ -189,8 +189,7 @@ export function KanbanBoard({
 
       const newStatus = targetColumn.id;
       const formData = new FormData();
-      const statusToSend = newStatus === "done" ? "completed" : newStatus;
-      formData.append("status", statusToSend);
+      formData.append("status", newStatus);
 
       try {
         await updateTask({ id: taskId, data: formData }).unwrap();
@@ -217,7 +216,7 @@ export function KanbanBoard({
 
     if (
       typeof overId === "string" &&
-      ["todo", "in_progress", "needs_review", "done"].includes(overId)
+      ["todo", "in_progress", "in_review", "completed"].includes(overId)
     ) {
       overColumn = localColumns.find((col) => col.id === overId);
     } else {

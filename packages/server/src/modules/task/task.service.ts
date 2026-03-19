@@ -40,15 +40,26 @@ export class TaskService {
         throw new ApiError('User must belong to a company to create tasks', 400, 'NO_COMPANY');
       }
 
-      // If clientId is provided, verify they belong to the same company or have a relationship
+      // If clientId is provided, verify there's a relationship between the accounting firm and client's company
       if (dto.clientId) {
         const client = await this.prisma.user.findUnique({
           where: { id: dto.clientId },
           select: { companyId: true },
         });
 
-        // Verify client belongs to same company
-        if (client?.companyId !== creator.companyId) {
+        if (!client?.companyId) {
+          throw new ApiError('Client must be associated with a company', 400, 'INVALID_CLIENT');
+        }
+
+        // Verify there's a relationship between the accounting firm and the client's company
+        const relationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
+          where: {
+            accountingFirmId: creator.companyId,
+            clientCompanyId: client.companyId,
+          },
+        });
+
+        if (!relationship) {
           throw new ApiError('Client must belong to the same company', 400, 'INVALID_CLIENT');
         }
       }

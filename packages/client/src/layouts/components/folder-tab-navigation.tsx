@@ -29,7 +29,23 @@ export function FolderTabNavigation({
         alignItems: "flex-end",
         gap: 0,
         position: "relative",
-        mb: 0, // No margin bottom to merge with content
+        mb: 0,
+        overflowX: "auto",
+        overflowY: "hidden",
+        "&::-webkit-scrollbar": {
+          height: 6,
+        },
+        "&::-webkit-scrollbar-track": {
+          bgcolor: alpha(theme.palette.grey[300], 0.3),
+          borderRadius: 3,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(theme.palette.grey[400], 0.5),
+          borderRadius: 3,
+          "&:hover": {
+            bgcolor: alpha(theme.palette.grey[500], 0.7),
+          },
+        },
       }}
     >
       {tabs.map((tab, index) => {
@@ -77,57 +93,54 @@ export function FolderTabNavigation({
               position: "relative",
               cursor: "pointer",
               transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-              zIndex: isActive ? tabs.length + 1 : tabs.length - index, // Active tab on top, others stack behind
-              ml: index > 0 ? "-18px" : 0, // Overlap tabs by shifting left (except first tab)
+              zIndex: isActive ? tabs.length + 1 : tabs.length - index,
+              ml: index > 0 ? { xs: "-10px", sm: "-14px", md: "-18px" } : 0,
               // Active tab styling
               ...(isActive && {
                 bgcolor: "white",
                 color: theme.palette.text.primary,
-                borderTopLeftRadius: isFirst ? "8px" : 0, // Only first tab has rounded left corner
-                borderTopRightRadius: isLast ? "8px" : 0, // Only last tab has rounded right corner
-                borderBottom: "none", // No bottom border to merge with content
-                borderLeft: "none",
-                borderTop: "none",
-                borderRight: "none",
-                px: 8,
-                py: 1.5,
-                fontWeight: 600,
-                fontSize: 14,
-                minHeight: 48,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "none", // No shadow to merge seamlessly
-                // Extend slightly below to overlap content border and create seamless merge
-                mb: "-1px",
-                // Keep the same slanted shape as inactive tabs
-                clipPath: getClipPath(),
-              }),
-              // Inactive tab styling
-              ...(!isActive && {
-                bgcolor: alpha(theme.palette.primary.main, opacity), // Faded blue based on distance
-                color: "white",
-                borderTopLeftRadius: isFirst ? "8px" : 0, // Only first tab has rounded left corner
-                borderTopRightRadius: isLast ? "8px" : 0, // Only last tab has rounded right corner
+                borderTopLeftRadius: isFirst ? "8px" : 0,
+                borderTopRightRadius: isLast ? "8px" : 0,
                 borderBottom: "none",
                 borderLeft: "none",
                 borderTop: "none",
                 borderRight: "none",
-                px: 6,
+                px: { xs: 3, sm: 5, md: 8 },
                 py: 1.5,
                 fontWeight: 600,
-                fontSize: 14,
-                minHeight: 48,
+                fontSize: { xs: 13, sm: 14 },
+                minHeight: { xs: 44, sm: 48 },
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                // Slanted edges using clip-path based on tab position
+                boxShadow: "none",
+                mb: "-1px",
+                clipPath: getClipPath(),
+              }),
+              // Inactive tab styling
+              ...(!isActive && {
+                bgcolor: alpha(theme.palette.primary.main, opacity),
+                color: "white",
+                borderTopLeftRadius: isFirst ? "8px" : 0,
+                borderTopRightRadius: isLast ? "8px" : 0,
+                borderBottom: "none",
+                borderLeft: "none",
+                borderTop: "none",
+                borderRight: "none",
+                px: { xs: 2.5, sm: 4, md: 6 },
+                py: 1.5,
+                fontWeight: 600,
+                fontSize: { xs: 13, sm: 14 },
+                minHeight: { xs: 44, sm: 48 },
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
                 clipPath: getClipPath(),
                 "&:hover": {
                   bgcolor: alpha(
                     theme.palette.primary.dark,
                     Math.min(opacity + 0.1, 1),
-                  ), // Slightly darker on hover
+                  ),
                 },
               }),
             }}
@@ -136,12 +149,21 @@ export function FolderTabNavigation({
               variant="body2"
               sx={{
                 fontWeight: 600,
-                fontSize: 14,
+                fontSize: { xs: 13, sm: 14 },
                 whiteSpace: "nowrap",
               }}
             >
               {tab.label}
-              {tab.count !== undefined && ` (${tab.count})`}
+              {tab.count !== undefined && (
+                <Box
+                  component="span"
+                  sx={{
+                    display: { xs: "none", sm: "inline" },
+                  }}
+                >
+                  {` (${tab.count})`}
+                </Box>
+              )}
             </Typography>
           </Box>
         );

@@ -27,8 +27,7 @@ export function TaskDetailsContent({
   const statusLabels: Record<Task["status"], string> = {
     todo: "À faire",
     in_progress: "En cours",
-    needs_review: "En attente de validation",
-    done: "Terminé",
+    in_review: "En révision",
     completed: "Terminé",
     cancelled: "Annulé",
   };
@@ -36,8 +35,7 @@ export function TaskDetailsContent({
   const statusColors: Record<Task["status"], string> = {
     todo: "#EF4444",
     in_progress: "#F59E0B",
-    needs_review: "#8B5CF6",
-    done: "#10B981",
+    in_review: "#8B5CF6",
     completed: "#10B981",
     cancelled: "#6B7280",
   };
@@ -55,6 +53,7 @@ export function TaskDetailsContent({
         sx={{
           display: "flex",
           alignItems: "center",
+          justifyContent: "space-between",
           gap: { xs: 1.5, sm: 2 },
           flexWrap: "wrap",
         }}
@@ -69,34 +68,42 @@ export function TaskDetailsContent({
         >
           {task.title}
         </Typography>
-        <Chip
-          label={statusLabels[task.status]}
-          size="small"
+        <Box
           sx={{
-            height: 24,
-            fontSize: 12,
-            fontWeight: 600,
-            bgcolor: alpha(statusColors[task.status], 0.1),
-            color: statusColors[task.status],
-            "& .MuiChip-label": {
-              px: 1.5,
-            },
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
           }}
-        />
-        <Chip
-          label={priorityConfig.label}
-          size="small"
-          sx={{
-            height: 24,
-            fontSize: 12,
-            fontWeight: 600,
-            bgcolor: alpha(priorityConfig.color, 0.1),
-            color: priorityConfig.color,
-            "& .MuiChip-label": {
-              px: 1.5,
-            },
-          }}
-        />
+        >
+          <Chip
+            label={statusLabels[task.status]}
+            size="medium"
+            sx={{
+              height: 32,
+              fontSize: 14,
+              fontWeight: 600,
+              bgcolor: alpha(statusColors[task.status], 0.1),
+              color: statusColors[task.status],
+              "& .MuiChip-label": {
+                px: 2,
+              },
+            }}
+          />
+          <Chip
+            label={priorityConfig.label}
+            size="medium"
+            sx={{
+              height: 32,
+              fontSize: 14,
+              fontWeight: 600,
+              bgcolor: alpha(priorityConfig.color, 0.1),
+              color: priorityConfig.color,
+              "& .MuiChip-label": {
+                px: 2,
+              },
+            }}
+          />
+        </Box>
       </Box>
 
       {/* Description */}

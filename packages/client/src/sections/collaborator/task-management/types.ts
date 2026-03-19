@@ -13,6 +13,7 @@ export interface TaskComment {
   comment: string;
   attachments: string[];
   createdAt: string;
+  user?: TaskUser;
 }
 
 export interface Task {
@@ -21,13 +22,7 @@ export interface Task {
   description: string | null;
   type: "accounting" | "review" | "meeting" | "document" | "other";
   priority: "low" | "medium" | "high" | "urgent";
-  status:
-    | "todo"
-    | "in_progress"
-    | "needs_review"
-    | "done"
-    | "completed"
-    | "cancelled";
+  status: "todo" | "in_progress" | "in_review" | "completed" | "cancelled";
   dueDate: string | null;
   progress: number;
   assigneeId: number;
@@ -49,7 +44,7 @@ export interface Task {
 }
 
 export interface KanbanColumn {
-  id: "todo" | "in_progress" | "needs_review" | "done";
+  id: "todo" | "in_progress" | "in_review" | "completed";
   title: string;
   color: string;
   tasks: Task[];
@@ -67,11 +62,11 @@ export const COLUMN_CONFIG_ACCOUNTANT: Record<
     title: "En cours",
     color: "#F59E0B",
   },
-  needs_review: {
+  in_review: {
     title: "En révision",
     color: "#8B5CF6",
   },
-  done: {
+  completed: {
     title: "Terminé",
     color: "#10B981",
   },
@@ -89,11 +84,11 @@ export const COLUMN_CONFIG_COLLABORATOR: Record<
     title: "En cours",
     color: "#F59E0B",
   },
-  needs_review: {
+  in_review: {
     title: "En révision",
     color: "#8B5CF6",
   },
-  done: {
+  completed: {
     title: "Terminé",
     color: "#10B981",
   },

@@ -39,6 +39,7 @@ type Props = {
 export default function ViewRequestDrawer({ open, onClose, request }: Props) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const isMedium = useMediaQuery(theme.breakpoints.down("md"));
   const { showAlert } = useAlert();
   const [deleteRequest, { isLoading: isDeleting }] = useDeleteRequestMutation();
   const [updateRequest, { isLoading: isUpdating }] = useUpdateRequestMutation();
@@ -347,12 +348,13 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
       }}
       PaperProps={{
         sx: {
-          width: isMobile ? "100%" : 480,
+          width: { xs: "100%", sm: "90%", md: 480 },
+          maxWidth: { xs: "100%", sm: 420, md: 480 },
           height: isMobile ? "100%" : "calc(100vh - 48px)",
           marginTop: isMobile ? 0 : "24px",
           marginBottom: isMobile ? 0 : "24px",
-          borderTopLeftRadius: 20,
-          borderBottomLeftRadius: 20,
+          borderTopLeftRadius: isMobile ? 0 : 20,
+          borderBottomLeftRadius: isMobile ? 0 : 20,
           bgcolor: theme.palette.grey[50],
           boxShadow: "-8px 0 24px rgba(0, 0, 0, 0.12)",
           transition:
@@ -363,7 +365,7 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
       {/* Header */}
       <Box
         sx={{
-          p: 2,
+          p: { xs: 1.5, sm: 2 },
           bgcolor: theme.palette.common.white,
           borderBottom: `1px solid ${theme.palette.divider}`,
           animation: open
@@ -392,7 +394,7 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
           <Typography
             variant="h6"
             fontWeight={600}
-            sx={{ flex: 1, pr: 2, fontSize: "1.125rem" }}
+            sx={{ flex: 1, pr: 2, fontSize: { xs: "1rem", sm: "1.125rem" } }}
           >
             {isEditMode ? "Modifier la demande" : localRequest.subject}
           </Typography>
@@ -444,7 +446,7 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
       {/* Content */}
       <Box
         sx={{
-          p: 2,
+          p: { xs: 1.5, sm: 2 },
           overflowY: "auto",
           flex: 1,
           "@keyframes fadeInUp": {
@@ -477,7 +479,7 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
               <Box
                 sx={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
+                  gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
                   gap: 2,
                   mb: 2,
                 }}
@@ -677,7 +679,7 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
                       display: "grid",
                       gridTemplateColumns:
                         localRequest.assignedTo && localRequest.respondedAt
-                          ? "1fr 1fr"
+                          ? { xs: "1fr", sm: "1fr 1fr" }
                           : "1fr",
                       gap: 2,
                     }}
@@ -1221,11 +1223,12 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
       {/* Footer Actions */}
       <Box
         sx={{
-          p: 1.5,
+          p: { xs: 1.5, sm: 1.5 },
           bgcolor: theme.palette.common.white,
           borderTop: `1px solid ${theme.palette.divider}`,
           display: "flex",
-          gap: 1,
+          flexDirection: { xs: "column", sm: "row" },
+          gap: { xs: 1.5, sm: 1 },
           animation: open
             ? "slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both"
             : "none",

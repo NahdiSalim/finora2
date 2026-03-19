@@ -5,6 +5,7 @@ import {
   Chip,
   useTheme,
   alpha,
+  CircularProgress,
 } from "@mui/material";
 import { ArrowUpDown } from "lucide-react";
 import { useDroppable } from "@dnd-kit/core";
@@ -14,12 +15,16 @@ import {
 } from "@dnd-kit/sortable";
 import { TaskCard } from "./task-card";
 import type { KanbanColumn } from "./types";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 interface BoardColumnProps {
   column: KanbanColumn;
   onAddTask?: (columnId: KanbanColumn["id"]) => void;
   onSortByPriority?: (columnId: KanbanColumn["id"]) => void;
 }
+
+const INITIAL_TASKS_DISPLAY = 3;
+const LOAD_MORE_AMOUNT = 3;
 
 export function BoardColumn({
   column,
@@ -31,11 +36,49 @@ export function BoardColumn({
     id: column.id,
   });
 
-  const taskIds = column.tasks.map((task) => task.id);
+  const [displayCount, setDisplayCount] = useState(INITIAL_TASKS_DISPLAY);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const visibleTasks = column.tasks.slice(0, displayCount);
+  const hasMore = displayCount < column.tasks.length;
+  const taskIds = visibleTasks.map((task) => task.id);
+
+  useEffect(() => {
+    setDisplayCount(INITIAL_TASKS_DISPLAY);
+  }, [column.id]);
+
+  const handleScroll = useCallback(() => {
+    if (!scrollContainerRef.current || !hasMore || isLoadingMore) return;
+
+    const { scrollTop, scrollHeight, clientHeight } =
+      scrollContainerRef.current;
+    const scrolledToBottom = scrollTop + clientHeight >= scrollHeight - 50;
+
+    if (scrolledToBottom) {
+      setIsLoadingMore(true);
+      setTimeout(() => {
+        setDisplayCount((prev) =>
+          Math.min(prev + LOAD_MORE_AMOUNT, column.tasks.length),
+        );
+        setIsLoadingMore(false);
+      }, 300);
+    }
+  }, [hasMore, isLoadingMore, column.tasks.length]);
+
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current;
+    if (scrollContainer) {
+      scrollContainer.addEventListener("scroll", handleScroll);
+      return () => scrollContainer.removeEventListener("scroll", handleScroll);
+    }
+    return undefined;
+  }, [handleScroll]);
 
   const handleSortByPriority = () => {
     if (onSortByPriority) {
       onSortByPriority(column.id);
+      setDisplayCount(INITIAL_TASKS_DISPLAY);
     }
   };
 
@@ -125,7 +168,10 @@ export function BoardColumn({
       {/* Tasks List - Droppable */}
       <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
         <Box
-          ref={setNodeRef}
+          ref={(node: HTMLDivElement | null) => {
+            setNodeRef(node);
+            scrollContainerRef.current = node;
+          }}
           sx={{
             display: "flex",
             flexDirection: "column",
@@ -137,11 +183,35 @@ export function BoardColumn({
             p: 1,
             borderRadius: 1,
             bgcolor: "transparent",
+            "&::-webkit-scrollbar": {
+              width: 6,
+            },
+            "&::-webkit-scrollbar-track": {
+              backgroundColor: "transparent",
+            },
+            "&::-webkit-scrollbar-thumb": {
+              backgroundColor: alpha(column.color, 0.3),
+              borderRadius: 3,
+            },
           }}
         >
-          {column.tasks.map((task) => (
+          {visibleTasks.map((task) => (
             <TaskCard key={task.id} task={task} />
           ))}
+
+          {isLoadingMore && (
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                py: 2,
+              }}
+            >
+              <CircularProgress size={24} sx={{ color: column.color }} />
+            </Box>
+          )}
+
           {column.tasks.length === 0 && (
             <Box
               sx={{

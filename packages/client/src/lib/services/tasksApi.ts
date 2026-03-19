@@ -16,6 +16,7 @@ export interface TaskComment {
   comment: string;
   attachments: string[];
   createdAt: string;
+  user?: TaskUser;
 }
 
 export interface Task {
@@ -24,7 +25,7 @@ export interface Task {
   description: string | null;
   type: "accounting" | "review" | "meeting" | "document" | "other";
   priority: "low" | "medium" | "high" | "urgent";
-  status: "todo" | "in_progress" | "completed" | "cancelled";
+  status: "todo" | "in_progress" | "in_review" | "completed" | "cancelled";
   dueDate: string | null;
   progress: number;
   assigneeId: number;
@@ -77,7 +78,7 @@ export interface UpdateTaskDto {
   description?: string;
   type?: "accounting" | "review" | "meeting" | "document" | "other";
   priority?: "low" | "medium" | "high" | "urgent";
-  status?: "todo" | "in_progress" | "completed" | "cancelled";
+  status?: "todo" | "in_progress" | "in_review" | "completed" | "cancelled";
   dueDate?: string;
   assigneeId?: number;
   addCollaborators?: number[];
@@ -222,7 +223,23 @@ export const tasksApi = createApi({
       ],
     }),
 
-    // Complete task
+    // Submit task for review (Collaborator)
+    submitForReview: builder.mutation<
+      { success: boolean; message: string; data: Task },
+      number
+    >({
+      query: (id) => ({
+        url: `/tasks/${id}/review`,
+        method: "PUT",
+      }),
+      invalidatesTags: (result, error, id) => [
+        { type: "Task", id },
+        { type: "Tasks", id: "MY_CREATED_LIST" },
+        { type: "Tasks", id: "MY_ASSIGNED_LIST" },
+      ],
+    }),
+
+    // Complete task (Accountant only)
     completeTask: builder.mutation<
       { success: boolean; message: string; data: Task },
       number
@@ -274,6 +291,7 @@ export const {
   useCreateTaskMutation,
   useUpdateTaskMutation,
   useStartTaskMutation,
+  useSubmitForReviewMutation,
   useCompleteTaskMutation,
   useAddCommentMutation,
   useDeleteTaskMutation,

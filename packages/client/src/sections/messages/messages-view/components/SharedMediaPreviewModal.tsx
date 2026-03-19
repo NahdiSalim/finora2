@@ -258,7 +258,7 @@ export default function SharedMediaPreviewModal({
                 borderRadius: "10px",
               }}
             >
-              Download
+              Télécharger
             </Button>
           </Box>
         </Box>

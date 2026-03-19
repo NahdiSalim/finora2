@@ -3,6 +3,8 @@ import Box from "@mui/material/Box";
 import Avatar from "@mui/material/Avatar";
 import Typography from "@mui/material/Typography";
 import CircleIcon from "@mui/icons-material/Circle";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import dayjs from "dayjs";
 
 import type { Conversation } from "../data/types";
@@ -21,17 +23,14 @@ const getConversationDateLabel = (
   const date = dayjs(fullDate);
   const now = nowRef ?? dayjs();
 
-  // Pendant la même minute exacte que l'envoi
   if (date.isSame(now, "minute")) {
     return "Now";
   }
 
-  // Même jour mais plus la même minute => afficher l'heure du message, figée
   if (date.isSame(now, "day")) {
     return time || "Today";
   }
 
-  // Sinon autre jour
   return date.format("DD MMM");
 };
 
@@ -40,6 +39,8 @@ export default function ConversationItem({
   selected,
   onClick,
 }: ConversationItemProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [now, setNow] = useState(dayjs());
 
   useEffect(() => {
@@ -65,18 +66,23 @@ export default function ConversationItem({
         position: "relative",
         display: "flex",
         alignItems: "center",
-        gap: 1.5,
-        px: 1.5,
-        py: 1.35,
-        minHeight: 84,
-        borderRadius: "14px",
+        gap: isMobile ? 1.25 : 1.5,
+        px: isMobile ? 1.5 : 2,
+        py: isMobile ? 1.4 : 1.75,
+        minHeight: isMobile ? 86 : 88,
+        borderRadius: isMobile ? "14px" : "14px",
         cursor: "pointer",
-        backgroundColor: selected ? "#EEF4FF" : "#FFFFFF",
-        border: selected ? "1px solid #DCE8FF" : "1px solid transparent",
+        backgroundColor: selected
+          ? theme.palette.primary.lighter
+          : theme.palette.common.white,
+        border: "1px solid",
+        borderColor: selected ? theme.palette.primary.light : "transparent",
         transition: "all 0.2s ease",
         overflow: "hidden",
         "&:hover": {
-          backgroundColor: selected ? "#EEF4FF" : "#F8FAFC",
+          backgroundColor: selected
+            ? theme.palette.primary.lighter
+            : theme.palette.grey[100],
         },
         "&::before": selected
           ? {
@@ -87,7 +93,7 @@ export default function ConversationItem({
               bottom: 10,
               width: "3px",
               borderRadius: "999px",
-              backgroundColor: "#2F6BFF",
+              backgroundColor: theme.palette.primary.main,
             }
           : undefined,
       }}
@@ -100,9 +106,9 @@ export default function ConversationItem({
       >
         <Avatar
           sx={{
-            width: 48,
-            height: 48,
-            fontSize: 18,
+            width: isMobile ? 48 : 48,
+            height: isMobile ? 48 : 48,
+            fontSize: isMobile ? 18 : 18,
             bgcolor: conversation.avatarColor,
             color: conversation.avatarTextColor,
             fontWeight: 700,
@@ -117,11 +123,11 @@ export default function ConversationItem({
               position: "absolute",
               right: 1,
               bottom: 1,
-              fontSize: 10,
+              fontSize: isMobile ? 10 : 10,
               color: "#22C55E",
-              backgroundColor: "#FFFFFF",
+              backgroundColor: theme.palette.common.white,
               borderRadius: "50%",
-              boxShadow: "0 0 0 2px #FFFFFF",
+              boxShadow: `0 0 0 2px ${theme.palette.common.white}`,
             }}
           />
         )}
@@ -142,18 +148,18 @@ export default function ConversationItem({
             alignItems: "flex-start",
             justifyContent: "space-between",
             gap: 1,
-            mb: 0.2,
+            mb: 0.25,
           }}
         >
           <Typography
             noWrap
             sx={{
-              fontWeight: 600,
-              fontSize: 15,
-              color: "#344054",
-              lineHeight: 1.2,
               minWidth: 0,
               flex: 1,
+              fontWeight: 600,
+              fontSize: isMobile ? 15.5 : 16,
+              lineHeight: isMobile ? "20px" : "20px",
+              color: (theme.palette.grey as any)[1000],
             }}
           >
             {conversation.name}
@@ -161,13 +167,12 @@ export default function ConversationItem({
 
           <Typography
             sx={{
-              whiteSpace: "nowrap",
-              color: "#98A2B3",
-              fontSize: 12,
-              lineHeight: 1.2,
-              fontWeight: 400,
               flexShrink: 0,
-              pt: 0.1,
+              whiteSpace: "nowrap",
+              color: theme.palette.info.light,
+              fontSize: isMobile ? 12 : 12,
+              fontWeight: 400,
+              lineHeight: "18px",
             }}
           >
             {displayDate}
@@ -177,10 +182,11 @@ export default function ConversationItem({
         <Typography
           noWrap
           sx={{
-            color: "#98A2B3",
-            fontSize: 12,
-            lineHeight: 1.25,
-            mb: 0.55,
+            color: theme.palette.info.light,
+            fontSize: isMobile ? 12 : 12,
+            fontWeight: 400,
+            lineHeight: "18px",
+            mb: 0.45,
           }}
         >
           {conversation.role}
@@ -198,11 +204,12 @@ export default function ConversationItem({
           <Typography
             noWrap
             sx={{
-              color: "#667085",
-              fontSize: 13,
-              lineHeight: 1.3,
               minWidth: 0,
               flex: 1,
+              color: theme.palette.grey[800],
+              fontSize: isMobile ? 13.5 : 13,
+              fontWeight: 400,
+              lineHeight: "18px",
             }}
           >
             {conversation.preview}
@@ -211,11 +218,11 @@ export default function ConversationItem({
           {!!conversation.unreadCount && conversation.unreadCount > 0 && (
             <Box
               sx={{
-                minWidth: 22,
-                height: 22,
-                px: 0.75,
+                minWidth: isMobile ? 22 : 22,
+                height: isMobile ? 22 : 22,
+                px: isMobile ? 0.75 : 0.75,
                 borderRadius: "999px",
-                backgroundColor: "#FF8A00",
+                backgroundColor: "#F79009",
                 color: "#FFFFFF",
                 display: "flex",
                 alignItems: "center",
@@ -225,7 +232,7 @@ export default function ConversationItem({
             >
               <Typography
                 sx={{
-                  fontSize: 10,
+                  fontSize: isMobile ? 10.5 : 10,
                   fontWeight: 700,
                   lineHeight: 1,
                 }}

@@ -3,14 +3,14 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import IconButton from "@mui/material/IconButton";
 import Popover from "@mui/material/Popover";
+import { useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 import { Search } from "lucide-react";
-
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import "dayjs/locale/fr";
-
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { DateCalendar } from "@mui/x-date-pickers/DateCalendar";
@@ -18,7 +18,7 @@ import { DateCalendar } from "@mui/x-date-pickers/DateCalendar";
 import CustomInput from "../../../../components/common/CustomInput";
 import CustomButton from "../../../../components/common/CustomButton";
 
-import type { Conversation } from "../data/types";
+import type { Conversation, ConversationCategory } from "../data/types";
 import ConversationItem from "../components/ConversationItem";
 
 dayjs.locale("fr");
@@ -42,20 +42,95 @@ export default function ConversationsList({
   onDateFilterChange,
   onSelect,
 }: ConversationsListProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
   const [calendarAnchorEl, setCalendarAnchorEl] = useState<null | HTMLElement>(
     null,
   );
+  const [selectedTab, setSelectedTab] =
+    useState<ConversationCategory>("collaborateur");
 
   const isCalendarOpen = Boolean(calendarAnchorEl);
+
+  const filteredConversations = conversations.filter(
+    (conversation) => conversation.category === selectedTab,
+  );
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="fr">
       <>
         <Box
           sx={{
+            mb: isMobile ? 1.25 : 1.5,
+            p: isMobile ? 0.875 : 0.75,
+            borderRadius: isMobile ? "18px" : "16px",
+            backgroundColor: theme.palette.common.white,
+            border: "1px solid",
+            borderColor: theme.palette.grey[200],
+            flexShrink: 0,
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: isMobile ? 1 : 0.75,
+              p: isMobile ? "4px" : "6px",
+              borderRadius: isMobile ? "14px" : "8px",
+              backgroundColor: theme.palette.grey[100],
+            }}
+          >
+            {[
+              { label: "Clients", value: "client" },
+              { label: "Collaborateurs", value: "collaborateur" },
+            ].map((tab) => {
+              const active = selectedTab === tab.value;
+
+              return (
+                <Box
+                  key={tab.value}
+                  onClick={() =>
+                    setSelectedTab(tab.value as ConversationCategory)
+                  }
+                  sx={{
+                    flex: 1,
+                    height: isMobile ? 48 : 42,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: isMobile ? "12px" : "6px",
+                    cursor: "pointer",
+                    userSelect: "none",
+                    fontSize: isMobile ? 14 : 14,
+                    fontWeight: active ? 600 : 500,
+                    transition: "all 0.2s ease",
+                    backgroundColor: active
+                      ? theme.palette.primary.main
+                      : "transparent",
+                    color: active
+                      ? theme.palette.common.white
+                      : theme.palette.info.main,
+                    boxShadow: "none",
+                    "&:hover": {
+                      backgroundColor: active
+                        ? theme.palette.primary.main
+                        : theme.palette.grey[200],
+                    },
+                  }}
+                >
+                  {tab.label}
+                </Box>
+              );
+            })}
+          </Box>
+        </Box>
+
+        <Box
+          sx={{
             display: "flex",
-            gap: 1,
-            mb: 1.25,
+            gap: isMobile ? 1 : 1,
+            mb: isMobile ? 1.25 : 1.25,
             flexShrink: 0,
             alignItems: "center",
           }}
@@ -65,7 +140,7 @@ export default function ConversationsList({
               placeholder="Rechercher ..."
               value={searchTerm}
               onChange={(event) => onSearchChange(event.target.value)}
-              backgroundColor="#FFFFFF"
+              backgroundColor={theme.palette.common.white}
               border
               startIcon={<Search size={15} />}
             />
@@ -74,26 +149,27 @@ export default function ConversationsList({
           <IconButton
             onClick={(event) => setCalendarAnchorEl(event.currentTarget)}
             sx={{
-              width: 46,
-              height: 46,
-              border: "1px solid #EAECF0",
-              borderRadius: "12px",
-              color: "#98A2B3",
+              width: isMobile ? 44 : 46,
+              height: isMobile ? 44 : 46,
+              border: "1px solid",
+              borderColor: theme.palette.grey[300],
+              borderRadius: isMobile ? "12px" : "12px",
+              color: theme.palette.info.light,
               flexShrink: 0,
-              backgroundColor: "#FFFFFF",
+              backgroundColor: theme.palette.common.white,
               "&:hover": {
-                backgroundColor: "#F9FAFB",
+                backgroundColor: theme.palette.grey[100],
               },
             }}
           >
-            <CalendarMonthOutlinedIcon sx={{ fontSize: 18 }} />
+            <CalendarMonthOutlinedIcon sx={{ fontSize: isMobile ? 18 : 18 }} />
           </IconButton>
         </Box>
 
         {selectedDateFilter && (
           <Box
             sx={{
-              mb: 1.5,
+              mb: 1.25,
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -101,14 +177,15 @@ export default function ConversationsList({
               px: 1.25,
               py: 0.9,
               borderRadius: "12px",
-              backgroundColor: "#F9FAFB",
-              border: "1px solid #EAECF0",
+              backgroundColor: theme.palette.grey[100],
+              border: "1px solid",
+              borderColor: theme.palette.grey[300],
             }}
           >
             <Typography
               sx={{
                 fontSize: 13,
-                color: "#475467",
+                color: theme.palette.grey[900],
                 fontWeight: 500,
               }}
             >
@@ -121,7 +198,7 @@ export default function ConversationsList({
               sx={{
                 width: 24,
                 height: 24,
-                color: "#98A2B3",
+                color: theme.palette.info.light,
               }}
             >
               <CloseIcon sx={{ fontSize: 16 }} />
@@ -145,46 +222,31 @@ export default function ConversationsList({
             sx: {
               mt: 1,
               borderRadius: "18px",
-              border: "1px solid #EAECF0",
+              border: "1px solid",
+              borderColor: theme.palette.grey[300],
               boxShadow: "0px 12px 32px rgba(16, 24, 40, 0.08)",
               overflow: "hidden",
             },
           }}
         >
-          <Box
-            sx={{
-              width: 320,
-              backgroundColor: "#FFFFFF",
-            }}
-          >
+          <Box sx={{ width: 320, backgroundColor: theme.palette.common.white }}>
             <Box
               sx={{
                 px: 2,
                 py: 1.5,
                 display: "flex",
-                alignItems: "center",
                 justifyContent: "space-between",
-                borderBottom: "1px solid #F2F4F7",
+                borderBottom: "1px solid",
+                borderColor: theme.palette.grey[200],
               }}
             >
-              <Typography
-                sx={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: "#344054",
-                }}
-              >
+              <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
                 Filtrer par date
               </Typography>
 
               <IconButton
                 size="small"
                 onClick={() => setCalendarAnchorEl(null)}
-                sx={{
-                  width: 28,
-                  height: 28,
-                  color: "#98A2B3",
-                }}
               >
                 <CloseIcon sx={{ fontSize: 16 }} />
               </IconButton>
@@ -196,42 +258,16 @@ export default function ConversationsList({
                 onDateFilterChange(value);
                 setCalendarAnchorEl(null);
               }}
-              sx={{
-                width: "100%",
-                maxHeight: 380,
-                "& .MuiPickersDay-root": {
-                  fontSize: 13,
-                  borderRadius: "10px",
-                },
-              }}
             />
 
-            <Box
-              sx={{
-                px: 2,
-                pb: 2,
-                pt: 0.5,
-              }}
-            >
+            <Box sx={{ p: 2 }}>
               <CustomButton
                 fullWidth
+                variant="outlined"
+                color="info"
                 onClick={() => {
                   onDateFilterChange(null);
                   setCalendarAnchorEl(null);
-                }}
-                sx={{
-                  height: 40,
-                  borderRadius: "12px",
-                  border: "1px solid #EAECF0",
-                  fontSize: 13.5,
-                  fontWeight: 500,
-                  color: "#667085",
-                  backgroundColor: "#FFFFFF",
-                  boxShadow: "none",
-                  "&:hover": {
-                    backgroundColor: "#F9FAFB",
-                    boxShadow: "none",
-                  },
                 }}
               >
                 Réinitialiser
@@ -243,56 +279,18 @@ export default function ConversationsList({
         <Box
           sx={{
             overflowY: "auto",
-            pr: 0.25,
             flex: 1,
-            minHeight: 0,
-            "&::-webkit-scrollbar": {
-              width: 6,
-            },
-            "&::-webkit-scrollbar-thumb": {
-              backgroundColor: "#E4E7EC",
-              borderRadius: "999px",
-            },
+            pb: isMobile ? 2.5 : 0,
           }}
         >
-          {conversations.length === 0 ? (
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                py: 6,
-                height: "100%",
-              }}
-            >
-              <Typography
-                sx={{
-                  fontSize: 14,
-                  color: "#98A2B3",
-                  textAlign: "center",
-                }}
-              >
-                Aucun résultat trouvé.
-              </Typography>
-            </Box>
-          ) : (
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 1,
-              }}
-            >
-              {conversations.map((conversation) => (
-                <ConversationItem
-                  key={conversation.id}
-                  conversation={conversation}
-                  selected={selectedConversation === conversation.id}
-                  onClick={() => onSelect(conversation.id)}
-                />
-              ))}
-            </Box>
-          )}
+          {filteredConversations.map((conversation) => (
+            <ConversationItem
+              key={conversation.id}
+              conversation={conversation}
+              selected={selectedConversation === conversation.id}
+              onClick={() => onSelect(conversation.id)}
+            />
+          ))}
         </Box>
       </>
     </LocalizationProvider>

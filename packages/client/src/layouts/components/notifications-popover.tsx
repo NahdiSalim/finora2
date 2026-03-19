@@ -73,13 +73,15 @@ export function NotificationsPopover({
         onClick={handleOpenPopover}
         sx={{
           position: "relative",
-          minWidth: 44,
-          height: 44,
+          minWidth: { xs: 38, sm: 44 },
+          width: { xs: 38, sm: 44 },
+          height: { xs: 38, sm: 44 },
           p: 0,
           borderRadius: 1.5,
           borderColor: theme.palette.divider,
           backgroundColor: theme.palette.background.paper,
           color: theme.palette.common.black,
+          flexShrink: 0,
           transition: theme.transitions.create([
             "border-color",
             "background-color",
@@ -99,9 +101,8 @@ export function NotificationsPopover({
         }}
         {...other}
       >
-        <Bell />
+        <Bell size={17} />
 
-        {/* Red Dot Badge for Unread */}
         {hasUnread && (
           <Box
             sx={{

@@ -70,13 +70,15 @@ export function MessagesPopover({
         onClick={handleOpenPopover}
         sx={{
           position: "relative",
-          minWidth: 44,
-          height: 44,
+          minWidth: { xs: 38, sm: 44 },
+          width: { xs: 38, sm: 44 },
+          height: { xs: 38, sm: 44 },
           p: 0,
           borderRadius: 1.5,
           borderColor: theme.palette.divider,
           backgroundColor: theme.palette.background.paper,
           color: theme.palette.common.black,
+          flexShrink: 0,
           transition: theme.transitions.create([
             "border-color",
             "background-color",
@@ -96,9 +98,8 @@ export function MessagesPopover({
         }}
         {...other}
       >
-        <Mail />
+        <Mail size={17} />
 
-        {/* Red Dot Badge for Unread */}
         {hasUnread && (
           <Box
             sx={{
@@ -134,7 +135,6 @@ export function MessagesPopover({
           },
         }}
       >
-        {/* Header */}
         <Box
           sx={{
             py: 2,
@@ -174,7 +174,6 @@ export function MessagesPopover({
 
         <Divider sx={{ borderStyle: "dashed" }} />
 
-        {/* Messages List */}
         <Scrollbar
           fillContent
           sx={{ minHeight: 240, maxHeight: { xs: 360, sm: 400 } }}
@@ -209,7 +208,6 @@ export function MessagesPopover({
 
         <Divider sx={{ borderStyle: "dashed" }} />
 
-        {/* Footer */}
         <Box sx={{ p: 1 }}>
           <Button
             fullWidth

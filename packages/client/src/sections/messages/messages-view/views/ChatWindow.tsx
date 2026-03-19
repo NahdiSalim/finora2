@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 
-import { conversations } from "../data/mock";
-import type { Message } from "../data/types";
+import { conversations, messageRequests } from "../data/mock";
+import type { Message, MessageRequest } from "../data/types";
 import ChatHeader from "../components/ChatHeader";
 import MessageInput from "../components/MessageInput";
 import MessageBubble from "../components/MessageBubble";
@@ -15,6 +17,7 @@ type ChatWindowProps = {
   isCommunicationConfirmed: boolean;
   onMessagesChange: (messages: Message[]) => void;
   onOpenMedia?: () => void;
+  onBack?: () => void;
 };
 
 function htmlToText(html: string) {
@@ -34,7 +37,11 @@ export default function ChatWindow({
   isCommunicationConfirmed,
   onMessagesChange,
   onOpenMedia,
+  onBack,
 }: ChatWindowProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
   const currentConversation = useMemo(
     () => conversations.find((c) => c.id === conversationId),
     [conversationId],
@@ -53,14 +60,7 @@ export default function ChatWindow({
       messagesContainerRef.current.scrollTop =
         messagesContainerRef.current.scrollHeight;
     }
-  }, [messages]);
-
-  useEffect(() => {
-    if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop =
-        messagesContainerRef.current.scrollHeight;
-    }
-  }, [conversationId]);
+  }, [messages, conversationId]);
 
   useEffect(() => {
     let startTypingTimer: ReturnType<typeof setTimeout> | undefined;
@@ -112,7 +112,7 @@ export default function ChatWindow({
     return `${(size / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const handleSendMessage = (file?: File) => {
+  const handleSendMessage = (file?: File, request?: MessageRequest) => {
     if (!isCommunicationConfirmed) return;
 
     const now = new Date();
@@ -121,6 +121,28 @@ export default function ChatWindow({
       minute: "2-digit",
     });
     const formattedDate = now.toISOString().split("T")[0];
+
+    if (request) {
+      const newMessage: Message = {
+        id: Date.now(),
+        type: "request",
+        mine: true,
+        time: formattedTime,
+        date: formattedDate,
+        request: {
+          id: request.id,
+          title: request.title,
+          subtitle: request.subtitle,
+          dateLabel: request.dateLabel,
+          status: request.status,
+          urgency: request.urgency,
+        },
+      };
+
+      onMessagesChange([...messages, newMessage]);
+      setInputValue("");
+      return;
+    }
 
     if (file) {
       const newMessage: Message = {
@@ -138,6 +160,7 @@ export default function ChatWindow({
       };
 
       onMessagesChange([...messages, newMessage]);
+      setInputValue("");
       return;
     }
 
@@ -169,17 +192,17 @@ export default function ChatWindow({
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
-        borderRadius: "18px",
-        border: "1px solid #F2F4F7",
+        borderRadius: isMobile ? "14px" : "18px",
+        border: isMobile ? "none" : "1px solid #F2F4F7",
         backgroundColor: "#FFFFFF",
       }}
     >
       <Box
         sx={{
           flexShrink: 0,
-          px: { xs: 1.5, md: 2 },
-          pt: { xs: 1.5, md: 1.75 },
-          pb: 1.25,
+          px: { xs: 1, md: 2 },
+          pt: { xs: 2.5, md: 1.75 },
+          pb: { xs: 1, md: 1.25 },
           borderBottom: "1px solid #F2F4F7",
           backgroundColor: "#FFFFFF",
         }}
@@ -187,6 +210,7 @@ export default function ChatWindow({
         <ChatHeader
           conversation={currentConversation}
           onOpenMedia={onOpenMedia}
+          onBack={onBack}
         />
       </Box>
 
@@ -197,9 +221,9 @@ export default function ChatWindow({
           minHeight: 0,
           overflowY: "auto",
           overflowX: "hidden",
-          px: { xs: 1.5, md: 2.25 },
-          pt: 1.5,
-          pb: 1.25,
+          px: { xs: 0.75, md: 2.25 },
+          pt: { xs: 1, md: 1.5 },
+          pb: { xs: 0.5, md: 1.25 },
           backgroundColor: "#FFFFFF",
           "&::-webkit-scrollbar": {
             width: 6,
@@ -258,7 +282,7 @@ export default function ChatWindow({
               mb: 0.25,
               fontStyle: "italic",
               color: "#B0B7C3",
-              fontSize: 13,
+              fontSize: isMobile ? 12 : 13,
               pl: 0.5,
               fontWeight: 500,
             }}
@@ -271,11 +295,17 @@ export default function ChatWindow({
       <Box
         sx={{
           flexShrink: 0,
-          px: { xs: 1.5, md: 2 },
-          pt: 1,
-          pb: 0.75,
+          px: { xs: 1, md: 2 },
+          pt: { xs: 0.75, md: 1 },
+          pb: {
+            xs: "calc(env(safe-area-inset-bottom, 0px) + 8px)",
+            md: 0.75,
+          },
           borderTop: "1px solid #F2F4F7",
           backgroundColor: isCommunicationConfirmed ? "#FFFFFF" : "#FCFCFD",
+          position: { xs: "sticky", md: "relative" },
+          bottom: 0,
+          zIndex: 5,
         }}
       >
         {!isCommunicationConfirmed && (
@@ -295,6 +325,7 @@ export default function ChatWindow({
           value={inputValue}
           onChange={setInputValue}
           onSend={handleSendMessage}
+          requests={messageRequests}
           disabled={!isCommunicationConfirmed}
         />
       </Box>

@@ -23,52 +23,55 @@ import { useDashboardBase } from "src/hooks/useDashboardBase";
 
 function useDashboardTabs() {
   const base = useDashboardBase();
+
   const SUPERADMIN_TABS = [
     {
       label: "Dashboard",
       path: `${base}/dashboard`,
-      icon: <LayoutGrid size={22} />,
+      icon: <LayoutGrid size={20} />,
     },
     {
       label: "Collaborateurs",
       path: `${base}/collaborators`,
-      icon: <Users size={22} />,
+      icon: <Users size={20} />,
     },
-    { label: "Clients", path: `${base}/clients`, icon: <User size={22} /> },
+    { label: "Clients", path: `${base}/clients`, icon: <User size={20} /> },
     {
       label: "Messagerie",
       path: `${base}/messages`,
-      icon: <MessageSquareMore size={22} />,
+      icon: <MessageSquareMore size={20} />,
     },
     {
       label: "Rendez-vous",
       path: `${base}/meetings`,
-      icon: <Calendar size={22} />,
+      icon: <Calendar size={20} />,
     },
   ];
+
   const DEFAULT_TABS = [
     {
       label: "Dashboard",
       path: `${base}/dashboard`,
-      icon: <LayoutGrid size={22} />,
+      icon: <LayoutGrid size={20} />,
     },
     {
       label: "Messagerie",
       path: `${base}/messages`,
-      icon: <MessageSquareMore size={22} />,
+      icon: <MessageSquareMore size={20} />,
     },
     {
       label: "Rendez-vous",
       path: `${base}/meetings`,
-      icon: <Calendar size={22} />,
+      icon: <Calendar size={20} />,
     },
     {
       label: "Collaborateurs",
       path: `${base}/collaborators`,
-      icon: <Users size={22} />,
+      icon: <Users size={20} />,
     },
-    { label: "Clients", path: `${base}/clients`, icon: <User size={22} /> },
+    { label: "Clients", path: `${base}/clients`, icon: <User size={20} /> },
   ];
+
   return { SUPERADMIN_TABS, DEFAULT_TABS };
 }
 
@@ -79,6 +82,7 @@ export function BottomNav() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const navItems = useNavigation();
+
   const {
     value: drawerOpen,
     onTrue: openDrawer,
@@ -87,18 +91,18 @@ export function BottomNav() {
 
   const { SUPERADMIN_TABS, DEFAULT_TABS } = useDashboardTabs();
 
-  // Determine role — superadmin has access to both /collaborators and /clients
   const features = useAppSelector((state) => state.auth.features);
+
   const isSuperAdmin =
     features?.some((f) => f.pages.some((p) => p.route === "/collaborators")) &&
     features?.some((f) => f.pages.some((p) => p.route === "/clients"));
 
   const tabs = isSuperAdmin ? SUPERADMIN_TABS : DEFAULT_TABS;
 
-  // Match active tab — "Plus" is active when current path isn't a direct tab
   const directPaths = tabs
     .filter((t) => t.path !== "__more__")
     .map((t) => t.path);
+
   const activeTab = directPaths.includes(pathname) ? pathname : "__more__";
 
   const handleChange = (_: React.SyntheticEvent, value: string) => {
@@ -111,10 +115,8 @@ export function BottomNav() {
 
   return (
     <>
-      {/* Drawer triggered by "Plus" tab */}
       <NavMobile data={navItems} open={drawerOpen} onClose={closeDrawer} />
 
-      {/* Bottom navigation bar */}
       <Paper
         elevation={0}
         sx={{
@@ -124,69 +126,78 @@ export function BottomNav() {
           right: 0,
           zIndex: theme.zIndex.appBar,
           borderTop: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
-          display: { xs: "block", lg: "none" }, // hide on desktop
+          display: { xs: "block", lg: "none" },
+          bgcolor: "background.paper",
+          'body[data-hide-bottom-nav="true"] &': {
+            display: "none",
+          },
         }}
       >
         <BottomNavigation
           value={activeTab}
           onChange={handleChange}
+          showLabels={false}
           sx={{
-            height: 64,
+            height: 72,
             bgcolor: "background.paper",
+            px: 0.5,
             "& .MuiBottomNavigationAction-root": {
               minWidth: 0,
-              gap: 0.5,
-              py: 1,
+              maxWidth: "none",
+              flex: 1,
+              py: 0.5,
+              px: 0,
               color: theme.palette.text.secondary,
               transition: "color 0.2s",
-              "& .MuiBottomNavigationAction-label": {
-                fontSize: "0.7rem",
-                fontWeight: 500,
-                opacity: 1,
-                "&.Mui-selected": {
-                  fontSize: "0.7rem",
-                },
-              },
-              "&.Mui-selected": {
-                color: theme.palette.primary.main,
-              },
             },
           }}
         >
           {tabs.map((tab) => (
             <BottomNavigationAction
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                minWidth: 0,
-                padding: 0,
-                "& .MuiBottomNavigationAction-label": { display: "none" }, // hide default label
-              }}
               key={tab.path}
               value={tab.path}
+              sx={{
+                minWidth: 0,
+                px: 0.25,
+                "& .MuiBottomNavigationAction-label": {
+                  display: "none",
+                },
+              }}
               icon={
                 <Box
                   sx={{
+                    width: "100%",
+                    minWidth: 0,
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
                     justifyContent: "center",
                     borderRadius: 2,
-                    px: 2.5,
-                    py: 0.75,
-                    gap: 0.5,
+                    px: 0.5,
+                    py: 0.55,
+                    gap: 0.35,
                     ...(activeTab === tab.path && {
                       bgcolor: alpha(theme.palette.primary.main, 0.1),
                     }),
                   }}
                 >
                   {tab.icon}
+
                   <Box
                     component="span"
                     sx={{
-                      fontSize: "0.7rem",
+                      display: "-webkit-box",
+                      width: "100%",
+                      textAlign: "center",
+                      fontSize: "0.58rem",
+                      lineHeight: 1.05,
                       fontWeight: 500,
+                      whiteSpace: "normal",
+                      overflow: "visible",
+                      textOverflow: "unset",
+                      wordBreak: "break-word",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
                       color:
                         activeTab === tab.path
                           ? theme.palette.primary.main
@@ -201,7 +212,6 @@ export function BottomNav() {
           ))}
         </BottomNavigation>
 
-        {/* Safe area spacer for iOS */}
         <Box
           sx={{
             height: "env(safe-area-inset-bottom, 0px)",
@@ -210,8 +220,15 @@ export function BottomNav() {
         />
       </Paper>
 
-      {/* Push page content up so it's not hidden behind the nav */}
-      <Box sx={{ display: { xs: "block", lg: "none" }, height: 64 }} />
+      <Box
+        sx={{
+          display: { xs: "block", lg: "none" },
+          height: 72,
+          'body[data-hide-bottom-nav="true"] &': {
+            display: "none",
+          },
+        }}
+      />
     </>
   );
 }

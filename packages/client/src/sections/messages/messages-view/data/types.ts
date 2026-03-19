@@ -1,3 +1,5 @@
+export type ConversationCategory = "client" | "collaborateur";
+
 export type Conversation = {
   id: number;
   name: string;
@@ -11,6 +13,7 @@ export type Conversation = {
   online: boolean;
   unreadCount: number;
   phone: string;
+  category: ConversationCategory; // ✅ ajouté
 };
 
 export type MessageFile = {
@@ -20,12 +23,22 @@ export type MessageFile = {
   url: string;
 };
 
+export type MessageRequest = {
+  id: number;
+  title: string;
+  subtitle: string;
+  dateLabel?: string;
+  status?: string;
+  urgency?: string;
+};
+
 export type Message = {
   id: number;
-  type: "text" | "file";
+  type: "text" | "file" | "request";
   text?: string;
   html?: string;
   file?: MessageFile;
+  request?: MessageRequest;
   mine: boolean;
   large?: boolean;
   time?: string;

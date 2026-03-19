@@ -173,7 +173,7 @@ export default function SharedMediaCard({
             boxShadow: "none",
           }}
         >
-          Download
+          Télécharger
         </CustomButton>
 
         <CustomButton
@@ -194,7 +194,7 @@ export default function SharedMediaCard({
             boxShadow: "none",
           }}
         >
-          View
+          Voir
         </CustomButton>
       </Box>
     </Paper>

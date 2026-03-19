@@ -1,39 +1,48 @@
 import { useEffect, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
-import Typography from "@mui/material/Typography";
+import Badge from "@mui/material/Badge";
+import { useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import type { Dayjs } from "dayjs";
 
 import ConversationsList from "./views/ConversationsList";
 import ChatWindow from "./views/ChatWindow";
 import SharedMediaView from "./views/SharedMediaView";
-import CommunicationModal from "./components/CommunicationModal";
+
 import {
   conversations as initialConversations,
   messagesByConversation as initialMessagesByConversation,
 } from "./data/mock";
+
 import type { Conversation, Message } from "./data/types";
 
 type MessagesViewProps = {
   onOpenMedia?: () => void;
 };
 
+const MOBILE_BOTTOM_NAV_HEIGHT = 72;
+const MOBILE_HEADER_HEIGHT = 88;
+
 export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
   const [selectedConversation, setSelectedConversation] = useState<number>(1);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedDateFilter, setSelectedDateFilter] = useState<Dayjs | null>(
     null,
   );
-  const [isCommunicationModalOpen, setIsCommunicationModalOpen] =
-    useState<boolean>(false);
-  const [
-    platformConfirmedConversationIds,
-    setPlatformConfirmedConversationIds,
-  ] = useState<number[]>([]);
-  const [currentView, setCurrentView] = useState<"chat" | "media">("chat");
+
+  const [desktopView, setDesktopView] = useState<"chat" | "media">("chat");
+  const [mobileView, setMobileView] = useState<"list" | "chat" | "media">(
+    "list",
+  );
+
   const [allMessagesByConversation, setAllMessagesByConversation] = useState<
     Record<number, Message[]>
   >(initialMessagesByConversation);
+
   const [allConversations, setAllConversations] =
     useState<Conversation[]>(initialConversations);
 
@@ -42,7 +51,39 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     setAllConversations(initialConversations);
   }, []);
 
-  const markConversationAsRead = (id: number) => {
+  useEffect(() => {
+    if (!isMobile) {
+      setMobileView("list");
+    }
+  }, [isMobile]);
+
+  useEffect(() => {
+    if (!isMobile) {
+      document.body.removeAttribute("data-hide-bottom-nav");
+    } else {
+      const shouldHide = mobileView === "chat" || mobileView === "media";
+
+      if (shouldHide) {
+        document.body.setAttribute("data-hide-bottom-nav", "true");
+      } else {
+        document.body.removeAttribute("data-hide-bottom-nav");
+      }
+    }
+
+    return () => {
+      document.body.removeAttribute("data-hide-bottom-nav");
+    };
+  }, [isMobile, mobileView]);
+
+  const handleSelectConversation = (id: number) => {
+    setSelectedConversation(id);
+
+    if (isMobile) {
+      setMobileView("chat");
+    } else {
+      setDesktopView("chat");
+    }
+
     setAllConversations((prev) =>
       prev.map((conversation) =>
         conversation.id === id
@@ -52,80 +93,12 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     );
   };
 
-  const handleSelectConversation = (id: number) => {
-    setSelectedConversation(id);
-    setCurrentView("chat");
-
-    const alreadyConfirmed = platformConfirmedConversationIds.includes(id);
-
-    if (!alreadyConfirmed) {
-      setIsCommunicationModalOpen(true);
-    }
-  };
-
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
   };
 
   const handleDateFilterChange = (value: Dayjs | null) => {
     setSelectedDateFilter(value);
-  };
-
-  const handleCloseCommunicationModal = () => {
-    const alreadyConfirmed =
-      platformConfirmedConversationIds.includes(selectedConversation);
-
-    setIsCommunicationModalOpen(false);
-
-    if (!alreadyConfirmed) {
-      setTimeout(() => {
-        setIsCommunicationModalOpen(true);
-      }, 500);
-    }
-  };
-
-  const handleChooseWhatsApp = () => {
-    const selectedContact = allConversations.find(
-      (conversation) => conversation.id === selectedConversation,
-    );
-
-    if (!selectedContact) {
-      setIsCommunicationModalOpen(false);
-      return;
-    }
-
-    const message = encodeURIComponent(
-      `Bonjour ${selectedContact.name}, je vous contacte via FINORA.`,
-    );
-
-    window.open(
-      `https://wa.me/${selectedContact.phone}?text=${message}`,
-      "_blank",
-    );
-
-    setPlatformConfirmedConversationIds((prev) => {
-      if (prev.includes(selectedConversation)) {
-        return prev;
-      }
-
-      return [...prev, selectedConversation];
-    });
-
-    markConversationAsRead(selectedConversation);
-    setIsCommunicationModalOpen(false);
-  };
-
-  const handleChoosePlatform = () => {
-    setPlatformConfirmedConversationIds((prev) => {
-      if (prev.includes(selectedConversation)) {
-        return prev;
-      }
-
-      return [...prev, selectedConversation];
-    });
-
-    markConversationAsRead(selectedConversation);
-    setIsCommunicationModalOpen(false);
   };
 
   const filteredConversations = useMemo(() => {
@@ -148,9 +121,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   }, [allConversations, searchTerm, selectedDateFilter]);
 
   useEffect(() => {
-    if (filteredConversations.length === 0) {
-      return;
-    }
+    if (filteredConversations.length === 0) return;
 
     const selectedStillExists = filteredConversations.some(
       (conversation) => conversation.id === selectedConversation,
@@ -158,15 +129,16 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
 
     if (!selectedStillExists) {
       setSelectedConversation(filteredConversations[0].id);
-      setCurrentView("chat");
+
+      if (isMobile) {
+        setMobileView("list");
+      } else {
+        setDesktopView("chat");
+      }
     }
-  }, [filteredConversations, selectedConversation]);
+  }, [filteredConversations, selectedConversation, isMobile]);
 
   const hasSelectedConversation = filteredConversations.some(
-    (conversation) => conversation.id === selectedConversation,
-  );
-
-  const selectedConversationData = allConversations.find(
     (conversation) => conversation.id === selectedConversation,
   );
 
@@ -180,9 +152,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       0,
     );
   }, [allConversations]);
-
-  const isSelectedConversationConfirmed =
-    platformConfirmedConversationIds.includes(selectedConversation);
 
   const showEmptyState =
     filteredConversations.length === 0 || !hasSelectedConversation;
@@ -207,8 +176,10 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
 
         if (lastMessage.type === "text") {
           previewText = lastMessage.text || "";
-        } else {
+        } else if (lastMessage.type === "file") {
           previewText = `📎 ${lastMessage.file?.name || "Fichier"}`;
+        } else if (lastMessage.type === "request") {
+          previewText = `🔗 ${lastMessage.request?.title || "Demande"}`;
         }
 
         const preview = lastMessage.mine ? `Vous: ${previewText}` : previewText;
@@ -232,25 +203,28 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     <Box
       sx={{
         flexShrink: 0,
-        mb: 2,
-        px: 0.25,
+        mb: isMobile ? 1.5 : 2,
+        px: isMobile ? 0.5 : 0.25,
+        pt: isMobile ? 0.5 : 0,
       }}
     >
       <Box
         sx={{
           display: "flex",
           alignItems: "center",
-          gap: 1,
-          mb: 0.5,
+          justifyContent: isMobile ? "space-between" : "flex-start",
+          gap: isMobile ? 1 : 1.25,
+          mb: 0.75,
+          width: "100%",
         }}
       >
         <Box
           component="span"
           sx={{
-            fontSize: 30,
+            fontSize: isMobile ? 24 : 30,
             fontWeight: 600,
             lineHeight: 1.15,
-            color: "#101828",
+            color: (theme.palette.grey as any)[1000],
             letterSpacing: "-0.02em",
           }}
         >
@@ -258,29 +232,33 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
         </Box>
 
         {totalUnreadMessages > 0 && (
-          <Box
+          <Badge
+            badgeContent={totalUnreadMessages}
             sx={{
-              minWidth: 22,
-              height: 22,
-              px: 0.75,
-              borderRadius: "999px",
-              backgroundColor: "#F59E0B",
-              color: "#FFFFFF",
-              fontSize: 11,
-              fontWeight: 700,
-              lineHeight: "22px",
-              textAlign: "center",
+              display: "flex",
+              flexShrink: 0,
+              "& .MuiBadge-badge": {
+                position: "static",
+                transform: "none",
+                backgroundColor: "#F79009",
+                color: "#FFFFFF",
+                minWidth: 20,
+                height: 20,
+                px: 0.75,
+                borderRadius: "999px",
+                fontSize: 11,
+                fontWeight: 700,
+                lineHeight: 1,
+              },
             }}
-          >
-            {totalUnreadMessages}
-          </Box>
+          />
         )}
       </Box>
 
       <Box
         sx={{
-          fontSize: 14,
-          color: "#98A2B3",
+          fontSize: isMobile ? 13 : 14,
+          color: theme.palette.info.light,
           lineHeight: 1.45,
         }}
       >
@@ -296,15 +274,15 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
         flex: 1,
         minWidth: 0,
         minHeight: 0,
-        px: 2.5,
-        pt: 2.25,
-        pb: 1.75,
+        px: isMobile ? 1.25 : 2.5,
+        pt: isMobile ? 1.25 : 2.25,
+        pb: isMobile ? 1.25 : 1.75,
         display: "flex",
         flexDirection: "column",
-        borderRadius: "20px",
-        border: "1px solid #EEF2F6",
-        backgroundColor: "#FFFFFF",
-        boxShadow: "none",
+        borderRadius: isMobile ? "16px" : "20px",
+        border: "1px solid",
+        borderColor: theme.palette.grey[200],
+        backgroundColor: theme.palette.common.white,
         overflow: "hidden",
       }}
     >
@@ -312,115 +290,43 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     </Paper>
   );
 
-  const renderLockedDiscussionState = () => (
-    <Box
-      sx={{
-        flex: 1,
-        minHeight: 0,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        px: 3,
-        py: 6,
-      }}
-    >
-      <Box
-        sx={{
-          maxWidth: 420,
-          textAlign: "center",
-        }}
-      >
-        <Typography
-          sx={{
-            fontSize: 18,
-            fontWeight: 600,
-            color: "#101828",
-            mb: 1,
-          }}
-        >
-          Accès à la discussion verrouillé
-        </Typography>
-
-        <Typography
-          sx={{
-            fontSize: 14,
-            lineHeight: 1.6,
-            color: "#98A2B3",
-          }}
-        >
-          Choisissez d’abord un mode de communication pour accéder à cette
-          discussion et commencer les échanges.
-        </Typography>
-      </Box>
-    </Box>
-  );
-
-  return (
-    <>
-      <Box
-        sx={{
-          height: "calc(100vh - 120px)",
-          minHeight: 0,
-          width: "100%",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-      >
-        <Box
-          sx={{
-            flex: 1,
-            minHeight: 0,
-            display: "flex",
-            flexDirection: "column",
-            width: "100%",
-            overflow: "hidden",
-          }}
-        >
-          {renderContentHeader()}
-
-          {currentView === "media" ? (
-            <Box
-              sx={{
-                flex: 1,
-                minHeight: 0,
-                width: "100%",
-                display: "flex",
-                overflow: "hidden",
-              }}
-            >
-              {renderMediaPanel(
-                <SharedMediaView
-                  conversationId={selectedConversation}
-                  allMessagesByConversation={allMessagesByConversation}
-                  onBack={() => setCurrentView("chat")}
-                />,
-              )}
-            </Box>
-          ) : (
+  if (isMobile) {
+    return (
+      <>
+        {mobileView === "list" && (
+          <Box
+            sx={{
+              width: "100%",
+              minWidth: 0,
+              height: `calc(100dvh - ${MOBILE_HEADER_HEIGHT}px - ${MOBILE_BOTTOM_NAV_HEIGHT}px)`,
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              px: 1.5,
+              pt: 1.25,
+              pb: 0,
+              backgroundColor: theme.palette.common.white,
+            }}
+          >
             <Box
               sx={{
                 flex: 1,
                 minHeight: 0,
                 display: "flex",
-                gap: 2,
-                width: "100%",
+                flexDirection: "column",
                 overflow: "hidden",
               }}
             >
-              <Paper
-                elevation={0}
+              {renderContentHeader()}
+
+              <Box
                 sx={{
-                  width: { xs: 320, xl: 360 },
-                  p: 1.75,
+                  flex: 1,
+                  minHeight: 0,
+                  width: "100%",
                   display: "flex",
                   flexDirection: "column",
-                  borderRadius: "20px",
-                  border: "1px solid #EEF2F6",
-                  backgroundColor: "#FFFFFF",
-                  boxShadow: "none",
-                  flexShrink: 0,
-                  minHeight: 0,
                   overflow: "hidden",
                 }}
               >
@@ -433,60 +339,188 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                   onDateFilterChange={handleDateFilterChange}
                   onSelect={handleSelectConversation}
                 />
-              </Paper>
-
-              <Paper
-                elevation={0}
-                sx={{
-                  flex: 1,
-                  minWidth: 0,
-                  minHeight: 0,
-                  px: 2.5,
-                  pt: 2,
-                  pb: 1.75,
-                  display: "flex",
-                  flexDirection: "column",
-                  borderRadius: "20px",
-                  border: "1px solid #EEF2F6",
-                  backgroundColor: "#FFFFFF",
-                  boxShadow: "none",
-                  overflow: "hidden",
-                }}
-              >
-                {showEmptyState ? (
-                  <Box
-                    sx={{
-                      flex: 1,
-                      minHeight: 0,
-                    }}
-                  />
-                ) : isSelectedConversationConfirmed ? (
-                  <ChatWindow
-                    conversationId={selectedConversation}
-                    messages={currentMessages}
-                    isCommunicationConfirmed
-                    onMessagesChange={handleMessagesChange}
-                    onOpenMedia={() => {
-                      setCurrentView("media");
-                      onOpenMedia?.();
-                    }}
-                  />
-                ) : (
-                  renderLockedDiscussionState()
-                )}
-              </Paper>
+              </Box>
             </Box>
-          )}
-        </Box>
-      </Box>
+          </Box>
+        )}
 
-      <CommunicationModal
-        open={isCommunicationModalOpen}
-        contactName={selectedConversationData?.name || "ce contact"}
-        onClose={handleCloseCommunicationModal}
-        onChooseWhatsApp={handleChooseWhatsApp}
-        onChoosePlatform={handleChoosePlatform}
-      />
-    </>
+        {mobileView === "chat" && (
+          <Box
+            sx={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 1200,
+              width: "100%",
+              height: "100dvh",
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              backgroundColor: theme.palette.common.white,
+              pb: "calc(env(safe-area-inset-bottom, 0px) + 4px)",
+            }}
+          >
+            {showEmptyState ? (
+              <Box sx={{ flex: 1, minHeight: 0 }} />
+            ) : (
+              <ChatWindow
+                conversationId={selectedConversation}
+                messages={currentMessages}
+                isCommunicationConfirmed
+                onMessagesChange={handleMessagesChange}
+                onOpenMedia={() => {
+                  setMobileView("media");
+                  onOpenMedia?.();
+                }}
+                onBack={() => setMobileView("list")}
+              />
+            )}
+          </Box>
+        )}
+
+        {mobileView === "media" && (
+          <Box
+            sx={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 1200,
+              width: "100%",
+              height: "100dvh",
+              minHeight: 0,
+              display: "flex",
+              overflow: "hidden",
+              backgroundColor: theme.palette.common.white,
+              pb: "calc(env(safe-area-inset-bottom, 0px) + 4px)",
+            }}
+          >
+            {renderMediaPanel(
+              <SharedMediaView
+                conversationId={selectedConversation}
+                allMessagesByConversation={allMessagesByConversation}
+                onBack={() => setMobileView("chat")}
+              />,
+            )}
+          </Box>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <Box
+      sx={{
+        height: "calc(100vh - 120px)",
+        minHeight: 0,
+        width: "100%",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          width: "100%",
+          overflow: "hidden",
+        }}
+      >
+        {renderContentHeader()}
+
+        {desktopView === "media" ? (
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              width: "100%",
+              display: "flex",
+              overflow: "hidden",
+            }}
+          >
+            {renderMediaPanel(
+              <SharedMediaView
+                conversationId={selectedConversation}
+                allMessagesByConversation={allMessagesByConversation}
+                onBack={() => setDesktopView("chat")}
+              />,
+            )}
+          </Box>
+        ) : (
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              display: "flex",
+              gap: 2,
+              width: "100%",
+              overflow: "hidden",
+            }}
+          >
+            <Paper
+              elevation={0}
+              sx={{
+                width: 360,
+                p: 1.75,
+                display: "flex",
+                flexDirection: "column",
+                borderRadius: "20px",
+                border: "1px solid",
+                borderColor: theme.palette.grey[200],
+                backgroundColor: theme.palette.common.white,
+                flexShrink: 0,
+                minHeight: 0,
+                overflow: "hidden",
+              }}
+            >
+              <ConversationsList
+                conversations={filteredConversations}
+                selectedConversation={selectedConversation}
+                searchTerm={searchTerm}
+                selectedDateFilter={selectedDateFilter}
+                onSearchChange={handleSearchChange}
+                onDateFilterChange={handleDateFilterChange}
+                onSelect={handleSelectConversation}
+              />
+            </Paper>
+
+            <Paper
+              elevation={0}
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                minHeight: 0,
+                px: 2.5,
+                pt: 2,
+                pb: 1.75,
+                display: "flex",
+                flexDirection: "column",
+                borderRadius: "20px",
+                border: "1px solid",
+                borderColor: theme.palette.grey[200],
+                backgroundColor: theme.palette.common.white,
+                overflow: "hidden",
+              }}
+            >
+              {showEmptyState ? (
+                <Box sx={{ flex: 1, minHeight: 0 }} />
+              ) : (
+                <ChatWindow
+                  conversationId={selectedConversation}
+                  messages={currentMessages}
+                  isCommunicationConfirmed
+                  onMessagesChange={handleMessagesChange}
+                  onOpenMedia={() => {
+                    setDesktopView("media");
+                    onOpenMedia?.();
+                  }}
+                />
+              )}
+            </Paper>
+          </Box>
+        )}
+      </Box>
+    </Box>
   );
 }

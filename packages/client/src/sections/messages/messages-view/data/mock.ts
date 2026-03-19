@@ -1,4 +1,9 @@
-import type { Conversation, Message, SharedMediaFile } from "./types";
+import type {
+  Conversation,
+  Message,
+  SharedMediaFile,
+  MessageRequest,
+} from "./types";
 
 const now = new Date();
 const threeHoursAgo = new Date(new Date().setHours(new Date().getHours() - 3));
@@ -8,6 +13,10 @@ const formatTime = (date: Date) =>
     hour: "2-digit",
     minute: "2-digit",
   });
+
+/* =========================
+   CONVERSATIONS
+========================= */
 
 export const conversations: Conversation[] = [
   {
@@ -23,6 +32,7 @@ export const conversations: Conversation[] = [
     online: true,
     unreadCount: 2,
     phone: "21651524007",
+    category: "client", // ✅
   },
   {
     id: 2,
@@ -37,6 +47,7 @@ export const conversations: Conversation[] = [
     online: true,
     unreadCount: 0,
     phone: "21666123456",
+    category: "collaborateur", // ✅
   },
   {
     id: 3,
@@ -51,6 +62,7 @@ export const conversations: Conversation[] = [
     online: false,
     unreadCount: 5,
     phone: "21677123456",
+    category: "client",
   },
   {
     id: 4,
@@ -65,15 +77,67 @@ export const conversations: Conversation[] = [
     online: false,
     unreadCount: 0,
     phone: "21688123456",
+    category: "collaborateur",
   },
 ];
+
+/* =========================
+   MESSAGE REQUESTS
+========================= */
+
+export const messageRequests: MessageRequest[] = [
+  {
+    id: 101,
+    title: "Bilan 2025",
+    subtitle: "Déclaration CNSS",
+    dateLabel: "15 Oct 2024",
+    status: "En cours",
+    urgency: "Urgent !",
+  },
+  {
+    id: 102,
+    title: "Bilan 2025",
+    subtitle: "Déclaration CNSS",
+    dateLabel: "15 Oct 2024",
+    status: "En cours",
+    urgency: "Urgent !",
+  },
+  {
+    id: 103,
+    title: "Bilan 2025",
+    subtitle: "Déclaration CNSS",
+    dateLabel: "15 Oct 2024",
+    status: "En cours",
+    urgency: "Urgent !",
+  },
+  {
+    id: 104,
+    title: "Bilan 2025",
+    subtitle: "Déclaration CNSS",
+    dateLabel: "15 Oct 2024",
+    status: "En cours",
+    urgency: "Urgent !",
+  },
+  {
+    id: 105,
+    title: "Bilan 2025",
+    subtitle: "Déclaration CNSS",
+    dateLabel: "15 Oct 2024",
+    status: "En cours",
+    urgency: "Urgent !",
+  },
+];
+
+/* =========================
+   MESSAGES
+========================= */
 
 export const messagesByConversation: Record<number, Message[]> = {
   1: [
     {
       id: 1,
       type: "text",
-      text: "Hello Katie ! Hope you're doing well. I need your help with some reports, are you available for a call later today?",
+      text: "Hello Katie ! Hope you're doing well. I need your help with some reports.",
       mine: false,
       large: true,
       date: "2026-03-08",
@@ -102,34 +166,6 @@ export const messagesByConversation: Record<number, Message[]> = {
     {
       id: 4,
       type: "text",
-      text: "Hey Martin ! How are you?",
-      mine: true,
-      date: "2026-03-10",
-    },
-    {
-      id: 5,
-      type: "text",
-      text: "For sure, I'll be free after mid-day, let me know what time works for you",
-      mine: true,
-      time: "11:41 AM",
-      date: "2026-03-10",
-    },
-    {
-      id: 6,
-      type: "file",
-      file: {
-        name: "Facture_client_mars.pdf",
-        size: "1.1 MB",
-        type: "application/pdf",
-        url: "/media/facture-preview-1.png",
-      },
-      mine: true,
-      time: "11:43 AM",
-      date: "2026-03-10",
-    },
-    {
-      id: 7,
-      type: "text",
       text: "cc",
       mine: true,
       time: formatTime(now),
@@ -140,50 +176,6 @@ export const messagesByConversation: Record<number, Message[]> = {
   2: [
     {
       id: 1,
-      type: "text",
-      text: "Hello Katie ! Hope you're doing well. I need your help with some reports, are you available for a call later today?",
-      mine: false,
-      large: true,
-      date: "2026-03-09",
-    },
-    {
-      id: 2,
-      type: "text",
-      text: "Thank you",
-      mine: false,
-      time: "10:40 AM",
-      date: "2026-03-09",
-    },
-    {
-      id: 3,
-      type: "text",
-      text: "Hey Martin ! How are you?",
-      mine: true,
-      date: "2026-03-10",
-    },
-    {
-      id: 4,
-      type: "file",
-      file: {
-        name: "Releve_bancaire.png",
-        size: "3.2 MB",
-        type: "image/png",
-        url: "/media/receipt-preview-1.png",
-      },
-      mine: false,
-      time: "11:20 AM",
-      date: "2026-03-10",
-    },
-    {
-      id: 5,
-      type: "text",
-      text: "For sure, I'll be free after mid-day, let me know what time works for you",
-      mine: true,
-      time: "11:41 AM",
-      date: "2026-03-10",
-    },
-    {
-      id: 6,
       type: "text",
       text: "Bonjour Katie",
       mine: false,
@@ -199,52 +191,11 @@ export const messagesByConversation: Record<number, Message[]> = {
       mine: true,
       date: "2026-03-07",
     },
-    {
-      id: 2,
-      type: "file",
-      file: {
-        name: "Contrat_prestation.xls",
-        size: "890 KB",
-        type: "application/vnd.ms-excel",
-        url: "/media/table-preview-1.png",
-      },
-      mine: false,
-      time: "09:10 AM",
-      date: "2026-03-10",
-    },
-    {
-      id: 3,
-      type: "text",
-      text: "Hello, how can I help you?",
-      mine: false,
-      time: "09:15 AM",
-      date: "2026-03-10",
-    },
   ],
 
   4: [
     {
       id: 1,
-      type: "text",
-      text: "Message test",
-      mine: false,
-      date: "2026-03-10",
-    },
-    {
-      id: 2,
-      type: "file",
-      file: {
-        name: "Pieces_justificatives.xls",
-        size: "1.8 MB",
-        type: "application/vnd.ms-excel",
-        url: "/media/table-preview-2.png",
-      },
-      mine: true,
-      time: "08:55 AM",
-      date: "2026-03-10",
-    },
-    {
-      id: 3,
       type: "text",
       text: "Réponse test",
       mine: true,
@@ -252,6 +203,10 @@ export const messagesByConversation: Record<number, Message[]> = {
     },
   ],
 };
+
+/* =========================
+   SHARED MEDIA
+========================= */
 
 export const sharedMediaFiles: SharedMediaFile[] = [
   {
@@ -312,6 +267,22 @@ export const sharedMediaFiles: SharedMediaFile[] = [
   },
   {
     id: 8,
+    name: "Facture Fatales.pdf",
+    type: "pdf",
+    size: "2.1 MB",
+    uploadedAt: "09 Sep, at 21:30",
+    previewUrl: "/media/facture-preview-2.png",
+  },
+  {
+    id: 9,
+    name: "Facture Fatales.pdf",
+    type: "pdf",
+    size: "2.1 MB",
+    uploadedAt: "09 Sep, at 21:30",
+    previewUrl: "/media/facture-preview-2.png",
+  },
+  {
+    id: 10,
     name: "Facture Fatales.pdf",
     type: "pdf",
     size: "2.1 MB",

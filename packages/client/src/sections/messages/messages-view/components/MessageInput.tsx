@@ -3,19 +3,26 @@ import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import Popover from "@mui/material/Popover";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import InsertEmoticonOutlinedIcon from "@mui/icons-material/InsertEmoticonOutlined";
 import SendIcon from "@mui/icons-material/Send";
 import CloseIcon from "@mui/icons-material/Close";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import type { EmojiClickData } from "emoji-picker-react";
 import EmojiPicker, { Theme } from "emoji-picker-react";
 
 import CustomButton from "../../../../components/common/CustomButton";
 import MessageAttachmentButton from "../components/MessageAttachmentButton";
+import RequestSelectionModal from "../components/RequestSelectionModal";
+import type { MessageRequest } from "../data/types";
 
 type MessageInputProps = {
   value: string;
   onChange: (value: string) => void;
-  onSend: (file?: File) => void;
+  onSend: (file?: File, request?: MessageRequest) => void;
+  requests: MessageRequest[];
   disabled?: boolean;
 };
 
@@ -62,15 +69,28 @@ export default function MessageInput({
   value,
   onChange,
   onSend,
+  requests,
   disabled = false,
 }: MessageInputProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<MessageRequest | null>(
+    null,
+  );
   const [emojiAnchorEl, setEmojiAnchorEl] = useState<null | HTMLElement>(null);
+  const [openRequestModal, setOpenRequestModal] = useState(false);
   const editorRef = useRef<HTMLDivElement | null>(null);
 
   const hasContent = useMemo(() => {
-    return !!getEditorPlainText(value) || hasFlagNode(value) || !!selectedFile;
-  }, [value, selectedFile]);
+    return (
+      !!getEditorPlainText(value) ||
+      hasFlagNode(value) ||
+      !!selectedFile ||
+      !!selectedRequest
+    );
+  }, [value, selectedFile, selectedRequest]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -84,6 +104,7 @@ export default function MessageInput({
   useEffect(() => {
     if (disabled) {
       setEmojiAnchorEl(null);
+      setOpenRequestModal(false);
     }
   }, [disabled]);
 
@@ -186,6 +207,7 @@ export default function MessageInput({
     img.width = 18;
     img.height = 18;
     img.style.borderRadius = "50%";
+    img.setAttribute("data-flag-image", "true");
 
     span.appendChild(img);
 
@@ -215,6 +237,13 @@ export default function MessageInput({
 
   const handleSend = () => {
     if (disabled) return;
+
+    if (selectedRequest) {
+      onSend(undefined, selectedRequest);
+      setSelectedRequest(null);
+      resetEditor();
+      return;
+    }
 
     if (selectedFile) {
       onSend(selectedFile);
@@ -254,54 +283,189 @@ export default function MessageInput({
 
   return (
     <Box sx={{ width: "100%" }}>
-      {selectedFile && (
+      {selectedRequest && (
         <Box
           sx={{
-            mb: 1.25,
-            px: 1.5,
-            py: 1,
-            border: "1px solid #E4E7EC",
-            borderRadius: "12px",
+            mb: isMobile ? 1 : 1.25,
+            px: isMobile ? 1.25 : 1.5,
+            py: isMobile ? 0.875 : 1,
+            border: "1px solid",
+            borderColor: theme.palette.primary.lighter,
+            borderRadius: isMobile ? "10px" : "12px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            backgroundColor: "#F9FAFB",
+            gap: isMobile ? 1 : 1.25,
+            backgroundColor: theme.palette.primary.lighter,
           }}
         >
-          <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>
-            {selectedFile.name}
-          </Typography>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: isMobile ? 1 : 1.25,
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            <Box
+              sx={{
+                width: isMobile ? 34 : 40,
+                height: isMobile ? 34 : 40,
+                minWidth: isMobile ? 34 : 40,
+                borderRadius: isMobile ? "8px" : "10px",
+                backgroundColor: theme.palette.common.white,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: theme.palette.primary.main,
+              }}
+            >
+              <DescriptionOutlinedIcon sx={{ fontSize: isMobile ? 18 : 20 }} />
+            </Box>
 
-          <IconButton size="small" onClick={() => setSelectedFile(null)}>
+            <Box sx={{ minWidth: 0 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.5,
+                  minWidth: 0,
+                }}
+              >
+                <LinkOutlinedIcon
+                  sx={{
+                    fontSize: 14,
+                    color: theme.palette.primary.main,
+                    flexShrink: 0,
+                  }}
+                />
+
+                <Typography
+                  noWrap
+                  sx={{
+                    fontSize: isMobile ? 12.5 : 13,
+                    fontWeight: 700,
+                    lineHeight: "18px",
+                    color: (theme.palette.grey as any)[1000],
+                  }}
+                >
+                  {selectedRequest.title}
+                </Typography>
+              </Box>
+
+              <Typography
+                noWrap
+                sx={{
+                  mt: 0.25,
+                  fontSize: isMobile ? 10.5 : 11,
+                  fontWeight: 400,
+                  lineHeight: "16px",
+                  color: theme.palette.info.main,
+                }}
+              >
+                {selectedRequest.subtitle}
+              </Typography>
+            </Box>
+          </Box>
+
+          <IconButton
+            size="small"
+            onClick={() => setSelectedRequest(null)}
+            sx={{
+              color: theme.palette.error.main,
+              flexShrink: 0,
+              p: 0.5,
+            }}
+          >
             <CloseIcon sx={{ fontSize: 16 }} />
           </IconButton>
         </Box>
       )}
 
-      <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1 }}>
+      {selectedFile && (
+        <Box
+          sx={{
+            mb: isMobile ? 1 : 1.25,
+            px: isMobile ? 1.25 : 1.5,
+            py: isMobile ? 0.875 : 1,
+            border: "1px solid",
+            borderColor: theme.palette.grey[200],
+            borderRadius: isMobile ? "10px" : "12px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            backgroundColor: theme.palette.grey[100],
+          }}
+        >
+          <Typography
+            noWrap
+            sx={{
+              fontSize: isMobile ? 12 : 12.5,
+              fontWeight: 600,
+              color: theme.palette.grey[900],
+              pr: 1,
+            }}
+          >
+            {selectedFile.name}
+          </Typography>
+
+          <IconButton
+            size="small"
+            onClick={() => setSelectedFile(null)}
+            sx={{
+              color: theme.palette.info.light,
+            }}
+          >
+            <CloseIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Box>
+      )}
+
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: isMobile ? 0.75 : 1,
+        }}
+      >
         <MessageAttachmentButton
           disabled={disabled}
-          onFileSelect={(file) => setSelectedFile(file)}
+          onFileSelect={(file) => {
+            setSelectedFile(file);
+            setSelectedRequest(null);
+          }}
+          onRequestClick={() => {
+            setOpenRequestModal(true);
+          }}
         />
 
         <Box
           sx={{
             flex: 1,
-            minHeight: 54,
-            border: "1px solid #E4E7EC",
-            borderRadius: "14px",
+            minHeight: isMobile ? 38 : 40,
+            border: "1px solid",
+            borderColor: theme.palette.grey[200],
+            borderRadius: isMobile ? "10px" : "12px",
             display: "flex",
-            alignItems: "flex-end",
-            px: 1.5,
-            py: 1,
-            gap: 1,
+            alignItems: "center",
+            px: isMobile ? "8px" : "10px",
+            py: "2px",
+            gap: isMobile ? "6px" : "8px",
+            backgroundColor: theme.palette.grey[100],
           }}
         >
           <IconButton
             onClick={(event) => setEmojiAnchorEl(event.currentTarget)}
             disabled={disabled}
+            sx={{
+              width: isMobile ? 26 : 28,
+              height: isMobile ? 26 : 28,
+              color: theme.palette.info.light,
+              flexShrink: 0,
+            }}
           >
-            <InsertEmoticonOutlinedIcon sx={{ fontSize: 18 }} />
+            <InsertEmoticonOutlinedIcon sx={{ fontSize: isMobile ? 17 : 18 }} />
           </IconButton>
 
           <Box
@@ -313,13 +477,23 @@ export default function MessageInput({
             data-placeholder="Saisir un message ..."
             sx={{
               flex: 1,
-              minHeight: 24,
+              minHeight: 20,
+              maxHeight: isMobile ? 84 : 100,
+              overflowY: "auto",
               outline: "none",
-              fontSize: 14,
+              fontSize: isMobile ? "12.5px" : "13px",
+              fontWeight: 400,
+              lineHeight: isMobile ? "18px" : "20px",
+              color: (theme.palette.grey as any)[1000],
               whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              py: "4px",
               "&:empty:before": {
                 content: "attr(data-placeholder)",
-                color: "#98A2B3",
+                color: theme.palette.info.light,
+              },
+              "& img": {
+                verticalAlign: "middle",
               },
             }}
           />
@@ -328,29 +502,57 @@ export default function MessageInput({
             open={!disabled && Boolean(emojiAnchorEl)}
             anchorEl={emojiAnchorEl}
             onClose={() => setEmojiAnchorEl(null)}
+            anchorOrigin={{
+              vertical: "top",
+              horizontal: "left",
+            }}
+            transformOrigin={{
+              vertical: "bottom",
+              horizontal: "left",
+            }}
+            PaperProps={{
+              sx: {
+                maxWidth: isMobile ? "calc(100vw - 24px)" : "none",
+              },
+            }}
           >
             <EmojiPicker
               theme={Theme.LIGHT}
               onEmojiClick={handleEmojiClick}
-              width={320}
-              height={380}
+              width={isMobile ? 280 : 320}
+              height={isMobile ? 340 : 380}
             />
           </Popover>
         </Box>
 
         <CustomButton
+          variant="contained"
+          color="secondary"
           onClick={handleSend}
           disabled={disabled || !hasContent}
           sx={{
-            minWidth: 54,
-            width: 54,
-            height: 54,
-            borderRadius: "14px",
+            minWidth: isMobile ? 38 : 40,
+            width: isMobile ? 38 : 40,
+            height: isMobile ? 38 : 40,
+            borderRadius: isMobile ? "10px" : "10px",
+            p: 0,
+            boxShadow: "none",
           }}
         >
-          <SendIcon sx={{ fontSize: 18 }} />
+          <SendIcon sx={{ fontSize: isMobile ? 17 : 18 }} />
         </CustomButton>
       </Box>
+
+      <RequestSelectionModal
+        open={openRequestModal}
+        onClose={() => setOpenRequestModal(false)}
+        requests={requests}
+        onAdd={(request) => {
+          setSelectedRequest(request);
+          setSelectedFile(null);
+          setOpenRequestModal(false);
+        }}
+      />
     </Box>
   );
 }

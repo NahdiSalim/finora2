@@ -6,14 +6,16 @@ import MenuItem from "@mui/material/MenuItem";
 import SearchIcon from "@mui/icons-material/Search";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
+import { useTheme } from "@mui/material/styles";
 
 import CustomInput from "../../../../components/common/CustomInput";
 import CustomSelect from "../../../../components/common/CustomSelect";
 
+import { CustomPagination } from "src/layouts/components/table-pagination";
+
 import { sharedMediaFiles } from "../data/mock";
 import type { Message, SharedMediaFile } from "../data/types";
 import SharedMediaCard from "../components/SharedMediaCard";
-import SharedMediaPagination from "../components/SharedMediaPagination";
 import SharedMediaPreviewModal from "../components/SharedMediaPreviewModal";
 
 type SharedMediaViewProps = {
@@ -24,7 +26,7 @@ type SharedMediaViewProps = {
 
 type FilterType = "all" | "pdf" | "image" | "doc" | "xls";
 
-const ITEMS_PER_PAGE = 8;
+const ITEMS_PER_PAGE = 10;
 
 function getFileCategory(fileName: string): SharedMediaFile["type"] {
   const lowerName = fileName.toLowerCase();
@@ -90,6 +92,7 @@ export default function SharedMediaView({
   allMessagesByConversation,
   onBack,
 }: SharedMediaViewProps) {
+  const theme = useTheme();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState<FilterType>("all");
   const [page, setPage] = useState(1);
@@ -157,11 +160,6 @@ export default function SharedMediaView({
     setPage(1);
   }, [searchTerm, selectedType, conversationId]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredFiles.length / ITEMS_PER_PAGE),
-  );
-
   const paginatedFiles = useMemo(() => {
     const startIndex = (page - 1) * ITEMS_PER_PAGE;
     return filteredFiles.slice(startIndex, startIndex + ITEMS_PER_PAGE);
@@ -187,8 +185,9 @@ export default function SharedMediaView({
           display: "flex",
           flexDirection: "column",
           borderRadius: "18px",
-          border: "1px solid #ECECEC",
-          backgroundColor: "#FFFFFF",
+          border: "1px solid",
+          borderColor: theme.palette.grey[200],
+          backgroundColor: theme.palette.common.white,
           overflow: "hidden",
         }}
       >
@@ -196,7 +195,8 @@ export default function SharedMediaView({
           sx={{
             px: 2,
             py: 1,
-            borderBottom: "1px solid #F1F1F1",
+            borderBottom: "1px solid",
+            borderColor: theme.palette.grey[200],
             flexShrink: 0,
           }}
         >
@@ -223,7 +223,7 @@ export default function SharedMediaView({
               <ArrowBackIosNewIcon
                 sx={{
                   fontSize: 13,
-                  color: "#6B7280",
+                  color: theme.palette.info.main,
                   flexShrink: 0,
                 }}
               />
@@ -233,7 +233,7 @@ export default function SharedMediaView({
                   fontSize: 13.5,
                   fontWeight: 500,
                   lineHeight: 1,
-                  color: "#343330",
+                  color: (theme.palette.grey as any)[1000],
                   whiteSpace: "nowrap",
                 }}
               >
@@ -257,7 +257,9 @@ export default function SharedMediaView({
                   backgroundColor="#FFFFFF"
                   border
                   startIcon={
-                    <SearchIcon sx={{ fontSize: 14, color: "#A3A3A3" }} />
+                    <SearchIcon
+                      sx={{ fontSize: 14, color: theme.palette.info.light }}
+                    />
                   }
                   sx={{
                     "& .MuiOutlinedInput-root": {
@@ -265,12 +267,12 @@ export default function SharedMediaView({
                       borderRadius: "6px",
                     },
                     "& .MuiOutlinedInput-notchedOutline": {
-                      borderColor: "#E6E8EC",
+                      borderColor: theme.palette.grey[200],
                       borderWidth: "1px",
                     },
                     "& .MuiInputBase-input": {
                       fontSize: 10.5,
-                      color: "#667085",
+                      color: theme.palette.info.main,
                       py: 0,
                     },
                   }}
@@ -300,12 +302,12 @@ export default function SharedMediaView({
                       backgroundColor: "#FFFFFF",
                     },
                     "& .MuiOutlinedInput-notchedOutline": {
-                      borderColor: "#E6E8EC",
+                      borderColor: theme.palette.grey[200],
                       borderWidth: "1px",
                     },
                     "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
                       {
-                        borderColor: "#E6E8EC",
+                        borderColor: theme.palette.grey[200],
                         borderWidth: "1px",
                       },
                     "& .MuiSelect-select": {
@@ -313,14 +315,14 @@ export default function SharedMediaView({
                       alignItems: "center",
                       fontSize: 10.5,
                       fontWeight: 500,
-                      color: "#667085",
+                      color: theme.palette.info.main,
                       py: "0 !important",
                       pl: "26px !important",
                       pr: "28px !important",
                     },
                     "& .MuiSvgIcon-root": {
                       fontSize: 18,
-                      color: "#98A2B3",
+                      color: theme.palette.info.light,
                     },
                   }}
                   MenuProps={{
@@ -358,7 +360,9 @@ export default function SharedMediaView({
                     zIndex: 1,
                   }}
                 >
-                  <FilterListIcon sx={{ fontSize: 12, color: "#98A2B3" }} />
+                  <FilterListIcon
+                    sx={{ fontSize: 12, color: theme.palette.info.light }}
+                  />
                 </Box>
               </Box>
             </Box>
@@ -375,7 +379,7 @@ export default function SharedMediaView({
               px: 3,
             }}
           >
-            <Typography sx={{ fontSize: 13, color: "#98A2B3" }}>
+            <Typography sx={{ fontSize: 13, color: theme.palette.info.light }}>
               Aucun fichier trouvé.
             </Typography>
           </Box>
@@ -394,20 +398,40 @@ export default function SharedMediaView({
               <Box
                 sx={{
                   height: "100%",
-                  display: "grid",
-                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                  gridAutoRows: "1fr",
-                  gap: 1.5,
-                  alignItems: "stretch",
+                  overflowY: "auto",
+                  pr: 0.5,
+                  scrollbarWidth: "thin",
+                  scrollbarColor: "#D0D5DD transparent",
+                  "&::-webkit-scrollbar": {
+                    width: 6,
+                  },
+                  "&::-webkit-scrollbar-thumb": {
+                    backgroundColor: "#D0D5DD",
+                    borderRadius: "999px",
+                  },
+                  "&::-webkit-scrollbar-track": {
+                    backgroundColor: "transparent",
+                  },
                 }}
               >
-                {paginatedFiles.map((file) => (
-                  <SharedMediaCard
-                    key={file.id}
-                    file={file}
-                    onView={handleOpenPreview}
-                  />
-                ))}
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                    gridAutoRows: "176px",
+                    gap: 1.5,
+                    alignItems: "stretch",
+                    pb: 0.5,
+                  }}
+                >
+                  {paginatedFiles.map((file) => (
+                    <SharedMediaCard
+                      key={file.id}
+                      file={file}
+                      onView={handleOpenPreview}
+                    />
+                  ))}
+                </Box>
               </Box>
             </Box>
 
@@ -415,15 +439,27 @@ export default function SharedMediaView({
               sx={{
                 flexShrink: 0,
                 px: 2.25,
-                py: 0.9,
-                borderTop: "1px solid #F1F1F1",
-                backgroundColor: "#FFFFFF",
+                py: 0,
+                borderTop: "1px solid",
+                borderColor: theme.palette.grey[200],
+                backgroundColor: theme.palette.common.white,
+                "& > .MuiBox-root": {
+                  py: 0.75,
+                  gap: 0.75,
+                  minHeight: 52,
+                },
+                "& .MuiTypography-caption": {
+                  ml: 1.25,
+                  fontSize: 12,
+                  lineHeight: 1.2,
+                },
               }}
             >
-              <SharedMediaPagination
-                page={page}
-                totalPages={totalPages}
-                onChange={setPage}
+              <CustomPagination
+                page={page - 1}
+                count={filteredFiles.length}
+                rowsPerPage={ITEMS_PER_PAGE}
+                onPageChange={(_, newPage) => setPage(newPage + 1)}
               />
             </Box>
           </>

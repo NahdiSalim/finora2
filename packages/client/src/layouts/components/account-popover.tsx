@@ -10,6 +10,7 @@ import MenuList from "@mui/material/MenuList";
 import Typography from "@mui/material/Typography";
 import Avatar from "@mui/material/Avatar";
 import MenuItem, { menuItemClasses } from "@mui/material/MenuItem";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme, alpha } from "@mui/material/styles";
 
 import { useRouter, usePathname } from "src/routes/hooks";
@@ -35,6 +36,7 @@ export function AccountPopover({
   ...other
 }: AccountPopoverProps) {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("lg"));
   const router = useRouter();
   const { data: userData } = useVerifyUserQuery();
 
@@ -69,7 +71,6 @@ export function AccountPopover({
     router.push("/sign-in");
   }, [handleClosePopover, router]);
 
-  // Get initials from full name
   const getInitials = (name: string) => {
     return name
       .split(" ")
@@ -96,9 +97,6 @@ export function AccountPopover({
     roleCode === "CLIENT" ||
     (typeof roleCode === "string" && roleCode.toLowerCase() === "client");
 
-  // Comptable : nom = nom du cabinet, sous-titre = "Cabinet de comptabilité"
-  // Client : nom = nom de l'utilisateur, sous-titre = nom de l'entreprise
-  // Autres : nom = nom de l'utilisateur, sous-titre = rôle ou "Member"
   const displayName = isAccountant && companyName ? companyName : fullName;
   const subtitle = isAccountant
     ? "Cabinet de comptabilité"
@@ -126,42 +124,46 @@ export function AccountPopover({
       <Button
         onClick={handleOpenPopover}
         sx={{
+          minWidth: isMobile ? 38 : "auto",
+          width: isMobile ? 38 : "auto",
+          height: isMobile ? 38 : "auto",
           display: "flex",
           alignItems: "center",
-          gap: 1,
-          px: 2,
-          py: 1,
-          borderRadius: 2,
+          justifyContent: "center",
+          gap: isMobile ? 0 : 1,
+          px: isMobile ? 0 : 2,
+          py: isMobile ? 0 : 1,
+          borderRadius: isMobile ? "50%" : 2,
           backgroundColor: "transparent",
           transition: theme.transitions.create(["background-color"]),
+          flexShrink: 0,
+          textTransform: "none",
           "&:hover": {
             backgroundColor: alpha(theme.palette.primary.main, 0.08),
           },
-          textTransform: "none",
           ...sx,
         }}
         {...other}
       >
-        {/* Avatar - Left (photo de profil si elle existe) */}
         <Avatar
           src={photoUrl ?? undefined}
           alt={displayName}
           sx={{
-            width: 40,
-            height: 40,
+            width: isMobile ? 34 : 40,
+            height: isMobile ? 34 : 40,
             backgroundColor: theme.palette.primary.main,
             color: theme.palette.primary.contrastText,
-            fontSize: 14,
+            fontSize: isMobile ? 12 : 14,
             fontWeight: 600,
+            flexShrink: 0,
           }}
         >
           {getInitials(displayName)}
         </Avatar>
 
-        {/* Name and Position - Right */}
         <Box
           sx={{
-            display: { xs: "none", sm: "flex" },
+            display: { xs: "none", lg: "flex" },
             flexDirection: "column",
             alignItems: "flex-start",
             minWidth: 0,
@@ -209,7 +211,6 @@ export function AccountPopover({
           },
         }}
       >
-        {/* Profile Header */}
         <Box
           sx={{
             p: 2.5,
@@ -272,7 +273,6 @@ export function AccountPopover({
 
         <Divider sx={{ borderStyle: "dashed" }} />
 
-        {/* Menu Items */}
         {data.length > 0 && (
           <>
             <MenuList
@@ -320,7 +320,6 @@ export function AccountPopover({
           </>
         )}
 
-        {/* Logout Button */}
         <Box sx={{ p: 1.5 }}>
           <Button
             fullWidth

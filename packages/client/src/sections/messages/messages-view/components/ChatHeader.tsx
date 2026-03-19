@@ -2,8 +2,11 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import IconButton from "@mui/material/IconButton";
 import Avatar from "@mui/material/Avatar";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import CircleIcon from "@mui/icons-material/Circle";
+import ArrowBackIosNewRoundedIcon from "@mui/icons-material/ArrowBackIosNewRounded";
 
 import CustomButton from "../../../../components/common/CustomButton";
 
@@ -12,12 +15,17 @@ import type { Conversation } from "../data/types";
 type ChatHeaderProps = {
   conversation?: Conversation;
   onOpenMedia?: () => void;
+  onBack?: () => void;
 };
 
 export default function ChatHeader({
   conversation,
   onOpenMedia,
+  onBack,
 }: ChatHeaderProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
   const handleViewProfile = () => {
     console.log("View profile clicked", conversation);
   };
@@ -28,19 +36,34 @@ export default function ChatHeader({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        gap: 2,
-        minHeight: 64,
+        gap: isMobile ? 1 : 2,
+        minHeight: isMobile ? 52 : 64,
       }}
     >
       <Box
         sx={{
           display: "flex",
           alignItems: "center",
-          gap: 1.5,
+          gap: isMobile ? 1 : 1.5,
           minWidth: 0,
           flex: 1,
         }}
       >
+        {isMobile && (
+          <IconButton
+            onClick={onBack}
+            sx={{
+              width: 32,
+              height: 32,
+              color: (theme.palette.grey as any)[1000],
+              ml: -0.25,
+              flexShrink: 0,
+            }}
+          >
+            <ArrowBackIosNewRoundedIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        )}
+
         <Box
           sx={{
             position: "relative",
@@ -49,12 +72,12 @@ export default function ChatHeader({
         >
           <Avatar
             sx={{
-              width: 48,
-              height: 48,
+              width: isMobile ? 40 : 48,
+              height: isMobile ? 40 : 48,
               bgcolor: conversation?.avatarColor,
               color: conversation?.avatarTextColor,
               fontWeight: 700,
-              fontSize: 18,
+              fontSize: isMobile ? 16 : 18,
             }}
           >
             {conversation?.avatar}
@@ -64,13 +87,13 @@ export default function ChatHeader({
             <CircleIcon
               sx={{
                 position: "absolute",
-                bottom: 2,
-                right: 2,
-                fontSize: 10,
+                bottom: 1,
+                right: 1,
+                fontSize: isMobile ? 9 : 10,
                 color: "#22C55E",
-                backgroundColor: "#FFFFFF",
+                backgroundColor: theme.palette.common.white,
                 borderRadius: "50%",
-                boxShadow: "0 0 0 2px #FFFFFF",
+                boxShadow: `0 0 0 2px ${theme.palette.common.white}`,
               }}
             />
           )}
@@ -88,8 +111,8 @@ export default function ChatHeader({
             noWrap
             sx={{
               fontWeight: 600,
-              fontSize: 16,
-              color: "#101828",
+              fontSize: isMobile ? 15 : 16,
+              color: (theme.palette.grey as any)[1000],
               lineHeight: 1.2,
               letterSpacing: "-0.01em",
             }}
@@ -100,10 +123,10 @@ export default function ChatHeader({
           <Typography
             noWrap
             sx={{
-              color: "#98A2B3",
-              fontSize: 13,
-              lineHeight: 1.4,
-              mt: 0.4,
+              color: theme.palette.info.light,
+              fontSize: isMobile ? 12 : 13,
+              lineHeight: 1.35,
+              mt: 0.25,
               fontWeight: 400,
             }}
           >
@@ -116,52 +139,50 @@ export default function ChatHeader({
         sx={{
           display: "flex",
           alignItems: "center",
-          gap: 1,
+          gap: 0.75,
           flexShrink: 0,
         }}
       >
-        <IconButton
-          onClick={onOpenMedia}
-          sx={{
-            width: 40,
-            height: 40,
-            border: "1px solid #2E6BFF",
-            borderRadius: "12px",
-            color: "#2E6BFF",
-            backgroundColor: "#FFFFFF",
-            "&:hover": {
-              backgroundColor: "#F5F8FF",
-              borderColor: "#2E6BFF",
-            },
-          }}
-        >
-          <ImageOutlinedIcon sx={{ fontSize: 18, color: "inherit" }} />
-        </IconButton>
+        {!isMobile && (
+          <IconButton
+            onClick={onOpenMedia}
+            sx={{
+              width: 40,
+              height: 40,
+              border: "1px solid",
+              borderColor: theme.palette.primary.main,
+              borderRadius: "10px",
+              color: theme.palette.primary.main,
+              backgroundColor: theme.palette.common.white,
+              "&:hover": {
+                backgroundColor: theme.palette.primary.lighter,
+                borderColor: theme.palette.primary.main,
+              },
+            }}
+          >
+            <ImageOutlinedIcon sx={{ fontSize: 18, color: "inherit" }} />
+          </IconButton>
+        )}
 
         <CustomButton
           variant="outlined"
           color="primary"
           onClick={handleViewProfile}
           sx={{
-            height: 40,
+            height: isMobile ? 32 : 40,
             minWidth: 0,
-            px: 1.8,
-            borderRadius: "12px",
-            fontSize: 12.5,
+            px: isMobile ? 1.25 : 1.75,
+            borderRadius: isMobile ? "8px" : "10px",
+            fontSize: isMobile ? 11.5 : 12.5,
             fontWeight: 600,
             whiteSpace: "nowrap",
             boxShadow: "none",
-            backgroundColor: "#FFFFFF",
-            color: "#2E6BFF",
-            borderColor: "#2E6BFF",
             "&:hover": {
-              backgroundColor: "#F5F8FF",
-              borderColor: "#2E6BFF",
               boxShadow: "none",
             },
           }}
         >
-          Voir le profil
+          {isMobile ? "Profil" : "Voir le profil"}
         </CustomButton>
       </Box>
     </Box>

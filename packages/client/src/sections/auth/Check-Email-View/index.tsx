@@ -5,7 +5,7 @@ import Lottie from "lottie-react";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
-import emailAnimation from "../../../../public/assets/Animations/email-successfully-sent.json";
+import emailAnimation from "src/assets/Animations/email-successfully-sent.json";
 import { useRouter } from "src/routes/hooks";
 import { useForgotPasswordMutation } from "src/lib/services/authApi";
 import { useAlert } from "src/contexts/AlertContext";

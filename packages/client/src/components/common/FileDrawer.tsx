@@ -59,7 +59,7 @@ import {
   useSynchronizeDocumentMutation,
 } from "src/lib/services/invoicesApi";
 import type { ProcessingStatus } from "src/lib/services/invoicesApi";
-import ExtractionAnim from "../../../public/assets/Animations/extraction.json";
+import ExtractionAnim from "src/assets/Animations/extraction.json";
 import Lottie from "lottie-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────

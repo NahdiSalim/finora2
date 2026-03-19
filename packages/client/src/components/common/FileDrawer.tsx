@@ -6,7 +6,6 @@ import {
   Typography,
   useTheme,
   Link,
-  Chip,
   Grid,
   alpha,
   Table,
@@ -18,6 +17,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Tooltip,
+  Divider,
 } from "@mui/material";
 import {
   X,
@@ -30,6 +31,8 @@ import {
   Trash2,
   ChevronRight,
   Folder,
+  List,
+  FolderOpen,
 } from "lucide-react";
 import PdfIcon from "./pdfIcon";
 import ImageIcon from "./imageIcon";
@@ -43,7 +46,6 @@ import MenuItem from "@mui/material/MenuItem";
 import { DOCUMENT_CATEGORIES } from "src/lib/constants/documentCategories";
 import { DocumentsTabs } from "src/layouts/components/DocumentTabs";
 import type { Message } from "src/layouts/components/ChatTab";
-import { Chat } from "src/layouts/components/ChatTab";
 import { useAppDispatch } from "src/hooks/use-redux";
 import {
   documentsApi,
@@ -232,31 +234,101 @@ function ProcessingLevelChips({
   const registered = ["enregistre", "synchronise"].includes(s);
   const synced = s === "synchronise";
 
-  const chip = (label: string, done: boolean) => (
-    <Chip
+  const chip = (label: string, done: boolean, index: number) => (
+    <Box
       key={label}
-      size="small"
-      label={done ? label : `✕ ${label}`}
       sx={{
-        mr: 0.5,
-        mb: 0.5,
-        bgcolor: done
-          ? alpha(theme.palette.success.main, 0.12)
-          : alpha(theme.palette.error.main, 0.08),
-        color: done ? theme.palette.success.dark : theme.palette.error.dark,
-        border: `1px solid ${done ? theme.palette.success.main : theme.palette.error.main}`,
+        display: "flex",
+        alignItems: "center",
+        gap: 0,
+        mb: 1.5,
       }}
-      icon={done ? <Check size={14} /> : undefined}
-    />
+    >
+      {/* Step chip */}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 0.75,
+          px: 1.25,
+          py: 0.5,
+          borderRadius: "20px",
+          border: `1px solid ${
+            done
+              ? alpha(theme.palette.success.main, 0.35)
+              : alpha(theme.palette.text.disabled, 0.2)
+          }`,
+          bgcolor: done
+            ? alpha(theme.palette.success.main, 0.08)
+            : alpha(theme.palette.action.disabledBackground, 0.4),
+          transition: "all 0.2s ease",
+        }}
+      >
+        {/* Status dot / check icon */}
+        <Box
+          sx={{
+            width: 16,
+            height: 16,
+            borderRadius: "50%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+            bgcolor: done
+              ? theme.palette.success.dark
+              : alpha(theme.palette.text.disabled, 0.25),
+            boxShadow: done
+              ? `0 0 6px ${alpha(theme.palette.success.dark, 0.5)}`
+              : "none",
+            transition: "all 0.2s ease",
+          }}
+        >
+          {done ? (
+            <Check size={10} color="#fff" strokeWidth={3} />
+          ) : (
+            <X size={10} color={theme.palette.text.disabled} strokeWidth={3} />
+          )}
+        </Box>
+
+        <Typography
+          variant="caption"
+          sx={{
+            fontWeight: done ? 600 : 400,
+            fontSize: "0.72rem",
+            letterSpacing: "0.01em",
+            color: done
+              ? theme.palette.success.dark
+              : theme.palette.text.disabled,
+            lineHeight: 1,
+            transition: "color 0.2s ease",
+          }}
+        >
+          {label}
+        </Typography>
+      </Box>
+
+      {/* Connector line between chips */}
+      {index < 2 && (
+        <Box
+          sx={{
+            width: 16,
+            height: 1.5,
+            bgcolor: done
+              ? alpha(theme.palette.success.main, 0.6)
+              : alpha(theme.palette.divider, 0.6),
+            flexShrink: 0,
+            transition: "background-color 0.2s ease",
+          }}
+        />
+      )}
+    </Box>
   );
 
   return (
-    <Box
-      sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 0.5 }}
-    >
-      {chip("Extrait", extracted)}
-      {chip("Enregistré", registered)}
-      {chip("Synchronisé", synced)}
+    <Box sx={{ display: "flex", alignItems: "center" }}>
+      {chip("Extrait", extracted, 0)}
+      {chip("Enregistré", registered, 1)}
+      {chip("Synchronisé", synced, 2)}
     </Box>
   );
 }
@@ -660,6 +732,8 @@ function DocumentDetailsPanel({
     }
   };
 
+  const breadcrumbText = breadcrumb.map((item) => item.name).join(" / ");
+
   const loading = isExtracting || isSaving || isSyncing;
   const isViewMode =
     !isEditing &&
@@ -709,77 +783,197 @@ function DocumentDetailsPanel({
   }
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      {/* Partie haute (masquée en mode édition) */}
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      {/* ── Meta info (hidden in edit mode) ── */}
       {!isEditing && (
-        <>
-          {/* Emplacement */}
-          <Box>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              display="block"
-              gutterBottom
-            >
-              Emplacement
-            </Typography>
-            <Typography variant="body2">
-              {breadcrumb.length > 0
-                ? breadcrumb.map((item, i) => (
-                    <React.Fragment key={item.id}>
-                      {i > 0 && " > "}
-                      <Link
-                        component="button"
-                        variant="body2"
-                        sx={{ cursor: "pointer" }}
-                      >
-                        {item.name}
-                      </Link>
-                    </React.Fragment>
-                  ))
-                : "—"}
-            </Typography>
-          </Box>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 0,
+            borderRadius: 2,
+            border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
+            overflow: "hidden",
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              gap: 1,
+              width: "100%",
+              mb: 1.5,
+            }}
+          >
+            {/* Emplacement */}
 
-          {/* Catégorie */}
-          <Box>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              display="block"
-              gutterBottom
+            <Box
+              sx={{
+                width: "75%",
+                overflow: "hidden",
+                flexWrap: "nowrap",
+              }}
             >
-              Catégorie
-            </Typography>
-            <Typography variant="body2">Facturation</Typography>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.disabled",
+                  fontWeight: 500,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  fontSize: "0.68rem",
+                  display: "block",
+                  mb: 0.25,
+                }}
+              >
+                Emplacement
+              </Typography>
+
+              <Tooltip
+                title={breadcrumb.length > 0 ? breadcrumbText : ""}
+                arrow
+                placement="top"
+              >
+                <Typography
+                  noWrap
+                  sx={{
+                    width: "100%",
+                    overflow: "hidden",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {breadcrumb.length > 0 ? (
+                    breadcrumb.map((item, i) => (
+                      <React.Fragment key={item.id}>
+                        {i > 0 && (
+                          <Box
+                            component="span"
+                            sx={{
+                              mx: 0.5,
+                              color: "text.disabled",
+                              fontSize: "0.75rem",
+                            }}
+                          >
+                            /
+                          </Box>
+                        )}
+                        <Link
+                          component="button"
+                          variant="body2"
+                          sx={{
+                            cursor: "pointer",
+                            color: "primary.main",
+                            fontWeight: 500,
+                            textDecoration: "none",
+                            "&:hover": { textDecoration: "underline" },
+                          }}
+                        >
+                          {item.name}
+                        </Link>
+                      </React.Fragment>
+                    ))
+                  ) : (
+                    <Typography
+                      component="span"
+                      variant="body2"
+                      color="text.disabled"
+                    >
+                      —
+                    </Typography>
+                  )}
+                </Typography>
+              </Tooltip>
+            </Box>
+
+            {/* Catégorie */}
+
+            <Box>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.disabled",
+                  fontWeight: 500,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  fontSize: "0.68rem",
+                  display: "block",
+                  mb: 0.25,
+                }}
+              >
+                Catégorie
+              </Typography>
+              <Typography variant="body2" fontWeight={500}>
+                Facture
+              </Typography>
+            </Box>
           </Box>
 
           {/* Niveau de traitement */}
-          <Box>
+
+          <Box sx={{ my: 1 }}>
             <Typography
               variant="caption"
-              color="text.secondary"
-              display="block"
-              gutterBottom
+              sx={{
+                color: "text.disabled",
+                fontWeight: 500,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+                fontSize: "0.68rem",
+                display: "block",
+                mb: 1.5,
+              }}
             >
-              Niveau de traitement :
+              Niveau de traitement
             </Typography>
             <ProcessingLevelChips status={processingStatus} />
           </Box>
-        </>
+          <Divider />
+        </Box>
       )}
 
-      {/* Formulaire (affiché uniquement après extraction réussie) */}
+      {/* ── Main form (shown after successful extraction) ── */}
       {["traite", "enregistre", "synchronise"].includes(processingStatus) && (
         <>
-          {/* Informations de base */}
-          <Box sx={{ mt: 1 }}>
+          {/* ── Section: Informations de base ── */}
+          <Box>
+            {/* Section header */}
             <Box
-              sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                mb: 2,
+                pb: 1.25,
+                borderBottom: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
+              }}
             >
-              <FileText size={16} color={theme.palette.primary.main} />
-              <Typography variant="subtitle2">Informations de base</Typography>
+              <Box
+                sx={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 1.5,
+                  background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.15)}, ${alpha(theme.palette.primary.main, 0.05)})`,
+                  border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <FileText size={15} color={theme.palette.primary.main} />
+              </Box>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 650,
+                  letterSpacing: "-0.01em",
+                  lineHeight: 1.2,
+                }}
+              >
+                Informations de base
+              </Typography>
             </Box>
+
             <Grid container spacing={1.5}>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <CustomInput
@@ -800,55 +994,54 @@ function DocumentDetailsPanel({
                   InputProps={{ readOnly: true }}
                 />
               </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                {isEditing && (
-                  <CustomSelect
-                    label="Catégorie"
-                    value={categoryValue}
-                    onChange={(e) =>
-                      setCategoryValue(String(e.target.value ?? ""))
-                    }
-                    displayEmpty
-                    disabled={isViewMode}
-                    MenuProps={{
-                      // Render inside the drawer to avoid nested Modals aria-hidden conflicts
-                      disablePortal: true,
-                      disableScrollLock: true,
-                    }}
-                    renderValue={(v) =>
-                      typeof v === "string" && v
-                        ? (DOCUMENT_CATEGORIES.find((c) => c.value === v)
-                            ?.label ?? "")
-                        : "Sélectionnez une catégorie"
-                    }
-                  >
-                    <MenuItem value="">
-                      <em>Sélectionnez une catégorie</em>
-                    </MenuItem>
-                    {DOCUMENT_CATEGORIES.map((c) => (
-                      <MenuItem key={c.value} value={c.value}>
-                        {c.label}
+              {isEditing && (
+                <>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <CustomSelect
+                      label="Catégorie"
+                      value={categoryValue}
+                      onChange={(e) =>
+                        setCategoryValue(String(e.target.value ?? ""))
+                      }
+                      displayEmpty
+                      disabled={isViewMode}
+                      MenuProps={{
+                        disablePortal: true,
+                        disableScrollLock: true,
+                      }}
+                      renderValue={(v) =>
+                        typeof v === "string" && v
+                          ? (DOCUMENT_CATEGORIES.find((c) => c.value === v)
+                              ?.label ?? "")
+                          : "Sélectionnez une catégorie"
+                      }
+                    >
+                      <MenuItem value="">
+                        <em>Sélectionnez une catégorie</em>
                       </MenuItem>
-                    ))}
-                  </CustomSelect>
-                )}
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                {isEditing && (
-                  <CustomInput
-                    fullWidth
-                    size="small"
-                    label="Chemin de destination"
-                    placeholder="Choisir la destination"
-                    value={destinationPath}
-                    onClick={() =>
-                      !isViewMode && setDestinationDialogOpen(true)
-                    }
-                    InputProps={{ readOnly: true }}
-                    disabled={isViewMode}
-                  />
-                )}
-              </Grid>
+                      {DOCUMENT_CATEGORIES.map((c) => (
+                        <MenuItem key={c.value} value={c.value}>
+                          {c.label}
+                        </MenuItem>
+                      ))}
+                    </CustomSelect>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <CustomInput
+                      fullWidth
+                      size="small"
+                      label="Chemin de destination"
+                      placeholder="Choisir la destination"
+                      value={destinationPath}
+                      onClick={() =>
+                        !isViewMode && setDestinationDialogOpen(true)
+                      }
+                      InputProps={{ readOnly: true }}
+                      disabled={isViewMode}
+                    />
+                  </Grid>
+                </>
+              )}
               <Grid size={{ xs: 12, sm: 6 }}>
                 <CustomInput
                   fullWidth
@@ -870,14 +1063,45 @@ function DocumentDetailsPanel({
             </Grid>
           </Box>
 
-          {/* Détails financiers */}
+          {/* ── Section: Détails financiers ── */}
           <Box>
             <Box
-              sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                mb: 2,
+                pb: 1.25,
+                borderBottom: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
+              }}
             >
-              <Calculator size={16} color={theme.palette.primary.main} />
-              <Typography variant="subtitle2">Détails financiers</Typography>
+              <Box
+                sx={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 1.5,
+                  background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.15)}, ${alpha(theme.palette.primary.main, 0.05)})`,
+                  border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Calculator size={15} color={theme.palette.primary.main} />
+              </Box>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 650,
+                  letterSpacing: "-0.01em",
+                  lineHeight: 1.2,
+                }}
+              >
+                Détails financiers
+              </Typography>
             </Box>
+
             <Grid container spacing={1.5}>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <CustomInput
@@ -947,165 +1171,268 @@ function DocumentDetailsPanel({
             </Grid>
           </Box>
 
-          {/* Liste des articles */}
+          {/* ── Section: Liste des articles ── */}
           <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              Liste des articles
-            </Typography>
-            <CustomButton
-              variant="outlined"
-              size="small"
-              sx={{ mb: 1 }}
-              onClick={addLineItem}
-              disabled={isViewMode}
-            >
-              + Ajouter un article
-            </CustomButton>
             <Box
               sx={{
-                border: `1px solid ${theme.palette.divider}`,
-                borderRadius: 1,
-                overflowX: "auto",
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                mb: 2,
+                pb: 1.25,
+                borderBottom: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
+              }}
+            >
+              <Box
+                sx={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 1.5,
+                  background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.15)}, ${alpha(theme.palette.primary.main, 0.05)})`,
+                  border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <List size={15} color={theme.palette.primary.main} />
+              </Box>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 650,
+                  letterSpacing: "-0.01em",
+                  lineHeight: 1.2,
+                }}
+              >
+                Liste des articles . {lineItems.length} article
+                {lineItems.length !== 1 ? "s" : ""}
+              </Typography>
+
+              {!isViewMode && (
+                <CustomButton
+                  variant="outlined"
+                  size="small"
+                  onClick={addLineItem}
+                  disabled={isViewMode}
+                  sx={{ flexShrink: 0 }}
+                >
+                  + Ajouter
+                </CustomButton>
+              )}
+            </Box>
+
+            <Box
+              sx={{
+                border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
+                borderRadius: 2,
+                overflow: "hidden",
               }}
             >
               {lineItems.length === 0 ? (
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ p: 2, textAlign: "center" }}
+                <Box
+                  sx={{
+                    py: 5,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 1,
+                    bgcolor: alpha(theme.palette.action.hover, 0.3),
+                  }}
                 >
-                  Aucun article pour le moment
-                </Typography>
+                  <Box
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 2,
+                      bgcolor: alpha(theme.palette.divider, 0.5),
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <List size={20} color={theme.palette.text.disabled} />
+                  </Box>
+                  <Typography
+                    variant="body2"
+                    color="text.disabled"
+                    sx={{ fontSize: "0.8rem" }}
+                  >
+                    Aucun article pour le moment
+                  </Typography>
+                </Box>
               ) : (
-                <Table size="small" sx={{ minWidth: 980 }}>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Date</TableCell>
-                      <TableCell>Description</TableCell>
-                      <TableCell>Quantité</TableCell>
-                      <TableCell>Unité</TableCell>
-                      <TableCell>Prix unitaire</TableCell>
-                      <TableCell>Remise (%)</TableCell>
-                      <TableCell>Total</TableCell>
-                      <TableCell align="right">Action</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {lineItems.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell sx={{ width: 140 }}>
-                          <CustomInput
-                            fullWidth
-                            size="small"
-                            value={row.date}
-                            placeholder="jj/mm/aaaa"
-                            onChange={(e) =>
-                              updateLineItem(row.id, "date", e.target.value)
-                            }
-                            disabled={isViewMode}
-                          />
-                        </TableCell>
-                        <TableCell sx={{ minWidth: 260 }}>
-                          <CustomInput
-                            fullWidth
-                            size="small"
-                            value={row.description}
-                            placeholder="Description"
-                            onChange={(e) =>
-                              updateLineItem(
-                                row.id,
-                                "description",
-                                e.target.value,
-                              )
-                            }
-                            disabled={isViewMode}
-                          />
-                        </TableCell>
-                        <TableCell sx={{ width: 120 }}>
-                          <CustomInput
-                            fullWidth
-                            size="small"
-                            value={row.qty}
-                            onChange={(e) =>
-                              updateLineItem(row.id, "qty", e.target.value)
-                            }
-                            disabled={isViewMode}
-                          />
-                        </TableCell>
-                        <TableCell sx={{ width: 120 }}>
-                          <CustomInput
-                            fullWidth
-                            size="small"
-                            value={row.unit}
-                            onChange={(e) =>
-                              updateLineItem(row.id, "unit", e.target.value)
-                            }
-                            disabled={isViewMode}
-                          />
-                        </TableCell>
-                        <TableCell sx={{ width: 140 }}>
-                          <CustomInput
-                            fullWidth
-                            size="small"
-                            value={row.unitPrice}
-                            onChange={(e) =>
-                              updateLineItem(
-                                row.id,
-                                "unitPrice",
-                                e.target.value,
-                              )
-                            }
-                            disabled={isViewMode}
-                          />
-                        </TableCell>
-                        <TableCell sx={{ width: 140 }}>
-                          <CustomInput
-                            fullWidth
-                            size="small"
-                            value={row.discount}
-                            onChange={(e) =>
-                              updateLineItem(row.id, "discount", e.target.value)
-                            }
-                            disabled={isViewMode}
-                          />
-                        </TableCell>
-                        <TableCell sx={{ width: 140 }}>
-                          <CustomInput
-                            fullWidth
-                            size="small"
-                            value={row.total}
-                            onChange={(e) =>
-                              updateLineItem(row.id, "total", e.target.value)
-                            }
-                            disabled={isViewMode}
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <IconButton
-                            size="small"
-                            onClick={() => removeLineItem(row.id)}
-                            disabled={isViewMode}
-                          >
-                            <Trash2 size={16} />
-                          </IconButton>
-                        </TableCell>
+                <Box sx={{ overflowX: "auto" }}>
+                  <Table size="small" sx={{ minWidth: 980 }}>
+                    <TableHead>
+                      <TableRow
+                        sx={{
+                          bgcolor: alpha(theme.palette.action.hover, 0.5),
+                          "& th": {
+                            fontWeight: 600,
+                            fontSize: "0.72rem",
+                            letterSpacing: "0.04em",
+                            textTransform: "uppercase",
+                            color: "text.secondary",
+                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+                            py: 1.25,
+                          },
+                        }}
+                      >
+                        <TableCell>Date</TableCell>
+                        <TableCell>Description</TableCell>
+                        <TableCell>Quantité</TableCell>
+                        <TableCell>Unité</TableCell>
+                        <TableCell>Prix unitaire</TableCell>
+                        <TableCell>Remise (%)</TableCell>
+                        <TableCell>Total</TableCell>
+                        <TableCell align="right">Action</TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHead>
+                    <TableBody>
+                      {lineItems.map((row, idx) => (
+                        <TableRow
+                          key={row.id}
+                          sx={{
+                            bgcolor:
+                              idx % 2 === 0
+                                ? "transparent"
+                                : alpha(theme.palette.action.hover, 0.25),
+                            "&:last-child td": { borderBottom: 0 },
+                            "& td": { py: 0.75 },
+                          }}
+                        >
+                          <TableCell sx={{ width: 140 }}>
+                            <CustomInput
+                              fullWidth
+                              size="small"
+                              value={row.date}
+                              placeholder="jj/mm/aaaa"
+                              onChange={(e) =>
+                                updateLineItem(row.id, "date", e.target.value)
+                              }
+                              disabled={isViewMode}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ minWidth: 260 }}>
+                            <CustomInput
+                              fullWidth
+                              size="small"
+                              value={row.description}
+                              placeholder="Description"
+                              onChange={(e) =>
+                                updateLineItem(
+                                  row.id,
+                                  "description",
+                                  e.target.value,
+                                )
+                              }
+                              disabled={isViewMode}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ width: 120 }}>
+                            <CustomInput
+                              fullWidth
+                              size="small"
+                              value={row.qty}
+                              onChange={(e) =>
+                                updateLineItem(row.id, "qty", e.target.value)
+                              }
+                              disabled={isViewMode}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ width: 120 }}>
+                            <CustomInput
+                              fullWidth
+                              size="small"
+                              value={row.unit}
+                              onChange={(e) =>
+                                updateLineItem(row.id, "unit", e.target.value)
+                              }
+                              disabled={isViewMode}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ width: 140 }}>
+                            <CustomInput
+                              fullWidth
+                              size="small"
+                              value={row.unitPrice}
+                              onChange={(e) =>
+                                updateLineItem(
+                                  row.id,
+                                  "unitPrice",
+                                  e.target.value,
+                                )
+                              }
+                              disabled={isViewMode}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ width: 140 }}>
+                            <CustomInput
+                              fullWidth
+                              size="small"
+                              value={row.discount}
+                              onChange={(e) =>
+                                updateLineItem(
+                                  row.id,
+                                  "discount",
+                                  e.target.value,
+                                )
+                              }
+                              disabled={isViewMode}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ width: 140 }}>
+                            <CustomInput
+                              fullWidth
+                              size="small"
+                              value={row.total}
+                              onChange={(e) =>
+                                updateLineItem(row.id, "total", e.target.value)
+                              }
+                              disabled={isViewMode}
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <IconButton
+                              size="small"
+                              onClick={() => removeLineItem(row.id)}
+                              disabled={isViewMode}
+                              sx={{
+                                color: "text.disabled",
+                                "&:hover": {
+                                  color: "error.main",
+                                  bgcolor: alpha(
+                                    theme.palette.error.main,
+                                    0.08,
+                                  ),
+                                },
+                                transition:
+                                  "color 0.15s ease, background-color 0.15s ease",
+                              }}
+                            >
+                              <Trash2 size={15} />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Box>
               )}
             </Box>
           </Box>
 
-          {/* Catégorie + chemin déplacés dans Informations de base */}
-
-          {/* Boutons Enregistrer / Modifier / Synchroniser */}
+          {/* ── Action buttons ── */}
           <Box
             sx={{
               display: "flex",
               gap: 1,
               flexWrap: "wrap",
-              mt: 1,
+              pt: 1,
+              mt: 0.5,
+              borderTop: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
               justifyContent: "flex-end",
             }}
           >
@@ -1113,20 +1440,21 @@ function DocumentDetailsPanel({
               <CustomButton
                 variant="contained"
                 color="primary"
-                startIcon={<Check size={18} />}
+                startIcon={<Check size={16} />}
                 onClick={handleSave}
                 disabled={loading}
               >
                 Enregistrer
               </CustomButton>
             )}
+
             {(processingStatus === "enregistre" ||
               processingStatus === "synchronise") && (
               <>
                 {!isEditing ? (
                   <CustomButton
                     variant="outlined"
-                    startIcon={<Pencil size={18} />}
+                    startIcon={<Pencil size={16} />}
                     onClick={() => setIsEditing(true)}
                     disabled={loading}
                   >
@@ -1140,11 +1468,11 @@ function DocumentDetailsPanel({
                         setIsEditing(false);
                         setLineItems(derivedLineItems);
                         setCategoryValue("");
-                        const path =
+                        setDestinationPath(
                           breadcrumb.length > 0
                             ? breadcrumb.map((b) => b.name).join(" > ")
-                            : "";
-                        setDestinationPath(path);
+                            : "",
+                        );
                       }}
                       disabled={loading}
                     >
@@ -1153,7 +1481,7 @@ function DocumentDetailsPanel({
                     <CustomButton
                       variant="contained"
                       color="primary"
-                      startIcon={<Check size={18} />}
+                      startIcon={<Check size={16} />}
                       onClick={handleSave}
                       disabled={loading}
                     >
@@ -1161,13 +1489,14 @@ function DocumentDetailsPanel({
                     </CustomButton>
                   </>
                 )}
+
                 {!isEditing &&
                   processingStatus === "enregistre" &&
                   hasDocumentId && (
                     <CustomButton
                       variant="contained"
                       color="primary"
-                      startIcon={<RefreshCw size={18} />}
+                      startIcon={<RefreshCw size={16} />}
                       onClick={handleSynchronize}
                       disabled={loading}
                     >
@@ -1178,7 +1507,7 @@ function DocumentDetailsPanel({
             )}
           </Box>
 
-          {/* Destination dialog (simple) */}
+          {/* ── Destination dialog ── */}
           <Dialog
             open={destinationDialogOpen}
             onClose={() => setDestinationDialogOpen(false)}
@@ -1187,11 +1516,43 @@ function DocumentDetailsPanel({
             sx={{ zIndex: (t) => t.zIndex.modal + 50 }}
             slotProps={{
               backdrop: { sx: { zIndex: (t) => t.zIndex.modal + 49 } },
-              paper: { sx: { zIndex: (t) => t.zIndex.modal + 50 } },
+              paper: {
+                sx: {
+                  zIndex: (t) => t.zIndex.modal + 50,
+                  borderRadius: 3,
+                  overflow: "hidden",
+                },
+              },
             }}
           >
-            <DialogTitle>Choisir la destination du document</DialogTitle>
-            <DialogContent dividers>
+            <DialogTitle
+              sx={{
+                pb: 1.5,
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+              }}
+            >
+              <Box
+                sx={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 1.5,
+                  bgcolor: alpha(theme.palette.primary.main, 0.08),
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <FolderOpen size={16} color={theme.palette.primary.main} />
+              </Box>
+              <Typography variant="subtitle1" fontWeight={600}>
+                Choisir la destination du document
+              </Typography>
+            </DialogTitle>
+
+            <DialogContent dividers sx={{ pt: 2 }}>
               <CustomInput
                 fullWidth
                 size="small"
@@ -1203,8 +1564,7 @@ function DocumentDetailsPanel({
               />
               <Box
                 sx={{
-                  border: 1,
-                  borderColor: "divider",
+                  border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
                   borderRadius: 2,
                   maxHeight: 240,
                   overflow: "auto",
@@ -1220,13 +1580,24 @@ function DocumentDetailsPanel({
                     py: 1.25,
                     cursor: "pointer",
                     bgcolor:
-                      parentId === null ? "action.selected" : "transparent",
-                    "&:hover": { bgcolor: "action.hover" },
+                      parentId === null
+                        ? alpha(theme.palette.primary.main, 0.08)
+                        : "transparent",
+                    "&:hover": {
+                      bgcolor: alpha(theme.palette.action.hover, 0.8),
+                    },
+                    transition: "background-color 0.15s ease",
+                    borderBottom: `1px solid ${alpha(theme.palette.divider, 0.4)}`,
                   }}
                 >
                   <ChevronRight size={18} color="transparent" />
-                  <Folder size={18} />
-                  <Typography variant="body2">Racine</Typography>
+                  <Folder size={16} color={theme.palette.text.secondary} />
+                  <Typography
+                    variant="body2"
+                    fontWeight={parentId === null ? 600 : 400}
+                  >
+                    Racine
+                  </Typography>
                 </Box>
                 {rootFolders.map((folder) => (
                   <FolderTreeItem
@@ -1243,7 +1614,8 @@ function DocumentDetailsPanel({
                 ))}
               </Box>
             </DialogContent>
-            <DialogActions>
+
+            <DialogActions sx={{ px: 2.5, py: 1.75, gap: 1 }}>
               <CustomButton
                 variant="outlined"
                 onClick={() => setDestinationDialogOpen(false)}
@@ -1253,7 +1625,6 @@ function DocumentDetailsPanel({
               <CustomButton
                 variant="contained"
                 onClick={() => {
-                  // Prefer folder selection path when available
                   if (selectedDestinationPath)
                     setDestinationPath(selectedDestinationPath);
                   setDestinationDialogOpen(false);
@@ -1265,8 +1636,6 @@ function DocumentDetailsPanel({
           </Dialog>
         </>
       )}
-
-      {/* Extraction se fait lors de l'upload : pas de bouton "Extraire" */}
     </Box>
   );
 }
@@ -1505,9 +1874,8 @@ function FileDrawerContent({
             flex: 1,
           }}
         >
-          <Box sx={{ flexShrink: 0 }}>{FILE_TYPE_ICONS[file.type]}</Box>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="subtitle1" fontWeight={600} noWrap>
+            <Typography variant="body1" fontWeight={600} noWrap>
               {file.name}
             </Typography>
             {dateAdded && (
@@ -1544,7 +1912,7 @@ function FileDrawerContent({
       <Box sx={{ flex: 1, overflow: "auto", p: 2 }}>
         <DocumentsTabs
           onTabChange={onTabChange}
-          secondTabLabel="Échanges"
+          disabledTabs={[1]}
           detailsContent={
             <DocumentDetailsPanel
               file={file}
@@ -1552,18 +1920,6 @@ function FileDrawerContent({
               onOpenEditModal={() => setEditModalOpen(true)}
             />
           }
-          chatContent={
-            <Chat
-              messages={messages}
-              currentUserId="currentUser"
-              currentUserName="Moi"
-              recipientName="Destinataire"
-              recipientStatus="online"
-              onSendMessage={onSendMessage}
-              height={400}
-            />
-          }
-          unreadMessages={unreadMessages}
         />
       </Box>
 

@@ -6,9 +6,12 @@ import { useTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import type { Dayjs } from "dayjs";
 
+import { useSelector } from "react-redux";
 import ConversationsList from "./views/ConversationsList";
 import ChatWindow from "./views/ChatWindow";
 import SharedMediaView from "./views/SharedMediaView";
+import { useChatSocket } from "./hooks/useChatSocket";
+import type { RootState } from "src/lib/store";
 
 import {
   conversations as initialConversations,
@@ -28,6 +31,55 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
+  const currentUserId = useSelector((state: RootState) => state.auth.user?.id);
+
+  const { joinRoom, leaveRoom, sendMessage } = useChatSocket({
+    onMessageNew: (msg) => {
+      // Ignorer l'écho de nos propres messages (déjà dans l'état local)
+      if (currentUserId && msg.senderId === Number(currentUserId)) return;
+
+      setAllMessagesByConversation((prev) => {
+        const existing = prev[msg.roomId] ?? [];
+        // Déduplication par id réel
+        if (existing.some((m) => m.id === msg.id)) return prev;
+        const date = msg.createdAt.slice(0, 10);
+        const time = new Date(msg.createdAt).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        const newMessage: Message = {
+          id: msg.id,
+          type: "text",
+          text: msg.content,
+          mine: false,
+          time,
+          date,
+        };
+        return { ...prev, [msg.roomId]: [...existing, newMessage] };
+      });
+
+      setAllConversations((prev) =>
+        prev.map((c) =>
+          c.id !== msg.roomId
+            ? c
+            : {
+                ...c,
+                preview: msg.content,
+                time: new Date(msg.createdAt).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+                fullDate: msg.createdAt,
+                unreadCount:
+                  msg.roomId !== selectedConversation
+                    ? c.unreadCount + 1
+                    : c.unreadCount,
+              },
+        ),
+      );
+    },
+  });
+
   const [selectedConversation, setSelectedConversation] = useState<number>(1);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedDateFilter, setSelectedDateFilter] = useState<Dayjs | null>(
@@ -45,6 +97,13 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
 
   const [allConversations, setAllConversations] =
     useState<Conversation[]>(initialConversations);
+
+  useEffect(() => {
+    joinRoom(selectedConversation);
+    return () => {
+      leaveRoom(selectedConversation);
+    };
+  }, [selectedConversation, joinRoom, leaveRoom]);
 
   useEffect(() => {
     setAllMessagesByConversation(initialMessagesByConversation);
@@ -368,6 +427,9 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                 messages={currentMessages}
                 isCommunicationConfirmed
                 onMessagesChange={handleMessagesChange}
+                onSendMessage={(content) =>
+                  sendMessage(selectedConversation, content)
+                }
                 onOpenMedia={() => {
                   setMobileView("media");
                   onOpenMedia?.();
@@ -511,6 +573,9 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                   messages={currentMessages}
                   isCommunicationConfirmed
                   onMessagesChange={handleMessagesChange}
+                  onSendMessage={(content) =>
+                    sendMessage(selectedConversation, content)
+                  }
                   onOpenMedia={() => {
                     setDesktopView("media");
                     onOpenMedia?.();

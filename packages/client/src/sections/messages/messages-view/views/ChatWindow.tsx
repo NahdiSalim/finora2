@@ -16,6 +16,7 @@ type ChatWindowProps = {
   messages: Message[];
   isCommunicationConfirmed: boolean;
   onMessagesChange: (messages: Message[]) => void;
+  onSendMessage?: (content: string) => void;
   onOpenMedia?: () => void;
   onBack?: () => void;
 };
@@ -36,6 +37,7 @@ export default function ChatWindow({
   messages,
   isCommunicationConfirmed,
   onMessagesChange,
+  onSendMessage,
   onOpenMedia,
   onBack,
 }: ChatWindowProps) {
@@ -180,6 +182,7 @@ export default function ChatWindow({
       date: formattedDate,
     };
 
+    onSendMessage?.(plainText);
     onMessagesChange([...messages, newMessage]);
     setInputValue("");
   };

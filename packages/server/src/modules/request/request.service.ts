@@ -262,6 +262,34 @@ export class RequestService {
         }
       }
 
+      // Auto-create tasks for collaborators if provided (not for accountants)
+      if (dto.collaboratorIds && dto.collaboratorIds.length > 0) {
+        // Parse collaboratorIds (may come as strings from multipart)
+        const collaboratorIds = dto.collaboratorIds
+          .map((id) => (typeof id === 'string' ? parseInt(id, 10) : id))
+          .filter((id) => !isNaN(id));
+
+        for (const collaboratorId of collaboratorIds) {
+          await this.prisma.task.create({
+            data: {
+              title: `Demande: ${updatedRequest.subject}`,
+              description: updatedRequest.description || null,
+              type: 'other',
+              priority:
+                updatedRequest.urgency === 'urgent'
+                  ? 'urgent'
+                  : updatedRequest.urgency === 'high'
+                    ? 'high'
+                    : 'medium',
+              assigneeId: collaboratorId,
+              createdById: clientId,
+              companyId: client.companyId,
+              attachments: [],
+            },
+          });
+        }
+      }
+
       // Notify accountant's firm about new request
       if (accountingFirmId) {
         const accountants = await this.prisma.user.findMany({

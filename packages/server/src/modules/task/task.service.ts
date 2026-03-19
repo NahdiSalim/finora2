@@ -509,7 +509,7 @@ export class TaskService {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
     }
 
-    // Collaborators cannot set status to 'completed' — only accountants can
+    // Collaborators cannot set status to 'completed' or 'archived' — only accountants can
     const isAccountant = userRole === 'ACCOUNTANT' || task.createdById === userId;
     if (dto.status === TaskStatus.COMPLETED && !isAccountant) {
       throw new ApiError(
@@ -517,6 +517,9 @@ export class TaskService {
         403,
         'FORBIDDEN_STATUS'
       );
+    }
+    if (dto.status === TaskStatus.ARCHIVED && !isAccountant) {
+      throw new ApiError('Only accountants can archive a task.', 403, 'FORBIDDEN_STATUS');
     }
 
     // Upload new attachments to MinIO if provided
@@ -690,6 +693,19 @@ export class TaskService {
     return this.updateTask(
       taskId,
       { status: TaskStatus.COMPLETED, progress: 100 },
+      userId,
+      undefined,
+      'ACCOUNTANT'
+    );
+  }
+
+  /**
+   * Archive task (Accountant only)
+   */
+  async archiveTask(taskId: number, userId: number) {
+    return this.updateTask(
+      taskId,
+      { status: TaskStatus.ARCHIVED },
       userId,
       undefined,
       'ACCOUNTANT'

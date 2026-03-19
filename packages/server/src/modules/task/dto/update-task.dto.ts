@@ -9,6 +9,7 @@ export enum TaskStatus {
   IN_REVIEW = 'in_review',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
+  ARCHIVED = 'archived',
 }
 
 export class UpdateTaskDto {

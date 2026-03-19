@@ -183,6 +183,19 @@ export class TaskController {
   }
 
   /**
+   * Archive task (Accountant only)
+   */
+  @Put(':id/archive')
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Archive task' })
+  @ApiResponse({ status: 200, description: 'Task archived' })
+  async archiveTask(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
+    const userId = req.user!.id;
+    return this.taskService.archiveTask(id, userId);
+  }
+
+  /**
    * Add comment to task
    */
   @Post(':id/comments')

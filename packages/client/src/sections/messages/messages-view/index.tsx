@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Badge from "@mui/material/Badge";
+import CircularProgress from "@mui/material/CircularProgress";
 import { useTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import type { Dayjs } from "dayjs";
@@ -10,10 +11,8 @@ import ConversationsList from "./views/ConversationsList";
 import ChatWindow from "./views/ChatWindow";
 import SharedMediaView from "./views/SharedMediaView";
 
-import {
-  conversations as initialConversations,
-  messagesByConversation as initialMessagesByConversation,
-} from "./data/mock";
+import { useConversations, useRoomMessages } from "./hooks/useChatData";
+import { useSendMessageMutation } from "src/lib/services/chatApi";
 
 import type { Conversation, Message } from "./data/types";
 
@@ -28,33 +27,66 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
-  const [selectedConversation, setSelectedConversation] = useState<number>(1);
+  // ── API data ──────────────────────────────────────────────────────────────
+  const { conversations: apiConversations, isLoading: roomsLoading } =
+    useConversations();
+  const [sendMessage] = useSendMessageMutation();
+
+  // ── Local state ───────────────────────────────────────────────────────────
+  const [selectedConversation, setSelectedConversation] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState<string>("");
-  const [selectedDateFilter, setSelectedDateFilter] = useState<Dayjs | null>(
-    null,
-  );
-
+  const [selectedDateFilter, setSelectedDateFilter] = useState<Dayjs | null>(null);
   const [desktopView, setDesktopView] = useState<"chat" | "media">("chat");
-  const [mobileView, setMobileView] = useState<"list" | "chat" | "media">(
-    "list",
+  const [mobileView, setMobileView] = useState<"list" | "chat" | "media">("list");
+
+  // Local overrides for optimistic UI (preview text, unread counts)
+  const [conversationOverrides, setConversationOverrides] = useState<
+    Record<number, Partial<Conversation>>
+  >({});
+
+  // Merge API conversations with local overrides
+  const allConversations: Conversation[] = useMemo(
+    () =>
+      apiConversations.map((c) => ({
+        ...c,
+        ...(conversationOverrides[c.id] ?? {}),
+      })),
+    [apiConversations, conversationOverrides],
   );
 
-  const [allMessagesByConversation, setAllMessagesByConversation] = useState<
-    Record<number, Message[]>
-  >(initialMessagesByConversation);
-
-  const [allConversations, setAllConversations] =
-    useState<Conversation[]>(initialConversations);
-
+  // Auto-select first conversation when rooms load
   useEffect(() => {
-    setAllMessagesByConversation(initialMessagesByConversation);
-    setAllConversations(initialConversations);
-  }, []);
-
-  useEffect(() => {
-    if (!isMobile) {
-      setMobileView("list");
+    if (allConversations.length > 0 && selectedConversation === 0) {
+      setSelectedConversation(allConversations[0].id);
     }
+  }, [allConversations, selectedConversation]);
+
+  // ── Messages for selected room ────────────────────────────────────────────
+  const { messages: apiMessages } = useRoomMessages(selectedConversation);
+
+  // Optimistic local messages (appended before server confirms)
+  const [localMessages, setLocalMessages] = useState<Record<number, Message[]>>({});
+
+  const currentMessages: Message[] = useMemo(() => {
+    const base = apiMessages;
+    const extra = localMessages[selectedConversation] ?? [];
+    const ids = new Set(base.map((m) => m.id));
+    return [...base, ...extra.filter((m) => !ids.has(m.id))];
+  }, [apiMessages, localMessages, selectedConversation]);
+
+  // Clear optimistic messages when API messages update
+  useEffect(() => {
+    setLocalMessages((prev) => {
+      const updated = { ...prev };
+      delete updated[selectedConversation];
+      return updated;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiMessages]);
+
+  // ── Sync mobile view ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isMobile) setMobileView("list");
   }, [isMobile]);
 
   useEffect(() => {
@@ -62,143 +94,131 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       document.body.removeAttribute("data-hide-bottom-nav");
     } else {
       const shouldHide = mobileView === "chat" || mobileView === "media";
-
       if (shouldHide) {
         document.body.setAttribute("data-hide-bottom-nav", "true");
       } else {
         document.body.removeAttribute("data-hide-bottom-nav");
       }
     }
-
     return () => {
       document.body.removeAttribute("data-hide-bottom-nav");
     };
   }, [isMobile, mobileView]);
 
+  // ── Handlers ──────────────────────────────────────────────────────────────
   const handleSelectConversation = (id: number) => {
     setSelectedConversation(id);
+    if (isMobile) setMobileView("chat");
+    else setDesktopView("chat");
+    setConversationOverrides((prev) => ({
+      ...prev,
+      [id]: { ...(prev[id] ?? {}), unreadCount: 0 },
+    }));
+  };
 
-    if (isMobile) {
-      setMobileView("chat");
-    } else {
-      setDesktopView("chat");
+  const handleSearchChange = (value: string) => setSearchTerm(value);
+  const handleDateFilterChange = (value: Dayjs | null) => setSelectedDateFilter(value);
+
+  const handleMessagesChange = async (updatedMessages: Message[]) => {
+    const lastMessage = updatedMessages[updatedMessages.length - 1];
+    if (!lastMessage || !lastMessage.mine) return;
+
+    // Optimistic update
+    setLocalMessages((prev) => ({
+      ...prev,
+      [selectedConversation]: [
+        ...(prev[selectedConversation] ?? []),
+        lastMessage,
+      ],
+    }));
+
+    // Update conversation preview optimistically
+    let previewText = "";
+    if (lastMessage.type === "text") previewText = lastMessage.text ?? "";
+    else if (lastMessage.type === "file")
+      previewText = `📎 ${lastMessage.file?.name ?? "Fichier"}`;
+    else if (lastMessage.type === "request")
+      previewText = `🔗 ${lastMessage.request?.title ?? "Demande"}`;
+
+    setConversationOverrides((prev) => ({
+      ...prev,
+      [selectedConversation]: {
+        ...(prev[selectedConversation] ?? {}),
+        preview: `Vous: ${previewText}`,
+        time: lastMessage.time,
+        fullDate: new Date().toISOString(),
+      },
+    }));
+
+    // Send to API (text messages only; file handling stays in ChatWindow)
+    if (lastMessage.type === "text" && lastMessage.text) {
+      try {
+        await sendMessage({
+          roomId: selectedConversation,
+          content: lastMessage.text,
+          type: "text",
+        });
+      } catch {
+        // Optimistic message stays visible even on error
+      }
     }
-
-    setAllConversations((prev) =>
-      prev.map((conversation) =>
-        conversation.id === id
-          ? { ...conversation, unreadCount: 0 }
-          : conversation,
-      ),
-    );
   };
 
-  const handleSearchChange = (value: string) => {
-    setSearchTerm(value);
-  };
-
-  const handleDateFilterChange = (value: Dayjs | null) => {
-    setSelectedDateFilter(value);
-  };
-
+  // ── Derived state ─────────────────────────────────────────────────────────
   const filteredConversations = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
-
     return allConversations.filter((conversation) => {
       const matchesSearch =
         !normalizedSearch ||
         conversation.name.toLowerCase().includes(normalizedSearch) ||
         conversation.preview.toLowerCase().includes(normalizedSearch) ||
         conversation.role.toLowerCase().includes(normalizedSearch);
-
       const matchesDate = !selectedDateFilter
         ? true
         : conversation.fullDate.slice(0, 10) ===
-          selectedDateFilter.format("YYYY-MM-DD");
-
+        selectedDateFilter.format("YYYY-MM-DD");
       return matchesSearch && matchesDate;
     });
   }, [allConversations, searchTerm, selectedDateFilter]);
 
   useEffect(() => {
     if (filteredConversations.length === 0) return;
-
     const selectedStillExists = filteredConversations.some(
-      (conversation) => conversation.id === selectedConversation,
+      (c) => c.id === selectedConversation,
     );
-
     if (!selectedStillExists) {
       setSelectedConversation(filteredConversations[0].id);
-
-      if (isMobile) {
-        setMobileView("list");
-      } else {
-        setDesktopView("chat");
-      }
+      if (isMobile) setMobileView("list");
+      else setDesktopView("chat");
     }
   }, [filteredConversations, selectedConversation, isMobile]);
 
   const hasSelectedConversation = filteredConversations.some(
-    (conversation) => conversation.id === selectedConversation,
+    (c) => c.id === selectedConversation,
   );
 
-  const currentMessages = useMemo(() => {
-    return allMessagesByConversation[selectedConversation] || [];
-  }, [allMessagesByConversation, selectedConversation]);
-
-  const totalUnreadMessages = useMemo(() => {
-    return allConversations.reduce(
-      (total, conversation) => total + (conversation.unreadCount || 0),
-      0,
-    );
-  }, [allConversations]);
+  const totalUnreadMessages = useMemo(
+    () =>
+      allConversations.reduce(
+        (total, c) => total + (c.unreadCount || 0),
+        0,
+      ),
+    [allConversations],
+  );
 
   const showEmptyState =
     filteredConversations.length === 0 || !hasSelectedConversation;
 
-  const handleMessagesChange = (updatedMessages: Message[]) => {
-    const lastMessage = updatedMessages[updatedMessages.length - 1];
+  const currentConversation = useMemo(
+    () => allConversations.find((c) => c.id === selectedConversation),
+    [allConversations, selectedConversation],
+  );
+  const allMessagesByConversation = useMemo(
+    () => ({ [selectedConversation]: currentMessages }),
+    [selectedConversation, currentMessages],
+  );
 
-    setAllMessagesByConversation((prev) => ({
-      ...prev,
-      [selectedConversation]: updatedMessages,
-    }));
-
-    if (!lastMessage) return;
-
-    setAllConversations((prev) => {
-      const updatedConversations = prev.map((conversation) => {
-        if (conversation.id !== selectedConversation) {
-          return conversation;
-        }
-
-        let previewText = "";
-
-        if (lastMessage.type === "text") {
-          previewText = lastMessage.text || "";
-        } else if (lastMessage.type === "file") {
-          previewText = `📎 ${lastMessage.file?.name || "Fichier"}`;
-        } else if (lastMessage.type === "request") {
-          previewText = `🔗 ${lastMessage.request?.title || "Demande"}`;
-        }
-
-        const preview = lastMessage.mine ? `Vous: ${previewText}` : previewText;
-
-        return {
-          ...conversation,
-          preview,
-          time: lastMessage.time,
-          fullDate: new Date().toISOString(),
-        };
-      });
-
-      return [...updatedConversations].sort(
-        (a, b) =>
-          new Date(b.fullDate).getTime() - new Date(a.fullDate).getTime(),
-      );
-    });
-  };
-
+  // ── Render helpers ────────────────────────────────────────────────────────
   const renderContentHeader = () => (
     <Box
       sx={{
@@ -290,6 +310,21 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     </Paper>
   );
 
+  if (roomsLoading) {
+    return (
+      <Box
+        sx={{
+          height: "calc(100vh - 120px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <CircularProgress size={32} />
+      </Box>
+    );
+  }
+
   if (isMobile) {
     return (
       <>
@@ -365,6 +400,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
             ) : (
               <ChatWindow
                 conversationId={selectedConversation}
+                conversation={currentConversation}
                 messages={currentMessages}
                 isCommunicationConfirmed
                 onMessagesChange={handleMessagesChange}
@@ -508,6 +544,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
               ) : (
                 <ChatWindow
                   conversationId={selectedConversation}
+                  conversation={currentConversation}
                   messages={currentMessages}
                   isCommunicationConfirmed
                   onMessagesChange={handleMessagesChange}

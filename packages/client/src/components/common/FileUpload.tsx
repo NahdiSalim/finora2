@@ -8,7 +8,6 @@ import {
   alpha,
 } from "@mui/material";
 import { Close as CloseIcon } from "@mui/icons-material";
-import UploadIcon from "../../../public/assets/upload.svg";
 import { Replace } from "lucide-react";
 import CustomButton from "./CustomButton";
 
@@ -300,7 +299,7 @@ export default function FileUpload({
             }),
           }}
         >
-          <Box component="img" src={UploadIcon} />
+          <Box component="img" src="/assets/upload.svg" />
 
           <Typography
             variant="body2"

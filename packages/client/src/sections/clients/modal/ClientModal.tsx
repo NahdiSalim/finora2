@@ -166,12 +166,12 @@ export default function ClientModal({ open, onClose, client }: Props) {
         patente: patenteFile ?? undefined,
         country: selectedCountry?.name,
       }).unwrap();
-      showAlert("Client created successfully", "success");
+      showAlert("Client créé avec succès", "success");
       reset();
       setPatenteFile(null);
       onClose();
     } catch {
-      showAlert("Error creating client", "error");
+      showAlert("Erreur lors de la création du client", "error");
     }
   };
 
@@ -184,9 +184,9 @@ export default function ClientModal({ open, onClose, client }: Props) {
   const sections = [
     {
       id: "personal",
-      title: "Personal Information",
+      title: "Informations personnelles",
       icon: <User size={18} />,
-      description: "Client's first and last name",
+      description: "Prénom et nom du client",
       content: (
         <Box
           sx={{
@@ -197,7 +197,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
         >
           <CustomInput
             {...register("lastName")}
-            label="Last Name"
+            label="Nom"
             placeholder="Dupont"
             fullWidth
             required
@@ -207,7 +207,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
           />
           <CustomInput
             {...register("firstName")}
-            label="First Name"
+            label="Prénom"
             placeholder="Jean"
             fullWidth
             required
@@ -222,7 +222,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
       id: "contact",
       title: "Contact",
       icon: <Mail size={18} />,
-      description: "Email and phone number",
+      description: "Email et numéro de téléphone",
       content: (
         <Box
           sx={{
@@ -237,7 +237,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
             {...register("email")}
             size="small"
             label="Email"
-            placeholder="jean.dupont@example.com"
+            placeholder="jean.dupont@exemple.com"
             fullWidth
             required
             error={!!errors.email}
@@ -251,7 +251,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
               <PhoneInput
                 {...field}
                 defaultCountry="TN"
-                label="Phone"
+                label="Téléphone"
                 placeholder="votre numéro de téléphone"
                 error={!!errors.phone}
                 helperText={errors.phone?.message}
@@ -266,9 +266,9 @@ export default function ClientModal({ open, onClose, client }: Props) {
     },
     {
       id: "company",
-      title: "Company",
+      title: "Société",
       icon: <Building2 size={18} />,
-      description: "Legal and business information",
+      description: "Informations légales et commerciales",
       content: (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <Box
@@ -280,7 +280,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
           >
             <CustomInput
               {...register("companyName")}
-              label="Company Name"
+              label="Nom de la société"
               placeholder="Acme Corp"
               fullWidth
               required
@@ -290,7 +290,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
             />
             <CustomInput
               {...register("legalForm")}
-              label="Legal Form"
+              label="Forme juridique"
               placeholder="SAS, SARL..."
               fullWidth
               error={!!errors.legalForm}
@@ -316,7 +316,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
             />
             <CustomInput
               {...register("vatNumber")}
-              label="VAT Number"
+              label="Numéro de TVA"
               placeholder="FR00000000000"
               fullWidth
               error={!!errors.vatNumber}
@@ -349,7 +349,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
       id: "address",
       title: "Adresse",
       icon: <MapPin size={18} />,
-      description: "Location details",
+      description: "Coordonnées géographiques",
       content: (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <Controller
@@ -432,7 +432,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
           />
           <CustomInput
             {...register("postalCode")}
-            label="Postal Code"
+            label="Code postal"
             placeholder="75001"
             fullWidth
             error={!!errors.postalCode}
@@ -444,9 +444,9 @@ export default function ClientModal({ open, onClose, client }: Props) {
     },
     {
       id: "security",
-      title: "Security",
+      title: "Sécurité",
       icon: <Lock size={18} />,
-      description: "Temporary password",
+      description: "Mot de passe temporaire",
       content: (
         <Controller
           name="password"
@@ -457,7 +457,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
               mode="create"
               required
               error={!!errors.password}
-              helperText={errors.password?.message || "Minimum 8 characters"}
+              helperText={errors.password?.message || "8 caractères minimum"}
             />
           )}
         />
@@ -504,7 +504,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
               lineHeight: 1.4,
             }}
           >
-            {isViewMode ? "Client Details" : "New Client"}
+            {isViewMode ? "Détails du client" : "Nouveau client"}
           </Typography>
           <Typography
             variant="caption"
@@ -512,8 +512,8 @@ export default function ClientModal({ open, onClose, client }: Props) {
             sx={{ display: { xs: "none", sm: "block" } }}
           >
             {isViewMode
-              ? "View client information"
-              : "Fill in the client information to create a new client in the system"}
+              ? "Consulter les informations du client"
+              : "Remplissez les informations du client pour créer un nouveau client dans le système"}
           </Typography>
         </Box>
 
@@ -636,7 +636,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
                 onClick={handleClose}
                 fullWidth={isMobile}
               >
-                Close
+                Fermer
               </CustomButton>
             ) : (
               <>
@@ -653,7 +653,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
                     },
                   }}
                 >
-                  Cancel
+                  Annuler
                 </CustomButton>
 
                 <CustomButton
@@ -685,7 +685,7 @@ export default function ClientModal({ open, onClose, client }: Props) {
                     },
                   }}
                 >
-                  {isLoading ? "Creating..." : "Create"}
+                  {isLoading ? "Création en cours..." : "Créer"}
                 </CustomButton>
               </>
             )}

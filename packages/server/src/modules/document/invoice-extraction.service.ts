@@ -1,10 +1,11 @@
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { MinioService } from '../../common/services/minio.service';
 import { ApiError } from '../../common/errors/api-error';
 import { Prisma } from '@prisma/client';
 import axios from 'axios';
 import FormData from 'form-data';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class InvoiceExtractionService {
@@ -13,7 +14,8 @@ export class InvoiceExtractionService {
 
   constructor(
     private prisma: PrismaService,
-    private minioService: MinioService
+    private minioService: MinioService,
+    private notificationService: NotificationService
   ) {}
 
   async extractInvoiceMetadata(documentId: number, companyId: number) {
@@ -151,6 +153,19 @@ export class InvoiceExtractionService {
           ? JSON.stringify(error.response.data)
           : error.message;
 
+        // Check if it's an AWS credentials error
+        if (
+          errorDetails.includes('UnrecognizedClientException') ||
+          errorDetails.includes('security token') ||
+          errorDetails.includes('invalid')
+        ) {
+          throw new ApiError(
+            'Extraction API AWS credentials error. Please check the API configuration.',
+            503,
+            'EXTRACTION_API_UNAVAILABLE'
+          );
+        }
+
         throw new ApiError(
           `Extraction API error: ${errorDetails}`,
           error.response?.status || 500,
@@ -162,19 +177,212 @@ export class InvoiceExtractionService {
     }
   }
 
+  /**
+   * Empty invoice JSON structure returned when extraction fails
+   */
+  private emptyInvoiceJson() {
+    return {
+      invoice_header: { msg_sender_id: null, msg_receiver_id: null },
+      bgm: { type: null, numero: null },
+      dtm: [],
+      partner_section: [],
+      loc_section: null,
+      pyt_section: [],
+      texte: null,
+      special_conditions: null,
+      lin_section: [],
+      invoice_moa: [],
+      invoice_tax: [],
+      invoice_alc: null,
+      additional_documents: null,
+      ref_ttn_val: null,
+    };
+  }
+
+  /**
+   * Extract invoice and auto-save to DB (used after upload).
+   * - Success → saves real data, processingStatus = 'enregistre'
+   * - Failure → saves empty JSON, extractionStatus = 'failed'
+   */
+  async extractAndSaveInvoice(documentId: number, companyId: number) {
+    const document = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      select: {
+        id: true,
+        isFolder: true,
+        status: true,
+        url: true,
+        name: true,
+        mimeType: true,
+        createdBy: true,
+      },
+    });
+    if (!document || document.isFolder || document.status !== 'active') return;
+
+    try {
+      // Download from MinIO
+      const fileStream = await this.minioService.getFileStream(document.url);
+      const chunks: Buffer[] = [];
+      for await (const chunk of fileStream) chunks.push(chunk);
+      const fileBuffer = Buffer.concat(chunks);
+
+      // Call extraction API
+      const formData = new FormData();
+      formData.append('files', fileBuffer, {
+        filename: document.name,
+        contentType: document.mimeType || 'application/pdf',
+      });
+
+      const response = await axios.post(this.extractionApiUrl, formData, {
+        headers: { ...formData.getHeaders() },
+        timeout: 120000,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      });
+
+      const extractedData = response.data;
+      if (!extractedData || typeof extractedData !== 'object') {
+        throw new Error('API returned empty or invalid response');
+      }
+
+      // Recalculate totals
+      const recalculated = this.recalculateInvoice(extractedData);
+      const parsedFields = this.parseExtractedData(recalculated);
+
+      // Upsert metadata
+      const existing = await this.prisma.invoiceMetadata.findUnique({ where: { documentId } });
+      if (existing) {
+        await this.prisma.invoiceMetadata.update({
+          where: { documentId },
+          data: {
+            rawData: recalculated,
+            extractionStatus: 'success',
+            errorMessage: null,
+            ...parsedFields,
+          },
+        });
+      } else {
+        await this.prisma.invoiceMetadata.create({
+          data: {
+            documentId,
+            rawData: recalculated,
+            extractionStatus: 'success',
+            errorMessage: null,
+            ...parsedFields,
+          },
+        });
+      }
+
+      // Update document status to 'traite' — stays here until user clicks save
+      await this.prisma.document.update({
+        where: { id: documentId },
+        data: { processingStatus: 'traite', extractionStatus: 'done' },
+      });
+
+      console.log(`✓ Auto-extraction complete for document ${documentId}`);
+
+      // Notify the user who uploaded the document
+      if (document.createdBy) {
+        const fileUrl = await this.minioService
+          .getPresignedUrl(document.url, 7 * 24 * 60 * 60)
+          .catch(() => null);
+        this.notificationService
+          .notify({
+            recipientId: document.createdBy,
+            type: 'invoice',
+            action: 'extracted',
+            data: { fileName: document.name, fileUrl },
+          })
+          .catch(() => {});
+      }
+    } catch (error) {
+      console.error(`✗ Auto-extraction failed for document ${documentId}:`, error);
+
+      // Save empty JSON so GET returns 'failed' instead of 'pending'
+      const emptyJson = this.emptyInvoiceJson();
+      const existing = await this.prisma.invoiceMetadata
+        .findUnique({ where: { documentId } })
+        .catch(() => null);
+      if (existing) {
+        await this.prisma.invoiceMetadata
+          .update({
+            where: { documentId },
+            data: {
+              rawData: emptyJson,
+              extractionStatus: 'failed',
+              errorMessage: error.message || 'Unknown error',
+            },
+          })
+          .catch(() => {});
+      } else {
+        await this.prisma.invoiceMetadata
+          .create({
+            data: {
+              documentId,
+              rawData: emptyJson,
+              extractionStatus: 'failed',
+              errorMessage: error.message || 'Unknown error',
+            },
+          })
+          .catch(() => {});
+      }
+
+      await this.prisma.document
+        .update({
+          where: { id: documentId },
+          data: { processingStatus: 'traite', extractionStatus: 'failed' },
+        })
+        .catch(() => {});
+
+      // Notify the user who uploaded the document
+      if (document.createdBy) {
+        const fileUrl = await this.minioService
+          .getPresignedUrl(document.url, 7 * 24 * 60 * 60)
+          .catch(() => null);
+        this.notificationService
+          .notify({
+            recipientId: document.createdBy,
+            type: 'invoice',
+            action: 'extraction_failed',
+            data: { documentId, fileName: document.name, fileUrl },
+          })
+          .catch(() => {});
+      }
+    }
+  }
+
+  /**
+   * Get invoice metadata by documentId.
+   * Returns extractionStatus: 'done' | 'pending' | 'failed' from Document.extractionStatus
+   */
   async getInvoiceMetadata(documentId: number, companyId: number) {
-    const metadata = await this.prisma.invoiceMetadata.findUnique({
-      where: { documentId },
+    const document = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      select: { id: true, extractionStatus: true },
     });
 
-    if (!metadata) {
-      throw new ApiError('Invoice metadata not found', 404, 'METADATA_NOT_FOUND');
+    if (!document) {
+      throw new ApiError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
     }
+
+    const extractionStatus = document.extractionStatus || 'pending';
+
+    // If pending, no metadata yet
+    if (extractionStatus === 'pending') {
+      return {
+        status: 'success',
+        code: '200',
+        data: { documentId, extractionStatus: 'pending', metadata: null },
+      };
+    }
+
+    // done or failed — return metadata (real or empty JSON)
+    const metadata = await this.prisma.invoiceMetadata.findUnique({ where: { documentId } });
 
     return {
       status: 'success',
       code: '200',
-      data: metadata,
+      data: { documentId, extractionStatus, metadata: metadata ?? null },
     };
   }
 
@@ -264,6 +472,106 @@ export class InvoiceExtractionService {
     }
   }
 
+  /**
+   * Recalculate invoice totals from line items and update the JSON in place.
+   * Keeps the same JSON structure, only updates computed values.
+   */
+  private recalculateInvoice(data: any): any {
+    const result = { ...data };
+
+    const lines: any[] = Array.isArray(result.lin_section) ? result.lin_section : [];
+
+    if (lines.length === 0) return result;
+
+    // Each line: lin_moa.rff = unit price HT, lin_qty = quantity, lin_alc.pcd = discount %
+    // Line total HT = qty * unit_price * (1 - discount/100)
+    let totalHT = 0;
+    result.lin_section = lines.map((line: any) => {
+      const qty = parseFloat(line.lin_qty) || 0;
+      const unitPrice = parseFloat(line.lin_moa?.rff) || 0;
+      const discountPct = parseFloat(line.lin_alc?.pcd) || 0;
+
+      const lineTotal = parseFloat((qty * unitPrice * (1 - discountPct / 100)).toFixed(3));
+      totalHT += lineTotal;
+
+      return {
+        ...line,
+        lin_qty: qty.toString(),
+        lin_moa: {
+          ...line.lin_moa,
+          rff: unitPrice.toFixed(3), // prix unitaire brut
+          lin_total: lineTotal.toFixed(3), // total ligne HT après remise
+        },
+      };
+    });
+
+    totalHT = parseFloat(totalHT.toFixed(3));
+
+    // Recalculate each tax entry from invoice_tax (supports multiple tax rates)
+    // TVA amount = totalHT * tvaRate for each entry
+    let totalTVA = 0;
+    if (Array.isArray(result.invoice_tax)) {
+      result.invoice_tax = result.invoice_tax.map((taxEntry: any) => {
+        let tvaRate = 0;
+        if (taxEntry?.tax) {
+          const match = taxEntry.tax.match(/(\d+(?:\.\d+)?)\s*%/);
+          if (match) tvaRate = parseFloat(match[1]) / 100;
+        }
+        const tvaAmount = parseFloat((totalHT * tvaRate).toFixed(3));
+        totalTVA += tvaAmount;
+        return { ...taxEntry, moa: tvaAmount.toFixed(3) };
+      });
+    }
+
+    totalTVA = parseFloat(totalTVA.toFixed(3));
+    const totalTTC = parseFloat((totalHT + totalTVA).toFixed(3));
+
+    // Update invoice_moa: [0]=HT, [1]=TVA total, [2]=TTC
+    if (Array.isArray(result.invoice_moa)) {
+      const moa = [...result.invoice_moa];
+      if (moa[0]) moa[0] = { ...moa[0], moa: totalHT.toFixed(3) };
+      if (moa[1]) moa[1] = { ...moa[1], moa: totalTVA.toFixed(3) };
+      if (moa[2]) moa[2] = { ...moa[2], moa: totalTTC.toFixed(3) };
+      result.invoice_moa = moa;
+    }
+
+    return result;
+  }
+
+  /**
+   * Parse structured fields from the raw extracted JSON
+   * Maps API response fields to InvoiceMetadata columns
+   */
+  private parseExtractedData(extractedData: any) {
+    const data = Array.isArray(extractedData) ? extractedData[0] : extractedData;
+    if (!data || typeof data !== 'object') return {};
+
+    const header = data.invoice_header || {};
+    const bgm = data.bgm || {};
+    const dtm = Array.isArray(data.dtm) ? data.dtm : [];
+
+    const invoiceDateEntry = dtm[0];
+    let invoiceDate: Date | null = null;
+    if (invoiceDateEntry?.date_periode) {
+      const parsed = new Date(invoiceDateEntry.date_periode);
+      if (!isNaN(parsed.getTime())) invoiceDate = parsed;
+    }
+
+    return {
+      msgSenderId: header.msg_sender_id?.toString() || null,
+      msgReceiverId: header.msg_receiver_id?.toString() || null,
+      invoiceType: bgm.type || null,
+      invoiceNumber: bgm.numero || null,
+      invoiceDate,
+      partners: data.partner_section || null,
+      paymentTerms: data.pyt_section || null,
+      totalInWords: data.texte || null,
+      lineItems: data.lin_section || null,
+      amounts: data.invoice_moa || null,
+      taxes: data.invoice_tax || null,
+    };
+  }
+
   async saveInvoiceMetadata(documentId: number, companyId: number, extractedData: any) {
     // 1. Get document directly by ID (only accountants can save)
     const document = await this.prisma.document.findUnique({
@@ -274,31 +582,34 @@ export class InvoiceExtractionService {
       throw new ApiError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
     }
 
-    // 2. Check if document is in "traite" status
-    if (document.processingStatus !== 'traite') {
+    // 2. Check if document is in "traite" or "enregistre" status (allow re-save)
+    if (!['traite', 'enregistre'].includes(document.processingStatus)) {
       throw new ApiError(
-        `Document must be in "traite" status to save metadata. Current status: ${document.processingStatus}`,
+        `Document must be in "traite" or "enregistre" status to save metadata. Current status: ${document.processingStatus}`,
         400,
         'INVALID_STATUS'
       );
     }
 
     try {
-      console.log('Received extractedData:', typeof extractedData);
-
-      // Validate that extractedData is an object
       if (!extractedData || typeof extractedData !== 'object') {
         throw new ApiError('extractedData must be a valid JSON object', 400, 'INVALID_DATA');
       }
 
-      // 3. Save or update metadata in database - store entire JSON directly
+      // 3. Recalculate totals from line items (in case user modified lines/prices)
+      const recalculated = this.recalculateInvoice(extractedData);
+
+      // 4. Parse structured fields from recalculated data
+      const parsedFields = this.parseExtractedData(recalculated);
+
       const metadataData = {
-        rawData: extractedData,
+        rawData: recalculated, // save recalculated JSON
         extractionStatus: 'success',
         errorMessage: null,
+        ...parsedFields,
       };
 
-      // Check if metadata already exists
+      // 4. Upsert metadata (create or update if already exists)
       const existingMetadata = await this.prisma.invoiceMetadata.findUnique({
         where: { documentId: document.id },
       });
@@ -309,13 +620,10 @@ export class InvoiceExtractionService {
             data: metadataData,
           })
         : await this.prisma.invoiceMetadata.create({
-            data: {
-              documentId: document.id,
-              ...metadataData,
-            },
+            data: { documentId: document.id, ...metadataData },
           });
 
-      // 4. Update document status to "enregistre"
+      // 5. Update document status to "enregistre"
       await this.prisma.document.update({
         where: { id: documentId },
         data: { processingStatus: 'enregistre' },
@@ -332,9 +640,7 @@ export class InvoiceExtractionService {
       };
     } catch (error) {
       console.error('Failed to save invoice metadata:', error);
-      if (error instanceof ApiError) {
-        throw error;
-      }
+      if (error instanceof ApiError) throw error;
       throw new ApiError('Failed to save invoice metadata', 500, 'SAVE_FAILED');
     }
   }

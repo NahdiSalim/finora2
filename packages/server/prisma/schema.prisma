@@ -308,6 +308,7 @@ model Company {
   
   // Requests
   requests          Request[] @relation("CompanyRequests")
+  accountingFirmRequests Request[] @relation("AccountingFirmRequests")
   
   // Appointments
   appointments      Appointment[] @relation("CompanyAppointments")
@@ -408,6 +409,7 @@ model Document {
   url               String
   category          String?   // Document category (e.g., facture, contrat, rapport)
   processingStatus  String    @default("pending") // "pending" | "traite" | "enregistre" | "synchronise"
+  extractionStatus  String?   // null | "pending" | "done" | "failed" — only for category=facture
   ownerId           Int       // Always the client company owner
   companyId         Int?      // Always the client company
   createdBy         Int?      // User ID who created this document (client or accountant user)
@@ -721,6 +723,10 @@ model Request {
   
   companyId   Int?
   company     Company? @relation("CompanyRequests", fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Accounting firm that receives this request
+  accountingFirmId Int?
+  accountingFirm   Company? @relation("AccountingFirmRequests", fields: [accountingFirmId], references: [id], onDelete: SetNull)
   
   // Task conversion
   convertedToTaskId Int?     @unique
@@ -740,6 +746,7 @@ model Request {
   @@index([clientId])
   @@index([assignedToId])
   @@index([companyId])
+  @@index([accountingFirmId])
   @@index([status])
   @@index([convertedToTaskId])
   @@map("requests")

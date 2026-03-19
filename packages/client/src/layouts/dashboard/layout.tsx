@@ -27,6 +27,7 @@ import type { LayoutSectionProps } from "../core/layout-section";
 import { NotificationsPopover } from "../components/notifications-popover";
 import { MessagesPopover } from "../components/messages-popover";
 import Logo from "src/components/common/Logo";
+import { GlobalFileDrawer } from "src/components/common/FileDrawer";
 
 // ----------------------------------------------------------------------
 
@@ -180,7 +181,10 @@ export function DashboardLayout({
   const renderFooter = () => null;
 
   const renderMain = () => (
-    <MainSection {...slotProps?.main}>{children}</MainSection>
+    <MainSection {...slotProps?.main}>
+      {children}
+      <GlobalFileDrawer />
+    </MainSection>
   );
 
   return (

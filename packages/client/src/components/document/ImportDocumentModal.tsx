@@ -15,16 +15,10 @@ import CustomSelect from "src/components/common/CustomSelect";
 import MenuItem from "@mui/material/MenuItem";
 import FileUpload from "src/components/common/FileUpload";
 import { useGetDocumentsQuery } from "src/lib/services/documentsApi";
+import { DOCUMENT_CATEGORIES } from "src/lib/constants/documentCategories";
 
 const MAX_SIZE_MB = 50;
 const ACCEPTED_FILES = [".jpg", ".jpeg", ".png", ".pdf", ".mp4"];
-
-const DOCUMENT_CATEGORIES = [
-  { value: "facture", label: "Facture" },
-  { value: "contrat", label: "Contrat" },
-  { value: "rapport", label: "Rapport" },
-  { value: "autre", label: "Autre" },
-];
 
 // ─── Folder tree item (loads children when expanded) ────────────────────────
 

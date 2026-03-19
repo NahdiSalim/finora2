@@ -7,6 +7,7 @@ model Document {
   url               String
   category          String?   // Document category (e.g., facture, contrat, rapport)
   processingStatus  String    @default("pending") // "pending" | "traite" | "enregistre" | "synchronise"
+  extractionStatus  String?   // null | "pending" | "done" | "failed" — only for category=facture
   ownerId           Int       // Always the client company owner
   companyId         Int?      // Always the client company
   createdBy         Int?      // User ID who created this document (client or accountant user)

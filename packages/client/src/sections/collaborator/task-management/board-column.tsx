@@ -7,7 +7,7 @@ import {
   alpha,
   CircularProgress,
 } from "@mui/material";
-import { ArrowUpDown } from "lucide-react";
+import { ArrowUpDown, Archive } from "lucide-react";
 import { useDroppable } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -21,6 +21,8 @@ interface BoardColumnProps {
   column: KanbanColumn;
   onAddTask?: (columnId: KanbanColumn["id"]) => void;
   onSortByPriority?: (columnId: KanbanColumn["id"]) => void;
+  onArchiveAll?: (columnId: KanbanColumn["id"]) => void;
+  isAccountant?: boolean;
 }
 
 const INITIAL_TASKS_DISPLAY = 3;
@@ -30,6 +32,8 @@ export function BoardColumn({
   column,
   onAddTask,
   onSortByPriority,
+  onArchiveAll,
+  isAccountant = false,
 }: BoardColumnProps) {
   const theme = useTheme();
   const { setNodeRef, isOver } = useDroppable({
@@ -82,18 +86,24 @@ export function BoardColumn({
     }
   };
 
+  const handleArchiveAll = () => {
+    if (onArchiveAll) {
+      onArchiveAll(column.id);
+    }
+  };
+
   return (
     <Box
       sx={{
-        flex: { xs: "0 0 280px", sm: "1 1 0%" },
-        minWidth: { xs: 280, sm: 0 },
-        maxWidth: { xs: "none", sm: "none" },
-        width: { xs: "280px", sm: "100%" },
+        flex: { xs: "0 0 280px", sm: "0 0 300px", lg: "1 1 0%" },
+        minWidth: { xs: 280, sm: 300, lg: 0 },
+        maxWidth: { xs: "none", sm: "none", lg: "none" },
+        width: { xs: "280px", sm: "300px", lg: "100%" },
         display: "flex",
         flexDirection: "column",
         bgcolor: isOver ? alpha(column.color, 0.08) : theme.palette.grey[50],
         borderRadius: 2,
-        p: 2,
+        p: { xs: 1.5, sm: 2 },
         border: isOver ? `2px solid ${column.color}` : `2px solid transparent`,
         transition: "all 0.2s ease",
       }}
@@ -104,12 +114,20 @@ export function BoardColumn({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          mb: 2,
-          pb: 2,
+          mb: { xs: 1.5, sm: 2 },
+          pb: { xs: 1.5, sm: 2 },
           borderBottom: `2px solid ${column.color}`,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flex: 1 }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: { xs: 1, sm: 1.5 },
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
           {/* Colored Dot */}
           <Box
             sx={{
@@ -117,6 +135,7 @@ export function BoardColumn({
               height: 8,
               borderRadius: "50%",
               bgcolor: column.color,
+              flexShrink: 0,
             }}
           />
           {/* Column Title */}
@@ -124,8 +143,11 @@ export function BoardColumn({
             variant="h6"
             sx={{
               fontWeight: 600,
-              fontSize: 16,
+              fontSize: { xs: 14, sm: 16 },
               color: theme.palette.text.primary,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
             }}
           >
             {column.title}
@@ -135,34 +157,59 @@ export function BoardColumn({
             label={column.tasks.length}
             size="small"
             sx={{
-              height: 24,
-              fontSize: 12,
+              height: { xs: 20, sm: 24 },
+              fontSize: { xs: 11, sm: 12 },
               fontWeight: 500,
               bgcolor: theme.palette.grey[200],
               color: theme.palette.text.secondary,
+              flexShrink: 0,
               "& .MuiChip-label": {
-                px: 1,
+                px: { xs: 0.75, sm: 1 },
               },
             }}
           />
         </Box>
-        {/* Sort By Priority Button */}
-        <IconButton
-          size="small"
-          onClick={handleSortByPriority}
-          sx={{
-            width: 28,
-            height: 28,
-            color: column.color,
-            bgcolor: alpha(column.color, 0.1),
-            borderRadius: 1.5,
-            "&:hover": {
-              bgcolor: alpha(column.color, 0.15),
-            },
-          }}
-        >
-          <ArrowUpDown size={16} />
-        </IconButton>
+        {/* Action Buttons */}
+        <Box sx={{ display: "flex", gap: { xs: 0.5, sm: 1 }, flexShrink: 0 }}>
+          {/* Sort By Priority Button */}
+          <IconButton
+            size="small"
+            onClick={handleSortByPriority}
+            sx={{
+              width: { xs: 26, sm: 28 },
+              height: { xs: 26, sm: 28 },
+              color: column.color,
+              bgcolor: alpha(column.color, 0.1),
+              borderRadius: 1.5,
+              "&:hover": {
+                bgcolor: alpha(column.color, 0.15),
+              },
+            }}
+          >
+            <ArrowUpDown size={16} />
+          </IconButton>
+          {/* Archive All Button - Only for completed column and accountants */}
+          {column.id === "completed" &&
+            isAccountant &&
+            column.tasks.length > 0 && (
+              <IconButton
+                size="small"
+                onClick={handleArchiveAll}
+                sx={{
+                  width: { xs: 26, sm: 28 },
+                  height: { xs: 26, sm: 28 },
+                  color: "#64748B",
+                  bgcolor: alpha("#64748B", 0.1),
+                  borderRadius: 1.5,
+                  "&:hover": {
+                    bgcolor: alpha("#64748B", 0.15),
+                  },
+                }}
+              >
+                <Archive size={16} />
+              </IconButton>
+            )}
+        </Box>
       </Box>
 
       {/* Tasks List - Droppable */}
@@ -196,7 +243,12 @@ export function BoardColumn({
           }}
         >
           {visibleTasks.map((task) => (
-            <TaskCard key={task.id} task={task} />
+            <TaskCard
+              key={task.id}
+              task={task}
+              isAccountant={isAccountant}
+              columnId={column.id}
+            />
           ))}
 
           {isLoadingMore && (

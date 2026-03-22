@@ -30,6 +30,7 @@ export function TaskDetailsContent({
     in_review: "En révision",
     completed: "Terminé",
     cancelled: "Annulé",
+    archived: "Archivé",
   };
 
   const statusColors: Record<Task["status"], string> = {
@@ -38,6 +39,7 @@ export function TaskDetailsContent({
     in_review: "#8B5CF6",
     completed: "#10B981",
     cancelled: "#6B7280",
+    archived: "#64748B",
   };
 
   return (
@@ -72,20 +74,20 @@ export function TaskDetailsContent({
           sx={{
             display: "flex",
             alignItems: "center",
-            gap: 1.5,
+            gap: { xs: 1, sm: 1.5 },
           }}
         >
           <Chip
             label={statusLabels[task.status]}
             size="medium"
             sx={{
-              height: 32,
-              fontSize: 14,
+              height: { xs: 28, sm: 32 },
+              fontSize: { xs: 12, sm: 14 },
               fontWeight: 600,
               bgcolor: alpha(statusColors[task.status], 0.1),
               color: statusColors[task.status],
               "& .MuiChip-label": {
-                px: 2,
+                px: { xs: 1.5, sm: 2 },
               },
             }}
           />
@@ -93,13 +95,13 @@ export function TaskDetailsContent({
             label={priorityConfig.label}
             size="medium"
             sx={{
-              height: 32,
-              fontSize: 14,
+              height: { xs: 28, sm: 32 },
+              fontSize: { xs: 12, sm: 14 },
               fontWeight: 600,
               bgcolor: alpha(priorityConfig.color, 0.1),
               color: priorityConfig.color,
               "& .MuiChip-label": {
-                px: 2,
+                px: { xs: 1.5, sm: 2 },
               },
             }}
           />
@@ -112,7 +114,7 @@ export function TaskDetailsContent({
           variant="body2"
           sx={{
             mb: 1,
-            fontSize: 14,
+            fontSize: { xs: 13, sm: 14 },
             fontWeight: 500,
             color: theme.palette.text.secondary,
           }}
@@ -121,17 +123,17 @@ export function TaskDetailsContent({
         </Typography>
         <Box
           sx={{
-            p: 2,
+            p: { xs: 1.5, sm: 2 },
             bgcolor: theme.palette.grey[50],
             borderRadius: 2,
             border: `1px solid ${theme.palette.grey[300]}`,
-            minHeight: 100,
+            minHeight: { xs: 80, sm: 100 },
           }}
         >
           <Typography
             variant="body2"
             sx={{
-              fontSize: 14,
+              fontSize: { xs: 13, sm: 14 },
               color: theme.palette.text.primary,
               lineHeight: 1.6,
             }}
@@ -150,7 +152,7 @@ export function TaskDetailsContent({
               variant="body2"
               sx={{
                 mb: 1,
-                fontSize: 14,
+                fontSize: { xs: 13, sm: 14 },
                 fontWeight: 500,
                 color: theme.palette.text.secondary,
               }}
@@ -159,7 +161,7 @@ export function TaskDetailsContent({
             </Typography>
             <Box
               sx={{
-                p: 1.5,
+                p: { xs: 1.25, sm: 1.5 },
                 bgcolor: theme.palette.grey[50],
                 borderRadius: 2,
                 border: `1px solid ${theme.palette.grey[300]}`,
@@ -168,7 +170,7 @@ export function TaskDetailsContent({
               <Typography
                 variant="body2"
                 sx={{
-                  fontSize: 14,
+                  fontSize: { xs: 13, sm: 14 },
                   color: theme.palette.text.primary,
                 }}
               >
@@ -189,7 +191,7 @@ export function TaskDetailsContent({
               variant="body2"
               sx={{
                 mb: 1,
-                fontSize: 14,
+                fontSize: { xs: 13, sm: 14 },
                 fontWeight: 500,
                 color: theme.palette.text.secondary,
               }}
@@ -198,7 +200,7 @@ export function TaskDetailsContent({
             </Typography>
             <Box
               sx={{
-                p: 1.5,
+                p: { xs: 1.25, sm: 1.5 },
                 bgcolor: theme.palette.grey[50],
                 borderRadius: 2,
                 border: `1px solid ${theme.palette.grey[300]}`,
@@ -207,7 +209,7 @@ export function TaskDetailsContent({
               <Typography
                 variant="body2"
                 sx={{
-                  fontSize: 14,
+                  fontSize: { xs: 13, sm: 14 },
                   color: theme.palette.text.primary,
                 }}
               >
@@ -226,22 +228,28 @@ export function TaskDetailsContent({
               variant="body2"
               sx={{
                 mb: 1,
-                fontSize: 14,
+                fontSize: { xs: 13, sm: 14 },
                 fontWeight: 500,
                 color: theme.palette.text.secondary,
               }}
             >
               Assigné à
             </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: { xs: 0.75, sm: 1 },
+              }}
+            >
               <Avatar
                 alt={task.assignee.username}
                 sx={{
-                  width: 40,
-                  height: 40,
+                  width: { xs: 36, sm: 40 },
+                  height: { xs: 36, sm: 40 },
                   bgcolor: theme.palette.primary.main,
                   color: theme.palette.common.white,
-                  fontSize: 14,
+                  fontSize: { xs: 13, sm: 14 },
                   fontWeight: 600,
                 }}
               >
@@ -250,12 +258,20 @@ export function TaskDetailsContent({
                   : task.assignee.username.charAt(0).toUpperCase()}
               </Avatar>
               <Box>
-                <Typography variant="body2" fontWeight={600}>
+                <Typography
+                  variant="body2"
+                  fontWeight={600}
+                  sx={{ fontSize: { xs: 13, sm: 14 } }}
+                >
                   {task.assignee.firstName && task.assignee.lastName
                     ? `${task.assignee.firstName} ${task.assignee.lastName}`
                     : task.assignee.username}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: 11, sm: 12 } }}
+                >
                   {task.assignee.email}
                 </Typography>
               </Box>

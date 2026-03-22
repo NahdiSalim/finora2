@@ -22,13 +22,25 @@ import {
 } from "src/lib/services/tasksApi";
 import type { KanbanColumn, Task } from "./types";
 import { COLUMN_CONFIG_ACCOUNTANT, COLUMN_CONFIG_COLLABORATOR } from "./types";
+import { useAppSelector } from "src/hooks/use-redux";
+import { ROLE_CODES } from "src/constants/roles";
 
 export default function TaskManagementView() {
   const theme = useTheme();
   const location = useLocation();
+  const { user } = useAppSelector((state) => state.auth);
   const isMesTasks =
     location.pathname.includes("/tasks") &&
     !location.pathname.includes("/task-management");
+
+  const userRole =
+    typeof user?.role === "object" ? user?.role?.code : user?.role;
+  const userRoleUpper = userRole?.toUpperCase();
+  const isAccountant =
+    userRoleUpper === ROLE_CODES.ACCOUNTANT ||
+    userRoleUpper === "COMPTABLE" ||
+    userRoleUpper === ROLE_CODES.ADMINISTRATOR ||
+    userRoleUpper === "ADMINISTRATEUR";
   const [searchValue, setSearchValue] = useState("");
   const [dateFilter, setDateFilter] = useState("today");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -79,7 +91,8 @@ export default function TaskManagementView() {
     }
 
     const filteredTasks = tasksData.data.filter((task: Task) => {
-      if (task.status === "cancelled") return false;
+      if (task.status === "cancelled" || task.status === "archived")
+        return false;
 
       if (searchValue.trim()) {
         const search = searchValue.toLowerCase();
@@ -150,7 +163,7 @@ export default function TaskManagementView() {
         sx={{
           bgcolor: "white",
           borderRadius: 3,
-          p: 2,
+          p: { xs: 1.5, sm: 2 },
           mb: 1.5,
         }}
       >
@@ -164,12 +177,12 @@ export default function TaskManagementView() {
           }}
         >
           {/* Left Side - Title and Caption */}
-          <Box>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography
               variant="h4"
               sx={{
                 fontWeight: 700,
-                fontSize: { xs: 24, md: 28 },
+                fontSize: { xs: 20, sm: 24, md: 28 },
                 color: theme.palette.text.primary,
                 mb: 0.5,
               }}
@@ -179,8 +192,9 @@ export default function TaskManagementView() {
             <Typography
               variant="body2"
               sx={{
-                fontSize: 14,
+                fontSize: { xs: 13, sm: 14 },
                 color: theme.palette.text.secondary,
+                display: { xs: "none", sm: "block" },
               }}
             >
               {isMesTasks
@@ -191,14 +205,29 @@ export default function TaskManagementView() {
 
           {/* Right Side - Action Button (Accountant only) */}
           {!isMesTasks && (
-            <Box>
+            <Box sx={{ flexShrink: 0 }}>
               <CustomButton
                 variant="contained"
                 color="primary"
                 startIcon={<Plus size={18} />}
                 onClick={() => handleAddTask()}
+                sx={{
+                  fontSize: { xs: 13, sm: 14 },
+                  px: { xs: 2, sm: 3 },
+                }}
               >
-                Ajouter une tâche
+                <Box
+                  component="span"
+                  sx={{ display: { xs: "none", sm: "inline" } }}
+                >
+                  Ajouter une tâche
+                </Box>
+                <Box
+                  component="span"
+                  sx={{ display: { xs: "inline", sm: "none" } }}
+                >
+                  Ajouter
+                </Box>
               </CustomButton>
             </Box>
           )}
@@ -210,7 +239,7 @@ export default function TaskManagementView() {
         sx={{
           bgcolor: "white",
           borderRadius: 3,
-          p: 2,
+          p: { xs: 1.5, sm: 2 },
         }}
       >
         {/* Controls Row */}
@@ -219,13 +248,18 @@ export default function TaskManagementView() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 2,
-            mb: 3,
-            flexWrap: { xs: "wrap", md: "nowrap" },
+            gap: { xs: 1.5, sm: 2 },
+            mb: { xs: 2, sm: 3 },
+            flexWrap: "wrap",
           }}
         >
           {/* Search Bar */}
-          <Box sx={{ width: { xs: "100%", md: "20%" }, minWidth: { md: 280 } }}>
+          <Box
+            sx={{
+              width: { xs: "100%", sm: "60%", md: "35%", lg: "25%" },
+              minWidth: { sm: 200 },
+            }}
+          >
             <CustomInput
               fullWidth
               placeholder="Rechercher"
@@ -238,8 +272,8 @@ export default function TaskManagementView() {
           {/* Date Filter */}
           <Box
             sx={{
-              width: { xs: "100%", sm: "auto" },
-              minWidth: { xs: "100%", sm: 200 },
+              width: { xs: "100%", sm: "35%", md: "auto" },
+              minWidth: { xs: "100%", sm: 180, md: 200 },
               display: "flex",
               alignItems: "stretch",
               borderRadius: "10px",
@@ -324,6 +358,7 @@ export default function TaskManagementView() {
             columns={columns}
             onAddTask={handleAddTask}
             isCollaboratorView={isMesTasks}
+            isAccountant={!isMesTasks && isAccountant}
           />
         )}
       </Card>

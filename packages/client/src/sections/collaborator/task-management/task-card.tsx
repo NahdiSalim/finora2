@@ -1,5 +1,13 @@
-import { Box, Typography, Avatar, useTheme, alpha, Chip } from "@mui/material";
-import { Flag, MessageCircle, Folder } from "lucide-react";
+import {
+  Box,
+  Typography,
+  Avatar,
+  useTheme,
+  alpha,
+  Chip,
+  IconButton,
+} from "@mui/material";
+import { Flag, MessageCircle, Folder, Archive } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -7,13 +15,21 @@ import { useDashboardBase } from "src/hooks/useDashboardBase";
 import type { Task } from "./types";
 import { PRIORITY_CONFIG } from "./types";
 import { format } from "date-fns";
+import { useArchiveTaskMutation } from "src/lib/services/tasksApi";
 
 interface TaskCardProps {
   task: Task;
   isDragging?: boolean;
+  isAccountant?: boolean;
+  columnId?: string;
 }
 
-export function TaskCard({ task, isDragging = false }: TaskCardProps) {
+export function TaskCard({
+  task,
+  isDragging = false,
+  isAccountant = false,
+  columnId,
+}: TaskCardProps) {
   const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -23,6 +39,8 @@ export function TaskCard({ task, isDragging = false }: TaskCardProps) {
     !location.pathname.includes("/task-management")
       ? "tasks"
       : "collaborators/task-management";
+
+  const [archiveTask, { isLoading: isArchiving }] = useArchiveTaskMutation();
 
   const {
     attributes,
@@ -47,6 +65,15 @@ export function TaskCard({ task, isDragging = false }: TaskCardProps) {
     }
   };
 
+  const handleArchive = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await archiveTask(task.id).unwrap();
+    } catch (err) {
+      console.error("Failed to archive task:", err);
+    }
+  };
+
   const priorityConfig = PRIORITY_CONFIG[task.priority];
   const formattedDate = task.dueDate
     ? format(new Date(task.dueDate), "dd/MM/yy")
@@ -67,7 +94,7 @@ export function TaskCard({ task, isDragging = false }: TaskCardProps) {
       sx={{
         bgcolor: "white",
         borderRadius: 2,
-        p: 2,
+        p: { xs: 1.5, sm: 2 },
         boxShadow: isDragging ? theme.shadows[8] : theme.shadows[1],
         cursor: isDragging ? "grabbing" : "grab",
         transition: "all 0.2s ease",
@@ -78,18 +105,18 @@ export function TaskCard({ task, isDragging = false }: TaskCardProps) {
       }}
     >
       {/* Priority Badge */}
-      <Box sx={{ mb: 1.5 }}>
+      <Box sx={{ mb: { xs: 1, sm: 1.5 } }}>
         <Chip
           label={priorityConfig.label}
           size="small"
           sx={{
-            height: 22,
-            fontSize: 11,
+            height: { xs: 20, sm: 22 },
+            fontSize: { xs: 10, sm: 11 },
             fontWeight: 600,
             bgcolor: alpha(priorityConfig.color, 0.1),
             color: priorityConfig.color,
             "& .MuiChip-label": {
-              px: 1.25,
+              px: { xs: 1, sm: 1.25 },
             },
           }}
         />
@@ -100,9 +127,10 @@ export function TaskCard({ task, isDragging = false }: TaskCardProps) {
         variant="h6"
         sx={{
           fontWeight: 600,
-          fontSize: 14,
+          fontSize: { xs: 13, sm: 14 },
           color: theme.palette.text.primary,
           mb: task.description ? 1 : 0,
+          lineHeight: 1.4,
         }}
       >
         {task.title}
@@ -113,12 +141,12 @@ export function TaskCard({ task, isDragging = false }: TaskCardProps) {
         <Typography
           variant="body2"
           sx={{
-            fontSize: 12,
+            fontSize: { xs: 11, sm: 12 },
             color: theme.palette.text.secondary,
-            mb: 1.5,
+            mb: { xs: 1, sm: 1.5 },
             lineHeight: 1.5,
             display: "-webkit-box",
-            WebkitLineClamp: 3,
+            WebkitLineClamp: { xs: 2, sm: 3 },
             WebkitBoxOrient: "vertical",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -134,13 +162,19 @@ export function TaskCard({ task, isDragging = false }: TaskCardProps) {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          mt: 1.5,
-          pt: 1.5,
+          mt: { xs: 1, sm: 1.5 },
+          pt: { xs: 1, sm: 1.5 },
           borderTop: `1px solid ${theme.palette.grey[200]}`,
         }}
       >
         {/* Left: Date and Avatars */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: { xs: 1, sm: 1.5 },
+          }}
+        >
           {/* Date with Flag */}
           {formattedDate && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -148,7 +182,7 @@ export function TaskCard({ task, isDragging = false }: TaskCardProps) {
               <Typography
                 variant="caption"
                 sx={{
-                  fontSize: 12,
+                  fontSize: { xs: 11, sm: 12 },
                   color: theme.palette.text.secondary,
                 }}
               >
@@ -161,9 +195,9 @@ export function TaskCard({ task, isDragging = false }: TaskCardProps) {
           <Avatar
             alt={assigneeName}
             sx={{
-              width: 24,
-              height: 24,
-              fontSize: 10,
+              width: { xs: 22, sm: 24 },
+              height: { xs: 22, sm: 24 },
+              fontSize: { xs: 9, sm: 10 },
               bgcolor: theme.palette.primary.main,
               color: theme.palette.common.white,
             }}
@@ -172,15 +206,21 @@ export function TaskCard({ task, isDragging = false }: TaskCardProps) {
           </Avatar>
         </Box>
 
-        {/* Right: Comments and Files */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        {/* Right: Comments, Files, and Archive Button */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: { xs: 1, sm: 1.5 },
+          }}
+        >
           {/* Comments */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <MessageCircle size={14} color={theme.palette.text.secondary} />
             <Typography
               variant="caption"
               sx={{
-                fontSize: 12,
+                fontSize: { xs: 11, sm: 12 },
                 color: theme.palette.text.secondary,
               }}
             >
@@ -194,13 +234,38 @@ export function TaskCard({ task, isDragging = false }: TaskCardProps) {
             <Typography
               variant="caption"
               sx={{
-                fontSize: 12,
+                fontSize: { xs: 11, sm: 12 },
                 color: theme.palette.text.secondary,
               }}
             >
               {task.attachments?.length || 0}
             </Typography>
           </Box>
+
+          {/* Archive Button - Only for completed tasks and accountants */}
+          {columnId === "completed" && isAccountant && (
+            <IconButton
+              size="small"
+              onClick={handleArchive}
+              disabled={isArchiving}
+              sx={{
+                width: { xs: 22, sm: 24 },
+                height: { xs: 22, sm: 24 },
+                color: "#64748B",
+                bgcolor: alpha("#64748B", 0.1),
+                borderRadius: 1,
+                "&:hover": {
+                  bgcolor: alpha("#64748B", 0.2),
+                  color: "#475569",
+                },
+                "&:disabled": {
+                  opacity: 0.5,
+                },
+              }}
+            >
+              <Archive size={12} />
+            </IconButton>
+          )}
         </Box>
       </Box>
     </Box>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Box, Card, useTheme, CircularProgress, Alert } from "@mui/material";
-import { Loader2, Check, Send } from "lucide-react";
+import { Loader2, Check, Send, Archive } from "lucide-react";
 import { PageHeader } from "src/layouts/components/page-header";
 import { useDashboardBase } from "src/hooks/useDashboardBase";
 import { useAppSelector } from "src/hooks/use-redux";
@@ -15,6 +15,7 @@ import {
   useStartTaskMutation,
   useSubmitForReviewMutation,
   useCompleteTaskMutation,
+  useArchiveTaskMutation,
 } from "src/lib/services/tasksApi";
 
 export default function TaskDetailsView() {
@@ -35,6 +36,7 @@ export default function TaskDetailsView() {
   const [submitForReview, { isLoading: isSubmitting }] =
     useSubmitForReviewMutation();
   const [completeTask, { isLoading: isCompleting }] = useCompleteTaskMutation();
+  const [archiveTask, { isLoading: isArchiving }] = useArchiveTaskMutation();
 
   const task = taskData?.data;
 
@@ -89,6 +91,16 @@ export default function TaskDetailsView() {
       refetch();
     } catch (err) {
       console.error("Failed to complete task:", err);
+    }
+  };
+
+  const handleArchiveTask = async () => {
+    if (!task) return;
+    try {
+      await archiveTask(task.id).unwrap();
+      handleBack();
+    } catch (err) {
+      console.error("Failed to archive task:", err);
     }
   };
 
@@ -151,6 +163,25 @@ export default function TaskDetailsView() {
       };
     }
 
+    if (task.status === "completed" && isAccountant) {
+      return {
+        label: "Archiver",
+        icon: <Archive size={18} />,
+        onClick: handleArchiveTask,
+        variant: "contained" as const,
+        color: "secondary" as const,
+        disabled: isArchiving,
+        sx: {
+          borderRadius: 1.5,
+          bgcolor: "#64748B",
+          color: "white",
+          "&:hover": {
+            bgcolor: "#475569",
+          },
+        },
+      };
+    }
+
     return undefined;
   };
 
@@ -202,7 +233,7 @@ export default function TaskDetailsView() {
       <Box
         sx={{
           display: "flex",
-          gap: 2,
+          gap: { xs: 1.5, sm: 2 },
           flexDirection: { xs: "column", lg: "row" },
           height: "100%",
           width: "100%",
@@ -277,7 +308,7 @@ export default function TaskDetailsView() {
               bgcolor: "white",
               borderRadius: 1.5,
               border: `1px solid ${theme.palette.grey[200]}`,
-              p: 3,
+              p: { xs: 2, sm: 2.5, md: 3 },
               height: { xs: "auto", lg: "calc(100vh - 300px)" },
               minHeight: { xs: 400, lg: "calc(100vh - 300px)" },
               display: "flex",

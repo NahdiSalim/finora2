@@ -178,6 +178,14 @@ export default function TaskModal({
       }}
       sx={{
         zIndex: theme.zIndex.modal,
+        "& .MuiDialog-paper": {
+          margin: { xs: 0, sm: 2, md: 4 },
+          maxHeight: {
+            xs: "100%",
+            sm: "calc(100% - 32px)",
+            md: "calc(100% - 64px)",
+          },
+        },
       }}
       PaperProps={{
         sx: {

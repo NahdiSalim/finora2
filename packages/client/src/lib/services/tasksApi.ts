@@ -25,7 +25,13 @@ export interface Task {
   description: string | null;
   type: "accounting" | "review" | "meeting" | "document" | "other";
   priority: "low" | "medium" | "high" | "urgent";
-  status: "todo" | "in_progress" | "in_review" | "completed" | "cancelled";
+  status:
+    | "todo"
+    | "in_progress"
+    | "in_review"
+    | "completed"
+    | "cancelled"
+    | "archived";
   dueDate: string | null;
   progress: number;
   assigneeId: number;
@@ -78,7 +84,13 @@ export interface UpdateTaskDto {
   description?: string;
   type?: "accounting" | "review" | "meeting" | "document" | "other";
   priority?: "low" | "medium" | "high" | "urgent";
-  status?: "todo" | "in_progress" | "in_review" | "completed" | "cancelled";
+  status?:
+    | "todo"
+    | "in_progress"
+    | "in_review"
+    | "completed"
+    | "cancelled"
+    | "archived";
   dueDate?: string;
   assigneeId?: number;
   addCollaborators?: number[];
@@ -255,6 +267,22 @@ export const tasksApi = createApi({
       ],
     }),
 
+    // Archive task (Accountant only)
+    archiveTask: builder.mutation<
+      { success: boolean; message: string; data: Task },
+      number
+    >({
+      query: (id) => ({
+        url: `/tasks/${id}/archive`,
+        method: "PUT",
+      }),
+      invalidatesTags: (result, error, id) => [
+        { type: "Task", id },
+        { type: "Tasks", id: "MY_CREATED_LIST" },
+        { type: "Tasks", id: "MY_ASSIGNED_LIST" },
+      ],
+    }),
+
     // Add comment to task
     addComment: builder.mutation<
       { success: boolean; message: string; data: TaskComment },
@@ -293,6 +321,7 @@ export const {
   useStartTaskMutation,
   useSubmitForReviewMutation,
   useCompleteTaskMutation,
+  useArchiveTaskMutation,
   useAddCommentMutation,
   useDeleteTaskMutation,
 } = tasksApi;

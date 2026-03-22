@@ -15,24 +15,30 @@ import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useState, useEffect } from "react";
 import { BoardColumn } from "./board-column";
 import { TaskCard } from "./task-card";
-import { useUpdateTaskMutation } from "src/lib/services/tasksApi";
+import {
+  useUpdateTaskMutation,
+  useArchiveTaskMutation,
+} from "src/lib/services/tasksApi";
 import type { KanbanColumn, Task } from "./types";
 
 interface KanbanBoardProps {
   columns: KanbanColumn[];
   onAddTask?: (columnId: KanbanColumn["id"]) => void;
   isCollaboratorView?: boolean;
+  isAccountant?: boolean;
 }
 
 export function KanbanBoard({
   columns,
   onAddTask,
   isCollaboratorView = false,
+  isAccountant = false,
 }: KanbanBoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [localColumns, setLocalColumns] = useState<KanbanColumn[]>(columns);
   const [updateTask] = useUpdateTaskMutation();
+  const [archiveTask] = useArchiveTaskMutation();
 
   const STORAGE_KEY = `kanban-order-${isCollaboratorView ? "collaborator" : "accountant"}`;
 
@@ -51,6 +57,7 @@ export function KanbanBoard({
       columnsToSave.forEach((col) => {
         orderMap[col.id] = col.tasks.map((t) => t.id);
       });
+      console.log("Saving task order:", STORAGE_KEY, orderMap);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(orderMap));
     } catch (error) {
       console.error("Failed to save task order:", error);
@@ -59,11 +66,19 @@ export function KanbanBoard({
 
   useEffect(() => {
     const savedOrder = loadTaskOrder();
+    console.log("🔵 Loading saved order:", STORAGE_KEY, savedOrder);
+    console.log(
+      "🔵 Incoming columns task IDs:",
+      columns.map((col) => ({ [col.id]: col.tasks.map((t) => t.id) })),
+    );
 
     if (Object.keys(savedOrder).length > 0) {
       const reorderedColumns = columns.map((col) => {
         const savedTaskIds = savedOrder[col.id];
-        if (!savedTaskIds || savedTaskIds.length === 0) return col;
+        if (!savedTaskIds || savedTaskIds.length === 0) {
+          console.log(`🔵 No saved order for column ${col.id}`);
+          return col;
+        }
 
         const tasksMap = new Map(col.tasks.map((t) => [t.id, t]));
         const orderedTasks: Task[] = [];
@@ -81,14 +96,23 @@ export function KanbanBoard({
           orderedTasks.unshift(task);
         });
 
+        console.log(
+          `🔵 Column ${col.id}: saved IDs:`,
+          savedTaskIds,
+          `| original order:`,
+          col.tasks.map((t) => t.id),
+          `| reordered:`,
+          orderedTasks.map((t) => t.id),
+        );
         return { ...col, tasks: orderedTasks };
       });
 
       setLocalColumns(reorderedColumns);
     } else {
+      console.log("🔵 No saved order found, using original columns");
       setLocalColumns(columns);
     }
-  }, [columns]);
+  }, [columns, STORAGE_KEY]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -274,6 +298,21 @@ export function KanbanBoard({
     saveTaskOrder(updatedColumns);
   };
 
+  const handleArchiveAll = async (columnId: KanbanColumn["id"]) => {
+    if (columnId !== "completed") return;
+
+    const completedColumn = localColumns.find((col) => col.id === "completed");
+    if (!completedColumn || completedColumn.tasks.length === 0) return;
+
+    try {
+      await Promise.all(
+        completedColumn.tasks.map((task) => archiveTask(task.id).unwrap()),
+      );
+    } catch (err) {
+      console.error("Failed to archive all tasks:", err);
+    }
+  };
+
   return (
     <DndContext
       sensors={sensors}
@@ -286,11 +325,12 @@ export function KanbanBoard({
       <Box
         sx={{
           display: "flex",
-          gap: 2,
+          gap: { xs: 1.5, sm: 2 },
           width: "100%",
-          overflowX: { xs: "auto", sm: "hidden" },
+          overflowX: { xs: "auto", lg: "hidden" },
           overflowY: "hidden",
           pb: 2,
+          minHeight: { xs: "60vh", sm: "70vh" },
           "&::-webkit-scrollbar": {
             height: 8,
           },
@@ -309,6 +349,8 @@ export function KanbanBoard({
             column={column}
             onAddTask={isCollaboratorView ? undefined : onAddTask}
             onSortByPriority={handleSortByPriority}
+            onArchiveAll={handleArchiveAll}
+            isAccountant={isAccountant}
           />
         ))}
       </Box>

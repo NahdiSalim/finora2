@@ -22,7 +22,13 @@ export interface Task {
   description: string | null;
   type: "accounting" | "review" | "meeting" | "document" | "other";
   priority: "low" | "medium" | "high" | "urgent";
-  status: "todo" | "in_progress" | "in_review" | "completed" | "cancelled";
+  status:
+    | "todo"
+    | "in_progress"
+    | "in_review"
+    | "completed"
+    | "cancelled"
+    | "archived";
   dueDate: string | null;
   progress: number;
   assigneeId: number;

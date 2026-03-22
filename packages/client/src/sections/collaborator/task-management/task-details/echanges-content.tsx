@@ -73,12 +73,12 @@ export function EchangesContent({
       }}
     >
       {/* Title */}
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: { xs: 2, sm: 3 } }}>
         <Typography
           variant="h6"
           sx={{
             fontWeight: 700,
-            fontSize: 18,
+            fontSize: { xs: 16, sm: 18 },
             color: theme.palette.text.primary,
           }}
         >
@@ -93,11 +93,11 @@ export function EchangesContent({
           overflowY: "auto",
           display: "flex",
           flexDirection: "column",
-          gap: 2,
+          gap: { xs: 1.5, sm: 2 },
           pr: 1,
           mb: 2,
-          maxHeight: "calc(100vh - 450px)",
-          minHeight: 200,
+          maxHeight: { xs: "300px", sm: "400px", lg: "calc(100vh - 450px)" },
+          minHeight: { xs: 150, sm: 200 },
         }}
       >
         {task.comments && task.comments.length > 0 ? (
@@ -107,7 +107,7 @@ export function EchangesContent({
               sx={{
                 bgcolor: "#F9FAFB",
                 borderRadius: 2,
-                p: 2,
+                p: { xs: 1.5, sm: 2 },
               }}
             >
               {/* Header with Avatar and Name */}
@@ -115,16 +115,16 @@ export function EchangesContent({
                 sx={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 1.5,
-                  mb: 1.5,
+                  gap: { xs: 1, sm: 1.5 },
+                  mb: { xs: 1, sm: 1.5 },
                 }}
               >
                 <Avatar
                   sx={{
-                    width: 32,
-                    height: 32,
+                    width: { xs: 28, sm: 32 },
+                    height: { xs: 28, sm: 32 },
                     bgcolor: theme.palette.primary.main,
-                    fontSize: 12,
+                    fontSize: { xs: 11, sm: 12 },
                     fontWeight: 600,
                   }}
                 >
@@ -134,7 +134,7 @@ export function EchangesContent({
                   variant="body2"
                   sx={{
                     fontWeight: 700,
-                    fontSize: 14,
+                    fontSize: { xs: 13, sm: 14 },
                     color: theme.palette.text.primary,
                   }}
                 >
@@ -146,10 +146,10 @@ export function EchangesContent({
               <Typography
                 variant="body2"
                 sx={{
-                  fontSize: 14,
+                  fontSize: { xs: 13, sm: 14 },
                   color: theme.palette.text.secondary,
                   lineHeight: 1.6,
-                  mb: 1.5,
+                  mb: { xs: 1, sm: 1.5 },
                 }}
               >
                 {comment.comment}
@@ -163,11 +163,11 @@ export function EchangesContent({
                   gap: 0.5,
                 }}
               >
-                <Clock size={14} color={theme.palette.text.disabled} />
+                <Clock size={12} color={theme.palette.text.disabled} />
                 <Typography
                   variant="caption"
                   sx={{
-                    fontSize: 12,
+                    fontSize: { xs: 11, sm: 12 },
                     color: theme.palette.text.disabled,
                   }}
                 >
@@ -200,9 +200,9 @@ export function EchangesContent({
         sx={{
           display: "flex",
           alignItems: "center",
-          gap: 1.5,
+          gap: { xs: 1, sm: 1.5 },
           mt: "auto",
-          pt: 2,
+          pt: { xs: 1.5, sm: 2 },
           borderTop: `1px solid ${theme.palette.grey[200]}`,
         }}
       >
@@ -214,8 +214,8 @@ export function EchangesContent({
             alignItems: "center",
             bgcolor: theme.palette.grey[100],
             borderRadius: "24px",
-            px: 2,
-            py: 1,
+            px: { xs: 1.5, sm: 2 },
+            py: { xs: 0.75, sm: 1 },
             border: `1px solid ${theme.palette.grey[300]}`,
             "&:focus-within": {
               borderColor: theme.palette.primary.main,
@@ -249,8 +249,8 @@ export function EchangesContent({
           onClick={handleSubmitComment}
           disabled={!commentText.trim() || isSubmitting}
           sx={{
-            width: 44,
-            height: 44,
+            width: { xs: 40, sm: 44 },
+            height: { xs: 40, sm: 44 },
             bgcolor: "#F97316",
             borderRadius: 2,
             "&:hover": {

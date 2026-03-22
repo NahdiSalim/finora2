@@ -587,6 +587,7 @@ export class TaskService {
           dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
           assigneeId: dto.assigneeId,
           progress: dto.progress,
+          order: dto.order,
           attachments: allAttachments,
           completedAt: dto.status === TaskStatus.COMPLETED ? new Date() : undefined,
         },
@@ -630,6 +631,7 @@ export class TaskService {
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         assigneeId: dto.assigneeId,
         progress: dto.progress,
+        order: dto.order,
         attachments: allAttachments,
         completedAt: dto.status === TaskStatus.COMPLETED ? new Date() : undefined,
       },
@@ -978,6 +980,63 @@ export class TaskService {
     return {
       success: true,
       message: 'Task deleted successfully',
+    };
+  }
+  /**
+   * Reorder tasks (drag & drop) — updates order field for each task
+   */
+  async reorderTasks(userId: number, orderedIds: { id: number; order: number }[], status?: string) {
+    await Promise.all(
+      orderedIds.map(({ id, order }) =>
+        this.prisma.task.updateMany({
+          where: {
+            id,
+            ...(status ? { status } : {}),
+            OR: [{ assigneeId: userId }, { createdById: userId }],
+          },
+          data: { order },
+        })
+      )
+    );
+
+    return { success: true, message: 'Tasks reordered successfully' };
+  }
+
+  /**
+   * Get tasks filtered by priority
+   */
+  async getTasksByPriority(
+    userId: number,
+    priority: string | string[],
+    page: number = 1,
+    limit: number = 10
+  ) {
+    const skip = (page - 1) * limit;
+    const priorities = Array.isArray(priority) ? priority : [priority];
+
+    const where: any = {
+      OR: [{ assigneeId: userId }, { createdById: userId }],
+      priority: { in: priorities },
+    };
+
+    const [total, tasks] = await Promise.all([
+      this.prisma.task.count({ where }),
+      this.prisma.task.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
+        include: {
+          assignee: { select: { id: true, username: true, firstName: true, lastName: true } },
+          createdBy: { select: { id: true, username: true } },
+        },
+      }),
+    ]);
+
+    return {
+      success: true,
+      data: tasks,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
 }

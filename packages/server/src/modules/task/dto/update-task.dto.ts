@@ -90,6 +90,12 @@ export class UpdateTaskDto {
   @IsOptional()
   progress?: number;
 
+  @ApiProperty({ example: 2, description: 'Order position for drag & drop', required: false })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  order?: number;
+
   @ApiProperty({
     type: 'array',
     items: { type: 'string', format: 'binary' },

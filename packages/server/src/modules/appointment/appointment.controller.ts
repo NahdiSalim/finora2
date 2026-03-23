@@ -90,6 +90,23 @@ export class AppointmentController {
   }
 
   /**
+   * Get all slots for an accountant on a given date (available + booked)
+   */
+  @Get('slots/available')
+  @ApiOperation({
+    summary: 'Get all time slots for an accountant on a specific date (excludes booked)',
+  })
+  @ApiQuery({ name: 'accountantId', required: true, type: Number, example: 2 })
+  @ApiQuery({ name: 'date', required: true, type: String, example: '2026-04-28' })
+  @ApiResponse({ status: 200, description: 'List of available slots' })
+  async getAvailableSlots(
+    @Query('accountantId', ParseIntPipe) accountantId: number,
+    @Query('date') date: string
+  ) {
+    return this.appointmentService.getAvailableSlots(accountantId, date);
+  }
+
+  /**
    * Get appointment by ID
    */
   @Get(':id')
@@ -230,22 +247,5 @@ export class AppointmentController {
   @ApiOperation({ summary: '[Accountant] Delete an availability slot' })
   async deleteAvailability(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
     return this.appointmentService.deleteAvailability(id, req.user!.id);
-  }
-
-  /**
-   * Get available slots for an accountant on a given date (Client)
-   */
-  @Get('slots')
-  @ApiOperation({
-    summary: '[Client] Get available time slots for an accountant on a specific date',
-  })
-  @ApiQuery({ name: 'accountantId', required: true, type: Number, example: 2 })
-  @ApiQuery({ name: 'date', required: true, type: String, example: '2026-04-28' })
-  @ApiResponse({ status: 200, description: 'List of available slots' })
-  async getAvailableSlots(
-    @Query('accountantId', ParseIntPipe) accountantId: number,
-    @Query('date') date: string
-  ) {
-    return this.appointmentService.getAvailableSlots(accountantId, date);
   }
 }

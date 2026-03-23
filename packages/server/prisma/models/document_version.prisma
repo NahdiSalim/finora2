@@ -1,0 +1,18 @@
+model DocumentVersion {
+  id            Int      @id @default(autoincrement())
+  documentId    Int
+  versionNumber Int      // 1, 2, 3...
+  url           String   // chemin MinIO de cette version
+  name          String   // nom du fichier à ce moment
+  size          Int?
+  uploadedBy    Int
+  comment       String?  @db.Text // note optionnelle ex: "correction TVA"
+  createdAt     DateTime @default(now())
+
+  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploader      User     @relation("DocumentVersionUploader", fields: [uploadedBy], references: [id])
+
+  @@index([documentId])
+  @@index([uploadedBy])
+  @@map("document_versions")
+}

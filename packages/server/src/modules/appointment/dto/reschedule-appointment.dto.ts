@@ -1,28 +1,23 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, Matches } from 'class-validator';
+
+const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 export class RescheduleAppointmentDto {
-  @ApiProperty({
-    example: '2026-03-25T14:00:00Z',
-    description: 'New start time',
-  })
-  @IsDateString()
+  @ApiProperty({ example: '2026-04-25', description: 'Nouvelle date (YYYY-MM-DD)' })
+  @IsString()
   @IsNotEmpty()
-  startTime: string;
+  @Matches(DATE_REGEX, { message: 'date doit être au format YYYY-MM-DD' })
+  date: string;
 
-  @ApiProperty({
-    example: '2026-03-25T15:00:00Z',
-    description: 'New end time',
-  })
-  @IsDateString()
+  @ApiProperty({ example: '14:00', description: 'Nouvelle heure (HH:MM)' })
+  @IsString()
   @IsNotEmpty()
-  endTime: string;
+  @Matches(TIME_REGEX, { message: 'hour doit être au format HH:MM' })
+  hour: string;
 
-  @ApiProperty({
-    example: 'Proposition de nouveau créneau',
-    description: 'Reason for rescheduling',
-    required: false,
-  })
+  @ApiProperty({ example: 'Proposition de nouveau créneau', required: false })
   @IsString()
   @IsOptional()
   reason?: string;

@@ -32,16 +32,13 @@ export class AppointmentController {
   constructor(private readonly appointmentService: AppointmentService) {}
 
   /**
-   * Create a new appointment (Client)
+   * Create a new appointment (Client or Accountant)
    */
   @Post()
-  @UseGuards(RolesGuard)
-  @Roles('CLIENT')
-  @ApiOperation({ summary: '[Client] Create a new appointment request' })
+  @ApiOperation({ summary: 'Create a new appointment (client or accountant)' })
   @ApiResponse({ status: 201, description: 'Appointment created successfully' })
   async createAppointment(@Body() dto: CreateAppointmentDto, @Req() req: AuthRequest) {
-    const clientId = req.user!.id;
-    return this.appointmentService.createAppointment(dto, clientId);
+    return this.appointmentService.createAppointment(dto, req.user!.id);
   }
 
   /**

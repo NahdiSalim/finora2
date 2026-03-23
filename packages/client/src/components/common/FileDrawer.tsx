@@ -963,7 +963,7 @@ function DocumentDetailsPanel({
                 <FileText size={15} color={theme.palette.primary.main} />
               </Box>
               <Typography
-                variant="subtitle2"
+                variant="caption"
                 sx={{
                   fontWeight: 650,
                   letterSpacing: "-0.01em",
@@ -1091,7 +1091,7 @@ function DocumentDetailsPanel({
                 <Calculator size={15} color={theme.palette.primary.main} />
               </Box>
               <Typography
-                variant="subtitle2"
+                variant="caption"
                 sx={{
                   fontWeight: 650,
                   letterSpacing: "-0.01em",
@@ -1173,54 +1173,54 @@ function DocumentDetailsPanel({
 
           {/* ── Section: Liste des articles ── */}
           <Box>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-                mb: 2,
-                pb: 1.25,
-                borderBottom: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
-              }}
-            >
+            <Box>
               <Box
                 sx={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 1.5,
-                  background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.15)}, ${alpha(theme.palette.primary.main, 0.05)})`,
-                  border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
+                  justifyContent: "space-between",
+                  gap: 1,
+                  mb: 2,
+                  pb: 1.25,
+                  borderBottom: (theme2) =>
+                    `1px solid ${theme2.palette.divider}`,
                 }}
               >
-                <List size={15} color={theme.palette.primary.main} />
-              </Box>
-              <Typography
-                variant="subtitle2"
-                sx={{
-                  fontWeight: 650,
-                  letterSpacing: "-0.01em",
-                  lineHeight: 1.2,
-                }}
-              >
-                Liste des articles . {lineItems.length} article
-                {lineItems.length !== 1 ? "s" : ""}
-              </Typography>
-
-              {!isViewMode && (
-                <CustomButton
-                  variant="outlined"
-                  size="small"
-                  onClick={addLineItem}
-                  disabled={isViewMode}
-                  sx={{ flexShrink: 0 }}
+                <Box
+                  sx={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 1.5,
+                    background: (theme2) =>
+                      `linear-gradient(135deg, ${alpha(theme2.palette.primary.main, 0.12)}, ${alpha(theme2.palette.primary.main, 0.04)})`,
+                    border: (theme2) =>
+                      `1px solid ${alpha(theme2.palette.primary.main, 0.2)}`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
                 >
-                  + Ajouter
-                </CustomButton>
-              )}
+                  <List size={15} color={theme.palette.primary.main} />
+                </Box>
+                <Typography variant="caption" sx={{ fontWeight: 600, flex: 1 }}>
+                  Liste des articles{" "}
+                  <Box component="span" sx={{ color: theme.palette.info.main }}>
+                    ({lineItems.length} article
+                    {lineItems.length !== 1 ? "s" : ""})
+                  </Box>
+                </Typography>
+                {!isViewMode && (
+                  <CustomButton
+                    variant="outlined"
+                    size="small"
+                    onClick={addLineItem}
+                    sx={{ flexShrink: 0 }}
+                  >
+                    + Ajouter
+                  </CustomButton>
+                )}
+              </Box>
             </Box>
 
             <Box
@@ -1693,7 +1693,7 @@ function EditFileModal({
               sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}
             >
               <FileText size={16} />
-              <Typography variant="subtitle2">Informations de base</Typography>
+              <Typography variant="caption">Informations de base</Typography>
             </Box>
             <Grid container spacing={1.5}>
               <Grid size={12}>
@@ -1749,7 +1749,7 @@ function EditFileModal({
           </Box>
 
           <Box>
-            <Typography variant="subtitle2" gutterBottom>
+            <Typography variant="caption" gutterBottom>
               Choisir la destination du fichier
             </Typography>
             <Typography variant="body2" color="text.secondary">
@@ -1764,7 +1764,7 @@ function EditFileModal({
               sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}
             >
               <Calculator size={16} />
-              <Typography variant="subtitle2">Détails financiers</Typography>
+              <Typography variant="caption">Détails financiers</Typography>
             </Box>
             <Grid container spacing={1.5}>
               <Grid size={12}>

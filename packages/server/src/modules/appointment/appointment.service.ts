@@ -133,15 +133,14 @@ export class AppointmentService {
   }
 
   /**
-   * Get available slots for an accountant on a given date (Client)
-   * Generates slots from Availability rules, excludes already booked ones
+   * Get available (non-booked) slots for an accountant on a given date
    */
   async getAvailableSlots(accountantId: number, date: string) {
     const targetDate = new Date(date);
     const dayNames = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
     const dayName = dayNames[targetDate.getDay()];
 
-    // Get matching availability rules (recurring for this day OR specific date)
+    // Get matching availability rules
     const rules = await this.prisma.availability.findMany({
       where: {
         accountantId,
@@ -155,15 +154,16 @@ export class AppointmentService {
 
     if (rules.length === 0) return { success: true, data: [] };
 
-    // Get already booked slots for this date
+    // Get already booked slot times for this date
     const bookedSlots = await this.prisma.availabilitySlot.findMany({
       where: { accountantId, date: targetDate, status: 'booked' },
       select: { startTime: true },
     });
-    const bookedTimes = new Set(bookedSlots.map((s) => s.startTime));
+    const bookedTimes = new Set(bookedSlots.map((s: any) => s.startTime));
 
-    // Generate slots from rules
-    const slots: any[] = [];
+    // Generate available slots from rules, skip booked ones
+    const slots: { startTime: string; endTime: string; availabilityId: number }[] = [];
+
     for (const rule of rules) {
       const [startH, startM] = rule.startTime.split(':').map(Number);
       const [endH, endM] = rule.endTime.split(':').map(Number);
@@ -174,25 +174,9 @@ export class AppointmentService {
         const slotStart = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
         const slotEnd = `${String(Math.floor((t + rule.slotDuration) / 60)).padStart(2, '0')}:${String((t + rule.slotDuration) % 60).padStart(2, '0')}`;
 
-        if (bookedTimes.has(slotStart)) continue; // already booked
+        if (bookedTimes.has(slotStart)) continue;
 
-        // Upsert slot in DB (create if not exists)
-        const slot = await this.prisma.availabilitySlot.upsert({
-          where: {
-            accountantId_date_startTime: { accountantId, date: targetDate, startTime: slotStart },
-          },
-          update: {},
-          create: {
-            availabilityId: rule.id,
-            accountantId,
-            date: targetDate,
-            startTime: slotStart,
-            endTime: slotEnd,
-            status: 'available',
-          },
-        });
-
-        slots.push(slot);
+        slots.push({ startTime: slotStart, endTime: slotEnd, availabilityId: rule.id });
       }
     }
 

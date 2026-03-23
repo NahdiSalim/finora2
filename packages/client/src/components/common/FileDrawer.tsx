@@ -19,6 +19,7 @@ import {
   DialogActions,
   Tooltip,
   Divider,
+  CircularProgress,
 } from "@mui/material";
 import {
   X,
@@ -360,8 +361,12 @@ function DocumentDetailsPanel({
     useGetBreadcrumbQuery(documentId!, {
       skip: !hasDocumentId,
     });
-  const { data: metadataResponse, isSuccess: hasMetadata } =
-    useGetInvoiceMetadataQuery(documentId!, { skip: !hasDocumentId });
+  const {
+    data: metadataResponse,
+    isSuccess: hasMetadata,
+    isFetching: isFetchingMetadata,
+    refetch: refetchMetadata,
+  } = useGetInvoiceMetadataQuery(documentId!, { skip: !hasDocumentId });
 
   const [extractInvoice, { isLoading: isExtracting }] =
     useExtractInvoiceMutation();
@@ -512,6 +517,9 @@ function DocumentDetailsPanel({
   const [isEditing, setIsEditing] = useState(false);
   const [categoryValue, setCategoryValue] = useState("");
   const [destinationPath, setDestinationPath] = useState("");
+  const [vendorValue, setVendorValue] = useState("");
+  const [clientValue, setClientValue] = useState("");
+  const [tvaPercentValue, setTvaPercentValue] = useState("");
   const [destinationDialogOpen, setDestinationDialogOpen] = useState(false);
   const [parentId, setParentId] = useState<number | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
@@ -550,6 +558,32 @@ function DocumentDetailsPanel({
     const normalized = normalizeCategoryValue(overrideCategory || fallbackType);
     setCategoryValue(normalized);
   }, [extractedObject, isEditing]);
+
+  useEffect(() => {
+    if (isEditing) return;
+    const overrides = extractedObject?.ui_overrides ?? {};
+    setVendorValue(
+      typeof overrides.vendor === "string" && overrides.vendor.trim()
+        ? overrides.vendor
+        : derivedVendor,
+    );
+    setClientValue(
+      typeof overrides.client === "string" && overrides.client.trim()
+        ? overrides.client
+        : derivedClient,
+    );
+    setTvaPercentValue(
+      typeof overrides.tvaPercent === "string" && overrides.tvaPercent.trim()
+        ? overrides.tvaPercent
+        : derivedTotals.tvaPercent || "0.00",
+    );
+  }, [
+    extractedObject,
+    derivedVendor,
+    derivedClient,
+    derivedTotals.tvaPercent,
+    isEditing,
+  ]);
 
   const { data: rootFoldersResponse } = useGetDocumentsQuery(
     {
@@ -591,8 +625,30 @@ function DocumentDetailsPanel({
     key: keyof (typeof lineItems)[number],
     value: string,
   ) => {
+    const parseNumber = (raw: string) => {
+      const cleaned = String(raw || "")
+        .replace(/\s/g, "")
+        .replace(/[€$£]/g, "")
+        .replace(",", ".")
+        .replace(/[^\d.-]/g, "");
+      const n = parseFloat(cleaned);
+      return Number.isFinite(n) ? n : 0;
+    };
+
     setLineItems((prev) =>
-      prev.map((row) => (row.id === id ? { ...row, [key]: value } : row)),
+      prev.map((row) => {
+        if (row.id !== id) return row;
+        const updated = { ...row, [key]: value };
+        // Recalculate row total in realtime when qty/price/discount changes
+        if (key === "qty" || key === "unitPrice" || key === "discount") {
+          const qty = parseNumber(updated.qty);
+          const price = parseNumber(updated.unitPrice);
+          const discount = parseNumber(updated.discount);
+          const total = qty * price * (1 - discount / 100);
+          updated.total = total.toFixed(2);
+        }
+        return updated;
+      }),
     );
   };
 
@@ -626,6 +682,27 @@ function DocumentDetailsPanel({
       return (invoiceMetadata?.rawData ?? {}) as Record<string, unknown>;
     return invoiceMetadata.rawData as Record<string, unknown>;
   }, [invoiceMetadata, lastExtractedData]);
+
+  const financialTotals = useMemo(() => {
+    const parseNumber = (raw: string) => {
+      const cleaned = String(raw || "")
+        .replace(/\s/g, "")
+        .replace(/[€$£]/g, "")
+        .replace(",", ".")
+        .replace(/[^\d.-]/g, "");
+      const n = parseFloat(cleaned);
+      return Number.isFinite(n) ? n : 0;
+    };
+    const ht = lineItems.reduce((sum, r) => sum + parseNumber(r.total), 0);
+    const tvaPct = parseNumber(tvaPercentValue);
+    const tva = ht * (tvaPct / 100);
+    const ttc = ht + tva;
+    return {
+      ht: ht.toFixed(2),
+      tva: tva.toFixed(2),
+      ttc: ttc.toFixed(2),
+    };
+  }, [lineItems, tvaPercentValue]);
 
   const handleExtract = async () => {
     if (!documentId) return;
@@ -674,6 +751,9 @@ function DocumentDetailsPanel({
       base.ui_overrides = {
         category: categoryValue || null,
         destinationPath: destinationPath || null,
+        vendor: vendorValue || null,
+        client: clientValue || null,
+        tvaPercent: tvaPercentValue || null,
       };
 
       await saveMetadata({ documentId, extractedData: base }).unwrap();
@@ -735,6 +815,24 @@ function DocumentDetailsPanel({
   const breadcrumbText = breadcrumb.map((item) => item.name).join(" / ");
 
   const loading = isExtracting || isSaving || isSyncing;
+  const hasPersistedMetadataData = useMemo(() => {
+    if (!invoiceMetadata || typeof invoiceMetadata !== "object") return false;
+    if (
+      invoiceMetadata.rawData &&
+      typeof invoiceMetadata.rawData === "object"
+    ) {
+      const keys = Object.keys(
+        invoiceMetadata.rawData as Record<string, unknown>,
+      );
+      if (keys.length > 0) return true;
+    }
+    return Boolean(
+      invoiceMetadata.invoiceNumber ||
+      invoiceMetadata.invoiceDate ||
+      (Array.isArray(invoiceMetadata.lineItems) &&
+        invoiceMetadata.lineItems.length > 0),
+    );
+  }, [invoiceMetadata]);
   const isViewMode =
     !isEditing &&
     (forceViewMode ||
@@ -750,6 +848,27 @@ function DocumentDetailsPanel({
     }, 2000);
     return () => window.clearInterval(id);
   }, [hasDocumentId, processingStatus, refetchDocument]);
+
+  // After status changes from pending, wait until metadata is persisted
+  // before showing saved information to avoid empty inputs flash.
+  useEffect(() => {
+    if (!hasDocumentId) return undefined;
+    if (!["traite", "enregistre", "synchronise"].includes(processingStatus))
+      return undefined;
+    if (hasPersistedMetadataData) return undefined;
+
+    const id = window.setInterval(() => {
+      void refetchMetadata();
+      void refetchDocument();
+    }, 1500);
+    return () => window.clearInterval(id);
+  }, [
+    hasDocumentId,
+    processingStatus,
+    hasPersistedMetadataData,
+    refetchMetadata,
+    refetchDocument,
+  ]);
 
   // État "Extraction en cours"
   if (processingStatus === "pending" || isExtracting) {
@@ -777,6 +896,24 @@ function DocumentDetailsPanel({
         </Typography>
         <Typography variant="body2" color="text.secondary">
           Restez sur cette page, l&apos;opération peut prendre un moment.
+        </Typography>
+      </Box>
+    );
+  }
+
+  if (
+    ["traite", "enregistre", "synchronise"].includes(processingStatus) &&
+    !hasPersistedMetadataData
+  ) {
+    return (
+      <Box sx={{ py: 4, px: 2, textAlign: "center" }}>
+        <CircularProgress size={28} />
+        <Typography variant="subtitle1" fontWeight={600} sx={{ mt: 2 }}>
+          Finalisation de l&apos;enregistrement
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Les données extraites sont en cours de sauvegarde...
+          {isFetchingMetadata ? " Mise à jour en cours." : ""}
         </Typography>
       </Box>
     );
@@ -1056,7 +1193,7 @@ function DocumentDetailsPanel({
                   fullWidth
                   size="small"
                   label="Total de la facture"
-                  value={derivedTotals.totalTTC || "0.00"}
+                  value={financialTotals.ttc || "0.00"}
                   InputProps={{ readOnly: true }}
                 />
               </Grid>
@@ -1108,7 +1245,7 @@ function DocumentDetailsPanel({
                   fullWidth
                   size="small"
                   label="Total HT"
-                  value={derivedTotals.totalHT || "0.00"}
+                  value={financialTotals.ht || "0.00"}
                   InputProps={{ readOnly: true }}
                 />
               </Grid>
@@ -1117,7 +1254,7 @@ function DocumentDetailsPanel({
                   fullWidth
                   size="small"
                   label="Total TVA"
-                  value={derivedTotals.totalTVA || "0.00"}
+                  value={financialTotals.tva || "0.00"}
                   InputProps={{ readOnly: true }}
                 />
               </Grid>
@@ -1126,7 +1263,7 @@ function DocumentDetailsPanel({
                   fullWidth
                   size="small"
                   label="Total TTC"
-                  value={derivedTotals.totalTTC || "0.00"}
+                  value={financialTotals.ttc || "0.00"}
                   InputProps={{ readOnly: true }}
                 />
               </Grid>
@@ -1135,8 +1272,9 @@ function DocumentDetailsPanel({
                   fullWidth
                   size="small"
                   label="TVA (%)"
-                  value={derivedTotals.tvaPercent || "0.00"}
-                  InputProps={{ readOnly: true }}
+                  value={tvaPercentValue}
+                  onChange={(e) => setTvaPercentValue(e.target.value)}
+                  disabled={isViewMode}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
@@ -1154,8 +1292,9 @@ function DocumentDetailsPanel({
                   size="small"
                   label="Fournisseur"
                   placeholder="Nom du fournisseur"
-                  value={derivedVendor}
-                  InputProps={{ readOnly: true }}
+                  value={vendorValue}
+                  onChange={(e) => setVendorValue(e.target.value)}
+                  disabled={isViewMode}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
@@ -1164,8 +1303,9 @@ function DocumentDetailsPanel({
                   size="small"
                   label="Client"
                   placeholder="Nom du client"
-                  value={derivedClient}
-                  InputProps={{ readOnly: true }}
+                  value={clientValue}
+                  onChange={(e) => setClientValue(e.target.value)}
+                  disabled={isViewMode}
                 />
               </Grid>
             </Grid>
@@ -1388,10 +1528,8 @@ function DocumentDetailsPanel({
                               fullWidth
                               size="small"
                               value={row.total}
-                              onChange={(e) =>
-                                updateLineItem(row.id, "total", e.target.value)
-                              }
-                              disabled={isViewMode}
+                              InputProps={{ readOnly: true }}
+                              disabled
                             />
                           </TableCell>
                           <TableCell align="right">

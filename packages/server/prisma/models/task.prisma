@@ -15,6 +15,7 @@ model Task {
   subtasks      String[]  // JSON array of subtask objects
   attachments   String[]  // JSON array of attachment URLs
   progress      Int       @default(0) // 0-100
+  order         Int       @default(0) // for drag & drop reordering
   completedAt   DateTime?
   validatedBy   Int?      // User who validated the task
   validatedAt   DateTime?

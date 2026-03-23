@@ -23,6 +23,7 @@ import NewAppointmentWizard from "src/components/appointment/NewAppointmentWizar
 import {
   type AppointmentItem,
   type AvailabilityItem,
+  useCreateAppointmentMutation,
   useCreateAvailabilityMutation,
   useDeleteAvailabilityMutation,
   useGetAllAppointmentsQuery,
@@ -92,6 +93,13 @@ function classifyTimeTab(item: AppointmentItem): TimeTab {
   const d = new Date(item.startTime);
   if (sameDay(d, now)) return "today";
   return d.getTime() > now.getTime() ? "upcoming" : "past";
+}
+
+function formatMonthLabelFr(date: Date) {
+  return date.toLocaleDateString("fr-FR", {
+    month: "long",
+    year: "numeric",
+  });
 }
 
 // ─── Availability Settings ────────────────────────────────────────────────────
@@ -548,6 +556,7 @@ export default function MeetingsView() {
   const appointment = detailsData?.data ?? null;
 
   const [respondAppointment] = useRespondAppointmentMutation();
+  const [createAppointment] = useCreateAppointmentMutation();
 
   const handleConfirm = async () => {
     if (!selectedId) return;
@@ -665,7 +674,7 @@ export default function MeetingsView() {
           {/* ── Monthly calendar ── */}
           <Box sx={{ mt: 3, px: 2 }}>
             <Typography variant="h6" sx={{ mb: 1.25 }}>
-              Septembre 2024
+              {formatMonthLabelFr(calendarMonth)}
             </Typography>
             <MonthlyAppointmentCalendar
               monthDate={calendarMonth}
@@ -728,9 +737,22 @@ export default function MeetingsView() {
       <NewAppointmentWizard
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
-        onSchedule={() => {
-          // NOTE: backend currently restricts create endpoint to CLIENT.
-          // Wizard UI is ready; plug accountant endpoint here when available.
+        onSchedule={async (payload) => {
+          const startTime = new Date(`${payload.date}T${payload.time}:00`);
+          const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+
+          await createAppointment({
+            title: payload.title,
+            description: payload.description,
+            type: "meeting",
+            startTime: startTime.toISOString(),
+            endTime: endTime.toISOString(),
+            meetingType: payload.meetingType,
+            location: payload.location || undefined,
+            clientNotes: payload.guests.length
+              ? `Invités: ${payload.guests.join(", ")}`
+              : undefined,
+          }).unwrap();
         }}
       />
     </PageHeader>

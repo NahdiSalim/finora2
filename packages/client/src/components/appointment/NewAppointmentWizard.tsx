@@ -46,6 +46,8 @@ export default function NewAppointmentWizard({
   const [location, setLocation] = useState("");
   const [guestInput, setGuestInput] = useState("");
   const [guests, setGuests] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const canNext = useMemo(() => {
     if (step === 0) return title.trim() && subject.trim() && description.trim();
@@ -71,6 +73,8 @@ export default function NewAppointmentWizard({
     setLocation("");
     setGuestInput("");
     setGuests([]);
+    setIsSubmitting(false);
+    setSubmitError("");
     onClose();
   };
 
@@ -311,6 +315,11 @@ export default function NewAppointmentWizard({
                 </Box>
               ))}
             </Box>
+            {submitError ? (
+              <Typography variant="caption" color="error.main">
+                {submitError}
+              </Typography>
+            ) : null}
           </Box>
         )}
       </DialogContent>
@@ -336,18 +345,33 @@ export default function NewAppointmentWizard({
           <CustomButton
             variant="contained"
             onClick={async () => {
-              await onSchedule({
-                title,
-                subject,
-                description,
-                date,
-                time,
-                meetingType,
-                location,
-                guests,
-              });
-              resetAndClose();
+              setSubmitError("");
+              setIsSubmitting(true);
+              try {
+                await onSchedule({
+                  title,
+                  subject,
+                  description,
+                  date,
+                  time,
+                  meetingType,
+                  location,
+                  guests,
+                });
+                resetAndClose();
+              } catch (e: any) {
+                const msg =
+                  e?.data?.message ||
+                  e?.error ||
+                  "Échec de planification du rendez-vous.";
+                setSubmitError(
+                  Array.isArray(msg) ? msg.join(" | ") : String(msg),
+                );
+              } finally {
+                setIsSubmitting(false);
+              }
             }}
+            disabled={isSubmitting}
           >
             Planifier
           </CustomButton>

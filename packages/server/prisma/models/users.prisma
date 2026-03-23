@@ -52,6 +52,8 @@ model User {
   // Appointments
   clientAppointments     Appointment[] @relation("ClientAppointments")
   accountantAppointments Appointment[] @relation("AccountantAppointments")
+  availabilities         Availability[] @relation("AccountantAvailabilities")
+  availabilitySlots      AvailabilitySlot[] @relation("AccountantSlots")
   
   // Tickets
   createdTickets       Ticket[] @relation("TicketCreatedBy")

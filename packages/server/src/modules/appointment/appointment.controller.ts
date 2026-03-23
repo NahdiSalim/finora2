@@ -17,6 +17,8 @@ import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 import { RespondAppointmentDto } from './dto/respond-appointment.dto';
 import { RescheduleAppointmentDto } from './dto/reschedule-appointment.dto';
+import { CreateAvailabilityDto } from './dto/create-availability.dto';
+import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -171,5 +173,82 @@ export class AppointmentController {
   async deleteAppointment(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
     const userId = req.user!.id;
     return this.appointmentService.deleteAppointment(id, userId);
+  }
+
+  // ─── AVAILABILITY ───────────────────────────────────────────────────────────
+
+  /**
+   * Create availability slot (Accountant)
+   */
+  @Post('availability')
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Add an availability slot' })
+  async createAvailability(@Body() dto: CreateAvailabilityDto, @Req() req: AuthRequest) {
+    return this.appointmentService.createAvailability(dto, req.user!.id);
+  }
+
+  /**
+   * Get my availabilities (Accountant)
+   */
+  @Get('availability/mine')
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Get my availability slots' })
+  @ApiQuery({ name: 'onlyActive', required: false, type: Boolean })
+  async getMyAvailabilities(@Req() req: AuthRequest, @Query('onlyActive') onlyActive?: string) {
+    return this.appointmentService.getMyAvailabilities(req.user!.id, onlyActive !== 'false');
+  }
+
+  /**
+   * Get accountant availabilities (Client — to pick a slot)
+   */
+  @Get('availability/:accountantId')
+  @ApiOperation({ summary: '[Client] Get availabilities of a specific accountant' })
+  async getAccountantAvailabilities(@Param('accountantId', ParseIntPipe) accountantId: number) {
+    return this.appointmentService.getAccountantAvailabilities(accountantId);
+  }
+
+  /**
+   * Update availability slot (Accountant)
+   */
+  @Put('availability/:id')
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Update an availability slot' })
+  async updateAvailability(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateAvailabilityDto,
+    @Req() req: AuthRequest
+  ) {
+    return this.appointmentService.updateAvailability(id, dto, req.user!.id);
+  }
+
+  /**
+   * Delete availability slot (Accountant)
+   */
+  @Delete('availability/:id')
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Delete an availability slot' })
+  async deleteAvailability(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
+    return this.appointmentService.deleteAvailability(id, req.user!.id);
+  }
+
+  /**
+   * Get available slots for an accountant on a given date (Client)
+   */
+  @Get('slots')
+  @ApiOperation({
+    summary: '[Client] Get available time slots for an accountant on a specific date',
+  })
+  @ApiQuery({ name: 'accountantId', required: true, type: Number, example: 2 })
+  @ApiQuery({ name: 'date', required: true, type: String, example: '2026-04-28' })
+  @ApiResponse({ status: 200, description: 'List of available slots' })
+  async getAvailableSlots(
+    @Query('accountantId', ParseIntPipe) accountantId: number,
+    @Query('date') date: string
+  ) {
+    return this.appointmentService.getAvailableSlots(accountantId, date);
   }
 }

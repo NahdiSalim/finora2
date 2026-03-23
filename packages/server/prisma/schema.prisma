@@ -71,7 +71,7 @@ model Appointment {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  @@index([clientId])
+  slot        AvailabilitySlot? @relation("AppointmentSlot")
   @@index([accountantId])
   @@index([companyId])
   @@index([status])
@@ -106,6 +106,71 @@ model AuditLog {
   @@index([companyId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+
+// From availability.prisma
+model Availability {
+  id            Int       @id @default(autoincrement())
+  accountantId  Int
+  companyId     Int?
+
+  // Recurring slot: dayOfWeek = 'lundi' | 'mardi' | 'mercredi' | 'jeudi' | 'vendredi' | 'samedi' | 'dimanche'
+  isRecurring   Boolean   @default(true)
+  dayOfWeek     String?   // used when isRecurring=true
+
+  // One-off slot: specific date, used when isRecurring=false
+  specificDate  DateTime? @db.Date
+
+  // Time window (stored as "HH:MM" strings for simplicity)
+  startTime     String    // e.g. "09:00"
+  endTime       String    // e.g. "10:00"
+
+  // Slot duration in minutes (e.g. 30 or 60)
+  slotDuration  Int       @default(60)
+
+  isActive      Boolean   @default(true)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accountant    User      @relation("AccountantAvailabilities", fields: [accountantId], references: [id], onDelete: Cascade)
+  company       Company?  @relation("CompanyAvailabilities", fields: [companyId], references: [id], onDelete: SetNull)
+  slots         AvailabilitySlot[]
+
+  @@index([accountantId])
+  @@index([companyId])
+  @@index([dayOfWeek])
+  @@index([specificDate])
+  @@index([isActive])
+  @@map("availabilities")
+}
+
+
+// From availability_slot.prisma
+model AvailabilitySlot {
+  id               Int       @id @default(autoincrement())
+  availabilityId   Int
+  accountantId     Int
+  date             DateTime  @db.Date
+  startTime        String
+  endTime          String
+  status           String    @default("available") // "available" | "booked" | "cancelled"
+
+  appointmentId    Int?      @unique
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  availability     Availability @relation(fields: [availabilityId], references: [id], onDelete: Cascade)
+  accountant       User         @relation("AccountantSlots", fields: [accountantId], references: [id], onDelete: Cascade)
+  appointment      Appointment? @relation("AppointmentSlot", fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@unique([accountantId, date, startTime])
+  @@index([availabilityId])
+  @@index([accountantId])
+  @@index([date])
+  @@index([status])
+  @@map("availability_slots")
 }
 
 
@@ -312,6 +377,7 @@ model Company {
   
   // Appointments
   appointments      Appointment[] @relation("CompanyAppointments")
+  availabilities    Availability[] @relation("CompanyAvailabilities")
   
   // Tasks
   tasks             Task[] @relation("TaskCompany")
@@ -860,6 +926,7 @@ model Task {
   subtasks      String[]  // JSON array of subtask objects
   attachments   String[]  // JSON array of attachment URLs
   progress      Int       @default(0) // 0-100
+  order         Int       @default(0) // for drag & drop reordering
   completedAt   DateTime?
   validatedBy   Int?      // User who validated the task
   validatedAt   DateTime?
@@ -975,6 +1042,8 @@ model User {
   // Appointments
   clientAppointments     Appointment[] @relation("ClientAppointments")
   accountantAppointments Appointment[] @relation("AccountantAppointments")
+  availabilities         Availability[] @relation("AccountantAvailabilities")
+  availabilitySlots      AvailabilitySlot[] @relation("AccountantSlots")
   
   // Tickets
   createdTickets       Ticket[] @relation("TicketCreatedBy")

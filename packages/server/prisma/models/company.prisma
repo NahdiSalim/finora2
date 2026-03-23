@@ -62,6 +62,7 @@ model Company {
   
   // Appointments
   appointments      Appointment[] @relation("CompanyAppointments")
+  availabilities    Availability[] @relation("CompanyAvailabilities")
   
   // Tasks
   tasks             Task[] @relation("TaskCompany")

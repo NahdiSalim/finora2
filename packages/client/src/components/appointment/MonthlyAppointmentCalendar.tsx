@@ -16,6 +16,14 @@ function toKey(d: Date) {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
+function isSameDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
 export default function MonthlyAppointmentCalendar({
   monthDate,
   appointments,
@@ -31,10 +39,9 @@ export default function MonthlyAppointmentCalendar({
   const daysInMonth = end.getDate();
   const jsFirstWeekDay = start.getDay(); // 0 sunday
   const firstCol = jsFirstWeekDay === 0 ? 6 : jsFirstWeekDay - 1;
-  const cells = Array.from(
-    { length: firstCol + daysInMonth },
-    (_, i) => i - firstCol + 1,
-  );
+  const totalCells = Math.ceil((firstCol + daysInMonth) / 7) * 7;
+  const cells = Array.from({ length: totalCells }, (_, i) => i - firstCol + 1);
+  const today = new Date();
 
   const appointmentsByDay = appointments.reduce<
     Record<string, AppointmentItem[]>
@@ -80,38 +87,41 @@ export default function MonthlyAppointmentCalendar({
       </Box>
       <Box sx={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
         {cells.map((dayNum, idx) => {
-          if (dayNum < 1) {
-            return (
-              <Box
-                key={`empty-${idx}`}
-                sx={{
-                  minHeight: 84,
-                  borderTop: "1px solid",
-                  borderRight: "1px solid",
-                  borderColor: "divider",
-                }}
-              />
-            );
-          }
           const d = new Date(
             monthDate.getFullYear(),
             monthDate.getMonth(),
             dayNum,
           );
+          const isCurrentMonth = d.getMonth() === monthDate.getMonth();
+          const isToday = isSameDay(d, today);
           const dayItems = appointmentsByDay[toKey(d)] || [];
+          const col = idx % 7;
           return (
             <Box
-              key={dayNum}
+              key={`${toKey(d)}-${idx}`}
               sx={{
                 minHeight: 84,
                 p: 0.75,
                 borderTop: "1px solid",
-                borderRight: dayNum % 7 === 0 ? 0 : "1px solid",
+                borderRight: col === 6 ? 0 : "1px solid",
                 borderColor: "divider",
+                bgcolor: isToday
+                  ? alpha(theme.palette.primary.main, 0.16)
+                  : "transparent",
               }}
             >
-              <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                {dayNum}
+              <Typography
+                variant="caption"
+                sx={{
+                  fontWeight: 600,
+                  color: isToday
+                    ? "primary.main"
+                    : isCurrentMonth
+                      ? "text.primary"
+                      : "text.disabled",
+                }}
+              >
+                {d.getDate()}
               </Typography>
               <Box
                 sx={{

@@ -71,6 +71,19 @@ export interface GetMyAvailabilitiesResponse {
   data: AvailabilityItem[];
 }
 
+export interface CreateAppointmentBody {
+  title: string;
+  description?: string;
+  type?: "meeting" | "consultation" | "review" | "other";
+  startTime: string;
+  endTime: string;
+  meetingType?: "in_person" | "online" | "phone";
+  location?: string;
+  accountantId?: number;
+  availabilitySlotId?: number;
+  clientNotes?: string;
+}
+
 type GetAllAppointmentsParams = {
   page?: number;
   limit?: number;
@@ -109,6 +122,18 @@ export const appointmentsApi = createApi({
     getAppointmentById: builder.query<GetAppointmentByIdResponse, number>({
       query: (id) => ({ url: `/appointments/${id}`, method: "GET" }),
       providesTags: (_result, _err, id) => [{ type: "Appointments", id }],
+    }),
+
+    createAppointment: builder.mutation<
+      { success: boolean; message?: string; data?: AppointmentItem },
+      CreateAppointmentBody
+    >({
+      query: (body) => ({
+        url: "/appointments",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: [{ type: "Appointments", id: "LIST" }],
     }),
 
     respondAppointment: builder.mutation<
@@ -246,6 +271,7 @@ export const appointmentsApi = createApi({
 export const {
   useGetAllAppointmentsQuery,
   useGetAppointmentByIdQuery,
+  useCreateAppointmentMutation,
   useRespondAppointmentMutation,
   useUpdateAppointmentMutation,
   useCancelAppointmentMutation,

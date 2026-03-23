@@ -1,15 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Box,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   Switch,
   Typography,
   useTheme,
 } from "@mui/material";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "src/layouts/components/page-header";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
@@ -20,9 +22,14 @@ import MonthlyAppointmentCalendar from "src/components/appointment/MonthlyAppoin
 import NewAppointmentWizard from "src/components/appointment/NewAppointmentWizard";
 import {
   type AppointmentItem,
+  type AvailabilityItem,
+  useCreateAvailabilityMutation,
+  useDeleteAvailabilityMutation,
   useGetAllAppointmentsQuery,
   useGetAppointmentByIdQuery,
+  useGetMyAvailabilitiesQuery,
   useRespondAppointmentMutation,
+  useUpdateAvailabilityMutation,
 } from "src/lib/services/appointmentsApi";
 
 type Mode = "appointments" | "availability";
@@ -37,6 +44,40 @@ const WEEK_DAYS = [
   "Samedi",
   "Dimanche",
 ] as const;
+
+const DAY_FR_TO_API: Record<(typeof WEEK_DAYS)[number], string> = {
+  Lundi: "lundi",
+  Mardi: "mardi",
+  Mercredi: "mercredi",
+  Jeudi: "jeudi",
+  Vendredi: "vendredi",
+  Samedi: "samedi",
+  Dimanche: "dimanche",
+};
+
+const DAY_API_TO_FR: Record<string, (typeof WEEK_DAYS)[number]> = {
+  lundi: "Lundi",
+  mardi: "Mardi",
+  mercredi: "Mercredi",
+  jeudi: "Jeudi",
+  vendredi: "Vendredi",
+  samedi: "Samedi",
+  dimanche: "Dimanche",
+};
+
+type UiSlot = {
+  id?: number;
+  localId: string;
+  start: string;
+  end: string;
+};
+
+type InitialSlotSnapshot = {
+  start: string;
+  end: string;
+  slotDuration: number;
+  isActive: boolean;
+};
 
 function sameDay(a: Date, b: Date) {
   return (
@@ -66,19 +107,264 @@ function AvailabilitySettings() {
     Samedi: false,
     Dimanche: false,
   });
-  const [slots, setSlots] = useState<
-    Record<string, Array<{ start: string; end: string }>>
-  >({
-    Lundi: [{ start: "09:00", end: "12:00" }],
-    Mardi: [{ start: "09:00", end: "12:00" }],
+  const [slots, setSlots] = useState<Record<string, UiSlot[]>>({
+    Lundi: [{ localId: "Lundi-default", start: "09:00", end: "12:00" }],
+    Mardi: [{ localId: "Mardi-default", start: "09:00", end: "12:00" }],
   });
+  const [removedSlotIds, setRemovedSlotIds] = useState<number[]>([]);
+  const [initialSignature, setInitialSignature] = useState("");
+  const [initialSlotsById, setInitialSlotsById] = useState<
+    Record<number, InitialSlotSnapshot>
+  >({});
+  const [saveError, setSaveError] = useState("");
+
+  const {
+    data: availabilitiesData,
+    isLoading: isLoadingAvailabilities,
+    refetch: refetchAvailabilities,
+  } = useGetMyAvailabilitiesQuery({ onlyActive: false });
+  const [createAvailability, { isLoading: isCreatingAvailability }] =
+    useCreateAvailabilityMutation();
+  const [updateAvailability, { isLoading: isUpdatingAvailability }] =
+    useUpdateAvailabilityMutation();
+  const [deleteAvailability, { isLoading: isDeletingAvailability }] =
+    useDeleteAvailabilityMutation();
+
+  const isSavingAvailability =
+    isCreatingAvailability || isUpdatingAvailability || isDeletingAvailability;
+
+  const signatureFor = (
+    argDuration: string,
+    argEnabledDays: Record<string, boolean>,
+    argSlots: Record<string, UiSlot[]>,
+    argRemovedIds: number[],
+  ) => {
+    const normalized = {
+      duration: argDuration,
+      enabledDays: WEEK_DAYS.map((d) => ({
+        day: d,
+        enabled: !!argEnabledDays[d],
+      })),
+      slots: WEEK_DAYS.map((d) => ({
+        day: d,
+        slots: (argSlots[d] || [])
+          .map((s) => ({
+            id: s.id ?? null,
+            start: s.start,
+            end: s.end,
+          }))
+          .sort(
+            (a, b) =>
+              a.start.localeCompare(b.start) || a.end.localeCompare(b.end),
+          ),
+      })),
+      removed: [...argRemovedIds].sort((a, b) => a - b),
+    };
+    return JSON.stringify(normalized);
+  };
+
+  const hydrateFromApi = (availabilityItems: AvailabilityItem[]) => {
+    const nextEnabledDays: Record<string, boolean> = Object.fromEntries(
+      WEEK_DAYS.map((d) => [d, false]),
+    );
+    const nextSlots: Record<string, UiSlot[]> = Object.fromEntries(
+      WEEK_DAYS.map((d) => [d, []]),
+    );
+    let firstDuration = "30";
+
+    const nextInitialById: Record<number, InitialSlotSnapshot> = {};
+    availabilityItems
+      .filter((a) => a.isRecurring && a.dayOfWeek)
+      .forEach((a) => {
+        const frDay = DAY_API_TO_FR[String(a.dayOfWeek).toLowerCase()];
+        if (!frDay) return;
+        if (a.isActive) nextEnabledDays[frDay] = true;
+        nextSlots[frDay].push({
+          id: a.id,
+          localId: `api-${a.id}`,
+          start: a.startTime,
+          end: a.endTime,
+        });
+        nextInitialById[a.id] = {
+          start: a.startTime,
+          end: a.endTime,
+          slotDuration: a.slotDuration,
+          isActive: a.isActive,
+        };
+        if (a.slotDuration) firstDuration = String(a.slotDuration);
+      });
+
+    WEEK_DAYS.forEach((d) => {
+      nextSlots[d].sort(
+        (a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end),
+      );
+    });
+
+    setDuration(firstDuration);
+    setEnabledDays(nextEnabledDays);
+    setSlots(nextSlots);
+    setInitialSlotsById(nextInitialById);
+    setRemovedSlotIds([]);
+    setInitialSignature(
+      signatureFor(firstDuration, nextEnabledDays, nextSlots, []),
+    );
+  };
+
+  useEffect(() => {
+    if (!availabilitiesData?.data) return;
+    hydrateFromApi(availabilitiesData.data);
+  }, [availabilitiesData]);
 
   const addSlot = (day: string) => {
     setSlots((prev) => ({
       ...prev,
-      [day]: [...(prev[day] || []), { start: "14:00", end: "17:00" }],
+      [day]: [
+        ...(prev[day] || []),
+        { localId: `${day}-${Date.now()}`, start: "14:00", end: "17:00" },
+      ],
     }));
   };
+
+  const removeSlot = (day: string, localId: string) => {
+    setSlots((prev) => {
+      const target = (prev[day] || []).find((s) => s.localId === localId);
+      if (target?.id) {
+        setRemovedSlotIds((old) =>
+          old.includes(target.id as number)
+            ? old
+            : [...old, target.id as number],
+        );
+      }
+      return {
+        ...prev,
+        [day]: (prev[day] || []).filter((s) => s.localId !== localId),
+      };
+    });
+  };
+
+  const hasChanges =
+    initialSignature !==
+    signatureFor(duration, enabledDays, slots, removedSlotIds);
+
+  const handleSaveAvailability = async () => {
+    setSaveError("");
+    const slotDuration = Number.parseInt(duration, 10);
+    const safeDuration = Number.isFinite(slotDuration) ? slotDuration : 30;
+    const toHHMM = (v: string) => {
+      const trimmed = String(v || "").trim();
+      const m = trimmed.match(/^(\d{1,2}):(\d{2})$/);
+      if (!m) return null;
+      const hh = Number(m[1]);
+      const mm = Number(m[2]);
+      if (!Number.isInteger(hh) || !Number.isInteger(mm)) return null;
+      if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+      return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+    };
+    const toMinutes = (hhmm: string) => {
+      const [h, m] = hhmm.split(":").map(Number);
+      return h * 60 + m;
+    };
+
+    if (safeDuration < 15 || safeDuration > 480) {
+      setSaveError("La durée doit être comprise entre 15 et 480 minutes.");
+      return;
+    }
+
+    for (const day of WEEK_DAYS) {
+      const daySlots = slots[day] || [];
+      for (const slot of daySlots) {
+        const start = toHHMM(slot.start);
+        const end = toHHMM(slot.end);
+        if (!start || !end) {
+          setSaveError(
+            `Format horaire invalide (${day}). Utilisez HH:MM, ex: 09:00.`,
+          );
+          return;
+        }
+        if (toMinutes(start) >= toMinutes(end)) {
+          setSaveError(
+            `Heure de début doit être avant l'heure de fin (${day}).`,
+          );
+          return;
+        }
+      }
+    }
+
+    try {
+      for (const id of removedSlotIds) {
+        await deleteAvailability(id).unwrap();
+      }
+
+      for (const day of WEEK_DAYS) {
+        const enabled = !!enabledDays[day];
+        const daySlots = slots[day] || [];
+
+        for (const slot of daySlots) {
+          const normalizedStart = toHHMM(slot.start) as string;
+          const normalizedEnd = toHHMM(slot.end) as string;
+          if (slot.id) {
+            const initial = initialSlotsById[slot.id];
+            const unchanged =
+              !!initial &&
+              initial.start === normalizedStart &&
+              initial.end === normalizedEnd &&
+              initial.slotDuration === safeDuration &&
+              initial.isActive === enabled;
+            if (unchanged) continue;
+            await updateAvailability({
+              id: slot.id,
+              body: {
+                startTime: normalizedStart,
+                endTime: normalizedEnd,
+                slotDuration: safeDuration,
+                isActive: enabled,
+              },
+            }).unwrap();
+          } else if (enabled) {
+            await createAvailability({
+              isRecurring: true,
+              dayOfWeek: DAY_FR_TO_API[day],
+              startTime: normalizedStart,
+              endTime: normalizedEnd,
+              slotDuration: safeDuration,
+            }).unwrap();
+          }
+        }
+      }
+      await refetchAvailabilities();
+    } catch (e: any) {
+      const backendMessage =
+        e?.data?.message ||
+        e?.error ||
+        "Échec d'enregistrement des disponibilités.";
+      setSaveError(
+        Array.isArray(backendMessage)
+          ? backendMessage.join(" | ")
+          : String(backendMessage),
+      );
+    }
+  };
+
+  if (isLoadingAvailabilities) {
+    return (
+      <Box
+        sx={{
+          bgcolor: "white",
+          borderRadius: 3,
+          p: 3,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 1.5,
+        }}
+      >
+        <CircularProgress size={22} />
+        <Typography color="text.secondary">
+          Chargement des disponibilités...
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ bgcolor: "white", borderRadius: 3, p: 2 }}>
@@ -86,6 +372,11 @@ function AvailabilitySettings() {
       <Typography variant="caption" color="text.secondary">
         Suivi de vos rendez-vous
       </Typography>
+      {saveError ? (
+        <Typography sx={{ mt: 1 }} variant="caption" color="error.main">
+          {saveError}
+        </Typography>
+      ) : null}
 
       <Box sx={{ mt: 2 }}>
         <Typography variant="subtitle2" sx={{ mb: 1 }}>
@@ -163,6 +454,13 @@ function AvailabilitySettings() {
                         }));
                       }}
                     />
+                    <IconButton
+                      aria-label={`Supprimer le créneau ${idx + 1}`}
+                      size="small"
+                      onClick={() => removeSlot(day, slot.localId)}
+                    >
+                      <Trash2 size={15} />
+                    </IconButton>
                   </Box>
                 ))}
                 <CustomButton
@@ -177,6 +475,21 @@ function AvailabilitySettings() {
             )}
           </Box>
         ))}
+      </Box>
+      <Box
+        sx={{
+          mt: 2,
+          display: "flex",
+          justifyContent: "flex-end",
+        }}
+      >
+        <CustomButton
+          variant="contained"
+          onClick={handleSaveAvailability}
+          disabled={!hasChanges || isSavingAvailability}
+        >
+          Enregistrer
+        </CustomButton>
       </Box>
     </Box>
   );

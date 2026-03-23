@@ -54,6 +54,23 @@ export interface GetAppointmentByIdResponse {
   data: AppointmentItem;
 }
 
+export interface AvailabilityItem {
+  id: number;
+  accountantId: number;
+  isRecurring: boolean;
+  dayOfWeek?: string | null;
+  specificDate?: string | null;
+  startTime: string;
+  endTime: string;
+  slotDuration: number;
+  isActive: boolean;
+}
+
+export interface GetMyAvailabilitiesResponse {
+  success: boolean;
+  data: AvailabilityItem[];
+}
+
 type GetAllAppointmentsParams = {
   page?: number;
   limit?: number;
@@ -63,7 +80,7 @@ type GetAllAppointmentsParams = {
 export const appointmentsApi = createApi({
   reducerPath: "appointmentsApi",
   baseQuery: baseQueryWithReauth,
-  tagTypes: ["Appointments"],
+  tagTypes: ["Appointments", "Availabilities"],
   endpoints: (builder) => ({
     getAllAppointments: builder.query<
       GetAllAppointmentsResponse,
@@ -139,6 +156,90 @@ export const appointmentsApi = createApi({
         { type: "Appointments", id: "LIST" },
       ],
     }),
+
+    getMyAvailabilities: builder.query<
+      GetMyAvailabilitiesResponse,
+      { onlyActive?: boolean } | void
+    >({
+      query: (params) => {
+        const p = params ?? {};
+        const search = new URLSearchParams();
+        if (typeof p.onlyActive === "boolean") {
+          search.set("onlyActive", String(p.onlyActive));
+        }
+        const q = search.toString();
+        return {
+          url: `/appointments/availability/mine${q ? `?${q}` : ""}`,
+          method: "GET",
+        };
+      },
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.data.map((a) => ({
+                type: "Availabilities" as const,
+                id: a.id,
+              })),
+              { type: "Availabilities", id: "LIST" },
+            ]
+          : [{ type: "Availabilities", id: "LIST" }],
+    }),
+
+    createAvailability: builder.mutation<
+      { success: boolean; message?: string; data?: AvailabilityItem },
+      {
+        isRecurring: boolean;
+        dayOfWeek?: string;
+        specificDate?: string;
+        startTime: string;
+        endTime: string;
+        slotDuration?: number;
+      }
+    >({
+      query: (body) => ({
+        url: "/appointments/availability",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: [{ type: "Availabilities", id: "LIST" }],
+    }),
+
+    updateAvailability: builder.mutation<
+      { success: boolean; message?: string; data?: AvailabilityItem },
+      {
+        id: number;
+        body: {
+          startTime?: string;
+          endTime?: string;
+          slotDuration?: number;
+          isActive?: boolean;
+        };
+      }
+    >({
+      query: ({ id, body }) => ({
+        url: `/appointments/availability/${id}`,
+        method: "PUT",
+        body,
+      }),
+      invalidatesTags: (_result, _err, arg) => [
+        { type: "Availabilities", id: arg.id },
+        { type: "Availabilities", id: "LIST" },
+      ],
+    }),
+
+    deleteAvailability: builder.mutation<
+      { success: boolean; message?: string },
+      number
+    >({
+      query: (id) => ({
+        url: `/appointments/availability/${id}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (_result, _err, id) => [
+        { type: "Availabilities", id },
+        { type: "Availabilities", id: "LIST" },
+      ],
+    }),
   }),
 });
 
@@ -148,4 +249,8 @@ export const {
   useRespondAppointmentMutation,
   useUpdateAppointmentMutation,
   useCancelAppointmentMutation,
+  useGetMyAvailabilitiesQuery,
+  useCreateAvailabilityMutation,
+  useUpdateAvailabilityMutation,
+  useDeleteAvailabilityMutation,
 } = appointmentsApi;

@@ -8,23 +8,27 @@ import { RescheduleAppointmentDto } from './dto/reschedule-appointment.dto';
 import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 import { NotificationService } from '../notification/notification.service';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class AppointmentService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notificationService: NotificationService
+    private readonly notificationService: NotificationService,
+    private readonly mailService: MailService
   ) {}
 
   /**
-   * Create a new appointment (Client)
+   * Create a new appointment (Client or Accountant)
    */
-  async createAppointment(dto: CreateAppointmentDto, clientId: number) {
+  async createAppointment(dto: CreateAppointmentDto, userId: number) {
     try {
-      const client = await this.prisma.user.findUnique({
-        where: { id: clientId },
-        select: { companyId: true },
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { companyId: true, role: true },
       });
+
+      const isAccountant = (user as any)?.role === 'ACCOUNTANT';
 
       // If slot provided — validate it's available and lock it
       if (dto.availabilitySlotId) {
@@ -35,34 +39,27 @@ export class AppointmentService {
         if (slot.status !== 'available')
           throw new ApiError('Ce créneau est déjà pris', 409, 'SLOT_UNAVAILABLE');
 
-        // Use slot times
-        dto.startTime = `${slot.date.toISOString().split('T')[0]}T${slot.startTime}:00.000Z`;
-        dto.endTime = `${slot.date.toISOString().split('T')[0]}T${slot.endTime}:00.000Z`;
+        dto.date = slot.date.toISOString().split('T')[0];
+        dto.hour = slot.startTime;
         if (!dto.accountantId) dto.accountantId = slot.accountantId;
       }
-
-      const start = new Date(dto.startTime);
-      const end = new Date(dto.endTime);
-      const duration = Math.round((end.getTime() - start.getTime()) / 60000);
-
-      if (duration <= 0)
-        throw new ApiError('End time must be after start time', 400, 'INVALID_TIME');
 
       const appointment = await this.prisma.appointment.create({
         data: {
           title: dto.title,
           description: dto.description,
           type: dto.type || 'meeting',
-          startTime: start,
-          endTime: end,
-          duration,
+          date: new Date(dto.date),
+          hour: dto.hour,
           meetingType: dto.meetingType || 'in_person',
           location: dto.location,
-          clientId,
-          accountantId: dto.accountantId,
-          companyId: client?.companyId,
+          clientId: isAccountant ? (dto.clientId ?? null) : userId,
+          accountantId: isAccountant ? userId : (dto.accountantId ?? null),
+          companyId: user?.companyId,
           clientNotes: dto.clientNotes,
-        },
+          color: dto.color ?? null,
+          guests: dto.guests ?? [],
+        } as any,
         include: {
           client: {
             select: { id: true, username: true, email: true, firstName: true, lastName: true },
@@ -82,20 +79,50 @@ export class AppointmentService {
         });
       }
 
-      if (dto.accountantId) {
-        const clientUser = await this.prisma.user.findUnique({
-          where: { id: clientId },
-          select: { firstName: true, lastName: true },
-        });
+      // Notify the other party
+      const notifyId = isAccountant
+        ? (appointment as any).clientId
+        : (appointment as any).accountantId;
+      if (notifyId) {
         this.notificationService
           .notify({
-            recipientId: dto.accountantId,
+            recipientId: notifyId,
             type: 'appointment',
             action: 'created',
-            actorName: clientUser ? `${clientUser.firstName} ${clientUser.lastName}` : 'Un client',
+            actorName: isAccountant
+              ? `${(appointment as any).accountant?.firstName ?? ''} ${(appointment as any).accountant?.lastName ?? ''}`.trim() ||
+                'Votre comptable'
+              : `${(appointment as any).client?.firstName ?? ''} ${(appointment as any).client?.lastName ?? ''}`.trim() ||
+                'Un client',
             data: { appointmentId: appointment.id },
           })
           .catch(() => {});
+      }
+
+      // Send invitation emails to guests (fire-and-forget)
+      if (dto.guests && dto.guests.length > 0) {
+        const appt = appointment as any;
+        const organizerUser = isAccountant ? appt.accountant : appt.client;
+        const organizerName =
+          `${organizerUser?.firstName ?? ''} ${organizerUser?.lastName ?? ''}`.trim() ||
+          organizerUser?.username ||
+          'Finora';
+
+        for (const guestEmail of dto.guests) {
+          this.mailService
+            .sendAppointmentGuestInvitation({
+              to: guestEmail,
+              appointmentTitle: appointment.title,
+              date: dto.date,
+              hour: dto.hour,
+              organizerName,
+              location: appointment.location ?? undefined,
+              meetingType: appointment.meetingType,
+              description: appointment.description ?? undefined,
+              color: dto.color ?? undefined,
+            })
+            .catch(() => {});
+        }
       }
 
       return { success: true, message: 'Appointment created successfully', data: appointment };
@@ -188,9 +215,7 @@ export class AppointmentService {
         where,
         skip,
         take: limit,
-        orderBy: {
-          startTime: 'asc',
-        },
+        orderBy: [{ date: 'asc' }, { hour: 'asc' }] as any,
         include: {
           accountant: {
             select: {
@@ -248,9 +273,7 @@ export class AppointmentService {
         where,
         skip,
         take: limit,
-        orderBy: {
-          startTime: 'asc',
-        },
+        orderBy: [{ date: 'asc' }, { hour: 'asc' }] as any,
         include: {
           client: {
             select: {
@@ -382,34 +405,23 @@ export class AppointmentService {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
     }
 
-    // Calculate new duration if times are updated
-    let duration = appointment.duration;
-    if (dto.startTime && dto.endTime) {
-      const start = new Date(dto.startTime);
-      const end = new Date(dto.endTime);
-      duration = Math.round((end.getTime() - start.getTime()) / 60000);
-
-      if (duration <= 0) {
-        throw new ApiError('End time must be after start time', 400, 'INVALID_TIME');
-      }
-    }
-
     const updatedAppointment = await this.prisma.appointment.update({
       where: { id: appointmentId },
       data: {
         title: dto.title,
         description: dto.description,
         type: dto.type,
-        startTime: dto.startTime ? new Date(dto.startTime) : undefined,
-        endTime: dto.endTime ? new Date(dto.endTime) : undefined,
-        duration,
+        date: dto.date ? new Date(dto.date) : undefined,
+        hour: dto.hour,
         meetingType: dto.meetingType,
         location: dto.location,
         status: dto.status,
         clientNotes: dto.clientNotes,
         accountantNotes: dto.accountantNotes,
+        color: dto.color,
+        guests: dto.guests,
         cancelledAt: dto.status === AppointmentStatus.CANCELLED ? new Date() : undefined,
-      },
+      } as any,
       include: {
         client: {
           select: {
@@ -523,24 +535,14 @@ export class AppointmentService {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
     }
 
-    // Calculate new duration
-    const start = new Date(dto.startTime);
-    const end = new Date(dto.endTime);
-    const duration = Math.round((end.getTime() - start.getTime()) / 60000);
-
-    if (duration <= 0) {
-      throw new ApiError('End time must be after start time', 400, 'INVALID_TIME');
-    }
-
     // Create new appointment with rescheduled status
     const newAppointment = await this.prisma.appointment.create({
       data: {
         title: appointment.title,
         description: appointment.description,
         type: appointment.type,
-        startTime: start,
-        endTime: end,
-        duration,
+        date: new Date(dto.date),
+        hour: dto.hour,
         meetingType: appointment.meetingType,
         location: appointment.location,
         clientId: appointment.clientId,
@@ -550,7 +552,8 @@ export class AppointmentService {
         originalAppointmentId: appointment.id,
         clientNotes: appointment.clientNotes,
         accountantNotes: dto.reason,
-      },
+        guests: (appointment as any).guests ?? [],
+      } as any,
       include: {
         client: {
           select: {

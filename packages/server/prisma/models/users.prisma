@@ -88,6 +88,9 @@ model User {
   // Contact Messages
   receivedContactMessages ContactMessage[] @relation("ContactMessageAccountant")
 
+  // Document Versions
+  uploadedVersions      DocumentVersion[] @relation("DocumentVersionUploader")
+
   @@index([email])
   @@index([companyId])
   @@index([status])

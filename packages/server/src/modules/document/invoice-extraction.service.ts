@@ -19,6 +19,7 @@ export class InvoiceExtractionService {
   ) {}
 
   async extractInvoiceMetadata(documentId: number, companyId: number) {
+    console.log('qqq');
     // 1. Get document directly by ID (only accountants can extract)
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },
@@ -239,7 +240,7 @@ export class InvoiceExtractionService {
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
       });
-
+      console.log(response, 'fileeeee');
       const extractedData = response.data;
       if (!extractedData || typeof extractedData !== 'object') {
         throw new Error('API returned empty or invalid response');

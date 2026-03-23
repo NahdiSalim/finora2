@@ -93,7 +93,6 @@ export default function NewAppointmentWizard({
     <Dialog
       open={open}
       onClose={resetAndClose}
-      maxWidth="md"
       fullWidth
       PaperProps={{
         sx: {
@@ -180,12 +179,15 @@ export default function NewAppointmentWizard({
         {step === 0 && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
             <CustomInput
-              label="Titre *"
+              label="Titre"
+              placeholder="Titre du rendez-vous"
+              required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
             <CustomSelect
-              label="Sujet *"
+              label="Sujet"
+              required
               value={subject}
               onChange={(e) => setSubject(String(e.target.value))}
               displayEmpty
@@ -199,7 +201,8 @@ export default function NewAppointmentWizard({
               <MenuItem value="budget">Préparation budget</MenuItem>
             </CustomSelect>
             <CustomInput
-              label="Description *"
+              label="Description"
+              required
               multiline
               minRows={4}
               value={description}
@@ -210,52 +213,70 @@ export default function NewAppointmentWizard({
         )}
 
         {step === 1 && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-            <Box
-              sx={{
-                display: "grid",
-                gap: 1.5,
-                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
-              }}
-            >
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 1.5,
+              width: "100%",
+            }}
+          >
+            <Box>
               <CustomInput
                 label="Date *"
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
               />
-              <Box>
-                <label style={{ fontWeight: 500 }}>Heure *</label>
+            </Box>
+            <Box>
+              <Typography
+                variant="caption"
+                color={theme.palette.grey[800]}
+                fontWeight={600}
+              >
+                Heure *
+              </Typography>
 
-                <Box display="flex" gap={1.5} mt={1}>
-                  {hours.map((hour) => {
-                    const selected = time === hour;
+              <Box
+                gap={1.5}
+                mt={1}
+                sx={{
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  width: "100%",
+                }}
+              >
+                {hours.map((hour) => {
+                  const selected = time === hour;
 
-                    return (
-                      <CustomButton
-                        key={hour}
-                        variant={selected ? "contained" : "outlined"}
-                        onClick={() => setTime(hour)}
-                        sx={{
-                          minWidth: 90,
-                          borderRadius: 2,
+                  return (
+                    <CustomButton
+                      key={hour}
+                      variant={selected ? "contained" : "outlined"}
+                      onClick={() => setTime(hour)}
+                      fullWidth
+                      sx={{
+                        minHeight: 50,
+                        borderRadius: 3,
 
-                          ...(selected && {
-                            backgroundColor: "primary.main",
-                            color: "white",
-                          }),
+                        ...(selected && {
+                          backgroundColor: "primary.main",
+                          color: "white",
+                        }),
 
-                          ...(!selected && {
-                            borderColor: "info.main",
-                            color: "info.main",
-                          }),
-                        }}
-                      >
-                        {hour}
-                      </CustomButton>
-                    );
-                  })}
-                </Box>
+                        ...(!selected && {
+                          borderColor: "info.main",
+                          color: "info.main",
+                        }),
+                      }}
+                    >
+                      {hour}
+                    </CustomButton>
+                  );
+                })}
               </Box>
             </Box>
             <Typography variant="subtitle2">Localisation *</Typography>

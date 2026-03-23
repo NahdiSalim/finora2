@@ -27,6 +27,7 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { AddCommentDto } from './dto/add-comment.dto';
 import { ValidateTaskDto } from './dto/validate-task.dto';
+import { ReorderTasksDto } from './dto/reorder-tasks.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -183,6 +184,19 @@ export class TaskController {
   }
 
   /**
+   * Archive task (Accountant only)
+   */
+  @Put(':id/archive')
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Archive task' })
+  @ApiResponse({ status: 200, description: 'Task archived' })
+  async archiveTask(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
+    const userId = req.user!.id;
+    return this.taskService.archiveTask(id, userId);
+  }
+
+  /**
    * Add comment to task
    */
   @Post(':id/comments')
@@ -261,5 +275,39 @@ export class TaskController {
   async deleteTask(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
     const userId = req.user!.id;
     return this.taskService.deleteTask(id, userId);
+  }
+
+  /**
+   * Reorder tasks (drag & drop)
+   */
+  @Put('reorder/bulk')
+  @ApiOperation({ summary: 'Reorder tasks via drag & drop' })
+  @ApiResponse({ status: 200, description: 'Tasks reordered' })
+  async reorderTasks(@Req() req: AuthRequest, @Body() dto: ReorderTasksDto) {
+    const userId = req.user!.id;
+    return this.taskService.reorderTasks(userId, dto.tasks, dto.status);
+  }
+
+  /**
+   * Filter tasks by priority
+   */
+  @Get('filter/priority')
+  @ApiOperation({ summary: 'Get tasks filtered by priority' })
+  @ApiQuery({
+    name: 'priority',
+    required: true,
+    enum: ['low', 'medium', 'high', 'urgent'],
+    isArray: true,
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  async getTasksByPriority(
+    @Req() req: AuthRequest,
+    @Query('priority') priority: string | string[],
+    @Query('page') page?: number,
+    @Query('limit') limit?: number
+  ) {
+    const userId = req.user!.id;
+    return this.taskService.getTasksByPriority(userId, priority, page || 1, limit || 10);
   }
 }

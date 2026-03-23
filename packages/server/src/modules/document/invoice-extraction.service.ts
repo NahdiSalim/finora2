@@ -279,7 +279,7 @@ export class InvoiceExtractionService {
         data: { processingStatus: 'traite', extractionStatus: 'done' },
       });
 
-      console.log(`✓ Auto-extraction complete for document ${documentId}`);
+      console.log(` Auto-extraction complete for document ${documentId}`);
 
       // Notify the user who uploaded the document
       if (document.createdBy) {
@@ -473,42 +473,121 @@ export class InvoiceExtractionService {
   }
 
   /**
-   * Recalculate invoice totals from line items and update the JSON in place.
-   * Keeps the same JSON structure, only updates computed values.
+   * Enrich invoice JSON with computed line totals.
+   *
+   * Structure réelle (confirmée par exemple de facture) :
+   *   lin_moa.rff        = prix unitaire HT brut (avant remise)
+   *   lin_qty            = quantité
+   *   lin_alc.pcd        = remise en % (ex: "10.0")
+   *   lin_total (ajouté) = qty × unitPrice × (1 - pcd/100)
+   *
+   *   invoice_moa[0].moa = Total HT  (déjà calculé par l'API)
+   *   invoice_moa[1].moa = Total TVA (déjà calculé par l'API)
+   *   invoice_moa[2].moa = Total TTC (déjà calculé par l'API)
+   *
+   *   invoice_tax[].moa  = montant TVA par taux (déjà calculé par l'API)
+   *
+   * On ne recalcule PAS les totaux globaux — l'API les fournit déjà correctement.
+   * On ajoute seulement lin_total sur chaque ligne pour l'affichage front.
+   * Si l'utilisateur modifie des lignes (saveInvoiceMetadata), on recalcule tout.
    */
   private recalculateInvoice(data: any): any {
     const result = { ...data };
 
     const lines: any[] = Array.isArray(result.lin_section) ? result.lin_section : [];
 
-    if (lines.length === 0) return result;
-
-    // Each line: lin_moa.rff = unit price HT, lin_qty = quantity, lin_alc.pcd = discount %
-    // Line total HT = qty * unit_price * (1 - discount/100)
-    let totalHT = 0;
+    // Ajouter lin_total sur chaque ligne (qty × unitPrice × (1 - remise%))
     result.lin_section = lines.map((line: any) => {
       const qty = parseFloat(line.lin_qty) || 0;
       const unitPrice = parseFloat(line.lin_moa?.rff) || 0;
       const discountPct = parseFloat(line.lin_alc?.pcd) || 0;
-
       const lineTotal = parseFloat((qty * unitPrice * (1 - discountPct / 100)).toFixed(3));
+
+      return {
+        ...line,
+        lin_moa: {
+          ...line.lin_moa,
+          lin_total: lineTotal.toFixed(3), // total ligne HT après remise (ajouté pour le front)
+        },
+      };
+    });
+
+    // Les totaux invoice_moa et invoice_tax sont déjà corrects depuis l'API — on ne les touche pas.
+    // invoice_moa[0] = HT, [1] = TVA, [2] = TTC
+
+    return result;
+  }
+
+  /**
+   * Recalculate ALL totals from scratch (used when user modifies lines in saveInvoiceMetadata).
+   * lin_moa.rff = prix unitaire HT brut
+   * lin_qty     = quantité
+   * lin_alc.pcd = remise %
+   * invoice_tax[].tax = "TVA 19%" → taux extrait par regex
+   */
+  private recalculateInvoiceFromLines(data: any): { result: any; warnings: string[] } {
+    const result = { ...data };
+    const warnings: string[] = [];
+
+    const lines: any[] = Array.isArray(result.lin_section) ? result.lin_section : [];
+
+    // ── 1. Validate & recalculate each line ──────────────────────────────────
+    let totalHT = 0;
+    result.lin_section = lines.map((line: any, idx: number) => {
+      const label = line.lin_imd || `Ligne ${idx + 1}`;
+
+      const rawQty = line.lin_qty;
+      const rawPrice = line.lin_moa?.rff;
+      const rawDiscount = line.lin_alc?.pcd;
+
+      const qty = parseFloat(rawQty);
+      const unitPrice = parseFloat(rawPrice);
+      const discountPct = parseFloat(rawDiscount) || 0;
+
+      // Validate qty
+      if (isNaN(qty) || qty < 0) {
+        warnings.push(`${label}: quantité invalide ("${rawQty}") — remplacée par 0`);
+      }
+      // Validate unit price
+      if (isNaN(unitPrice) || unitPrice < 0) {
+        warnings.push(`${label}: prix unitaire invalide ("${rawPrice}") — remplacé par 0`);
+      }
+      // Validate discount
+      if (discountPct < 0 || discountPct > 100) {
+        warnings.push(`${label}: remise invalide (${discountPct}%) — doit être entre 0 et 100`);
+      }
+
+      const safeQty = isNaN(qty) || qty < 0 ? 0 : qty;
+      const safePrice = isNaN(unitPrice) || unitPrice < 0 ? 0 : unitPrice;
+      const safeDiscount = discountPct < 0 || discountPct > 100 ? 0 : discountPct;
+
+      const lineTotal = parseFloat((safeQty * safePrice * (1 - safeDiscount / 100)).toFixed(3));
+
+      // Warn if front sent a wrong lin_total
+      const frontLinTotal = parseFloat(line.lin_moa?.lin_total);
+      if (!isNaN(frontLinTotal) && Math.abs(frontLinTotal - lineTotal) > 0.01) {
+        warnings.push(
+          `${label}: total ligne corrigé (envoyé: ${frontLinTotal}, calculé: ${lineTotal})`
+        );
+      }
+
       totalHT += lineTotal;
 
       return {
         ...line,
-        lin_qty: qty.toString(),
+        lin_qty: safeQty.toString(),
         lin_moa: {
           ...line.lin_moa,
-          rff: unitPrice.toFixed(3), // prix unitaire brut
-          lin_total: lineTotal.toFixed(3), // total ligne HT après remise
+          rff: safePrice.toFixed(3),
+          lin_total: lineTotal.toFixed(3),
         },
+        lin_alc: line.lin_alc ? { ...line.lin_alc, pcd: safeDiscount.toFixed(3) } : line.lin_alc,
       };
     });
 
     totalHT = parseFloat(totalHT.toFixed(3));
 
-    // Recalculate each tax entry from invoice_tax (supports multiple tax rates)
-    // TVA amount = totalHT * tvaRate for each entry
+    // ── 2. Validate & recalculate each tax entry ─────────────────────────────
     let totalTVA = 0;
     if (Array.isArray(result.invoice_tax)) {
       result.invoice_tax = result.invoice_tax.map((taxEntry: any) => {
@@ -518,6 +597,15 @@ export class InvoiceExtractionService {
           if (match) tvaRate = parseFloat(match[1]) / 100;
         }
         const tvaAmount = parseFloat((totalHT * tvaRate).toFixed(3));
+
+        // Warn if front sent wrong TVA amount
+        const frontTva = parseFloat(taxEntry.moa);
+        if (!isNaN(frontTva) && Math.abs(frontTva - tvaAmount) > 0.01) {
+          warnings.push(
+            `TVA (${taxEntry.tax}): montant corrigé (envoyé: ${frontTva}, calculé: ${tvaAmount})`
+          );
+        }
+
         totalTVA += tvaAmount;
         return { ...taxEntry, moa: tvaAmount.toFixed(3) };
       });
@@ -526,16 +614,31 @@ export class InvoiceExtractionService {
     totalTVA = parseFloat(totalTVA.toFixed(3));
     const totalTTC = parseFloat((totalHT + totalTVA).toFixed(3));
 
-    // Update invoice_moa: [0]=HT, [1]=TVA total, [2]=TTC
-    if (Array.isArray(result.invoice_moa)) {
-      const moa = [...result.invoice_moa];
-      if (moa[0]) moa[0] = { ...moa[0], moa: totalHT.toFixed(3) };
-      if (moa[1]) moa[1] = { ...moa[1], moa: totalTVA.toFixed(3) };
-      if (moa[2]) moa[2] = { ...moa[2], moa: totalTTC.toFixed(3) };
-      result.invoice_moa = moa;
+    // ── 3. Validate invoice_moa totals sent by front ─────────────────────────
+    const existingMoa = Array.isArray(result.invoice_moa) ? result.invoice_moa : [];
+
+    const frontHT = parseFloat(existingMoa[0]?.moa);
+    const frontTVA = parseFloat(existingMoa[1]?.moa);
+    const frontTTC = parseFloat(existingMoa[2]?.moa);
+
+    if (!isNaN(frontHT) && Math.abs(frontHT - totalHT) > 0.01) {
+      warnings.push(`Total HT corrigé (envoyé: ${frontHT}, calculé: ${totalHT})`);
+    }
+    if (!isNaN(frontTVA) && Math.abs(frontTVA - totalTVA) > 0.01) {
+      warnings.push(`Total TVA corrigé (envoyé: ${frontTVA}, calculé: ${totalTVA})`);
+    }
+    if (!isNaN(frontTTC) && Math.abs(frontTTC - totalTTC) > 0.01) {
+      warnings.push(`Total TTC corrigé (envoyé: ${frontTTC}, calculé: ${totalTTC})`);
     }
 
-    return result;
+    // Always write correct totals
+    result.invoice_moa = [
+      { ...(existingMoa[0] ?? {}), moa: totalHT.toFixed(3) },
+      { ...(existingMoa[1] ?? {}), moa: totalTVA.toFixed(3) },
+      { ...(existingMoa[2] ?? {}), moa: totalTTC.toFixed(3) },
+    ];
+
+    return { result, warnings };
   }
 
   /**
@@ -596,8 +699,8 @@ export class InvoiceExtractionService {
         throw new ApiError('extractedData must be a valid JSON object', 400, 'INVALID_DATA');
       }
 
-      // 3. Recalculate totals from line items (in case user modified lines/prices)
-      const recalculated = this.recalculateInvoice(extractedData);
+      // 3. Recalculate totals from line items (user may have modified lines/prices/quantities)
+      const { result: recalculated, warnings } = this.recalculateInvoiceFromLines(extractedData);
 
       // 4. Parse structured fields from recalculated data
       const parsedFields = this.parseExtractedData(recalculated);
@@ -609,7 +712,7 @@ export class InvoiceExtractionService {
         ...parsedFields,
       };
 
-      // 4. Upsert metadata (create or update if already exists)
+      // 5. Upsert metadata (create or update if already exists)
       const existingMetadata = await this.prisma.invoiceMetadata.findUnique({
         where: { documentId: document.id },
       });
@@ -623,7 +726,7 @@ export class InvoiceExtractionService {
             data: { documentId: document.id, ...metadataData },
           });
 
-      // 5. Update document status to "enregistre"
+      // 6. Update document status to "enregistre"
       await this.prisma.document.update({
         where: { id: documentId },
         data: { processingStatus: 'enregistre' },
@@ -636,6 +739,7 @@ export class InvoiceExtractionService {
         data: {
           documentId: document.id,
           metadata,
+          ...(warnings.length > 0 && { warnings }),
         },
       };
     } catch (error) {

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { seedFeatures } from './seeds/features.seed';
 import { seedRoles } from './seeds/role.seed';

@@ -9,6 +9,7 @@ export enum TaskStatus {
   IN_REVIEW = 'in_review',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
+  ARCHIVED = 'archived',
 }
 
 export class UpdateTaskDto {
@@ -88,6 +89,12 @@ export class UpdateTaskDto {
   @IsInt()
   @IsOptional()
   progress?: number;
+
+  @ApiProperty({ example: 2, description: 'Order position for drag & drop', required: false })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  order?: number;
 
   @ApiProperty({
     type: 'array',

@@ -7,12 +7,14 @@ import {
   DialogTitle,
   IconButton,
   Typography,
+  useTheme,
 } from "@mui/material";
 import { MapPin, Phone, Video, Plus, X } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
 import CustomSelect from "src/components/common/CustomSelect";
 import MenuItem from "@mui/material/MenuItem";
+import CustomAccordion from "../common/CustomAccordion";
 
 export interface NewAppointmentPayload {
   title: string;
@@ -46,6 +48,7 @@ export default function NewAppointmentWizard({
   const [location, setLocation] = useState("");
   const [guestInput, setGuestInput] = useState("");
   const [guests, setGuests] = useState<string[]>([]);
+  const theme = useTheme();
 
   const canNext = useMemo(() => {
     if (step === 0) return title.trim() && subject.trim() && description.trim();
@@ -73,6 +76,7 @@ export default function NewAppointmentWizard({
     setGuests([]);
     onClose();
   };
+  const hours = ["09:00", "10:00", "11:00", "12:00"];
 
   // Steps configuration
   const steps = [
@@ -81,12 +85,28 @@ export default function NewAppointmentWizard({
     { label: "Invités", value: 2 },
   ];
 
-  const progress = ((step + 1) / steps.length) * 100;
-
   return (
-    <Dialog open={open} onClose={resetAndClose} maxWidth="md" fullWidth>
+    <Dialog
+      open={open}
+      onClose={resetAndClose}
+      maxWidth="md"
+      fullWidth
+      PaperProps={{
+        sx: {
+          borderRadius: 4, // softer corners
+          overflow: "hidden", // keeps rounded corners clean
+          bgcolor: "background.paper",
+        },
+      }}
+    >
+      {/* Title with subtle border and clean close button */}
       <DialogTitle
         sx={{
+          px: 3,
+          pt: 3,
+          pb: 1.5,
+          borderBottom: "1px solid",
+          borderColor: "divider",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -108,49 +128,48 @@ export default function NewAppointmentWizard({
         <Box sx={{ mb: 3 }}>
           {/* Segmented progress bar with gaps */}
           <Box sx={{ display: "flex", gap: 1 }}>
-            {steps.map((_, idx) => {
-              let bgColor;
-              if (step > idx) {
-                bgColor = "primary.main"; // completed
-              } else if (step === idx) {
-                bgColor = "primary.main"; // current step
-              } else {
-                bgColor = "action.disabled"; // future step
-              }
+            {steps.map((s, idx) => {
+              const isCompleted = step > idx;
+              const isActive = step === idx;
+              const bgColor =
+                isCompleted || isActive ? "primary.main" : "info.lighter";
+
               return (
                 <Box
-                  key={idx}
+                  key={s.value}
                   sx={{
                     flex: 1,
-                    height: 6,
-                    borderRadius: 3,
-                    backgroundColor: bgColor,
-                    transition: "background-color 0.2s ease",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 0.75,
+                    cursor: "pointer",
                   }}
-                />
+                  onClick={() => setStep(s.value)}
+                >
+                  {/* Progress bar */}
+                  <Box
+                    sx={{
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: bgColor,
+                      transition: "background-color 0.2s ease",
+                    }}
+                  />
+                  {/* Label — sits directly under its own bar */}
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: isActive ? 600 : 400,
+                      color: isActive ? "primary.main" : "text.secondary",
+                      transition: "all 0.2s",
+                      "&:hover": { color: "primary.main" },
+                    }}
+                  >
+                    {s.label}
+                  </Typography>
+                </Box>
               );
             })}
-          </Box>
-
-          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-            {steps.map((s) => (
-              <Typography
-                key={s.value}
-                variant="subtitle2"
-                sx={{
-                  fontWeight: step === s.value ? 600 : 400,
-                  color: step === s.value ? "primary.main" : "text.secondary",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  "&:hover": {
-                    color: "primary.main",
-                  },
-                }}
-                onClick={() => setStep(s.value)}
-              >
-                {s.label}
-              </Typography>
-            ))}
           </Box>
         </Box>
 
@@ -201,78 +220,87 @@ export default function NewAppointmentWizard({
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
               />
-              <CustomInput
-                label="Heure *"
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-              />
+              <Box>
+                <label style={{ fontWeight: 500 }}>Heure *</label>
+
+                <Box display="flex" gap={1.5} mt={1}>
+                  {hours.map((hour) => {
+                    const selected = time === hour;
+
+                    return (
+                      <CustomButton
+                        key={hour}
+                        variant={selected ? "contained" : "outlined"}
+                        onClick={() => setTime(hour)}
+                        sx={{
+                          minWidth: 90,
+                          borderRadius: 2,
+
+                          ...(selected && {
+                            backgroundColor: "primary.main",
+                            color: "white",
+                          }),
+
+                          ...(!selected && {
+                            borderColor: "info.main",
+                            color: "info.main",
+                          }),
+                        }}
+                      >
+                        {hour}
+                      </CustomButton>
+                    );
+                  })}
+                </Box>
+              </Box>
             </Box>
             <Typography variant="subtitle2">Localisation *</Typography>
             <Box sx={{ display: "grid", gap: 1 }}>
-              <Box
-                onClick={() => setMeetingType("in_person")}
-                sx={{
-                  p: 1.5,
-                  border: "1px solid",
-                  borderColor:
-                    meetingType === "in_person" ? "primary.main" : "divider",
-                  borderRadius: 2,
-                  cursor: "pointer",
-                }}
+              <CustomAccordion
+                id="in_person"
+                icon={<MapPin size={22} color={theme.palette.primary.main} />}
+                title="Réunion physique"
+                subtitle="Reunion face a face"
+                expanded={meetingType === "in_person"}
+                onChange={setMeetingType}
               >
-                <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-                  <MapPin size={16} />
-                  <Typography variant="subtitle2">Réunion physique</Typography>
-                </Box>
-              </Box>
-              <Box
-                onClick={() => setMeetingType("online")}
-                sx={{
-                  p: 1.5,
-                  border: "1px solid",
-                  borderColor:
-                    meetingType === "online" ? "primary.main" : "divider",
-                  borderRadius: 2,
-                  cursor: "pointer",
-                }}
+                <CustomInput
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="Adresse"
+                />
+              </CustomAccordion>
+
+              <CustomAccordion
+                id="online"
+                icon={<Video size={22} color={theme.palette.primary.main} />}
+                title="Réunion virtuelle"
+                subtitle="Reunion en ligne"
+                expanded={meetingType === "online"}
+                onChange={setMeetingType}
               >
-                <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-                  <Video size={16} />
-                  <Typography variant="subtitle2">Réunion virtuelle</Typography>
-                </Box>
-              </Box>
-              <Box
-                onClick={() => setMeetingType("phone")}
-                sx={{
-                  p: 1.5,
-                  border: "1px solid",
-                  borderColor:
-                    meetingType === "phone" ? "primary.main" : "divider",
-                  borderRadius: 2,
-                  cursor: "pointer",
-                }}
+                <CustomInput
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="https://..."
+                />
+              </CustomAccordion>
+
+              <CustomAccordion
+                id="phone"
+                icon={<Phone size={22} color={theme.palette.primary.main} />}
+                title="Appel téléphonique"
+                subtitle="Via whatsApp ou sur tél"
+                expanded={meetingType === "phone"}
+                onChange={setMeetingType}
               >
-                <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-                  <Phone size={16} />
-                  <Typography variant="subtitle2">
-                    Appel téléphonique
-                  </Typography>
-                </Box>
-              </Box>
+                <CustomInput
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="+216 ..."
+                />
+              </CustomAccordion>
             </Box>
-            <CustomInput
-              label="Adresse / Lien / Téléphone"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder={
-                meetingType === "online"
-                  ? "https://..."
-                  : meetingType === "phone"
-                    ? "+216 ..."
-                    : "Adresse"
-              }
-            />
           </Box>
         )}
 

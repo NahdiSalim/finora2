@@ -44,6 +44,48 @@ export class AppointmentService {
         if (!dto.accountantId) dto.accountantId = slot.accountantId;
       }
 
+      // Validate that the date/hour is within the accountant's availability
+      const targetAccountantId = isAccountant ? userId : dto.accountantId;
+      if (targetAccountantId && dto.date && dto.hour) {
+        const targetDate = new Date(dto.date);
+        const dayNames = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+        const dayName = dayNames[targetDate.getDay()];
+
+        const matchingRule = await this.prisma.availability.findFirst({
+          where: {
+            accountantId: targetAccountantId,
+            isActive: true,
+            OR: [
+              { isRecurring: true, dayOfWeek: dayName },
+              { isRecurring: false, specificDate: targetDate },
+            ],
+          },
+        });
+
+        if (!matchingRule) {
+          throw new ApiError(
+            `Le comptable n'est pas disponible à cette date`,
+            400,
+            'ACCOUNTANT_NOT_AVAILABLE'
+          );
+        }
+
+        const [ruleStartH, ruleStartM] = matchingRule.startTime.split(':').map(Number);
+        const [ruleEndH, ruleEndM] = matchingRule.endTime.split(':').map(Number);
+        const [hourH, hourM] = dto.hour.split(':').map(Number);
+        const ruleStart = ruleStartH * 60 + ruleStartM;
+        const ruleEnd = ruleEndH * 60 + ruleEndM;
+        const apptHour = hourH * 60 + hourM;
+
+        if (apptHour < ruleStart || apptHour >= ruleEnd) {
+          throw new ApiError(
+            `L'heure ${dto.hour} est hors des disponibilités du comptable (${matchingRule.startTime} - ${matchingRule.endTime})`,
+            400,
+            'HOUR_OUT_OF_AVAILABILITY'
+          );
+        }
+      }
+
       const appointment = await this.prisma.appointment.create({
         data: {
           title: dto.title,
@@ -53,7 +95,7 @@ export class AppointmentService {
           hour: dto.hour,
           meetingType: dto.meetingType || 'in_person',
           location: dto.location,
-          clientId: isAccountant ? (dto.clientId ?? null) : userId,
+          clientId: dto.clientId,
           accountantId: isAccountant ? userId : (dto.accountantId ?? null),
           companyId: user?.companyId,
           clientNotes: dto.clientNotes,
@@ -62,10 +104,24 @@ export class AppointmentService {
         } as any,
         include: {
           client: {
-            select: { id: true, username: true, email: true, firstName: true, lastName: true },
+            select: {
+              id: true,
+              username: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              photo: true,
+            },
           },
           accountant: {
-            select: { id: true, username: true, email: true, firstName: true, lastName: true },
+            select: {
+              id: true,
+              username: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              photo: true,
+            },
           },
           company: { select: { id: true, name: true } },
         },
@@ -208,6 +264,7 @@ export class AppointmentService {
               email: true,
               firstName: true,
               lastName: true,
+              photo: true,
             },
           },
         },
@@ -266,6 +323,7 @@ export class AppointmentService {
               email: true,
               firstName: true,
               lastName: true,
+              photo: true,
             },
           },
           accountant: {
@@ -275,6 +333,7 @@ export class AppointmentService {
               email: true,
               firstName: true,
               lastName: true,
+              photo: true,
             },
           },
         },
@@ -412,6 +471,9 @@ export class AppointmentService {
             id: true,
             username: true,
             email: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
           },
         },
         accountant: {
@@ -419,6 +481,9 @@ export class AppointmentService {
             id: true,
             username: true,
             email: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
           },
         },
       },
@@ -468,6 +533,9 @@ export class AppointmentService {
             id: true,
             username: true,
             email: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
           },
         },
         accountant: {
@@ -475,6 +543,9 @@ export class AppointmentService {
             id: true,
             username: true,
             email: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
           },
         },
       },
@@ -544,6 +615,9 @@ export class AppointmentService {
             id: true,
             username: true,
             email: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
           },
         },
         accountant: {
@@ -551,6 +625,9 @@ export class AppointmentService {
             id: true,
             username: true,
             email: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
           },
         },
       },

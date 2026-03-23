@@ -6,14 +6,14 @@ import {
   DialogContent,
   DialogTitle,
   Switch,
-  Tab,
-  Tabs,
   Typography,
+  useTheme,
 } from "@mui/material";
 import { Plus } from "lucide-react";
 import { PageHeader } from "src/layouts/components/page-header";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
+import { CustomTabs } from "src/components/common/CustomTabs";
 import AppointmentCard from "src/components/appointment/AppointmentCard";
 import AppointmentDetailsDialog from "src/components/appointment/AppointmentDetailsDialog";
 import MonthlyAppointmentCalendar from "src/components/appointment/MonthlyAppointmentCalendar";
@@ -52,6 +52,8 @@ function classifyTimeTab(item: AppointmentItem): TimeTab {
   if (sameDay(d, now)) return "today";
   return d.getTime() > now.getTime() ? "upcoming" : "past";
 }
+
+// ─── Availability Settings ────────────────────────────────────────────────────
 
 function AvailabilitySettings() {
   const [duration, setDuration] = useState("30");
@@ -180,6 +182,8 @@ function AvailabilitySettings() {
   );
 }
 
+// ─── MeetingsView ─────────────────────────────────────────────────────────────
+
 export default function MeetingsView() {
   const [mode, setMode] = useState<Mode>("appointments");
   const [tab, setTab] = useState<TimeTab>("today");
@@ -189,12 +193,25 @@ export default function MeetingsView() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [calendarMonth] = useState(new Date());
   const [search, setSearch] = useState("");
+  const theme = useTheme();
 
   const { data, isLoading } = useGetAllAppointmentsQuery({
     page: 1,
     limit: 100,
   });
   const appointments = data?.data ?? [];
+
+  // Per-tab counts derived from all appointments (before search filter)
+  // so badges always reflect the true total per bucket.
+  const counts = useMemo(
+    () => ({
+      today: appointments.filter((a) => classifyTimeTab(a) === "today").length,
+      upcoming: appointments.filter((a) => classifyTimeTab(a) === "upcoming")
+        .length,
+      past: appointments.filter((a) => classifyTimeTab(a) === "past").length,
+    }),
+    [appointments],
+  );
 
   const filtered = useMemo(
     () =>
@@ -216,8 +233,8 @@ export default function MeetingsView() {
     skip: selectedId == null,
   });
   const appointment = detailsData?.data ?? null;
-  const [respondAppointment, { isLoading: isResponding }] =
-    useRespondAppointmentMutation();
+
+  const [respondAppointment] = useRespondAppointmentMutation();
 
   const handleConfirm = async () => {
     if (!selectedId) return;
@@ -237,7 +254,7 @@ export default function MeetingsView() {
 
   return (
     <PageHeader
-      title="Mes RDV"
+      title="Mes Rendez-vous"
       caption="Suivi de vos rendez-vous"
       actions={[
         {
@@ -262,44 +279,33 @@ export default function MeetingsView() {
       {mode === "availability" ? (
         <AvailabilitySettings />
       ) : (
-        <Box sx={{ bgcolor: "white", borderRadius: 3, p: 2 }}>
+        <Box
+          sx={{
+            borderRadius: "0 12px 12px 12px",
+            py: 2,
+            mt: 8,
+            backgroundColor: theme.palette.common.white,
+          }}
+        >
+          {/* ── Header row: CustomTabs + search ── */}
           <Box
             sx={{
               display: "flex",
-              alignItems: "center",
+              alignItems: "flex-start",
               justifyContent: "space-between",
-              mb: 2,
-              gap: 2,
+              mt: -7.6,
             }}
           >
-            <Tabs
+            <CustomTabs
               value={tab}
-              onChange={(_, v) => setTab(v)}
-              sx={{
-                minHeight: 40,
-                bgcolor: "grey.100",
-                borderRadius: 2,
-                p: 0.5,
-                "& .MuiTabs-indicator": { display: "none" },
-                "& .MuiTab-root": {
-                  minHeight: 30,
-                  minWidth: 110,
-                  textTransform: "none",
-                  borderRadius: 1.5,
-                  color: "text.secondary",
-                  fontWeight: 500,
-                  "&.Mui-selected": {
-                    bgcolor: "primary.main",
-                    color: "common.white",
-                  },
-                },
-              }}
-            >
-              <Tab value="today" label="Aujourd'hui" />
-              <Tab value="upcoming" label="A venir" />
-              <Tab value="past" label="Passé" />
-            </Tabs>
-            <Box sx={{ width: { xs: "100%", sm: 300 } }}>
+              onChange={(id) => setTab(id as TimeTab)}
+              tabs={[
+                { id: "today", label: "Aujourd'hui", count: counts.today },
+                { id: "upcoming", label: "À venir", count: counts.upcoming },
+                { id: "past", label: "Passé", count: counts.past },
+              ]}
+            />
+            <Box sx={{ width: { xs: "100%", sm: 300 }, mt: -1 }}>
               <CustomInput
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -308,7 +314,16 @@ export default function MeetingsView() {
             </Box>
           </Box>
 
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
+          {/* ── Appointment list ── */}
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 1.25,
+              mt: 2,
+              px: 2,
+            }}
+          >
             {isLoading ? (
               <Typography color="text.secondary">Chargement...</Typography>
             ) : filtered.length === 0 ? (
@@ -334,7 +349,8 @@ export default function MeetingsView() {
             )}
           </Box>
 
-          <Box sx={{ mt: 3 }}>
+          {/* ── Monthly calendar ── */}
+          <Box sx={{ mt: 3, px: 2 }}>
             <Typography variant="h6" sx={{ mb: 1.25 }}>
               Septembre 2024
             </Typography>
@@ -347,6 +363,7 @@ export default function MeetingsView() {
         </Box>
       )}
 
+      {/* ── Appointment details dialog ── */}
       <AppointmentDetailsDialog
         open={selectedId != null}
         appointment={appointment}
@@ -356,6 +373,7 @@ export default function MeetingsView() {
         onEdit={() => setWizardOpen(true)}
       />
 
+      {/* ── Reject reason dialog ── */}
       <Dialog
         open={rejectDialogOpen}
         onClose={() => setRejectDialogOpen(false)}
@@ -393,12 +411,13 @@ export default function MeetingsView() {
         </DialogActions>
       </Dialog>
 
+      {/* ── New appointment wizard ── */}
       <NewAppointmentWizard
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
         onSchedule={() => {
           // NOTE: backend currently restricts create endpoint to CLIENT.
-          // We keep full wizard workflow UI for accountant and can plug accountant endpoint later.
+          // Wizard UI is ready; plug accountant endpoint here when available.
         }}
       />
     </PageHeader>

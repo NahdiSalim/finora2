@@ -6,8 +6,6 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  Tab,
-  Tabs,
   Typography,
 } from "@mui/material";
 import { MapPin, Phone, Video, Plus, X } from "lucide-react";
@@ -76,6 +74,15 @@ export default function NewAppointmentWizard({
     onClose();
   };
 
+  // Steps configuration
+  const steps = [
+    { label: "Détails", value: 0 },
+    { label: "Date et localisation", value: 1 },
+    { label: "Invités", value: 2 },
+  ];
+
+  const progress = ((step + 1) / steps.length) * 100;
+
   return (
     <Dialog open={open} onClose={resetAndClose} maxWidth="md" fullWidth>
       <DialogTitle
@@ -96,11 +103,56 @@ export default function NewAppointmentWizard({
         </IconButton>
       </DialogTitle>
       <DialogContent dividers>
-        <Tabs value={step} onChange={(_, v) => setStep(v)} sx={{ mb: 2 }}>
-          <Tab value={0} label="Détails" />
-          <Tab value={1} label="Date et localisation" />
-          <Tab value={2} label="Invités" />
-        </Tabs>
+        {/* Custom stepper with labels and progress bar */}
+        {/* Custom stepper with segmented progress bar */}
+        <Box sx={{ mb: 3 }}>
+          {/* Segmented progress bar with gaps */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            {steps.map((_, idx) => {
+              let bgColor;
+              if (step > idx) {
+                bgColor = "primary.main"; // completed
+              } else if (step === idx) {
+                bgColor = "primary.main"; // current step
+              } else {
+                bgColor = "action.disabled"; // future step
+              }
+              return (
+                <Box
+                  key={idx}
+                  sx={{
+                    flex: 1,
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: bgColor,
+                    transition: "background-color 0.2s ease",
+                  }}
+                />
+              );
+            })}
+          </Box>
+
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
+            {steps.map((s) => (
+              <Typography
+                key={s.value}
+                variant="subtitle2"
+                sx={{
+                  fontWeight: step === s.value ? 600 : 400,
+                  color: step === s.value ? "primary.main" : "text.secondary",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  "&:hover": {
+                    color: "primary.main",
+                  },
+                }}
+                onClick={() => setStep(s.value)}
+              >
+                {s.label}
+              </Typography>
+            ))}
+          </Box>
+        </Box>
 
         {step === 0 && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
@@ -233,7 +285,7 @@ export default function NewAppointmentWizard({
               <CustomInput
                 value={guestInput}
                 onChange={(e) => setGuestInput(e.target.value)}
-                placeholder="Guest email"
+                placeholder="Email du participant"
               />
               <CustomButton
                 variant="contained"

@@ -72,6 +72,8 @@ model Appointment {
   updatedAt   DateTime  @updatedAt
 
   slot        AvailabilitySlot? @relation("AppointmentSlot")
+
+  @@index([clientId])
   @@index([accountantId])
   @@index([companyId])
   @@index([status])
@@ -152,12 +154,12 @@ model AvailabilitySlot {
   id               Int       @id @default(autoincrement())
   availabilityId   Int
   accountantId     Int
-  date             DateTime  @db.Date
-  startTime        String
-  endTime          String
+  date             DateTime  @db.Date        // date concrète du slot ex: 2026-04-28
+  startTime        String                    // "09:00"
+  endTime          String                    // "10:00"
   status           String    @default("available") // "available" | "booked" | "cancelled"
 
-  appointmentId    Int?      @unique
+  appointmentId    Int?      @unique         // null = libre, rempli = occupé
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -165,7 +167,7 @@ model AvailabilitySlot {
   accountant       User         @relation("AccountantSlots", fields: [accountantId], references: [id], onDelete: Cascade)
   appointment      Appointment? @relation("AppointmentSlot", fields: [appointmentId], references: [id], onDelete: SetNull)
 
-  @@unique([accountantId, date, startTime])
+  @@unique([accountantId, date, startTime]) // un seul slot par créneau horaire par comptable
   @@index([availabilityId])
   @@index([accountantId])
   @@index([date])

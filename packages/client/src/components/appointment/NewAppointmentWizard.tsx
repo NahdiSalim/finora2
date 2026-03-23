@@ -5,7 +5,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
+  Radio,
+  RadioGroup,
+  Tooltip,
   Typography,
   useTheme,
 } from "@mui/material";
@@ -15,6 +19,8 @@ import CustomInput from "src/components/common/CustomInput";
 import CustomSelect from "src/components/common/CustomSelect";
 import MenuItem from "@mui/material/MenuItem";
 import CustomAccordion from "../common/CustomAccordion";
+import ColorPicker from "../common/ColorPicker";
+import { alpha } from "@mui/material/styles";
 
 export interface NewAppointmentPayload {
   title: string;
@@ -51,6 +57,40 @@ export default function NewAppointmentWizard({
   const theme = useTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [selectedColor, setSelectedColor] = useState("blue");
+
+  const colorOptions = [
+    { id: "blue", label: "Bleu", color: "#3B82F6" },
+    { id: "green", label: "Vert", color: "#22C55E" },
+    { id: "purple", label: "Violet", color: "#8B5CF6" },
+    { id: "orange", label: "Orange", color: "#F97316" },
+    { id: "red", label: "Rouge", color: "#EF4444" },
+    { id: "pink", label: "Rose", color: "#EC4899" },
+  ];
+
+  const [locationType, setLocationType] = useState<
+    "my_office" | "accounting_office" | "other"
+  >("my_office");
+
+  // Seeded color palette — bg is a light tint, letter is the vivid shade
+  const AVATAR_COLORS = [
+    { bg: "#dbeafe", color: "#1d4ed8" }, // blue
+    { bg: "#dcfce7", color: "#15803d" }, // green
+    { bg: "#FFE5CF", color: "#FF861F" }, // yellow
+    { bg: "#fce7f3", color: "#be185d" }, // pink
+    { bg: "#ede9fe", color: "#6d28d9" }, // purple
+    { bg: "#ffedd5", color: "#c2410c" }, // orange
+  ];
+
+  // Deterministic: same email → same color every render
+  function getAvatarColor(email: string) {
+    const seed = email
+      .split("")
+      .reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return AVATAR_COLORS[seed % AVATAR_COLORS.length];
+  }
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   const canNext = useMemo(() => {
     if (step === 0) return title.trim() && subject.trim() && description.trim();
@@ -58,11 +98,17 @@ export default function NewAppointmentWizard({
     return true;
   }, [step, title, subject, description, date, time]);
 
+  const [guestError, setGuestError] = useState(false);
+
   const addGuest = () => {
     const v = guestInput.trim();
-    if (!v) return;
+    if (!EMAIL_RE.test(v)) {
+      setGuestError(true);
+      return;
+    }
     if (!guests.includes(v)) setGuests((prev) => [...prev, v]);
     setGuestInput("");
+    setGuestError(false);
   };
 
   const resetAndClose = () => {
@@ -209,6 +255,18 @@ export default function NewAppointmentWizard({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Informer votre client sur l'objet de la réunion..."
             />
+            <Typography
+              variant="caption"
+              color={theme.palette.grey[800]}
+              fontWeight={600}
+            >
+              Couleur du rdv
+            </Typography>
+            <ColorPicker
+              options={colorOptions}
+              value={selectedColor}
+              onChange={setSelectedColor}
+            />
           </Box>
         )}
 
@@ -289,11 +347,38 @@ export default function NewAppointmentWizard({
                 expanded={meetingType === "in_person"}
                 onChange={setMeetingType}
               >
-                <CustomInput
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="Adresse"
-                />
+                <RadioGroup
+                  value={locationType}
+                  onChange={(e) => setLocationType(e.target.value as any)}
+                >
+                  <FormControlLabel
+                    value="my_office"
+                    control={<Radio />}
+                    label="Mon bureau"
+                  />
+
+                  <FormControlLabel
+                    value="accounting_office"
+                    control={<Radio />}
+                    label="Chez le cabinet de comptabilité"
+                  />
+
+                  <FormControlLabel
+                    value="other"
+                    control={<Radio />}
+                    label="Autre localisation"
+                  />
+                </RadioGroup>
+
+                {locationType === "other" && (
+                  <Box sx={{ mt: 2 }}>
+                    <CustomInput
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      placeholder="Adresse"
+                    />
+                  </Box>
+                )}
               </CustomAccordion>
 
               <CustomAccordion
@@ -338,7 +423,10 @@ export default function NewAppointmentWizard({
               <CustomInput
                 value={guestInput}
                 onChange={(e) => setGuestInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addGuest()}
                 placeholder="Email du participant"
+                error={guestError}
+                helperText={guestError ? "Adresse email invalide" : undefined}
               />
               <CustomButton
                 variant="contained"
@@ -348,21 +436,89 @@ export default function NewAppointmentWizard({
                 <Plus size={16} />
               </CustomButton>
             </Box>
-            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-              {guests.map((g) => (
-                <Box
-                  key={g}
-                  sx={{
-                    px: 1.25,
-                    py: 0.75,
-                    bgcolor: "action.hover",
-                    borderRadius: 5,
-                    fontSize: 13,
-                  }}
-                >
-                  {g}
-                </Box>
-              ))}
+
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 0.5 }}>
+              {guests.map((g) => {
+                const { bg, color } = getAvatarColor(g);
+                return (
+                  <Tooltip key={g} title={g} placement="top" arrow>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 0.75,
+                        pl: 0.5,
+                        pr: 1,
+                        py: 0.5,
+                        bgcolor: bg,
+                        borderRadius: 99,
+                        border: "1px solid",
+                        borderColor: alpha(color, 0.25),
+                        maxWidth: 160,
+                      }}
+                    >
+                      {/* Avatar */}
+                      <Box
+                        sx={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: "50%",
+                          bgcolor: color,
+                          color: "#fff",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        {g[0]}
+                      </Box>
+
+                      {/* Truncated email */}
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color,
+                          fontWeight: 500,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          flex: 1,
+                        }}
+                      >
+                        {g}
+                      </Typography>
+
+                      {/* Remove button */}
+                      <Box
+                        component="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setGuests((prev) => prev.filter((x) => x !== g));
+                        }}
+                        sx={{
+                          all: "unset",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: 14,
+                          height: 14,
+                          borderRadius: "50%",
+                          color: alpha(color, 0.6),
+                          flexShrink: 0,
+                          "&:hover": { color },
+                        }}
+                      >
+                        <X size={11} strokeWidth={2.5} />
+                      </Box>
+                    </Box>
+                  </Tooltip>
+                );
+              })}
             </Box>
             {submitError ? (
               <Typography variant="caption" color="error.main">

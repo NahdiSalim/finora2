@@ -97,7 +97,7 @@ export class AppointmentService {
           hour: dto.hour,
           meetingType: dto.meetingType || 'in_person',
           location: dto.location,
-          clientId: isAccountant ? (dto.clientId ?? null) : userId,
+          clientId: dto.clientId,
           accountantId: isAccountant ? userId : (dto.accountantId ?? null),
           companyId: user?.companyId,
           clientNotes: dto.clientNotes,
@@ -1082,23 +1082,25 @@ export class AppointmentService {
     if (!period) return;
 
     const now = new Date();
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date(now);
-    todayEnd.setHours(23, 59, 59, 999);
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const d = now.getDate();
+
+    // Build UTC boundaries to match @db.Date storage
+    const todayStart = new Date(Date.UTC(y, m, d, 0, 0, 0, 0));
+    const todayEnd = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
+    const tomorrowStart = new Date(Date.UTC(y, m, d + 1, 0, 0, 0, 0));
+
     const currentHour = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
     if (period === 'today') {
-      // Date = today, any hour
       where.date = { gte: todayStart, lte: todayEnd };
     } else if (period === 'upcoming') {
-      // Either date > today, OR date = today AND hour > currentHour
       where.OR = [
-        { date: { gt: todayEnd } },
+        { date: { gte: tomorrowStart } },
         { date: { gte: todayStart, lte: todayEnd }, hour: { gt: currentHour } },
       ];
     } else if (period === 'past') {
-      // Either date < today, OR date = today AND hour < currentHour
       where.OR = [
         { date: { lt: todayStart } },
         { date: { gte: todayStart, lte: todayEnd }, hour: { lt: currentHour } },

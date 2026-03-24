@@ -52,9 +52,10 @@ export default function AppointmentCard({
         sx={{
           display: "flex",
           alignItems: "center",
+          justifyContent: "flex-start",
           gap: 1.5,
           minWidth: 0,
-          width: "40%",
+          width: "50%",
         }}
       >
         <Avatar sx={{ width: 36, height: 36 }}>
@@ -83,9 +84,11 @@ export default function AppointmentCard({
             </Box>
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
               <MapPin size={12} />
-              <Typography variant="caption" noWrap>
-                {appointment.location || "Mon bureau"}
-              </Typography>
+              <Box>
+                <Typography variant="caption" noWrap>
+                  {appointment.location || "Mon bureau"}
+                </Typography>
+              </Box>
             </Box>
           </Box>
         </Box>

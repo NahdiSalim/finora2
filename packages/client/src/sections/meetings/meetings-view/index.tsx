@@ -11,7 +11,7 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
 import { PageHeader } from "src/layouts/components/page-header";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
@@ -98,10 +98,7 @@ function classifyTimeTab(item: AppointmentItem): TimeTab {
 }
 
 function formatMonthLabelFr(date: Date) {
-  return date.toLocaleDateString("fr-FR", {
-    month: "long",
-    year: "numeric",
-  });
+  return date.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
 }
 
 // ─── Availability Settings ────────────────────────────────────────────────────
@@ -158,11 +155,7 @@ function AvailabilitySettings() {
       slots: WEEK_DAYS.map((d) => ({
         day: d,
         slots: (argSlots[d] || [])
-          .map((s) => ({
-            id: s.id ?? null,
-            start: s.start,
-            end: s.end,
-          }))
+          .map((s) => ({ id: s.id ?? null, start: s.start, end: s.end }))
           .sort(
             (a, b) =>
               a.start.localeCompare(b.start) || a.end.localeCompare(b.end),
@@ -181,8 +174,8 @@ function AvailabilitySettings() {
       WEEK_DAYS.map((d) => [d, []]),
     );
     let firstDuration = "30";
-
     const nextInitialById: Record<number, InitialSlotSnapshot> = {};
+
     availabilityItems
       .filter((a) => a.isRecurring && a.dayOfWeek)
       .forEach((a) => {
@@ -304,11 +297,9 @@ function AvailabilitySettings() {
       for (const id of removedSlotIds) {
         await deleteAvailability(id).unwrap();
       }
-
       for (const day of WEEK_DAYS) {
         const enabled = !!enabledDays[day];
         const daySlots = slots[day] || [];
-
         for (const slot of daySlots) {
           const normalizedStart = toHHMM(slot.start) as string;
           const normalizedEnd = toHHMM(slot.end) as string;
@@ -359,8 +350,6 @@ function AvailabilitySettings() {
     return (
       <Box
         sx={{
-          bgcolor: "white",
-          borderRadius: 3,
           p: 3,
           display: "flex",
           alignItems: "center",
@@ -378,17 +367,13 @@ function AvailabilitySettings() {
 
   return (
     <Box sx={{ bgcolor: "white", borderRadius: 3, p: 2 }}>
-      <Typography variant="h5">Mes disponibilités</Typography>
-      <Typography variant="caption" color="text.secondary">
-        Suivi de vos rendez-vous
-      </Typography>
-      {saveError ? (
-        <Typography sx={{ mt: 1 }} variant="caption" color="error.main">
+      {saveError && (
+        <Typography sx={{ mb: 1 }} variant="caption" color="error.main">
           {saveError}
         </Typography>
-      ) : null}
+      )}
 
-      <Box sx={{ mt: 2 }}>
+      <Box sx={{ mb: 2 }}>
         <Typography variant="subtitle2" sx={{ mb: 1 }}>
           Durée du rendez-vous
         </Typography>
@@ -403,7 +388,7 @@ function AvailabilitySettings() {
         </Typography>
       </Box>
 
-      <Box sx={{ mt: 2, display: "flex", flexDirection: "column", gap: 1.5 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
         {WEEK_DAYS.map((day) => (
           <Box
             key={day}
@@ -429,7 +414,7 @@ function AvailabilitySettings() {
               <>
                 {(slots[day] || []).map((slot, idx) => (
                   <Box
-                    key={`${day}-${idx}`}
+                    key={slot.localId}
                     sx={{
                       display: "flex",
                       gap: 1,
@@ -450,7 +435,7 @@ function AvailabilitySettings() {
                       }}
                     />
                     <Typography variant="body2" color="text.secondary">
-                      a
+                      à
                     </Typography>
                     <CustomInput
                       value={slot.end}
@@ -486,13 +471,8 @@ function AvailabilitySettings() {
           </Box>
         ))}
       </Box>
-      <Box
-        sx={{
-          mt: 2,
-          display: "flex",
-          justifyContent: "flex-end",
-        }}
-      >
+
+      <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}>
         <CustomButton
           variant="contained"
           onClick={handleSaveAvailability}
@@ -531,8 +511,6 @@ export default function MeetingsView() {
   });
   const appointments = data?.data ?? [];
 
-  // Per-tab counts derived from all appointments (before search filter)
-  // so badges always reflect the true total per bucket.
   const counts = useMemo(
     () => ({
       today: appointments.filter((a) => classifyTimeTab(a) === "today").length,
@@ -583,6 +561,20 @@ export default function MeetingsView() {
     setRejectReason("");
   };
 
+  // ── Availability layout ───────────────────────────────────────────────────
+  if (mode === "availability") {
+    return (
+      <PageHeader
+        title="Mes disponibilités"
+        caption="Configurez vos créneaux horaires hebdomadaires."
+        backButton={() => setMode("appointments")}
+      >
+        <AvailabilitySettings />
+      </PageHeader>
+    );
+  }
+
+  // ── Appointments layout ───────────────────────────────────────────────────
   return (
     <PageHeader
       title="Mes Rendez-vous"
@@ -596,65 +588,48 @@ export default function MeetingsView() {
           color: "primary",
         },
         {
-          label:
-            mode === "availability" ? "Mes rendez-vous" : "Mes disponibilités",
-          onClick: () =>
-            setMode((m) =>
-              m === "availability" ? "appointments" : "availability",
-            ),
+          label: "Mes disponibilités",
+          onClick: () => setMode("availability"),
           variant: "contained",
-          color: "warning",
+          color: "secondary",
         },
       ]}
     >
-      {mode === "availability" ? (
-        <AvailabilitySettings />
-      ) : (
+      {/* ── CustomTabs + search ── */}
+      <Box mt={2}>
+        <CustomTabs
+          value={tab}
+          onChange={(id) => setTab(id as TimeTab)}
+          tabs={[
+            { id: "today", label: "Aujourd'hui", count: counts.today },
+            { id: "upcoming", label: "À venir", count: counts.upcoming },
+            { id: "past", label: "Passé", count: counts.past },
+          ]}
+        />
+
         <Box
           sx={{
-            borderRadius: "0 12px 12px 12px",
-            py: 2,
-            mt: 8,
             backgroundColor: theme.palette.common.white,
+            borderRadius: "0 12px 12px 12px",
+            p: 2,
           }}
         >
-          {/* ── Header row: CustomTabs + search ── */}
+          {/* Search */}
           <Box
-            sx={{
-              display: "flex",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              mt: -7.6,
-            }}
+            sx={{ display: "flex", justifyContent: "flex-end", mb: 2, mt: -8 }}
           >
-            <CustomTabs
-              value={tab}
-              onChange={(id) => setTab(id as TimeTab)}
-              tabs={[
-                { id: "today", label: "Aujourd'hui", count: counts.today },
-                { id: "upcoming", label: "À venir", count: counts.upcoming },
-                { id: "past", label: "Passé", count: counts.past },
-              ]}
-            />
-            <Box sx={{ width: { xs: "100%", sm: 300 }, mt: -1 }}>
+            <Box sx={{ width: { xs: "100%", sm: 300 } }}>
               <CustomInput
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Rechercher par client ..."
+                startIcon={<Search />}
               />
             </Box>
           </Box>
 
-          {/* ── Appointment list ── */}
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 1.25,
-              mt: 2,
-              px: 2,
-            }}
-          >
+          {/* Appointment list */}
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
             {isLoading ? (
               <Typography color="text.secondary">Chargement...</Typography>
             ) : filtered.length === 0 ? (
@@ -680,8 +655,8 @@ export default function MeetingsView() {
             )}
           </Box>
 
-          {/* ── Monthly calendar ── */}
-          <Box sx={{ mt: 3, px: 2 }}>
+          {/* Monthly calendar */}
+          <Box sx={{ mt: 3 }}>
             <Typography variant="h6" sx={{ mb: 1.25 }}>
               {formatMonthLabelFr(calendarMonth)}
             </Typography>
@@ -692,7 +667,7 @@ export default function MeetingsView() {
             />
           </Box>
         </Box>
-      )}
+      </Box>
 
       {/* ── Appointment details dialog ── */}
       <AppointmentDetailsDialog
@@ -747,8 +722,8 @@ export default function MeetingsView() {
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
         onSchedule={async (payload) => {
-          const meId = me?.id ? Number(me.id) : undefined;
-
+          const startTime = new Date(`${payload.date}T${payload.time}:00`);
+          const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
           await createAppointment({
             title: payload.title,
             description: payload.description,

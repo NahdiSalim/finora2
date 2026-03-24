@@ -13,7 +13,7 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
-import { MapPin, Phone, Video, Plus, X } from "lucide-react";
+import { MapPin, Phone, Video, Plus, X, MoveLeft } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
 import CustomSelect from "src/components/common/CustomSelect";
@@ -593,12 +593,17 @@ export default function NewAppointmentWizard({
       </DialogContent>
       <DialogActions sx={{ px: 2, pb: 2 }}>
         {step > 0 && (
-          <CustomButton variant="text" onClick={() => setStep((s) => s - 1)}>
+          <CustomButton
+            variant="text"
+            color="info"
+            onClick={() => setStep((s) => s - 1)}
+          >
+            <MoveLeft />
             Retour
           </CustomButton>
         )}
         <Box sx={{ flex: 1 }} />
-        <CustomButton variant="outlined" onClick={resetAndClose}>
+        <CustomButton variant="outlined" color="info" onClick={resetAndClose}>
           Annuler
         </CustomButton>
         {step < 2 ? (

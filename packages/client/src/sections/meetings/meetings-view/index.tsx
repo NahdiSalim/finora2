@@ -15,7 +15,7 @@ import { Plus, Search, Trash2 } from "lucide-react";
 import { PageHeader } from "src/layouts/components/page-header";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
-import { CustomTabs } from "src/components/common/CustomTabs";
+import { FolderTabNavigation } from "src/components/common/CustomTabs";
 import AppointmentCard from "src/components/appointment/AppointmentCard";
 import AppointmentDetailsDialog from "src/components/appointment/AppointmentDetailsDialog";
 import MonthlyAppointmentCalendar from "src/components/appointment/MonthlyAppointmentCalendar";
@@ -602,9 +602,9 @@ export default function MeetingsView() {
     >
       {/* ── CustomTabs + search ── */}
       <Box mt={2}>
-        <CustomTabs
-          value={tab}
-          onChange={(id) => setTab(id as TimeTab)}
+        <FolderTabNavigation
+          activeTab={tab}
+          onTabChange={(id) => setTab(id as TimeTab)}
           tabs={[
             { id: "today", label: "Aujourd'hui", count: counts.today },
             { id: "upcoming", label: "À venir", count: counts.upcoming },
@@ -665,9 +665,10 @@ export default function MeetingsView() {
             <Typography variant="h6" sx={{ mb: 1.25 }}>
               {formatMonthLabelFr(calendarMonth)}
             </Typography>
+
             <MonthlyAppointmentCalendar
               monthDate={calendarMonth}
-              appointments={filtered}
+              appointments={appointments}
               onSelectAppointment={setSelectedId}
             />
           </Box>

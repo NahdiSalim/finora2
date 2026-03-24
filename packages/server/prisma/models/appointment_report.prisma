@@ -1,0 +1,18 @@
+model AppointmentReport {
+  id            Int      @id @default(autoincrement())
+  appointmentId Int
+  reportedById  Int
+  oldDate       DateTime @db.Date
+  oldHour       String
+  newDate       DateTime @db.Date
+  newHour       String
+  reason        String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  appointment   Appointment @relation("AppointmentReports", fields: [appointmentId], references: [id], onDelete: Cascade)
+  reportedBy    User        @relation("ReportedByUser", fields: [reportedById], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId])
+  @@index([reportedById])
+  @@map("appointment_reports")
+}

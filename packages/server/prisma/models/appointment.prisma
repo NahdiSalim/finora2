@@ -16,8 +16,8 @@ model Appointment {
   meetingType String   @default("in_person") // 'in_person', 'online', 'phone'
 
   // Relations
-  clientId    Int
-  client      User     @relation("ClientAppointments", fields: [clientId], references: [id], onDelete: Cascade)
+  clientId    Int?
+  client      User?    @relation("ClientAppointments", fields: [clientId], references: [id], onDelete: Cascade)
 
   accountantId Int?
   accountant   User?   @relation("AccountantAppointments", fields: [accountantId], references: [id], onDelete: SetNull)
@@ -46,6 +46,7 @@ model Appointment {
   updatedAt   DateTime  @updatedAt
 
   slot        AvailabilitySlot? @relation("AppointmentSlot")
+  reports     AppointmentReport[] @relation("AppointmentReports")
 
   @@index([clientId])
   @@index([accountantId])

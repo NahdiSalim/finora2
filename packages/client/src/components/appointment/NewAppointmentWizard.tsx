@@ -21,6 +21,7 @@ import MenuItem from "@mui/material/MenuItem";
 import CustomAccordion from "../common/CustomAccordion";
 import ColorPicker from "../common/ColorPicker";
 import { alpha } from "@mui/material/styles";
+import type { Client } from "src/lib/services/clientApi";
 
 export interface NewAppointmentPayload {
   title: string;
@@ -31,16 +32,22 @@ export interface NewAppointmentPayload {
   meetingType: "in_person" | "online" | "phone";
   location: string;
   guests: string[];
+  clientId?: number;
+  color?: string;
 }
 
 export default function NewAppointmentWizard({
   open,
   onClose,
   onSchedule,
+  clients,
+  clientsLoading = false,
 }: {
   open: boolean;
   onClose: () => void;
   onSchedule: (payload: NewAppointmentPayload) => void | Promise<void>;
+  clients?: Client[];
+  clientsLoading?: boolean;
 }) {
   const [step, setStep] = useState(0);
   const [title, setTitle] = useState("");
@@ -54,6 +61,7 @@ export default function NewAppointmentWizard({
   const [location, setLocation] = useState("");
   const [guestInput, setGuestInput] = useState("");
   const [guests, setGuests] = useState<string[]>([]);
+  const [clientId, setClientId] = useState("");
   const theme = useTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -67,6 +75,8 @@ export default function NewAppointmentWizard({
     { id: "red", label: "Rouge", color: "#EF4444" },
     { id: "pink", label: "Rose", color: "#EC4899" },
   ];
+  const selectedColorHex =
+    colorOptions.find((opt) => opt.id === selectedColor)?.color ?? "#3B82F6";
 
   const [locationType, setLocationType] = useState<
     "my_office" | "accounting_office" | "other"
@@ -91,6 +101,27 @@ export default function NewAppointmentWizard({
   }
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const getClientLabel = (c: Client) => {
+    const fullName = [c.ownerFirstName, c.ownerLastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    if (fullName) return fullName;
+
+    const companyValue = (c as any).company;
+    if (typeof companyValue === "string" && companyValue.trim()) {
+      return companyValue;
+    }
+    if (companyValue && typeof companyValue === "object") {
+      const nestedName =
+        typeof companyValue.name === "string" ? companyValue.name : "";
+      if (nestedName.trim()) return nestedName;
+    }
+
+    if (typeof c.email === "string" && c.email.trim()) return c.email;
+    return `Client #${c.id}`;
+  };
 
   const canNext = useMemo(() => {
     if (step === 0) return title.trim() && subject.trim() && description.trim();
@@ -122,6 +153,8 @@ export default function NewAppointmentWizard({
     setLocation("");
     setGuestInput("");
     setGuests([]);
+    setClientId("");
+    setSelectedColor("blue");
     setIsSubmitting(false);
     setSubmitError("");
     onClose();
@@ -267,6 +300,36 @@ export default function NewAppointmentWizard({
               value={selectedColor}
               onChange={setSelectedColor}
             />
+            <CustomSelect
+              label="Client"
+              value={clientId}
+              onChange={(e) => setClientId(String(e.target.value ?? ""))}
+              displayEmpty
+              renderValue={(v) => {
+                if (!v) return "Sélectionner un client";
+                const selected = (clients || []).find(
+                  (c) => String(c.id) === String(v),
+                );
+                if (!selected) return String(v);
+                return getClientLabel(selected);
+              }}
+            >
+              <MenuItem value="">
+                <em>
+                  {clientsLoading
+                    ? "Chargement des clients..."
+                    : "Sélectionner un client"}
+                </em>
+              </MenuItem>
+              {(clients || []).map((c) => {
+                const label = getClientLabel(c);
+                return (
+                  <MenuItem key={c.id} value={String(c.id)}>
+                    {label}
+                  </MenuItem>
+                );
+              })}
+            </CustomSelect>
           </Box>
         )}
 
@@ -439,7 +502,7 @@ export default function NewAppointmentWizard({
 
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 0.5 }}>
               {guests.map((g) => {
-                const { bg, color } = getAvatarColor(g);
+                const { bg, color: avatarColor } = getAvatarColor(g);
                 return (
                   <Tooltip key={g} title={g} placement="top" arrow>
                     <Box
@@ -453,7 +516,7 @@ export default function NewAppointmentWizard({
                         bgcolor: bg,
                         borderRadius: 99,
                         border: "1px solid",
-                        borderColor: alpha(color, 0.25),
+                        borderColor: alpha(avatarColor, 0.25),
                         maxWidth: 160,
                       }}
                     >
@@ -463,7 +526,7 @@ export default function NewAppointmentWizard({
                           width: 22,
                           height: 22,
                           borderRadius: "50%",
-                          bgcolor: color,
+                          bgcolor: avatarColor,
                           color: "#fff",
                           fontSize: 11,
                           fontWeight: 700,
@@ -481,7 +544,7 @@ export default function NewAppointmentWizard({
                       <Typography
                         variant="caption"
                         sx={{
-                          color,
+                          color: avatarColor,
                           fontWeight: 500,
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -508,9 +571,9 @@ export default function NewAppointmentWizard({
                           width: 14,
                           height: 14,
                           borderRadius: "50%",
-                          color: alpha(color, 0.6),
+                          color: alpha(avatarColor, 0.6),
                           flexShrink: 0,
-                          "&:hover": { color },
+                          "&:hover": { color: avatarColor },
                         }}
                       >
                         <X size={11} strokeWidth={2.5} />
@@ -562,6 +625,8 @@ export default function NewAppointmentWizard({
                   meetingType,
                   location,
                   guests,
+                  clientId: clientId ? Number(clientId) : undefined,
+                  color: selectedColorHex,
                 });
                 resetAndClose();
               } catch (e: any) {

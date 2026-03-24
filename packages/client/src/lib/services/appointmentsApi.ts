@@ -75,13 +75,17 @@ export interface CreateAppointmentBody {
   title: string;
   description?: string;
   type?: "meeting" | "consultation" | "review" | "other";
-  startTime: string;
-  endTime: string;
+  startTime?: string;
+  endTime?: string;
+  date?: string;
+  hour?: string;
   meetingType?: "in_person" | "online" | "phone";
   location?: string;
   accountantId?: number;
-  availabilitySlotId?: number;
+  clientId?: number;
   clientNotes?: string;
+  color?: string;
+  guests?: string[];
 }
 
 type GetAllAppointmentsParams = {

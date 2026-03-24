@@ -33,9 +33,9 @@ model Appointment {
   description String?  @db.Text
   type        String   @default("meeting") // 'meeting', 'consultation', 'review', 'other'
 
-  // Date and time (separate fields)
-  date        DateTime @db.Date
-  hour        String
+  // Date and time
+  date        DateTime @db.Date  // date du rendez-vous ex: 2026-04-15
+  hour        String             // heure du rendez-vous ex: "09:00"
 
   // Status
   status      String   @default("pending") // 'pending', 'confirmed', 'rescheduled', 'rejected', 'cancelled', 'completed'
@@ -65,8 +65,8 @@ model Appointment {
   rejectionReason String?  @db.Text
 
   // Extras
-  color       String?
-  guests      String[]
+  color       String?   // hex color for calendar display e.g. "#1976d2"
+  guests      String[]  // array of guest emails
 
   // Timestamps
   confirmedAt DateTime?
@@ -75,6 +75,7 @@ model Appointment {
   updatedAt   DateTime  @updatedAt
 
   slot        AvailabilitySlot? @relation("AppointmentSlot")
+
   @@index([clientId])
   @@index([accountantId])
   @@index([companyId])
@@ -523,12 +524,12 @@ model Document {
 model DocumentVersion {
   id            Int      @id @default(autoincrement())
   documentId    Int
-  versionNumber Int
-  url           String
-  name          String
+  versionNumber Int      // 1, 2, 3...
+  url           String   // chemin MinIO de cette version
+  name          String   // nom du fichier à ce moment
   size          Int?
   uploadedBy    Int
-  comment       String?  @db.Text
+  comment       String?  @db.Text // note optionnelle ex: "correction TVA"
   createdAt     DateTime @default(now())
 
   document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)

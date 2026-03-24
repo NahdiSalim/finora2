@@ -32,6 +32,8 @@ import {
   useRespondAppointmentMutation,
   useUpdateAvailabilityMutation,
 } from "src/lib/services/appointmentsApi";
+import { useVerifyUserQuery } from "src/lib/services/authApi";
+import { useGetClientsQuery } from "src/lib/services/clientApi";
 
 type Mode = "appointments" | "availability";
 type TimeTab = "today" | "upcoming" | "past";
@@ -515,6 +517,13 @@ export default function MeetingsView() {
   const [calendarMonth] = useState(new Date());
   const [search, setSearch] = useState("");
   const theme = useTheme();
+  const { data: me } = useVerifyUserQuery();
+  const { data: clientsData, isLoading: isLoadingClients } = useGetClientsQuery(
+    {
+      page: 1,
+      limit: 200,
+    },
+  );
 
   const { data, isLoading } = useGetAllAppointmentsQuery({
     page: 1,
@@ -738,22 +747,32 @@ export default function MeetingsView() {
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
         onSchedule={async (payload) => {
-          const startTime = new Date(`${payload.date}T${payload.time}:00`);
-          const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+          const meId = me?.id ? Number(me.id) : undefined;
 
           await createAppointment({
             title: payload.title,
             description: payload.description,
-            type: "meeting",
-            startTime: startTime.toISOString(),
-            endTime: endTime.toISOString(),
+            type:
+              payload.subject === "facturation"
+                ? "review"
+                : payload.subject === "budget"
+                  ? "consultation"
+                  : "consultation",
+            date: payload.date,
+            hour: payload.time,
             meetingType: payload.meetingType,
             location: payload.location || undefined,
+            accountantId: meId,
+            clientId: payload.clientId,
             clientNotes: payload.guests.length
               ? `Invités: ${payload.guests.join(", ")}`
-              : undefined,
+              : payload.description,
+            color: payload.color,
+            guests: payload.guests,
           }).unwrap();
         }}
+        clients={clientsData?.data ?? []}
+        clientsLoading={isLoadingClients}
       />
     </PageHeader>
   );

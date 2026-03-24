@@ -89,6 +89,8 @@ export class AppointmentService {
           clientNotes: dto.clientNotes,
           color: dto.color ?? null,
           guests: dto.guests ?? [],
+          createdById: userId,
+          updatedById: userId,
         } as any,
         include: {
           client: {
@@ -481,6 +483,7 @@ export class AppointmentService {
         color: dto.color,
         guests: dto.guests,
         cancelledAt: dto.status === AppointmentStatus.CANCELLED ? new Date() : undefined,
+        updatedById: userId,
       } as any,
       include: {
         client: {
@@ -908,7 +911,7 @@ export class AppointmentService {
 
     const where: any = {
       date: { gte: start, lte: end },
-      status: { notIn: ['cancelled', 'rejected'] },
+      status: 'confirmed',
       OR: [
         { companyId: (user as any)?.companyId ?? -1 },
         { accountantId: userId },

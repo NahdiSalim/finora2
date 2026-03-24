@@ -97,7 +97,7 @@ export class AppointmentService {
           hour: dto.hour,
           meetingType: dto.meetingType || 'in_person',
           location: dto.location,
-          clientId: dto.clientId,
+          clientId: isAccountant ? (dto.clientId ?? null) : userId,
           accountantId: isAccountant ? userId : (dto.accountantId ?? null),
           companyId: user?.companyId,
           clientNotes: dto.clientNotes,
@@ -195,7 +195,14 @@ export class AppointmentService {
    * Also excludes dates that fall within a leave period
    */
   async getAvailableSlots(accountantId: number, date: string) {
-    const targetDate = new Date(date);
+    // Normalize date to avoid timezone issues — use start of day UTC
+    const [year, month, day] = date.split('-').map(Number);
+    const targetDate = new Date(Date.UTC(year, month - 1, day));
+
+    const now = new Date();
+    const isToday =
+      now.getFullYear() === year && now.getMonth() + 1 === month && now.getDate() === day;
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
     // Check if date is within a leave period
     const leave = await this.prisma.accountantLeave.findFirst({
@@ -208,7 +215,9 @@ export class AppointmentService {
     if (leave) return { success: true, data: [], leaveReason: leave.reason ?? 'Congé' };
 
     const dayNames = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
-    const dayName = dayNames[targetDate.getDay()];
+    // Use local day of week based on the date string directly
+    const jsDate = new Date(year, month - 1, day);
+    const dayName = dayNames[jsDate.getDay()];
 
     // Get matching availability rules
     const rules = await this.prisma.availability.findMany({
@@ -224,14 +233,18 @@ export class AppointmentService {
 
     if (rules.length === 0) return { success: true, data: [] };
 
-    // Get already booked slot times for this date
-    const bookedSlots = await this.prisma.availabilitySlot.findMany({
-      where: { accountantId, date: targetDate, status: 'booked' },
-      select: { startTime: true },
+    // Get booked hours from appointments (non-cancelled/rejected) for this date
+    const bookedAppointments = await this.prisma.appointment.findMany({
+      where: {
+        accountantId,
+        date: targetDate,
+        status: { notIn: ['cancelled', 'rejected'] },
+      },
+      select: { hour: true },
     });
-    const bookedTimes = new Set(bookedSlots.map((s: any) => s.startTime));
+    const bookedTimes = new Set(bookedAppointments.map((a: any) => a.hour));
 
-    // Generate available slots from rules, skip booked ones
+    // Generate available slots — skip booked and past slots (if today)
     const slots: { startTime: string; endTime: string; availabilityId: number }[] = [];
 
     for (const rule of rules) {
@@ -244,7 +257,11 @@ export class AppointmentService {
         const slotStart = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
         const slotEnd = `${String(Math.floor((t + rule.slotDuration) / 60)).padStart(2, '0')}:${String((t + rule.slotDuration) % 60).padStart(2, '0')}`;
 
+        // Skip if already booked by an appointment
         if (bookedTimes.has(slotStart)) continue;
+
+        // Skip past slots if querying today
+        if (isToday && t < currentMinutes) continue;
 
         slots.push({ startTime: slotStart, endTime: slotEnd, availabilityId: rule.id });
       }
@@ -897,7 +914,42 @@ export class AppointmentService {
     return { success: true, message: 'Availability deleted' };
   }
 
-  // ─── CONGÉS ──────────────────────────────────────────────────────────────────
+  async getConfirmedThisMonth(userId: number) {
+    const now = new Date();
+    const start = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+    const end = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0));
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    const isAccountant = (user as any)?.role === 'ACCOUNTANT';
+
+    const where: any = {
+      status: 'confirmed',
+      date: { gte: start, lte: end },
+    };
+    if (isAccountant) where.accountantId = userId;
+    else where.clientId = userId;
+
+    const appointments = await this.prisma.appointment.findMany({
+      where,
+      orderBy: [{ date: 'asc' }, { hour: 'asc' }] as any,
+      select: {
+        id: true,
+        title: true,
+        date: true,
+        hour: true,
+        meetingType: true,
+        location: true,
+        color: true,
+        client: { select: { id: true, firstName: true, lastName: true, photo: true } },
+        accountant: { select: { id: true, firstName: true, lastName: true, photo: true } },
+      },
+    });
+
+    return { success: true, data: appointments };
+  }
 
   async createLeave(dto: CreateLeaveDto, accountantId: number) {
     if (dto.startDate > dto.endDate)
@@ -1027,17 +1079,30 @@ export class AppointmentService {
   // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
   private applyPeriodFilter(where: any, period?: string) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    if (!period) return;
+
+    const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(now);
+    todayEnd.setHours(23, 59, 59, 999);
+    const currentHour = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
     if (period === 'today') {
-      where.date = { gte: today, lt: tomorrow };
+      // Date = today, any hour
+      where.date = { gte: todayStart, lte: todayEnd };
     } else if (period === 'upcoming') {
-      where.date = { gte: tomorrow };
+      // Either date > today, OR date = today AND hour > currentHour
+      where.OR = [
+        { date: { gt: todayEnd } },
+        { date: { gte: todayStart, lte: todayEnd }, hour: { gt: currentHour } },
+      ];
     } else if (period === 'past') {
-      where.date = { lt: today };
+      // Either date < today, OR date = today AND hour < currentHour
+      where.OR = [
+        { date: { lt: todayStart } },
+        { date: { gte: todayStart, lte: todayEnd }, hour: { lt: currentHour } },
+      ];
     }
   }
 

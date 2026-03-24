@@ -112,6 +112,15 @@ export class AppointmentController {
   }
 
   /**
+   * Get confirmed appointments for current month
+   */
+  @Get('confirmed/this-month')
+  @ApiOperation({ summary: 'Rendez-vous confirmés du mois actuel (date, heure, titre)' })
+  async getConfirmedThisMonth(@Req() req: AuthRequest) {
+    return this.appointmentService.getConfirmedThisMonth(req.user!.id);
+  }
+
+  /**
    * Get all slots for an accountant on a given date (available + booked)
    */
   @Get('slots/available')

@@ -498,6 +498,11 @@ export default function MeetingsView() {
   const [search, setSearch] = useState("");
   const theme = useTheme();
   const { data: me } = useVerifyUserQuery();
+  const rawMeId = me?.id != null ? Number(me.id) : NaN;
+  const meId =
+    Number.isInteger(rawMeId) && Number.isFinite(rawMeId) && rawMeId > 0
+      ? rawMeId
+      : undefined;
   const { data: clientsData, isLoading: isLoadingClients } = useGetClientsQuery(
     {
       page: 1,
@@ -723,7 +728,6 @@ export default function MeetingsView() {
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
         onSchedule={async (payload) => {
-          const meId = me?.id ? Number(me.id) : undefined;
           await createAppointment({
             title: payload.title,
             description: payload.description,
@@ -736,7 +740,7 @@ export default function MeetingsView() {
             date: payload.date,
             hour: payload.time,
             meetingType: payload.meetingType,
-            location: payload.location || undefined,
+            location: payload.location,
             accountantId: meId,
             clientId: payload.clientId,
             clientNotes: payload.guests.length
@@ -748,6 +752,7 @@ export default function MeetingsView() {
         }}
         clients={clientsData?.data ?? []}
         clientsLoading={isLoadingClients}
+        accountantId={meId}
       />
     </PageHeader>
   );

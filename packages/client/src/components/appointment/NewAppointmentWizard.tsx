@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Dialog,
@@ -22,6 +22,7 @@ import CustomAccordion from "../common/CustomAccordion";
 import ColorPicker from "../common/ColorPicker";
 import { alpha } from "@mui/material/styles";
 import type { Client } from "src/lib/services/clientApi";
+import { useGetAvailableSlotsQuery } from "src/lib/services/appointmentsApi";
 
 export interface NewAppointmentPayload {
   title: string;
@@ -42,12 +43,14 @@ export default function NewAppointmentWizard({
   onSchedule,
   clients,
   clientsLoading = false,
+  accountantId,
 }: {
   open: boolean;
   onClose: () => void;
   onSchedule: (payload: NewAppointmentPayload) => void | Promise<void>;
   clients?: Client[];
   clientsLoading?: boolean;
+  accountantId?: number;
 }) {
   const [step, setStep] = useState(0);
   const [title, setTitle] = useState("");
@@ -123,11 +126,45 @@ export default function NewAppointmentWizard({
     return `Client #${c.id}`;
   };
 
+  const parsedAccountantId = accountantId != null ? Number(accountantId) : NaN;
+  const hasValidAccountantId =
+    Number.isInteger(parsedAccountantId) &&
+    Number.isFinite(parsedAccountantId) &&
+    parsedAccountantId > 0;
+
+  const {
+    data: availableSlotsResponse,
+    isFetching: isFetchingSlots,
+    isLoading: isLoadingSlots,
+  } = useGetAvailableSlotsQuery(
+    { accountantId: parsedAccountantId, date },
+    { skip: !date || !hasValidAccountantId },
+  );
+  const availableHours = useMemo(() => {
+    const slots = availableSlotsResponse?.data ?? [];
+    const unique = Array.from(new Set(slots.map((s) => s.startTime)));
+    return unique.sort((a, b) => a.localeCompare(b));
+  }, [availableSlotsResponse]);
+
+  useEffect(() => {
+    if (!date) {
+      setTime("");
+      return;
+    }
+    if (availableHours.length === 0) {
+      setTime("");
+      return;
+    }
+    if (!availableHours.includes(time)) {
+      setTime(availableHours[0]);
+    }
+  }, [date, availableHours, time]);
+
   const canNext = useMemo(() => {
     if (step === 0) return title.trim() && subject.trim() && description.trim();
-    if (step === 1) return date && time;
+    if (step === 1) return !!date && !!time && availableHours.includes(time);
     return true;
-  }, [step, title, subject, description, date, time]);
+  }, [step, title, subject, description, date, time, availableHours]);
 
   const [guestError, setGuestError] = useState(false);
 
@@ -142,25 +179,37 @@ export default function NewAppointmentWizard({
     setGuestError(false);
   };
 
+  const resolveLocationValue = () => {
+    const typed = location.trim();
+    if (meetingType === "in_person") {
+      if (locationType === "my_office") return "Mon bureau";
+      if (locationType === "accounting_office")
+        return "Chez le cabinet de comptabilité";
+      return typed || "Autre localisation";
+    }
+    if (meetingType === "online") return typed || "Réunion en ligne";
+    return typed || "Appel téléphonique";
+  };
+
   const resetAndClose = () => {
     setStep(0);
     setTitle("");
     setSubject("");
     setDescription("");
     setDate("");
-    setTime("09:00");
+    setTime("");
     setMeetingType("in_person");
+    setLocationType("my_office");
     setLocation("");
     setGuestInput("");
     setGuests([]);
+    setGuestError(false);
     setClientId("");
     setSelectedColor("blue");
     setIsSubmitting(false);
     setSubmitError("");
     onClose();
   };
-  const hours = ["09:00", "10:00", "11:00", "12:00"];
-
   // Steps configuration
   const steps = [
     { label: "Détails", value: 0 },
@@ -360,45 +409,84 @@ export default function NewAppointmentWizard({
               </Typography>
 
               <Box
-                gap={1.5}
-                mt={1}
                 sx={{
                   display: "flex",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  width: "100%",
+                  overflowX: "auto",
+                  gap: 1,
+                  pb: 0.5,
+                  mt: 1,
+                  "&::-webkit-scrollbar": { height: 4 },
+                  "&::-webkit-scrollbar-track": { bgcolor: "transparent" },
+                  "&::-webkit-scrollbar-thumb": {
+                    bgcolor: "divider",
+                    borderRadius: 99,
+                  },
                 }}
               >
-                {hours.map((hour) => {
+                {availableHours.map((hour) => {
                   const selected = time === hour;
 
                   return (
-                    <CustomButton
+                    <Box
                       key={hour}
-                      variant={selected ? "contained" : "outlined"}
                       onClick={() => setTime(hour)}
-                      fullWidth
                       sx={{
+                        flexShrink: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        minWidth: 88,
                         minHeight: 50,
+                        px: 2,
+                        border: "1px solid",
+                        borderColor: selected ? "primary.main" : "info.main",
                         borderRadius: 3,
-
-                        ...(selected && {
-                          backgroundColor: "primary.main",
-                          color: "white",
-                        }),
-
-                        ...(!selected && {
-                          borderColor: "info.main",
-                          color: "info.main",
-                        }),
+                        cursor: "pointer",
+                        transition: "all .15s",
+                        backgroundColor: selected
+                          ? theme.palette.primary.main
+                          : "transparent",
+                        "&:hover": {
+                          borderColor: alpha(theme.palette.primary.main, 0.4),
+                          backgroundColor: alpha(
+                            theme.palette.primary.main,
+                            0.05,
+                          ),
+                        },
                       }}
                     >
-                      {hour}
-                    </CustomButton>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: 600,
+                          color: selected ? "common.white" : "info.main",
+                          transition: "all .15s",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {hour}
+                      </Typography>
+                    </Box>
                   );
                 })}
               </Box>
+              {!date ? (
+                <Typography variant="caption" color="text.secondary">
+                  Choisissez une date pour afficher les heures disponibles.
+                </Typography>
+              ) : !hasValidAccountantId ? (
+                <Typography variant="caption" color="warning.main">
+                  Comptable non identifié, impossible de charger les créneaux.
+                </Typography>
+              ) : isLoadingSlots || isFetchingSlots ? (
+                <Typography variant="caption" color="text.secondary">
+                  Chargement des créneaux disponibles...
+                </Typography>
+              ) : availableHours.length === 0 ? (
+                <Typography variant="caption" color="warning.main">
+                  Aucun créneau disponible pour cette date.
+                </Typography>
+              ) : null}
             </Box>
             <Typography variant="subtitle2">Localisation *</Typography>
             <Box sx={{ display: "grid", gap: 1 }}>
@@ -628,7 +716,7 @@ export default function NewAppointmentWizard({
                   date,
                   time,
                   meetingType,
-                  location,
+                  location: resolveLocationValue(),
                   guests,
                   clientId: clientId ? Number(clientId) : undefined,
                   color: selectedColorHex,

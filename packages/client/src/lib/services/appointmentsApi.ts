@@ -72,6 +72,21 @@ export interface GetMyAvailabilitiesResponse {
   data: AvailabilityItem[];
 }
 
+export interface AvailableSlotItem {
+  id: number;
+  availabilityId: number;
+  accountantId: number;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: "available" | "booked";
+}
+
+export interface GetAvailableSlotsResponse {
+  success: boolean;
+  data: AvailableSlotItem[];
+}
+
 export interface CreateAppointmentBody {
   title: string;
   description?: string;
@@ -215,6 +230,21 @@ export const appointmentsApi = createApi({
           : [{ type: "Availabilities", id: "LIST" }],
     }),
 
+    getAvailableSlots: builder.query<
+      GetAvailableSlotsResponse,
+      { accountantId: number; date: string }
+    >({
+      query: ({ accountantId, date }) => {
+        const search = new URLSearchParams();
+        search.set("accountantId", String(accountantId));
+        search.set("date", date);
+        return {
+          url: `/appointments/slots/available?${search.toString()}`,
+          method: "GET",
+        };
+      },
+    }),
+
     createAvailability: builder.mutation<
       { success: boolean; message?: string; data?: AvailabilityItem },
       {
@@ -281,6 +311,7 @@ export const {
   useUpdateAppointmentMutation,
   useCancelAppointmentMutation,
   useGetMyAvailabilitiesQuery,
+  useGetAvailableSlotsQuery,
   useCreateAvailabilityMutation,
   useUpdateAvailabilityMutation,
   useDeleteAvailabilityMutation,

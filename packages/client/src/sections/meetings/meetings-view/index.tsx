@@ -478,34 +478,34 @@ function AvailabilitySettings() {
 
         {vacationEnabled && (
           <Box
-              sx={{
-                display: "flex",
-                gap: 1,
-                alignItems: "flex-end",
-                mb: 1,
-              }}
-            >
-              <CustomInput
-                label="Date début"
-                type="date"
-                value={vacationStart}
-                onChange={(e) => setVacationStart(e.target.value)}
-              />
+            sx={{
+              display: "flex",
+              gap: 1,
+              alignItems: "flex-end",
+              mb: 1,
+            }}
+          >
+            <CustomInput
+              label="Date début"
+              type="date"
+              value={vacationStart}
+              onChange={(e) => setVacationStart(e.target.value)}
+            />
 
-              <CustomInput
-                label="Date fin"
-                type="date"
-                value={vacationEnd}
-                onChange={(e) => setVacationEnd(e.target.value)}
-              />
-              <CustomButton
-                variant="contained"
-                disabled={!vacationStart || !vacationEnd}
-                size="large"
-              >
-                <Check size={16} />
-              </CustomButton>
-            </Box>
+            <CustomInput
+              label="Date fin"
+              type="date"
+              value={vacationEnd}
+              onChange={(e) => setVacationEnd(e.target.value)}
+            />
+            <CustomButton
+              variant="contained"
+              disabled={!vacationStart || !vacationEnd}
+              size="large"
+            >
+              <Check size={16} />
+            </CustomButton>
+          </Box>
         )}
       </Box>
 
@@ -700,6 +700,10 @@ export default function MeetingsView() {
                   onReject={() => {
                     setSelectedId(item.id);
                     setRejectDialogOpen(true);
+                  }}
+                  onReschedule={() => {
+                    setSelectedId(item.id);
+                    // open reschedule dialog/wizard
                   }}
                 />
               ))

@@ -36,6 +36,7 @@ export interface AppointmentItem {
   minutesFileUrl?: string | null;
   client?: AppointmentUser;
   accountant?: AppointmentUser;
+  date?: Date | null;
 }
 
 export interface GetAllAppointmentsResponse {

@@ -1,5 +1,5 @@
-import { Avatar, Box, Typography, useTheme } from "@mui/material";
-import { Clock3, MapPin } from "lucide-react";
+import { Avatar, Box, Tooltip, Typography, useTheme } from "@mui/material";
+import { Calendar, Clock3, MapPin } from "lucide-react";
 import type { AppointmentItem } from "src/lib/services/appointmentsApi";
 import AppointmentStatusChip from "./AppointmentStatusChip";
 import CustomButton from "src/components/common/CustomButton";
@@ -16,11 +16,13 @@ export default function AppointmentCard({
   onClick,
   onConfirm,
   onReject,
+  onReschedule,
 }: {
   appointment: AppointmentItem;
   onClick: () => void;
   onConfirm?: () => void;
   onReject?: () => void;
+  onReschedule?: () => void;
 }) {
   const fullName =
     [appointment.client?.firstName, appointment.client?.lastName]
@@ -44,7 +46,6 @@ export default function AppointmentCard({
         justifyContent: "space-between",
         cursor: "pointer",
         bgcolor: theme.palette.grey[50],
-
         "&:hover": { bgcolor: "action.hover" },
       }}
     >
@@ -69,53 +70,192 @@ export default function AppointmentCard({
             sx={{
               display: "flex",
               alignItems: "center",
+              justifyContent: "flex-start",
               gap: 1.5,
               color: "text.secondary",
+              width: "100%",
             }}
           >
-            <Typography variant="caption" noWrap>
-              {fullName}
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-              <Clock3 size={12} />
-              <Typography variant="caption">
-                {formatTime(appointment.startTime)}
-              </Typography>
+            {/* Full name */}
+            <Box
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+                width: 120,
+              }}
+            >
+              <Tooltip title={fullName} arrow>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    width: "100%",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {fullName}
+                </Typography>
+              </Tooltip>
             </Box>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+
+            {/* Time */}
+            <Box
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+                width: 60,
+              }}
+            >
+              <Clock3 size={12} />
+              <Tooltip title={formatTime(appointment.startTime)} arrow>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    width: "100%",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {formatTime(appointment.startTime)}
+                </Typography>
+              </Tooltip>
+            </Box>
+
+            {/* Location */}
+            <Box
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+                width: 120,
+              }}
+            >
               <MapPin size={12} />
-              <Box>
-                <Typography variant="caption" noWrap>
+              <Tooltip title={appointment.location || "Mon bureau"} arrow>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    width: "100%",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
                   {appointment.location || "Mon bureau"}
                 </Typography>
-              </Box>
+              </Tooltip>
+            </Box>
+
+            {/* Date */}
+            <Box
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+                width: 120,
+              }}
+            >
+              <Calendar size={12} />
+              <Tooltip
+                title={
+                  appointment.date
+                    ? new Date(appointment.date).toLocaleDateString("fr-FR", {
+                        day: "2-digit",
+                        month: "long",
+                        year: "numeric",
+                      })
+                    : "Mon bureau"
+                }
+                arrow
+              >
+                <Typography
+                  variant="caption"
+                  sx={{
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    width: "100%",
+                  }}
+                >
+                  {appointment.date
+                    ? new Date(appointment.date).toLocaleDateString("fr-FR", {
+                        day: "2-digit",
+                        month: "long",
+                        year: "numeric",
+                      })
+                    : "Mon bureau"}
+                </Typography>
+              </Tooltip>
             </Box>
           </Box>
         </Box>
       </Box>
-      <AppointmentStatusChip status={appointment.status} />
-      {appointment.status === "pending" && onConfirm && onReject && (
-        <Box sx={{ display: "flex", gap: 1, ml: 1 }}>
-          <CustomButton
-            variant="outlined"
-            onClick={(e) => {
-              e.stopPropagation();
-              onReject();
-            }}
-          >
-            Refuser
-          </CustomButton>
-          <CustomButton
-            variant="contained"
-            onClick={(e) => {
-              e.stopPropagation();
-              onConfirm();
-            }}
-          >
-            confirmer
-          </CustomButton>
-        </Box>
-      )}
+
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: 1,
+        }}
+      >
+        <AppointmentStatusChip status={appointment.status} />
+
+        {/* Pending — Refuser / Confirmer */}
+        {appointment.status === "pending" && onConfirm && onReject && (
+          <Box sx={{ display: "flex", gap: 1, ml: 1 }}>
+            <CustomButton
+              variant="outlined"
+              onClick={(e) => {
+                e.stopPropagation();
+                onReject();
+              }}
+            >
+              Refuser
+            </CustomButton>
+            <CustomButton
+              variant="contained"
+              onClick={(e) => {
+                e.stopPropagation();
+                onConfirm();
+              }}
+            >
+              Confirmer
+            </CustomButton>
+          </Box>
+        )}
+
+        {/* Confirmed + upcoming — Reporter */}
+        {appointment.status === "confirmed" &&
+          new Date(appointment.startTime) > new Date() &&
+          onReschedule && (
+            <Box sx={{ ml: 1 }}>
+              <CustomButton
+                variant="outlined"
+                color="warning"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReschedule();
+                }}
+              >
+                Reporter
+              </CustomButton>
+            </Box>
+          )}
+      </Box>
     </Box>
   );
 }

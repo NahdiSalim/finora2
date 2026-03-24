@@ -16,7 +16,7 @@ const MAP: Record<
 
 export default function AppointmentStatusChip({
   status,
-  size = "small",
+  size = "medium",
 }: {
   status: AppointmentStatus;
   size?: "small" | "medium";
@@ -42,6 +42,7 @@ export default function AppointmentStatusChip({
         bgcolor: alpha(colorMain, 0.12),
         color: colorMain,
         fontWeight: 600,
+        borderRadius: 2,
       }}
     />
   );

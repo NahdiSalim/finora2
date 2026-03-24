@@ -1,4 +1,4 @@
-import { Avatar, Box, Typography } from "@mui/material";
+import { Avatar, Box, Typography, useTheme } from "@mui/material";
 import { Clock3, MapPin } from "lucide-react";
 import type { AppointmentItem } from "src/lib/services/appointmentsApi";
 import AppointmentStatusChip from "./AppointmentStatusChip";
@@ -29,6 +29,7 @@ export default function AppointmentCard({
     appointment.client?.username ||
     appointment.client?.email ||
     "Client";
+  const theme = useTheme();
 
   return (
     <Box
@@ -42,17 +43,25 @@ export default function AppointmentCard({
         alignItems: "center",
         justifyContent: "space-between",
         cursor: "pointer",
+        bgcolor: theme.palette.grey[50],
+
         "&:hover": { bgcolor: "action.hover" },
       }}
     >
       <Box
-        sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1.5,
+          minWidth: 0,
+          width: "40%",
+        }}
       >
         <Avatar sx={{ width: 36, height: 36 }}>
           {fullName.slice(0, 1).toUpperCase()}
         </Avatar>
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="subtitle2" noWrap>
+          <Typography variant="body2" noWrap fontWeight={600}>
             {appointment.title}
           </Typography>
           <Box
@@ -86,7 +95,6 @@ export default function AppointmentCard({
         <Box sx={{ display: "flex", gap: 1, ml: 1 }}>
           <CustomButton
             variant="outlined"
-            size="small"
             onClick={(e) => {
               e.stopPropagation();
               onReject();
@@ -96,7 +104,6 @@ export default function AppointmentCard({
           </CustomButton>
           <CustomButton
             variant="contained"
-            size="small"
             onClick={(e) => {
               e.stopPropagation();
               onConfirm();

@@ -660,9 +660,10 @@ export default function MeetingsView() {
             <Typography variant="h6" sx={{ mb: 1.25 }}>
               {formatMonthLabelFr(calendarMonth)}
             </Typography>
+
             <MonthlyAppointmentCalendar
               monthDate={calendarMonth}
-              appointments={filtered}
+              appointments={appointments}
               onSelectAppointment={setSelectedId}
             />
           </Box>

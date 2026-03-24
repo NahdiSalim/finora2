@@ -27,6 +27,7 @@ export interface AppointmentItem {
   duration: number;
   meetingType: "in_person" | "online" | "phone";
   location?: string | null;
+  color?: string | null; // ← add this line
   rejectionReason?: string | null;
   accountantNotes?: string | null;
   clientNotes?: string | null;

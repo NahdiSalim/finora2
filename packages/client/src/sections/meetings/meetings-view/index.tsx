@@ -21,7 +21,6 @@ import AppointmentDetailsDialog from "src/components/appointment/AppointmentDeta
 import MonthlyAppointmentCalendar from "src/components/appointment/MonthlyAppointmentCalendar";
 import NewAppointmentWizard from "src/components/appointment/NewAppointmentWizard";
 import {
-  type AppointmentItem,
   type AvailabilityItem,
   useCreateAppointmentMutation,
   useCreateAvailabilityMutation,
@@ -81,21 +80,6 @@ type InitialSlotSnapshot = {
   slotDuration: number;
   isActive: boolean;
 };
-
-function sameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
-function classifyTimeTab(item: AppointmentItem): TimeTab {
-  const now = new Date();
-  const d = new Date(item.startTime);
-  if (sameDay(d, now)) return "today";
-  return d.getTime() > now.getTime() ? "upcoming" : "past";
-}
 
 function formatMonthLabelFr(date: Date) {
   return date.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
@@ -510,36 +494,45 @@ export default function MeetingsView() {
     },
   );
 
+  const searchTerm = search.trim();
   const { data, isLoading } = useGetAllAppointmentsQuery({
     page: 1,
     limit: 100,
+    period: tab,
+    search: searchTerm || undefined,
   });
   const appointments = data?.data ?? [];
+  const { data: calendarData } = useGetAllAppointmentsQuery({
+    page: 1,
+    limit: 500,
+  });
+  const calendarAppointments = calendarData?.data ?? [];
 
+  const { data: todayCountData } = useGetAllAppointmentsQuery({
+    page: 1,
+    limit: 1,
+    period: "today",
+    search: searchTerm || undefined,
+  });
+  const { data: upcomingCountData } = useGetAllAppointmentsQuery({
+    page: 1,
+    limit: 1,
+    period: "upcoming",
+    search: searchTerm || undefined,
+  });
+  const { data: pastCountData } = useGetAllAppointmentsQuery({
+    page: 1,
+    limit: 1,
+    period: "past",
+    search: searchTerm || undefined,
+  });
   const counts = useMemo(
     () => ({
-      today: appointments.filter((a) => classifyTimeTab(a) === "today").length,
-      upcoming: appointments.filter((a) => classifyTimeTab(a) === "upcoming")
-        .length,
-      past: appointments.filter((a) => classifyTimeTab(a) === "past").length,
+      today: todayCountData?.pagination?.total ?? 0,
+      upcoming: upcomingCountData?.pagination?.total ?? 0,
+      past: pastCountData?.pagination?.total ?? 0,
     }),
-    [appointments],
-  );
-
-  const filtered = useMemo(
-    () =>
-      appointments
-        .filter((a) => classifyTimeTab(a) === tab)
-        .filter((a) => {
-          const term = search.trim().toLowerCase();
-          if (!term) return true;
-          const name = [a.client?.firstName, a.client?.lastName]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
-          return a.title.toLowerCase().includes(term) || name.includes(term);
-        }),
-    [appointments, tab, search],
+    [todayCountData, upcomingCountData, pastCountData],
   );
 
   const { data: detailsData } = useGetAppointmentByIdQuery(selectedId!, {
@@ -637,10 +630,10 @@ export default function MeetingsView() {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
             {isLoading ? (
               <Typography color="text.secondary">Chargement...</Typography>
-            ) : filtered.length === 0 ? (
+            ) : appointments.length === 0 ? (
               <Typography color="text.secondary">Aucun rendez-vous.</Typography>
             ) : (
-              filtered.map((item) => (
+              appointments.map((item) => (
                 <AppointmentCard
                   key={item.id}
                   appointment={item}
@@ -668,7 +661,7 @@ export default function MeetingsView() {
 
             <MonthlyAppointmentCalendar
               monthDate={calendarMonth}
-              appointments={appointments}
+              appointments={calendarAppointments}
               onSelectAppointment={setSelectedId}
             />
           </Box>

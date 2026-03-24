@@ -55,6 +55,41 @@ export interface GetAppointmentByIdResponse {
   data: AppointmentItem;
 }
 
+function normalizeAppointmentItem(raw: any): AppointmentItem {
+  const item = { ...(raw ?? {}) } as any;
+
+  const dateRaw = typeof item.date === "string" ? item.date : "";
+  const datePart = dateRaw.includes("T") ? dateRaw.split("T")[0] : dateRaw;
+  const hourRaw = typeof item.hour === "string" ? item.hour : "";
+  const safeHour = /^\d{2}:\d{2}$/.test(hourRaw) ? hourRaw : "00:00";
+
+  const computedStart =
+    datePart && !item.startTime
+      ? `${datePart}T${safeHour}:00.000Z`
+      : item.startTime;
+
+  const durationMinutes =
+    typeof item.duration === "number" && Number.isFinite(item.duration)
+      ? item.duration
+      : 60;
+
+  let computedEnd = item.endTime;
+  if (!computedEnd && computedStart) {
+    const startDate = new Date(computedStart);
+    if (!Number.isNaN(startDate.getTime())) {
+      computedEnd = new Date(
+        startDate.getTime() + durationMinutes * 60 * 1000,
+      ).toISOString();
+    }
+  }
+
+  return {
+    ...item,
+    startTime: computedStart ?? "",
+    endTime: computedEnd ?? computedStart ?? "",
+  } as AppointmentItem;
+}
+
 export interface AvailabilityItem {
   id: number;
   accountantId: number;
@@ -108,6 +143,8 @@ type GetAllAppointmentsParams = {
   page?: number;
   limit?: number;
   status?: AppointmentStatus;
+  period?: "today" | "upcoming" | "past";
+  search?: string;
 };
 
 export const appointmentsApi = createApi({
@@ -125,8 +162,16 @@ export const appointmentsApi = createApi({
         if (p.page) search.set("page", String(p.page));
         if (p.limit) search.set("limit", String(p.limit));
         if (p.status) search.set("status", p.status);
+        if (p.period) search.set("period", p.period);
+        if (p.search && p.search.trim()) search.set("search", p.search.trim());
         return { url: `/appointments/all?${search.toString()}`, method: "GET" };
       },
+      transformResponse: (response: GetAllAppointmentsResponse) => ({
+        ...response,
+        data: Array.isArray(response?.data)
+          ? response.data.map((a: any) => normalizeAppointmentItem(a))
+          : [],
+      }),
       providesTags: (result) =>
         result
           ? [
@@ -141,6 +186,10 @@ export const appointmentsApi = createApi({
 
     getAppointmentById: builder.query<GetAppointmentByIdResponse, number>({
       query: (id) => ({ url: `/appointments/${id}`, method: "GET" }),
+      transformResponse: (response: GetAppointmentByIdResponse) => ({
+        ...response,
+        data: normalizeAppointmentItem(response?.data),
+      }),
       providesTags: (_result, _err, id) => [{ type: "Appointments", id }],
     }),
 

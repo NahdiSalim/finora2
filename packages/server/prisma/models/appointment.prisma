@@ -45,6 +45,11 @@ model Appointment {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  createdById Int?
+  createdBy   User?     @relation("AppointmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById Int?
+  updatedBy   User?     @relation("AppointmentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
   slot        AvailabilitySlot? @relation("AppointmentSlot")
   reports     AppointmentReport[] @relation("AppointmentReports")
 

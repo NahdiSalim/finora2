@@ -722,8 +722,7 @@ export default function MeetingsView() {
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
         onSchedule={async (payload) => {
-          const startTime = new Date(`${payload.date}T${payload.time}:00`);
-          const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+          const meId = me?.id ? Number(me.id) : undefined;
           await createAppointment({
             title: payload.title,
             description: payload.description,

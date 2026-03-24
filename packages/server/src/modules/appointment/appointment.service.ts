@@ -32,20 +32,6 @@ export class AppointmentService {
 
       const isAccountant = (user as any)?.role === 'ACCOUNTANT';
 
-      // If slot provided — validate it's available and lock it
-      if (dto.availabilitySlotId) {
-        const slot = await this.prisma.availabilitySlot.findUnique({
-          where: { id: dto.availabilitySlotId },
-        });
-        if (!slot) throw new ApiError('Slot introuvable', 404, 'SLOT_NOT_FOUND');
-        if (slot.status !== 'available')
-          throw new ApiError('Ce créneau est déjà pris', 409, 'SLOT_UNAVAILABLE');
-
-        dto.date = slot.date.toISOString().split('T')[0];
-        dto.hour = slot.startTime;
-        if (!dto.accountantId) dto.accountantId = slot.accountantId;
-      }
-
       // Validate that the date/hour is within the accountant's availability
       const targetAccountantId = isAccountant ? userId : dto.accountantId;
       if (targetAccountantId && dto.date && dto.hour) {
@@ -98,7 +84,7 @@ export class AppointmentService {
           meetingType: dto.meetingType || 'in_person',
           location: dto.location,
           clientId: dto.clientId,
-          accountantId: isAccountant ? userId : (dto.accountantId ?? null),
+          accountantId: dto.accountantId,
           companyId: user?.companyId,
           clientNotes: dto.clientNotes,
           color: dto.color ?? null,
@@ -128,14 +114,6 @@ export class AppointmentService {
           company: { select: { id: true, name: true } },
         },
       });
-
-      // Mark slot as booked
-      if (dto.availabilitySlotId) {
-        await this.prisma.availabilitySlot.update({
-          where: { id: dto.availabilitySlotId },
-          data: { status: 'booked', appointmentId: appointment.id },
-        });
-      }
 
       // Notify the other party
       const notifyId = isAccountant

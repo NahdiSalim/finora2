@@ -91,16 +91,6 @@ export class CreateAppointmentDto {
   @IsOptional()
   clientId?: number;
 
-  @ApiProperty({
-    example: 5,
-    description: 'ID du slot de disponibilité (GET /appointments/slots)',
-    required: false,
-  })
-  @Type(() => Number)
-  @IsInt()
-  @IsOptional()
-  availabilitySlotId?: number;
-
   @ApiProperty({ example: 'Documents à préparer: bilans, factures', required: false })
   @IsString()
   @IsOptional()

@@ -11,7 +11,7 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
-import { Plus, Search, Trash2 } from "lucide-react";
+import { Check, Plus, Search, Trash2 } from "lucide-react";
 import { PageHeader } from "src/layouts/components/page-header";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
@@ -104,6 +104,9 @@ function formatMonthLabelFr(date: Date) {
 // ─── Availability Settings ────────────────────────────────────────────────────
 
 function AvailabilitySettings() {
+  const [vacationEnabled, setVacationEnabled] = useState(false);
+  const [vacationStart, setVacationStart] = useState("");
+  const [vacationEnd, setVacationEnd] = useState("");
   const [duration, setDuration] = useState("30");
   const [enabledDays, setEnabledDays] = useState<Record<string, boolean>>({
     Lundi: true,
@@ -470,6 +473,56 @@ function AvailabilitySettings() {
             )}
           </Box>
         ))}
+      </Box>
+
+      <Box sx={{ borderTop: "1px solid", borderColor: "divider", pt: 1.5 }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            mb: 1,
+          }}
+        >
+          <Typography variant="subtitle2">Période de congé</Typography>
+
+          <Switch
+            checked={vacationEnabled}
+            onChange={(_, checked) => setVacationEnabled(checked)}
+          />
+        </Box>
+
+        {vacationEnabled && (
+          <Box
+              sx={{
+                display: "flex",
+                gap: 1,
+                alignItems: "flex-end",
+                mb: 1,
+              }}
+            >
+              <CustomInput
+                label="Date début"
+                type="date"
+                value={vacationStart}
+                onChange={(e) => setVacationStart(e.target.value)}
+              />
+
+              <CustomInput
+                label="Date fin"
+                type="date"
+                value={vacationEnd}
+                onChange={(e) => setVacationEnd(e.target.value)}
+              />
+              <CustomButton
+                variant="contained"
+                disabled={!vacationStart || !vacationEnd}
+                size="large"
+              >
+                <Check size={16} />
+              </CustomButton>
+            </Box>
+        )}
       </Box>
 
       <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}>

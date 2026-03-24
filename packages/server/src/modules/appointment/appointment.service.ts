@@ -7,6 +7,8 @@ import { RespondAppointmentDto, AppointmentAction } from './dto/respond-appointm
 import { RescheduleAppointmentDto } from './dto/reschedule-appointment.dto';
 import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
+import { CreateLeaveDto } from './dto/create-leave.dto';
+import { ReportAppointmentDto } from './dto/report-appointment.dto';
 import { NotificationService } from '../notification/notification.service';
 import { MailService } from '../mail/mail.service';
 
@@ -190,9 +192,21 @@ export class AppointmentService {
 
   /**
    * Get available (non-booked) slots for an accountant on a given date
+   * Also excludes dates that fall within a leave period
    */
   async getAvailableSlots(accountantId: number, date: string) {
     const targetDate = new Date(date);
+
+    // Check if date is within a leave period
+    const leave = await this.prisma.accountantLeave.findFirst({
+      where: {
+        accountantId,
+        startDate: { lte: targetDate },
+        endDate: { gte: targetDate },
+      },
+    });
+    if (leave) return { success: true, data: [], leaveReason: leave.reason ?? 'Congé' };
+
     const dayNames = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
     const dayName = dayNames[targetDate.getDay()];
 
@@ -242,13 +256,21 @@ export class AppointmentService {
   /**
    * Get my appointments (Client)
    */
-  async getMyAppointments(clientId: number, page: number = 1, limit: number = 10, status?: string) {
+  async getMyAppointments(
+    clientId: number,
+    page: number = 1,
+    limit: number = 10,
+    status?: string,
+    period?: string, // 'today' | 'upcoming' | 'past'
+    search?: string
+  ) {
     const skip = (page - 1) * limit;
     const where: any = { clientId };
 
-    if (status) {
-      where.status = status;
-    }
+    if (status) where.status = status;
+    this.applyPeriodFilter(where, period);
+    this.applySearchFilter(where, search);
+
     const [total, appointments] = await Promise.all([
       this.prisma.appointment.count({ where }),
       this.prisma.appointment.findMany({
@@ -267,19 +289,19 @@ export class AppointmentService {
               photo: true,
             },
           },
+          reports: { select: { id: true } },
         },
       }),
     ]);
 
     return {
       success: true,
-      data: appointments,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      data: appointments.map((a) => ({
+        ...a,
+        reported: (a.reports as any[]).length > 0,
+        reports: undefined,
+      })),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
 
@@ -290,9 +312,10 @@ export class AppointmentService {
     accountantId: number,
     page: number = 1,
     limit: number = 10,
-    status?: string
+    status?: string,
+    period?: string, // 'today' | 'upcoming' | 'past'
+    search?: string
   ) {
-    // Get accountant's company
     const accountant = await this.prisma.user.findUnique({
       where: { id: accountantId },
       select: { companyId: true },
@@ -305,9 +328,10 @@ export class AppointmentService {
     const skip = (page - 1) * limit;
     const where: any = { companyId: accountant.companyId };
 
-    if (status) {
-      where.status = status;
-    }
+    if (status) where.status = status;
+    this.applyPeriodFilter(where, period);
+    this.applySearchFilter(where, search);
+
     const [total, appointments] = await Promise.all([
       this.prisma.appointment.count({ where }),
       this.prisma.appointment.findMany({
@@ -336,18 +360,18 @@ export class AppointmentService {
               photo: true,
             },
           },
+          reports: { select: { id: true } },
         },
       }),
     ]);
 
-    // Count by status
     const statusCounts = await this.prisma.appointment.groupBy({
       by: ['status'],
       where: { companyId: accountant.companyId },
       _count: true,
     });
 
-    const counts = {
+    const counts: Record<string, number> = {
       pending: 0,
       confirmed: 0,
       rescheduled: 0,
@@ -355,20 +379,18 @@ export class AppointmentService {
       cancelled: 0,
       completed: 0,
     };
-
-    statusCounts.forEach((item) => {
+    statusCounts.forEach((item: any) => {
       counts[item.status] = item._count;
     });
 
     return {
       success: true,
-      data: appointments,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      data: appointments.map((a) => ({
+        ...a,
+        reported: (a.reports as any[]).length > 0,
+        reports: undefined,
+      })),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
       counts,
     };
   }
@@ -552,15 +574,17 @@ export class AppointmentService {
     });
 
     // Notify client about accountant's response
-    this.notificationService
-      .notify({
-        recipientId: updatedAppointment.client.id,
-        type: 'appointment',
-        action: isConfirmed ? 'confirmed' : 'rejected',
-        actorName: 'Votre comptable',
-        data: { appointmentId },
-      })
-      .catch(() => {});
+    if (updatedAppointment.client?.id) {
+      this.notificationService
+        .notify({
+          recipientId: updatedAppointment.client.id,
+          type: 'appointment',
+          action: isConfirmed ? 'confirmed' : 'rejected',
+          actorName: 'Votre comptable',
+          data: { appointmentId },
+        })
+        .catch(() => {});
+    }
 
     return {
       success: true,
@@ -871,5 +895,176 @@ export class AppointmentService {
     await this.prisma.availability.delete({ where: { id: availabilityId } });
 
     return { success: true, message: 'Availability deleted' };
+  }
+
+  // ─── CONGÉS ──────────────────────────────────────────────────────────────────
+
+  async createLeave(dto: CreateLeaveDto, accountantId: number) {
+    if (dto.startDate > dto.endDate)
+      throw new ApiError('startDate doit être avant endDate', 400, 'INVALID_DATE_RANGE');
+
+    const leave = await this.prisma.accountantLeave.create({
+      data: {
+        accountantId,
+        startDate: new Date(dto.startDate),
+        endDate: new Date(dto.endDate),
+        reason: dto.reason,
+      },
+    });
+    return { success: true, message: 'Congé créé', data: leave };
+  }
+
+  async getMyLeaves(accountantId: number) {
+    const leaves = await this.prisma.accountantLeave.findMany({
+      where: { accountantId },
+      orderBy: { startDate: 'asc' },
+    });
+    return { success: true, data: leaves };
+  }
+
+  async deleteLeave(leaveId: number, accountantId: number) {
+    const leave = await this.prisma.accountantLeave.findUnique({ where: { id: leaveId } });
+    if (!leave) throw new ApiError('Congé introuvable', 404, 'NOT_FOUND');
+    if (leave.accountantId !== accountantId)
+      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+    await this.prisma.accountantLeave.delete({ where: { id: leaveId } });
+    return { success: true, message: 'Congé supprimé' };
+  }
+
+  // ─── REPORT (REPORTER UN RDV) ─────────────────────────────────────────────
+
+  async reportAppointment(appointmentId: number, dto: ReportAppointmentDto, userId: number) {
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id: appointmentId },
+    });
+    if (!appointment) throw new ApiError('Appointment not found', 404, 'APPOINTMENT_NOT_FOUND');
+    if (appointment.clientId !== userId && appointment.accountantId !== userId)
+      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+
+    // Save report history
+    await this.prisma.appointmentReport.create({
+      data: {
+        appointmentId,
+        reportedById: userId,
+        oldDate: (appointment as any).date,
+        oldHour: (appointment as any).hour,
+        newDate: new Date(dto.newDate),
+        newHour: dto.newHour,
+        reason: dto.reason,
+      },
+    });
+
+    // Update appointment date/hour
+    const updated = await this.prisma.appointment.update({
+      where: { id: appointmentId },
+      data: { date: new Date(dto.newDate), hour: dto.newHour } as any,
+      include: {
+        client: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
+          },
+        },
+        accountant: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
+          },
+        },
+        reports: { select: { id: true } },
+      },
+    });
+
+    // Notify the other party
+    const recipientId =
+      userId === appointment.clientId ? appointment.accountantId : appointment.clientId;
+    if (recipientId) {
+      this.notificationService
+        .notify({
+          recipientId,
+          type: 'appointment',
+          action: 'rescheduled',
+          actorName: userId === appointment.clientId ? 'Le client' : 'Votre comptable',
+          data: { appointmentId },
+        })
+        .catch(() => {});
+    }
+
+    return {
+      success: true,
+      message: 'Rendez-vous reporté',
+      data: { ...(updated as any), reported: true, reports: undefined },
+    };
+  }
+
+  async getAppointmentHistory(appointmentId: number, userId: number) {
+    const appointment = await this.prisma.appointment.findUnique({ where: { id: appointmentId } });
+    if (!appointment) throw new ApiError('Appointment not found', 404, 'APPOINTMENT_NOT_FOUND');
+    if (appointment.clientId !== userId && appointment.accountantId !== userId)
+      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+
+    const history = await this.prisma.appointmentReport.findMany({
+      where: { appointmentId },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        reportedBy: {
+          select: { id: true, username: true, firstName: true, lastName: true, photo: true },
+        },
+      },
+    });
+
+    return { success: true, data: history };
+  }
+
+  // ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+  private applyPeriodFilter(where: any, period?: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    if (period === 'today') {
+      where.date = { gte: today, lt: tomorrow };
+    } else if (period === 'upcoming') {
+      where.date = { gte: tomorrow };
+    } else if (period === 'past') {
+      where.date = { lt: today };
+    }
+  }
+
+  private applySearchFilter(where: any, search?: string) {
+    if (!search) return;
+    where.OR = [
+      { title: { contains: search, mode: 'insensitive' } },
+      {
+        client: {
+          OR: [
+            { firstName: { contains: search, mode: 'insensitive' } },
+            { lastName: { contains: search, mode: 'insensitive' } },
+            { username: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+          ],
+        },
+      },
+      {
+        accountant: {
+          OR: [
+            { firstName: { contains: search, mode: 'insensitive' } },
+            { lastName: { contains: search, mode: 'insensitive' } },
+            { username: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+          ],
+        },
+      },
+    ];
   }
 }

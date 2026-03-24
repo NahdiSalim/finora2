@@ -1,0 +1,16 @@
+model AccountantLeave {
+  id           Int      @id @default(autoincrement())
+  accountantId Int
+  startDate    DateTime @db.Date
+  endDate      DateTime @db.Date
+  reason       String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  accountant   User     @relation("AccountantLeaves", fields: [accountantId], references: [id], onDelete: Cascade)
+
+  @@index([accountantId])
+  @@index([startDate])
+  @@index([endDate])
+  @@map("accountant_leaves")
+}

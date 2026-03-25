@@ -242,14 +242,14 @@ export class TaskService {
       where.priority = priority;
     }
 
-    const orderBy: any = {};
+    const orderBy: any[] = [{ order: 'asc' }];
     if (sortBy === 'priority') {
       // Custom priority order: urgent > high > medium > low
-      orderBy.priority = 'desc';
+      orderBy.push({ priority: 'desc' });
     } else if (sortBy === 'dueDate') {
-      orderBy.dueDate = 'asc';
+      orderBy.push({ dueDate: 'asc' });
     } else {
-      orderBy.createdAt = 'desc';
+      orderBy.push({ createdAt: 'desc' });
     }
 
     const [total, tasks] = await Promise.all([
@@ -352,9 +352,7 @@ export class TaskService {
         where,
         skip,
         take: limit,
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
         include: {
           assignee: {
             select: {

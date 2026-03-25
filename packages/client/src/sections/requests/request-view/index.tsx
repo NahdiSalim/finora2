@@ -614,6 +614,7 @@ export default function RequestView() {
         open={openViewDrawer}
         onClose={handleCloseViewDrawer}
         request={selectedRequest}
+        pageContext={viewTab}
       />
       <DeleteConfirmModal
         open={showDeleteModal}

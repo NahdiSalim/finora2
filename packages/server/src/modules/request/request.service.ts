@@ -455,7 +455,10 @@ export class RequestService {
     sortBy: 'urgency' | 'createdAt' = 'createdAt'
   ) {
     const skip = (page - 1) * limit;
-    const where: any = { assignedToId: accountantId };
+    const where: any = {
+      assignedToId: accountantId,
+      convertedToTaskId: null, // Only show requests not converted to tasks
+    };
 
     if (status) {
       where.status = status;
@@ -509,7 +512,10 @@ export class RequestService {
       }),
       this.prisma.request.groupBy({
         by: ['status'],
-        where: { assignedToId: accountantId },
+        where: {
+          assignedToId: accountantId,
+          convertedToTaskId: null, // Only count requests not converted to tasks
+        },
         _count: true,
       }),
     ]);
@@ -861,8 +867,88 @@ export class RequestService {
         );
       }
 
-      updateData.assignedToId = dto.assignedToId;
-      // Note: Status is NOT automatically changed per requirement #5
+      // If assigning to a COLLABORATOR, convert to task automatically
+      if (assignee.role?.code === 'COLLABORATOR') {
+        // Map urgency to priority
+        const priorityMap = {
+          low: 'low',
+          normal: 'medium',
+          high: 'high',
+          urgent: 'urgent',
+        };
+
+        // Check if request is already converted to a task
+        if (request.convertedToTaskId) {
+          // Update existing task's assignee
+          await this.prisma.task.update({
+            where: { id: request.convertedToTaskId },
+            data: {
+              assigneeId: dto.assignedToId,
+              title: dto.subject || undefined,
+              description: dto.description || undefined,
+              type: dto.type || undefined,
+              priority: dto.urgency ? priorityMap[dto.urgency] : undefined,
+              dueDate: dto.desiredResponseDate ? new Date(dto.desiredResponseDate) : undefined,
+            },
+          });
+
+          updateData.status = 'in_progress';
+          updateData.assignedToId = userId; // Keep accountant as the request owner
+
+          // Notify the new collaborator
+          this.notificationService
+            .notify({
+              recipientId: assignee.id,
+              type: 'task',
+              action: 'assigned',
+              actorName: 'Votre comptable',
+              data: { taskId: request.convertedToTaskId },
+            })
+            .catch(() => {});
+        } else {
+          // Create new task for the collaborator
+          const task = await this.prisma.task.create({
+            data: {
+              title: dto.subject || request.subject,
+              description: dto.description || request.description || '',
+              type: dto.type || request.type,
+              priority: priorityMap[dto.urgency || request.urgency] || 'medium',
+              dueDate: dto.desiredResponseDate
+                ? new Date(dto.desiredResponseDate)
+                : request.desiredResponseDate
+                  ? new Date(request.desiredResponseDate)
+                  : null,
+              assigneeId: dto.assignedToId,
+              createdById: userId,
+              clientId: request.clientId,
+              companyId: request.companyId,
+              requestId: request.id,
+              attachments: attachmentUrls,
+            },
+          });
+
+          // Mark request as converted
+          updateData.convertedToTaskId = task.id;
+          updateData.convertedAt = new Date();
+          updateData.status = 'in_progress';
+          updateData.assignedToId = userId; // Keep accountant as the assigned person for the request
+
+          // Notify the collaborator
+          this.notificationService
+            .notify({
+              recipientId: assignee.id,
+              type: 'task',
+              action: 'assigned',
+              actorName: 'Votre comptable',
+              data: { taskId: task.id },
+            })
+            .catch(() => {});
+        }
+      } else {
+        // Assigning to an ACCOUNTANT - keep as request
+        updateData.assignedToId = dto.assignedToId;
+        // Note: Status is NOT automatically changed per requirement #5
+      }
     } else if (dto.assignedToId === null || dto.assignedToId === undefined) {
       // Explicitly allow null to unassign (when sent as null or empty string converted to null)
       updateData.assignedToId = null;

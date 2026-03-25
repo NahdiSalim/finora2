@@ -31,6 +31,7 @@ export interface Task {
     | "archived";
   dueDate: string | null;
   progress: number;
+  order: number;
   assigneeId: number;
   assignee: TaskUser;
   createdById: number;

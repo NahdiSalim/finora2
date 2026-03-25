@@ -9,8 +9,10 @@ import {
   useMediaQuery,
   Chip,
   MenuItem,
+  Menu,
+  Divider,
 } from "@mui/material";
-import { X, Download, Edit, Trash2, Save } from "lucide-react";
+import { X, Download, Edit, Trash2, Save, UserPlus } from "lucide-react";
 import type { Request, RequestFormData, RequestType } from "src/types/request";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
@@ -24,8 +26,9 @@ import {
   useUpdateRequestMutation,
   useGetUsersByRoleQuery,
 } from "src/lib/services/requestApi";
+import { tasksApi } from "src/lib/services/tasksApi";
 import { useForm, Controller } from "react-hook-form";
-import { useAppSelector } from "src/hooks/use-redux";
+import { useAppSelector, useAppDispatch } from "src/hooks/use-redux";
 import { ROLE_CODES } from "src/constants/roles";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { requestValidationSchema } from "src/validations/request/request-validation";
@@ -34,19 +37,29 @@ type Props = {
   open: boolean;
   onClose: () => void;
   request: Request | null;
+  pageContext?: "my_requests" | "client_requests"; // To determine what assignment options to show
 };
 
-export default function ViewRequestDrawer({ open, onClose, request }: Props) {
+export default function ViewRequestDrawer({
+  open,
+  onClose,
+  request,
+  pageContext = "client_requests",
+}: Props) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isMedium = useMediaQuery(theme.breakpoints.down("md"));
   const { showAlert } = useAlert();
+  const dispatch = useAppDispatch();
   const [deleteRequest, { isLoading: isDeleting }] = useDeleteRequestMutation();
   const [updateRequest, { isLoading: isUpdating }] = useUpdateRequestMutation();
   const [isEditMode, setIsEditMode] = useState(false);
   const [assignedUserId, setAssignedUserId] = useState<number | null>(null);
   const [localRequest, setLocalRequest] = useState<Request | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [assignMenuAnchorEl, setAssignMenuAnchorEl] =
+    useState<null | HTMLElement>(null);
+  const isAssignMenuOpen = Boolean(assignMenuAnchorEl);
 
   // Get current user and check role
   const { user } = useAppSelector((state) => state.auth);
@@ -75,6 +88,14 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
     if (!isAccountant || !user) return [];
 
     const users = usersData?.data || [];
+
+    // Filter based on page context
+    if (pageContext === "my_requests") {
+      // On "Mes demandes" page: only show collaborators (exclude current user)
+      return users.filter((u) => u.id !== Number(user.id));
+    }
+
+    // On "Demandes des clients" page: show "me" + all collaborators
     const currentUserIncluded = users.some((u) => u.id === Number(user.id));
 
     // If current user is not in the list, add them
@@ -104,7 +125,7 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
     }
 
     return users;
-  }, [usersData, user, isAccountant]);
+  }, [usersData, user, isAccountant, pageContext]);
 
   const {
     register,
@@ -222,6 +243,75 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
     }
   };
 
+  const handleOpenAssignMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setAssignMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleCloseAssignMenu = () => {
+    setAssignMenuAnchorEl(null);
+  };
+
+  const handleAssignUser = async (userId: number | null) => {
+    if (!localRequest) return;
+
+    setAssignedUserId(userId);
+    handleCloseAssignMenu();
+
+    try {
+      const formData = new FormData();
+      if (userId !== null) {
+        formData.append("assignedToId", userId.toString());
+      } else {
+        formData.append("assignedToId", "");
+      }
+
+      const result = await updateRequest({
+        id: localRequest.id,
+        data: formData,
+      }).unwrap();
+
+      // If request was converted to task, invalidate tasks cache
+      if (result.data?.convertedToTaskId) {
+        dispatch(
+          tasksApi.util.invalidateTags([
+            { type: "Tasks", id: "MY_ASSIGNED_LIST" },
+            { type: "Tasks", id: "MY_CREATED_LIST" },
+          ]),
+        );
+      }
+
+      if (result.data) {
+        setLocalRequest(result.data);
+      }
+
+      const assigneeName =
+        userId === Number(user?.id)
+          ? "vous-même"
+          : assignableUsers.find((u) => u.id === userId)?.username ||
+            "l'utilisateur";
+
+      // If converted to task, show different message
+      if (result.data?.convertedToTaskId) {
+        showAlert(
+          `Demande convertie en tâche et assignée à ${assigneeName}`,
+          "success",
+        );
+      } else {
+        showAlert(
+          userId
+            ? `Demande assignée à ${assigneeName}`
+            : "Demande non assignée",
+          "success",
+        );
+      }
+    } catch (error) {
+      console.error("Error updating assignment:", error);
+      showAlert("Erreur lors de la mise à jour de l'assignation", "error");
+      // Revert to previous value on error
+      setAssignedUserId(localRequest.assignedToId || null);
+    }
+  };
+
   const onSubmit = async (data: RequestFormData) => {
     if (!localRequest) return;
 
@@ -260,12 +350,33 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
         data: formData,
       }).unwrap();
 
+      // If request was converted to task, invalidate tasks cache
+      if (result.data?.convertedToTaskId) {
+        dispatch(
+          tasksApi.util.invalidateTags([
+            { type: "Tasks", id: "MY_ASSIGNED_LIST" },
+            { type: "Tasks", id: "MY_CREATED_LIST" },
+          ]),
+        );
+      }
+
       // Update local request with the response data
       if (result.data) {
         setLocalRequest(result.data);
       }
 
-      showAlert("Demande mise à jour avec succès", "success");
+      // Show appropriate message
+      if (result.data?.convertedToTaskId) {
+        const assigneeName =
+          assignableUsers.find((u) => u.id === assignedUserId)?.username ||
+          "le collaborateur";
+        showAlert(
+          `Demande convertie en tâche et assignée à ${assigneeName}`,
+          "success",
+        );
+      } else {
+        showAlert("Demande mise à jour avec succès", "success");
+      }
       setIsEditMode(false);
     } catch (error) {
       console.error("Error updating request:", error);
@@ -560,106 +671,6 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
               </Box>
             </Box>
 
-            {/* Assignment Section for Accountants */}
-            {isAccountant && (
-              <Box
-                sx={{
-                  mb: 2,
-                  p: 1.5,
-                  bgcolor: theme.palette.common.white,
-                  borderRadius: 2,
-                  animation: open
-                    ? "fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both"
-                    : "none",
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  fontWeight={600}
-                  sx={{ mb: 1, display: "block", fontSize: 10 }}
-                >
-                  GESTION DE LA DEMANDE
-                </Typography>
-                <CustomSelect
-                  label="Assigné à"
-                  value={assignedUserId || ""}
-                  onChange={async (e) => {
-                    const value = e.target.value;
-                    const newValue = value === "" ? null : Number(value);
-                    setAssignedUserId(newValue);
-
-                    try {
-                      // Auto-update on change
-                      const formData = new FormData();
-                      if (newValue !== null) {
-                        formData.append("assignedToId", newValue.toString());
-                      } else {
-                        // Send empty string to unassign (backend will convert to null)
-                        formData.append("assignedToId", "");
-                      }
-
-                      const result = await updateRequest({
-                        id: localRequest.id,
-                        data: formData,
-                      }).unwrap();
-
-                      if (result.data) {
-                        setLocalRequest(result.data);
-                      }
-
-                      const assigneeName =
-                        newValue === Number(user?.id)
-                          ? "vous-même"
-                          : assignableUsers.find((u) => u.id === newValue)
-                              ?.username || "l'utilisateur";
-                      showAlert(
-                        newValue
-                          ? `Demande assignée à ${assigneeName}`
-                          : "Demande non assignée",
-                        "success",
-                      );
-                    } catch (error) {
-                      console.error("Error updating assignment:", error);
-                      showAlert(
-                        "Erreur lors de la mise à jour de l'assignation",
-                        "error",
-                      );
-                      // Revert to previous value on error
-                      setAssignedUserId(localRequest.assignedToId || null);
-                    }
-                  }}
-                  fullWidth
-                  size="small"
-                >
-                  <MenuItem value="">Non assigné</MenuItem>
-                  {assignableUsers.map((assignableUser) => {
-                    const isCurrentUser =
-                      assignableUser.id === Number(user?.id);
-                    const displayName =
-                      assignableUser.firstName && assignableUser.lastName
-                        ? `${assignableUser.firstName} ${assignableUser.lastName}`
-                        : assignableUser.username;
-                    const roleName =
-                      typeof assignableUser.role === "object" &&
-                      "nameFr" in assignableUser.role
-                        ? assignableUser.role.nameFr
-                        : "Comptable";
-                    return (
-                      <MenuItem
-                        key={assignableUser.id}
-                        value={assignableUser.id}
-                      >
-                        {isCurrentUser
-                          ? `Moi (${displayName})`
-                          : `${displayName} (${roleName})`}
-                      </MenuItem>
-                    );
-                  })}
-                </CustomSelect>
-              </Box>
-            )}
-
             {/* Accountant Info (if assigned) - Show for clients */}
             {!isAccountant &&
               (localRequest.assignedTo || localRequest.respondedAt) && (
@@ -772,36 +783,6 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
                   sx={{ whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.5 }}
                 >
                   {localRequest.description}
-                </Typography>
-              </Box>
-            )}
-
-            {/* Response from accountant */}
-            {localRequest.response && (
-              <Box
-                sx={{
-                  mb: 2,
-                  p: 1.5,
-                  bgcolor: theme.palette.common.white,
-                  borderRadius: 2,
-                  animation: open
-                    ? "fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.5s both"
-                    : "none",
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  fontWeight={600}
-                  sx={{ mb: 0.5, display: "block", fontSize: 10 }}
-                >
-                  RÉPONSE
-                </Typography>
-                <Typography
-                  variant="body2"
-                  sx={{ whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.5 }}
-                >
-                  {localRequest.response}
                 </Typography>
               </Box>
             )}
@@ -1227,8 +1208,8 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
           bgcolor: theme.palette.common.white,
           borderTop: `1px solid ${theme.palette.divider}`,
           display: "flex",
-          flexDirection: { xs: "column", sm: "row" },
-          gap: { xs: 1.5, sm: 1 },
+          flexDirection: "column",
+          gap: 1.5,
           animation: open
             ? "slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both"
             : "none",
@@ -1246,8 +1227,37 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
       >
         {!isEditMode ? (
           <>
+            {/* Assignment Button for Accountants - Full Width at Bottom */}
+            {isAccountant && (
+              <CustomButton
+                variant="contained"
+                color="primary"
+                startIcon={<UserPlus size={18} />}
+                onClick={handleOpenAssignMenu}
+                fullWidth
+                size="large"
+                sx={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                }}
+              >
+                {assignedUserId
+                  ? assignedUserId === Number(user?.id)
+                    ? "Assigné à moi"
+                    : `Assigné à ${assignableUsers.find((u) => u.id === assignedUserId)?.username || "Utilisateur"}`
+                  : "Assigner la demande"}
+              </CustomButton>
+            )}
+
+            {/* Client Actions */}
             {!isAccountant && (
-              <>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: { xs: "column", sm: "row" },
+                  gap: 1,
+                }}
+              >
                 <CustomButton
                   variant="outlined"
                   startIcon={<Trash2 size={16} />}
@@ -1292,11 +1302,17 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
                 >
                   Modifier
                 </CustomButton>
-              </>
+              </Box>
             )}
           </>
         ) : (
-          <>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: { xs: "column", sm: "row" },
+              gap: 1,
+            }}
+          >
             <CustomButton
               variant="text"
               onClick={handleCancelEdit}
@@ -1331,9 +1347,152 @@ export default function ViewRequestDrawer({ open, onClose, request }: Props) {
             >
               {isUpdating ? "Mise à jour..." : "Enregistrer"}
             </CustomButton>
-          </>
+          </Box>
         )}
       </Box>
+
+      {/* Assignment Menu */}
+      <Menu
+        anchorEl={assignMenuAnchorEl}
+        open={isAssignMenuOpen}
+        onClose={handleCloseAssignMenu}
+        anchorOrigin={{
+          vertical: "top",
+          horizontal: "center",
+        }}
+        transformOrigin={{
+          vertical: "bottom",
+          horizontal: "center",
+        }}
+        PaperProps={{
+          sx: {
+            width: { xs: "calc(100% - 48px)", sm: 320 },
+            maxHeight: 400,
+            mt: -1,
+            borderRadius: 2,
+            boxShadow: theme.shadows[8],
+            "& .MuiList-root": {
+              py: 1,
+            },
+          },
+        }}
+      >
+        {/* Show "Me" option only on client_requests page */}
+        {pageContext === "client_requests" && (
+          <>
+            <MenuItem
+              onClick={() => handleAssignUser(Number(user?.id))}
+              selected={assignedUserId === Number(user?.id)}
+              sx={{
+                py: 1.5,
+                px: 2,
+                "&:hover": {
+                  bgcolor: alpha(theme.palette.primary.main, 0.08),
+                },
+                "&.Mui-selected": {
+                  bgcolor: alpha(theme.palette.primary.main, 0.12),
+                  "&:hover": {
+                    bgcolor: alpha(theme.palette.primary.main, 0.16),
+                  },
+                },
+              }}
+            >
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
+                <Typography variant="body2" fontWeight={600}>
+                  Moi
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {user?.full_name || user?.email}
+                </Typography>
+              </Box>
+            </MenuItem>
+            {assignableUsers.length > 0 && <Divider sx={{ my: 0.5 }} />}
+          </>
+        )}
+
+        {/* Show collaborators */}
+        {assignableUsers.length > 0 ? (
+          assignableUsers.map((assignableUser) => {
+            // Skip current user in the list if we're on client_requests page (already shown above)
+            if (
+              pageContext === "client_requests" &&
+              assignableUser.id === Number(user?.id)
+            ) {
+              return null;
+            }
+
+            const displayName =
+              assignableUser.firstName && assignableUser.lastName
+                ? `${assignableUser.firstName} ${assignableUser.lastName}`
+                : assignableUser.username;
+            const roleName =
+              typeof assignableUser.role === "object" &&
+              "nameFr" in assignableUser.role
+                ? assignableUser.role.nameFr
+                : "Comptable";
+
+            return (
+              <MenuItem
+                key={assignableUser.id}
+                onClick={() => handleAssignUser(assignableUser.id)}
+                selected={assignedUserId === assignableUser.id}
+                sx={{
+                  py: 1.5,
+                  px: 2,
+                  "&:hover": {
+                    bgcolor: alpha(theme.palette.primary.main, 0.08),
+                  },
+                  "&.Mui-selected": {
+                    bgcolor: alpha(theme.palette.primary.main, 0.12),
+                    "&:hover": {
+                      bgcolor: alpha(theme.palette.primary.main, 0.16),
+                    },
+                  },
+                }}
+              >
+                <Box
+                  sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}
+                >
+                  <Typography variant="body2" fontWeight={600}>
+                    {displayName}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {roleName}
+                  </Typography>
+                </Box>
+              </MenuItem>
+            );
+          })
+        ) : (
+          <MenuItem disabled sx={{ py: 1.5, px: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              Aucun collaborateur disponible
+            </Typography>
+          </MenuItem>
+        )}
+
+        {/* Unassign option */}
+        {assignedUserId && (
+          <>
+            <Divider sx={{ my: 0.5 }} />
+            <MenuItem
+              onClick={() => handleAssignUser(null)}
+              sx={{
+                py: 1.5,
+                px: 2,
+                color: theme.palette.error.main,
+                "&:hover": {
+                  bgcolor: alpha(theme.palette.error.main, 0.08),
+                },
+              }}
+            >
+              <Typography variant="body2" fontWeight={600}>
+                Désassigner
+              </Typography>
+            </MenuItem>
+          </>
+        )}
+      </Menu>
 
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal

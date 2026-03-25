@@ -34,6 +34,7 @@ export interface Task {
     | "archived";
   dueDate: string | null;
   progress: number;
+  order: number;
   assigneeId: number;
   assignee: TaskUser;
   createdById: number;
@@ -99,6 +100,11 @@ export interface UpdateTaskDto {
 
 export interface AddCommentDto {
   comment: string;
+}
+
+export interface ReorderTasksDto {
+  tasks: { id: number; order: number }[];
+  status?: string;
 }
 
 export const tasksApi = createApi({
@@ -309,6 +315,22 @@ export const tasksApi = createApi({
         ],
       },
     ),
+
+    // Reorder tasks (drag & drop)
+    reorderTasks: builder.mutation<
+      { success: boolean; message: string },
+      ReorderTasksDto
+    >({
+      query: (dto) => ({
+        url: "/tasks/reorder/bulk",
+        method: "PUT",
+        body: dto,
+      }),
+      invalidatesTags: [
+        { type: "Tasks", id: "MY_CREATED_LIST" },
+        { type: "Tasks", id: "MY_ASSIGNED_LIST" },
+      ],
+    }),
   }),
 });
 
@@ -324,4 +346,5 @@ export const {
   useArchiveTaskMutation,
   useAddCommentMutation,
   useDeleteTaskMutation,
+  useReorderTasksMutation,
 } = tasksApi;

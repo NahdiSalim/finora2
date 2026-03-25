@@ -18,6 +18,7 @@ import { TaskCard } from "./task-card";
 import {
   useUpdateTaskMutation,
   useArchiveTaskMutation,
+  useReorderTasksMutation,
 } from "src/lib/services/tasksApi";
 import type { KanbanColumn, Task } from "./types";
 
@@ -39,80 +40,76 @@ export function KanbanBoard({
   const [localColumns, setLocalColumns] = useState<KanbanColumn[]>(columns);
   const [updateTask] = useUpdateTaskMutation();
   const [archiveTask] = useArchiveTaskMutation();
+  const [reorderTasks] = useReorderTasksMutation();
 
   const STORAGE_KEY = `kanban-order-${isCollaboratorView ? "collaborator" : "accountant"}`;
 
-  const loadTaskOrder = () => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  };
-
-  const saveTaskOrder = (columnsToSave: KanbanColumn[]) => {
+  const saveTaskOrderToLocalStorage = (columnsToSave: KanbanColumn[]) => {
     try {
       const orderMap: Record<string, number[]> = {};
       columnsToSave.forEach((col) => {
         orderMap[col.id] = col.tasks.map((t) => t.id);
       });
-      console.log("Saving task order:", STORAGE_KEY, orderMap);
+      console.log(
+        "💾 Saving task order to localStorage:",
+        STORAGE_KEY,
+        orderMap,
+      );
       localStorage.setItem(STORAGE_KEY, JSON.stringify(orderMap));
     } catch (error) {
-      console.error("Failed to save task order:", error);
+      console.error("Failed to save task order to localStorage:", error);
+    }
+  };
+
+  const getColumnOrderOffset = (columnId: string): number => {
+    const offsets: Record<string, number> = {
+      todo: 0,
+      in_progress: 1000,
+      in_review: 2000,
+      completed: 3000,
+    };
+    return offsets[columnId] || 0;
+  };
+
+  const saveTaskOrderToBackend = async (
+    columnId: string,
+    tasks: Task[],
+  ): Promise<void> => {
+    try {
+      const columnOffset = getColumnOrderOffset(columnId);
+      const reorderedTasks = tasks.map((task, index) => ({
+        id: task.id,
+        order: columnOffset + index,
+      }));
+
+      console.log(
+        `🌐 Saving task order to backend for column ${columnId}:`,
+        reorderedTasks,
+      );
+
+      await reorderTasks({
+        tasks: reorderedTasks,
+        status: columnId,
+      }).unwrap();
+
+      console.log("✅ Backend order saved successfully");
+    } catch (error) {
+      console.error("❌ Failed to save task order to backend:", error);
+      throw error;
     }
   };
 
   useEffect(() => {
-    const savedOrder = loadTaskOrder();
-    console.log("🔵 Loading saved order:", STORAGE_KEY, savedOrder);
     console.log(
-      "🔵 Incoming columns task IDs:",
-      columns.map((col) => ({ [col.id]: col.tasks.map((t) => t.id) })),
+      "🔵 Setting columns from backend with order field:",
+      columns.map((col) => ({
+        id: col.id,
+        taskIds: col.tasks.map((t) => t.id),
+        orders: col.tasks.map((t) => t.order),
+      })),
     );
-
-    if (Object.keys(savedOrder).length > 0) {
-      const reorderedColumns = columns.map((col) => {
-        const savedTaskIds = savedOrder[col.id];
-        if (!savedTaskIds || savedTaskIds.length === 0) {
-          console.log(`🔵 No saved order for column ${col.id}`);
-          return col;
-        }
-
-        const tasksMap = new Map(col.tasks.map((t) => [t.id, t]));
-        const orderedTasks: Task[] = [];
-        const remainingTasks = new Set(col.tasks);
-
-        savedTaskIds.forEach((id: number) => {
-          const task = tasksMap.get(id);
-          if (task) {
-            orderedTasks.push(task);
-            remainingTasks.delete(task);
-          }
-        });
-
-        remainingTasks.forEach((task) => {
-          orderedTasks.unshift(task);
-        });
-
-        console.log(
-          `🔵 Column ${col.id}: saved IDs:`,
-          savedTaskIds,
-          `| original order:`,
-          col.tasks.map((t) => t.id),
-          `| reordered:`,
-          orderedTasks.map((t) => t.id),
-        );
-        return { ...col, tasks: orderedTasks };
-      });
-
-      setLocalColumns(reorderedColumns);
-    } else {
-      console.log("🔵 No saved order found, using original columns");
-      setLocalColumns(columns);
-    }
-  }, [columns, STORAGE_KEY]);
+    setLocalColumns(columns);
+  }, [columns]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -184,15 +181,24 @@ export function KanbanBoard({
       }
 
       if (oldIndex !== newIndex) {
+        const newTasks = arrayMove(sourceColumn.tasks, oldIndex, newIndex);
+
         const updatedColumns = localColumns.map((col) => {
           if (col.id === sourceColumn.id) {
-            const newTasks = arrayMove(col.tasks, oldIndex, newIndex);
             return { ...col, tasks: newTasks };
           }
           return col;
         });
+
         setLocalColumns(updatedColumns);
-        saveTaskOrder(updatedColumns);
+        saveTaskOrderToLocalStorage(updatedColumns);
+
+        try {
+          await saveTaskOrderToBackend(sourceColumn.id, newTasks);
+        } catch (error) {
+          console.error("Failed to persist order, reverting:", error);
+          setLocalColumns(localColumns);
+        }
       }
     } else {
       const updatedColumns = localColumns.map((col) => {
@@ -209,7 +215,7 @@ export function KanbanBoard({
       });
 
       setLocalColumns(updatedColumns);
-      saveTaskOrder(updatedColumns);
+      saveTaskOrderToLocalStorage(updatedColumns);
 
       const newStatus = targetColumn.id;
       const formData = new FormData();
@@ -217,6 +223,21 @@ export function KanbanBoard({
 
       try {
         await updateTask({ id: taskId, data: formData }).unwrap();
+
+        // Update order for both source and target columns
+        const sourceCol = updatedColumns.find(
+          (col) => col.id === sourceColumn.id,
+        );
+        const targetCol = updatedColumns.find(
+          (col) => col.id === targetColumn.id,
+        );
+
+        if (sourceCol && sourceCol.tasks.length > 0) {
+          await saveTaskOrderToBackend(sourceColumn.id, sourceCol.tasks);
+        }
+        if (targetCol) {
+          await saveTaskOrderToBackend(targetColumn.id, targetCol.tasks);
+        }
       } catch (error) {
         console.error("Failed to update task status:", error);
         setLocalColumns(localColumns);
@@ -281,7 +302,7 @@ export function KanbanBoard({
     setActiveId(null);
   };
 
-  const handleSortByPriority = (columnId: KanbanColumn["id"]) => {
+  const handleSortByPriority = async (columnId: KanbanColumn["id"]) => {
     const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
 
     const updatedColumns = localColumns.map((col) => {
@@ -295,7 +316,16 @@ export function KanbanBoard({
     });
 
     setLocalColumns(updatedColumns);
-    saveTaskOrder(updatedColumns);
+    saveTaskOrderToLocalStorage(updatedColumns);
+
+    const targetCol = updatedColumns.find((col) => col.id === columnId);
+    if (targetCol) {
+      try {
+        await saveTaskOrderToBackend(columnId, targetCol.tasks);
+      } catch (error) {
+        console.error("Failed to persist sorted order:", error);
+      }
+    }
   };
 
   const handleArchiveAll = async (columnId: KanbanColumn["id"]) => {

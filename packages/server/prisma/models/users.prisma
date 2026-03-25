@@ -52,8 +52,12 @@ model User {
   // Appointments
   clientAppointments     Appointment[] @relation("ClientAppointments")
   accountantAppointments Appointment[] @relation("AccountantAppointments")
+  createdAppointments    Appointment[] @relation("AppointmentCreatedBy")
+  updatedAppointments    Appointment[] @relation("AppointmentUpdatedBy")
   availabilities         Availability[] @relation("AccountantAvailabilities")
   availabilitySlots      AvailabilitySlot[] @relation("AccountantSlots")
+  accountantLeaves       AccountantLeave[] @relation("AccountantLeaves")
+  appointmentReports     AppointmentReport[] @relation("ReportedByUser")
   
   // Tickets
   createdTickets       Ticket[] @relation("TicketCreatedBy")
@@ -87,6 +91,9 @@ model User {
   
   // Contact Messages
   receivedContactMessages ContactMessage[] @relation("ContactMessageAccountant")
+
+  // Document Versions
+  uploadedVersions      DocumentVersion[] @relation("DocumentVersionUploader")
 
   @@index([email])
   @@index([companyId])

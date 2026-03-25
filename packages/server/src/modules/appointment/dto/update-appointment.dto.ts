@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsEnum, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsEnum, Matches, IsArray, IsEmail } from 'class-validator';
 import { AppointmentType, MeetingType } from './create-appointment.dto';
 
 export enum AppointmentStatus {
@@ -10,6 +10,9 @@ export enum AppointmentStatus {
   CANCELLED = 'cancelled',
   COMPLETED = 'completed',
 }
+
+const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 export class UpdateAppointmentDto {
   @ApiProperty({ example: 'Titre mis à jour', required: false })
@@ -27,15 +30,21 @@ export class UpdateAppointmentDto {
   @IsOptional()
   type?: AppointmentType;
 
-  @ApiProperty({ example: '2026-03-20T10:00:00Z', required: false })
-  @IsDateString()
+  @ApiProperty({
+    example: '2026-04-20',
+    description: 'Date du rendez-vous (YYYY-MM-DD)',
+    required: false,
+  })
+  @IsString()
+  @Matches(DATE_REGEX, { message: 'date doit être au format YYYY-MM-DD' })
   @IsOptional()
-  startTime?: string;
+  date?: string;
 
-  @ApiProperty({ example: '2026-03-20T11:00:00Z', required: false })
-  @IsDateString()
+  @ApiProperty({ example: '14:00', description: 'Heure du rendez-vous (HH:MM)', required: false })
+  @IsString()
+  @Matches(TIME_REGEX, { message: 'hour doit être au format HH:MM' })
   @IsOptional()
-  endTime?: string;
+  hour?: string;
 
   @ApiProperty({ enum: MeetingType, required: false })
   @IsEnum(MeetingType)
@@ -61,4 +70,16 @@ export class UpdateAppointmentDto {
   @IsString()
   @IsOptional()
   accountantNotes?: string;
+
+  @ApiProperty({ example: '#e53935', required: false })
+  @IsString()
+  @Matches(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/, { message: 'color doit être un code hex valide' })
+  @IsOptional()
+  color?: string;
+
+  @ApiProperty({ example: ['guest@example.com'], required: false, type: [String] })
+  @IsArray()
+  @IsEmail({}, { each: true })
+  @IsOptional()
+  guests?: string[];
 }

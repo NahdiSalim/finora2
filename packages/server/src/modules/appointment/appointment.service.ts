@@ -7,95 +7,160 @@ import { RespondAppointmentDto, AppointmentAction } from './dto/respond-appointm
 import { RescheduleAppointmentDto } from './dto/reschedule-appointment.dto';
 import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
+import { CreateLeaveDto } from './dto/create-leave.dto';
+import { ReportAppointmentDto } from './dto/report-appointment.dto';
 import { NotificationService } from '../notification/notification.service';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class AppointmentService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notificationService: NotificationService
+    private readonly notificationService: NotificationService,
+    private readonly mailService: MailService
   ) {}
 
   /**
-   * Create a new appointment (Client)
+   * Create a new appointment (Client or Accountant)
    */
-  async createAppointment(dto: CreateAppointmentDto, clientId: number) {
+  async createAppointment(dto: CreateAppointmentDto, userId: number) {
     try {
-      const client = await this.prisma.user.findUnique({
-        where: { id: clientId },
-        select: { companyId: true },
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { companyId: true, role: true },
       });
 
-      // If slot provided — validate it's available and lock it
-      if (dto.availabilitySlotId) {
-        const slot = await this.prisma.availabilitySlot.findUnique({
-          where: { id: dto.availabilitySlotId },
+      const isAccountant = (user as any)?.role === 'ACCOUNTANT';
+
+      // Validate that the date/hour is within the accountant's availability
+      const targetAccountantId = isAccountant ? userId : dto.accountantId;
+      if (targetAccountantId && dto.date && dto.hour) {
+        const targetDate = new Date(dto.date + 'T00:00:00.000Z');
+        const dayNames = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+        const dayName = dayNames[targetDate.getDay()];
+
+        const matchingRule = await this.prisma.availability.findFirst({
+          where: {
+            accountantId: targetAccountantId,
+            isActive: true,
+            OR: [
+              { isRecurring: true, dayOfWeek: dayName },
+              { isRecurring: false, specificDate: targetDate },
+            ],
+          },
         });
-        if (!slot) throw new ApiError('Slot introuvable', 404, 'SLOT_NOT_FOUND');
-        if (slot.status !== 'available')
-          throw new ApiError('Ce créneau est déjà pris', 409, 'SLOT_UNAVAILABLE');
 
-        // Use slot times
-        dto.startTime = `${slot.date.toISOString().split('T')[0]}T${slot.startTime}:00.000Z`;
-        dto.endTime = `${slot.date.toISOString().split('T')[0]}T${slot.endTime}:00.000Z`;
-        if (!dto.accountantId) dto.accountantId = slot.accountantId;
+        if (!matchingRule) {
+          throw new ApiError(
+            `Le comptable n'est pas disponible à cette date`,
+            400,
+            'ACCOUNTANT_NOT_AVAILABLE'
+          );
+        }
+
+        const [ruleStartH, ruleStartM] = matchingRule.startTime.split(':').map(Number);
+        const [ruleEndH, ruleEndM] = matchingRule.endTime.split(':').map(Number);
+        const [hourH, hourM] = dto.hour.split(':').map(Number);
+        const ruleStart = ruleStartH * 60 + ruleStartM;
+        const ruleEnd = ruleEndH * 60 + ruleEndM;
+        const apptHour = hourH * 60 + hourM;
+
+        if (apptHour < ruleStart || apptHour >= ruleEnd) {
+          throw new ApiError(
+            `L'heure ${dto.hour} est hors des disponibilités du comptable (${matchingRule.startTime} - ${matchingRule.endTime})`,
+            400,
+            'HOUR_OUT_OF_AVAILABILITY'
+          );
+        }
       }
-
-      const start = new Date(dto.startTime);
-      const end = new Date(dto.endTime);
-      const duration = Math.round((end.getTime() - start.getTime()) / 60000);
-
-      if (duration <= 0)
-        throw new ApiError('End time must be after start time', 400, 'INVALID_TIME');
 
       const appointment = await this.prisma.appointment.create({
         data: {
           title: dto.title,
           description: dto.description,
           type: dto.type || 'meeting',
-          startTime: start,
-          endTime: end,
-          duration,
+          date: new Date(dto.date + 'T00:00:00.000Z'),
+          hour: dto.hour,
           meetingType: dto.meetingType || 'in_person',
           location: dto.location,
-          clientId,
+          clientId: dto.clientId,
           accountantId: dto.accountantId,
-          companyId: client?.companyId,
+          companyId: user?.companyId,
           clientNotes: dto.clientNotes,
-        },
+          color: dto.color ?? null,
+          guests: dto.guests ?? [],
+          createdById: userId,
+          updatedById: userId,
+        } as any,
         include: {
           client: {
-            select: { id: true, username: true, email: true, firstName: true, lastName: true },
+            select: {
+              id: true,
+              username: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              photo: true,
+            },
           },
           accountant: {
-            select: { id: true, username: true, email: true, firstName: true, lastName: true },
+            select: {
+              id: true,
+              username: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              photo: true,
+            },
           },
           company: { select: { id: true, name: true } },
         },
       });
 
-      // Mark slot as booked
-      if (dto.availabilitySlotId) {
-        await this.prisma.availabilitySlot.update({
-          where: { id: dto.availabilitySlotId },
-          data: { status: 'booked', appointmentId: appointment.id },
-        });
-      }
-
-      if (dto.accountantId) {
-        const clientUser = await this.prisma.user.findUnique({
-          where: { id: clientId },
-          select: { firstName: true, lastName: true },
-        });
+      // Notify the other party
+      const notifyId = isAccountant
+        ? (appointment as any).clientId
+        : (appointment as any).accountantId;
+      if (notifyId) {
         this.notificationService
           .notify({
-            recipientId: dto.accountantId,
+            recipientId: notifyId,
             type: 'appointment',
             action: 'created',
-            actorName: clientUser ? `${clientUser.firstName} ${clientUser.lastName}` : 'Un client',
+            actorName: isAccountant
+              ? `${(appointment as any).accountant?.firstName ?? ''} ${(appointment as any).accountant?.lastName ?? ''}`.trim() ||
+                'Votre comptable'
+              : `${(appointment as any).client?.firstName ?? ''} ${(appointment as any).client?.lastName ?? ''}`.trim() ||
+                'Un client',
             data: { appointmentId: appointment.id },
           })
           .catch(() => {});
+      }
+
+      // Send invitation emails to guests (fire-and-forget)
+      if (dto.guests && dto.guests.length > 0) {
+        const appt = appointment as any;
+        const organizerUser = isAccountant ? appt.accountant : appt.client;
+        const organizerName =
+          `${organizerUser?.firstName ?? ''} ${organizerUser?.lastName ?? ''}`.trim() ||
+          organizerUser?.username ||
+          'Finora';
+
+        for (const guestEmail of dto.guests) {
+          this.mailService
+            .sendAppointmentGuestInvitation({
+              to: guestEmail,
+              appointmentTitle: appointment.title,
+              date: dto.date,
+              hour: dto.hour,
+              organizerName,
+              location: appointment.location ?? undefined,
+              meetingType: appointment.meetingType,
+              description: appointment.description ?? undefined,
+              color: dto.color ?? undefined,
+            })
+            .catch(() => {});
+        }
       }
 
       return { success: true, message: 'Appointment created successfully', data: appointment };
@@ -106,15 +171,35 @@ export class AppointmentService {
   }
 
   /**
-   * Get available slots for an accountant on a given date (Client)
-   * Generates slots from Availability rules, excludes already booked ones
+   * Get available (non-booked) slots for an accountant on a given date
+   * Also excludes dates that fall within a leave period
    */
   async getAvailableSlots(accountantId: number, date: string) {
-    const targetDate = new Date(date);
-    const dayNames = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
-    const dayName = dayNames[targetDate.getDay()];
+    // Normalize date to avoid timezone issues — use start of day UTC
+    const [year, month, day] = date.split('-').map(Number);
+    const targetDate = new Date(Date.UTC(year, month - 1, day));
 
-    // Get matching availability rules (recurring for this day OR specific date)
+    const now = new Date();
+    const isToday =
+      now.getFullYear() === year && now.getMonth() + 1 === month && now.getDate() === day;
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    // Check if date is within a leave period
+    const leave = await this.prisma.accountantLeave.findFirst({
+      where: {
+        accountantId,
+        startDate: { lte: targetDate },
+        endDate: { gte: targetDate },
+      },
+    });
+    if (leave) return { success: true, data: [], leaveReason: leave.reason ?? 'Congé' };
+
+    const dayNames = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+    // Use local day of week based on the date string directly
+    const jsDate = new Date(year, month - 1, day);
+    const dayName = dayNames[jsDate.getDay()];
+
+    // Get matching availability rules
     const rules = await this.prisma.availability.findMany({
       where: {
         accountantId,
@@ -128,15 +213,20 @@ export class AppointmentService {
 
     if (rules.length === 0) return { success: true, data: [] };
 
-    // Get already booked slots for this date
-    const bookedSlots = await this.prisma.availabilitySlot.findMany({
-      where: { accountantId, date: targetDate, status: 'booked' },
-      select: { startTime: true },
+    // Get booked hours from appointments (non-cancelled/rejected) for this date
+    const bookedAppointments = await this.prisma.appointment.findMany({
+      where: {
+        accountantId,
+        date: targetDate,
+        status: { notIn: ['cancelled', 'rejected'] },
+      },
+      select: { hour: true },
     });
-    const bookedTimes = new Set(bookedSlots.map((s) => s.startTime));
+    const bookedTimes = new Set(bookedAppointments.map((a: any) => a.hour));
 
-    // Generate slots from rules
-    const slots: any[] = [];
+    // Generate available slots — skip booked and past slots (if today)
+    const slots: { startTime: string; endTime: string; availabilityId: number }[] = [];
+
     for (const rule of rules) {
       const [startH, startM] = rule.startTime.split(':').map(Number);
       const [endH, endM] = rule.endTime.split(':').map(Number);
@@ -147,25 +237,13 @@ export class AppointmentService {
         const slotStart = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
         const slotEnd = `${String(Math.floor((t + rule.slotDuration) / 60)).padStart(2, '0')}:${String((t + rule.slotDuration) % 60).padStart(2, '0')}`;
 
-        if (bookedTimes.has(slotStart)) continue; // already booked
+        // Skip if already booked by an appointment
+        if (bookedTimes.has(slotStart)) continue;
 
-        // Upsert slot in DB (create if not exists)
-        const slot = await this.prisma.availabilitySlot.upsert({
-          where: {
-            accountantId_date_startTime: { accountantId, date: targetDate, startTime: slotStart },
-          },
-          update: {},
-          create: {
-            availabilityId: rule.id,
-            accountantId,
-            date: targetDate,
-            startTime: slotStart,
-            endTime: slotEnd,
-            status: 'available',
-          },
-        });
+        // Skip past slots if querying today
+        if (isToday && t < currentMinutes) continue;
 
-        slots.push(slot);
+        slots.push({ startTime: slotStart, endTime: slotEnd, availabilityId: rule.id });
       }
     }
 
@@ -175,22 +253,28 @@ export class AppointmentService {
   /**
    * Get my appointments (Client)
    */
-  async getMyAppointments(clientId: number, page: number = 1, limit: number = 10, status?: string) {
+  async getMyAppointments(
+    clientId: number,
+    page: number = 1,
+    limit: number = 10,
+    status?: string,
+    period?: string, // 'today' | 'upcoming' | 'past'
+    search?: string
+  ) {
     const skip = (page - 1) * limit;
     const where: any = { clientId };
 
-    if (status) {
-      where.status = status;
-    }
+    if (status) where.status = status;
+    this.applyPeriodFilter(where, period);
+    this.applySearchFilter(where, search);
+
     const [total, appointments] = await Promise.all([
       this.prisma.appointment.count({ where }),
       this.prisma.appointment.findMany({
         where,
         skip,
         take: limit,
-        orderBy: {
-          startTime: 'asc',
-        },
+        orderBy: [{ date: 'asc' }, { hour: 'asc' }] as any,
         include: {
           accountant: {
             select: {
@@ -199,21 +283,22 @@ export class AppointmentService {
               email: true,
               firstName: true,
               lastName: true,
+              photo: true,
             },
           },
+          reports: { select: { id: true } },
         },
       }),
     ]);
 
     return {
       success: true,
-      data: appointments,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      data: appointments.map((a) => ({
+        ...a,
+        reported: (a.reports as any[]).length > 0,
+        reports: undefined,
+      })),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
 
@@ -224,9 +309,10 @@ export class AppointmentService {
     accountantId: number,
     page: number = 1,
     limit: number = 10,
-    status?: string
+    status?: string,
+    period?: string, // 'today' | 'upcoming' | 'past'
+    search?: string
   ) {
-    // Get accountant's company
     const accountant = await this.prisma.user.findUnique({
       where: { id: accountantId },
       select: { companyId: true },
@@ -239,18 +325,17 @@ export class AppointmentService {
     const skip = (page - 1) * limit;
     const where: any = { companyId: accountant.companyId };
 
-    if (status) {
-      where.status = status;
-    }
+    if (status) where.status = status;
+    this.applyPeriodFilter(where, period);
+    this.applySearchFilter(where, search);
+
     const [total, appointments] = await Promise.all([
       this.prisma.appointment.count({ where }),
       this.prisma.appointment.findMany({
         where,
         skip,
         take: limit,
-        orderBy: {
-          startTime: 'asc',
-        },
+        orderBy: [{ date: 'asc' }, { hour: 'asc' }] as any,
         include: {
           client: {
             select: {
@@ -259,6 +344,7 @@ export class AppointmentService {
               email: true,
               firstName: true,
               lastName: true,
+              photo: true,
             },
           },
           accountant: {
@@ -268,20 +354,21 @@ export class AppointmentService {
               email: true,
               firstName: true,
               lastName: true,
+              photo: true,
             },
           },
+          reports: { select: { id: true } },
         },
       }),
     ]);
 
-    // Count by status
     const statusCounts = await this.prisma.appointment.groupBy({
       by: ['status'],
       where: { companyId: accountant.companyId },
       _count: true,
     });
 
-    const counts = {
+    const counts: Record<string, number> = {
       pending: 0,
       confirmed: 0,
       rescheduled: 0,
@@ -289,20 +376,18 @@ export class AppointmentService {
       cancelled: 0,
       completed: 0,
     };
-
-    statusCounts.forEach((item) => {
+    statusCounts.forEach((item: any) => {
       counts[item.status] = item._count;
     });
 
     return {
       success: true,
-      data: appointments,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      data: appointments.map((a) => ({
+        ...a,
+        reported: (a.reports as any[]).length > 0,
+        reports: undefined,
+      })),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
       counts,
     };
   }
@@ -382,40 +467,33 @@ export class AppointmentService {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
     }
 
-    // Calculate new duration if times are updated
-    let duration = appointment.duration;
-    if (dto.startTime && dto.endTime) {
-      const start = new Date(dto.startTime);
-      const end = new Date(dto.endTime);
-      duration = Math.round((end.getTime() - start.getTime()) / 60000);
-
-      if (duration <= 0) {
-        throw new ApiError('End time must be after start time', 400, 'INVALID_TIME');
-      }
-    }
-
     const updatedAppointment = await this.prisma.appointment.update({
       where: { id: appointmentId },
       data: {
         title: dto.title,
         description: dto.description,
         type: dto.type,
-        startTime: dto.startTime ? new Date(dto.startTime) : undefined,
-        endTime: dto.endTime ? new Date(dto.endTime) : undefined,
-        duration,
+        date: dto.date ? new Date(dto.date + 'T00:00:00.000Z') : undefined,
+        hour: dto.hour,
         meetingType: dto.meetingType,
         location: dto.location,
         status: dto.status,
         clientNotes: dto.clientNotes,
         accountantNotes: dto.accountantNotes,
+        color: dto.color,
+        guests: dto.guests,
         cancelledAt: dto.status === AppointmentStatus.CANCELLED ? new Date() : undefined,
-      },
+        updatedById: userId,
+      } as any,
       include: {
         client: {
           select: {
             id: true,
             username: true,
             email: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
           },
         },
         accountant: {
@@ -423,6 +501,9 @@ export class AppointmentService {
             id: true,
             username: true,
             email: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
           },
         },
       },
@@ -472,6 +553,9 @@ export class AppointmentService {
             id: true,
             username: true,
             email: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
           },
         },
         accountant: {
@@ -479,21 +563,26 @@ export class AppointmentService {
             id: true,
             username: true,
             email: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
           },
         },
       },
     });
 
     // Notify client about accountant's response
-    this.notificationService
-      .notify({
-        recipientId: updatedAppointment.client.id,
-        type: 'appointment',
-        action: isConfirmed ? 'confirmed' : 'rejected',
-        actorName: 'Votre comptable',
-        data: { appointmentId },
-      })
-      .catch(() => {});
+    if (updatedAppointment.client?.id) {
+      this.notificationService
+        .notify({
+          recipientId: updatedAppointment.client.id,
+          type: 'appointment',
+          action: isConfirmed ? 'confirmed' : 'rejected',
+          actorName: 'Votre comptable',
+          data: { appointmentId },
+        })
+        .catch(() => {});
+    }
 
     return {
       success: true,
@@ -523,24 +612,14 @@ export class AppointmentService {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
     }
 
-    // Calculate new duration
-    const start = new Date(dto.startTime);
-    const end = new Date(dto.endTime);
-    const duration = Math.round((end.getTime() - start.getTime()) / 60000);
-
-    if (duration <= 0) {
-      throw new ApiError('End time must be after start time', 400, 'INVALID_TIME');
-    }
-
     // Create new appointment with rescheduled status
     const newAppointment = await this.prisma.appointment.create({
       data: {
         title: appointment.title,
         description: appointment.description,
         type: appointment.type,
-        startTime: start,
-        endTime: end,
-        duration,
+        date: new Date(dto.date + 'T00:00:00.000Z'),
+        hour: dto.hour,
         meetingType: appointment.meetingType,
         location: appointment.location,
         clientId: appointment.clientId,
@@ -550,13 +629,17 @@ export class AppointmentService {
         originalAppointmentId: appointment.id,
         clientNotes: appointment.clientNotes,
         accountantNotes: dto.reason,
-      },
+        guests: (appointment as any).guests ?? [],
+      } as any,
       include: {
         client: {
           select: {
             id: true,
             username: true,
             email: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
           },
         },
         accountant: {
@@ -564,6 +647,9 @@ export class AppointmentService {
             id: true,
             username: true,
             email: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
           },
         },
       },
@@ -807,5 +893,237 @@ export class AppointmentService {
     await this.prisma.availability.delete({ where: { id: availabilityId } });
 
     return { success: true, message: 'Availability deleted' };
+  }
+
+  async getConfirmedThisMonth(userId: number) {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+
+    const start = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
+    const end = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999));
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, companyId: true },
+    });
+    const isAccountant = (user as any)?.role === 'ACCOUNTANT';
+
+    const where: any = {
+      date: { gte: start, lte: end },
+      status: 'confirmed',
+      OR: [
+        { companyId: (user as any)?.companyId ?? -1 },
+        { accountantId: userId },
+        { clientId: userId },
+      ],
+    };
+
+    const appointments = await this.prisma.appointment.findMany({
+      where,
+      orderBy: [{ date: 'asc' }, { hour: 'asc' }] as any,
+      select: {
+        id: true,
+        title: true,
+        date: true,
+        hour: true,
+        status: true,
+        meetingType: true,
+        location: true,
+        color: true,
+        client: { select: { id: true, firstName: true, lastName: true, photo: true } },
+        accountant: { select: { id: true, firstName: true, lastName: true, photo: true } },
+      },
+    });
+
+    return { success: true, total: appointments.length, data: appointments };
+  }
+
+  async createLeave(dto: CreateLeaveDto, accountantId: number) {
+    if (dto.startDate > dto.endDate)
+      throw new ApiError('startDate doit être avant endDate', 400, 'INVALID_DATE_RANGE');
+
+    const leave = await this.prisma.accountantLeave.create({
+      data: {
+        accountantId,
+        startDate: new Date(dto.startDate + 'T00:00:00.000Z'),
+        endDate: new Date(dto.endDate + 'T00:00:00.000Z'),
+        reason: dto.reason,
+      },
+    });
+    return { success: true, message: 'Congé créé', data: leave };
+  }
+
+  async getMyLeaves(accountantId: number) {
+    const leaves = await this.prisma.accountantLeave.findMany({
+      where: { accountantId },
+      orderBy: { startDate: 'asc' },
+    });
+    return { success: true, data: leaves };
+  }
+
+  async deleteLeave(leaveId: number, accountantId: number) {
+    const leave = await this.prisma.accountantLeave.findUnique({ where: { id: leaveId } });
+    if (!leave) throw new ApiError('Congé introuvable', 404, 'NOT_FOUND');
+    if (leave.accountantId !== accountantId)
+      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+    await this.prisma.accountantLeave.delete({ where: { id: leaveId } });
+    return { success: true, message: 'Congé supprimé' };
+  }
+
+  // ─── REPORT (REPORTER UN RDV) ─────────────────────────────────────────────
+
+  async reportAppointment(appointmentId: number, dto: ReportAppointmentDto, userId: number) {
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id: appointmentId },
+    });
+    if (!appointment) throw new ApiError('Appointment not found', 404, 'APPOINTMENT_NOT_FOUND');
+    if (appointment.clientId !== userId && appointment.accountantId !== userId)
+      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+
+    // Save report history
+    await this.prisma.appointmentReport.create({
+      data: {
+        appointmentId,
+        reportedById: userId,
+        oldDate: (appointment as any).date,
+        oldHour: (appointment as any).hour,
+        newDate: new Date(dto.newDate + 'T00:00:00.000Z'),
+        newHour: dto.newHour,
+        reason: dto.reason,
+      },
+    });
+
+    // Update appointment date/hour
+    const updated = await this.prisma.appointment.update({
+      where: { id: appointmentId },
+      data: {
+        date: new Date(dto.newDate + 'T00:00:00.000Z'),
+        hour: dto.newHour,
+        status: 'pending',
+      } as any,
+      include: {
+        client: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
+          },
+        },
+        accountant: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            photo: true,
+          },
+        },
+        reports: { select: { id: true } },
+      },
+    });
+
+    // Notify the other party
+    const recipientId =
+      userId === appointment.clientId ? appointment.accountantId : appointment.clientId;
+    if (recipientId) {
+      this.notificationService
+        .notify({
+          recipientId,
+          type: 'appointment',
+          action: 'rescheduled',
+          actorName: userId === appointment.clientId ? 'Le client' : 'Votre comptable',
+          data: { appointmentId },
+        })
+        .catch(() => {});
+    }
+
+    return {
+      success: true,
+      message: 'Rendez-vous reporté',
+      data: { ...(updated as any), reported: true, reports: undefined },
+    };
+  }
+
+  async getAppointmentHistory(appointmentId: number, userId: number) {
+    const appointment = await this.prisma.appointment.findUnique({ where: { id: appointmentId } });
+    if (!appointment) throw new ApiError('Appointment not found', 404, 'APPOINTMENT_NOT_FOUND');
+    if (appointment.clientId !== userId && appointment.accountantId !== userId)
+      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+
+    const history = await this.prisma.appointmentReport.findMany({
+      where: { appointmentId },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        reportedBy: {
+          select: { id: true, username: true, firstName: true, lastName: true, photo: true },
+        },
+      },
+    });
+
+    return { success: true, data: history };
+  }
+
+  // ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+  private applyPeriodFilter(where: any, period?: string) {
+    if (!period) return;
+
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const d = now.getDate();
+
+    // Build UTC boundaries to match @db.Date storage
+    const todayStart = new Date(Date.UTC(y, m, d, 0, 0, 0, 0));
+    const todayEnd = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
+    const tomorrowStart = new Date(Date.UTC(y, m, d + 1, 0, 0, 0, 0));
+
+    const currentHour = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+    if (period === 'today') {
+      where.date = { gte: todayStart, lte: todayEnd };
+    } else if (period === 'upcoming') {
+      where.OR = [
+        { date: { gte: tomorrowStart } },
+        { date: { gte: todayStart, lte: todayEnd }, hour: { gt: currentHour } },
+      ];
+    } else if (period === 'past') {
+      where.OR = [
+        { date: { lt: todayStart } },
+        { date: { gte: todayStart, lte: todayEnd }, hour: { lt: currentHour } },
+      ];
+    }
+  }
+
+  private applySearchFilter(where: any, search?: string) {
+    if (!search) return;
+    where.OR = [
+      { title: { contains: search, mode: 'insensitive' } },
+      {
+        client: {
+          OR: [
+            { firstName: { contains: search, mode: 'insensitive' } },
+            { lastName: { contains: search, mode: 'insensitive' } },
+            { username: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+          ],
+        },
+      },
+      {
+        accountant: {
+          OR: [
+            { firstName: { contains: search, mode: 'insensitive' } },
+            { lastName: { contains: search, mode: 'insensitive' } },
+            { username: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+          ],
+        },
+      },
+    ];
   }
 }

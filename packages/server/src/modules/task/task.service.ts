@@ -40,15 +40,26 @@ export class TaskService {
         throw new ApiError('User must belong to a company to create tasks', 400, 'NO_COMPANY');
       }
 
-      // If clientId is provided, verify they belong to the same company or have a relationship
+      // If clientId is provided, verify there's a relationship between the accounting firm and client's company
       if (dto.clientId) {
         const client = await this.prisma.user.findUnique({
           where: { id: dto.clientId },
           select: { companyId: true },
         });
 
-        // Verify client belongs to same company
-        if (client?.companyId !== creator.companyId) {
+        if (!client?.companyId) {
+          throw new ApiError('Client must be associated with a company', 400, 'INVALID_CLIENT');
+        }
+
+        // Verify there's a relationship between the accounting firm and the client's company
+        const relationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
+          where: {
+            accountingFirmId: creator.companyId,
+            clientCompanyId: client.companyId,
+          },
+        });
+
+        if (!relationship) {
           throw new ApiError('Client must belong to the same company', 400, 'INVALID_CLIENT');
         }
       }
@@ -231,14 +242,14 @@ export class TaskService {
       where.priority = priority;
     }
 
-    const orderBy: any = {};
+    const orderBy: any[] = [{ order: 'asc' }];
     if (sortBy === 'priority') {
       // Custom priority order: urgent > high > medium > low
-      orderBy.priority = 'desc';
+      orderBy.push({ priority: 'desc' });
     } else if (sortBy === 'dueDate') {
-      orderBy.dueDate = 'asc';
+      orderBy.push({ dueDate: 'asc' });
     } else {
-      orderBy.createdAt = 'desc';
+      orderBy.push({ createdAt: 'desc' });
     }
 
     const [total, tasks] = await Promise.all([
@@ -341,9 +352,7 @@ export class TaskService {
         where,
         skip,
         take: limit,
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
         include: {
           assignee: {
             select: {

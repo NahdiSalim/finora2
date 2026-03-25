@@ -165,6 +165,96 @@ export class MailService {
     await this.sendEmail(to, '✅ Votre compte FINORA a été activé', html);
   }
 
+  async sendAppointmentGuestInvitation(opts: {
+    to: string;
+    appointmentTitle: string;
+    organizerName: string;
+    date: string; // YYYY-MM-DD
+    hour: string; // HH:MM
+    location?: string;
+    meetingType: string;
+    description?: string;
+    color?: string;
+  }): Promise<void> {
+    const {
+      to,
+      appointmentTitle,
+      organizerName,
+      date,
+      hour,
+      location,
+      meetingType,
+      description,
+      color,
+    } = opts;
+
+    const accentColor = color || '#1976d2';
+
+    const dateObj = new Date(date);
+    const formattedDate = dateObj.toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    const meetingTypeLabel: Record<string, string> = {
+      in_person: '📍 En présentiel',
+      online: '💻 En ligne',
+      phone: '📞 Par téléphone',
+    };
+
+    const html = this.getEmailTemplate(
+      `📅 Invitation : ${appointmentTitle}`,
+      `
+      <p style="font-size: 15px; color: #666;">Vous avez été invité(e) à un rendez-vous par <strong>${organizerName}</strong>.</p>
+
+      <div style="border-left: 4px solid ${accentColor}; background: #f8f9fa; border-radius: 8px; padding: 24px; margin: 24px 0;">
+        <h2 style="font-size: 20px; color: #1a1a1a; margin: 0 0 16px 0;">${appointmentTitle}</h2>
+
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 6px 0; color: #888; font-size: 13px; width: 120px;">📅 Date</td>
+            <td style="padding: 6px 0; color: #333; font-size: 14px; font-weight: 500;">${formattedDate}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #888; font-size: 13px;">🕐 Heure</td>
+            <td style="padding: 6px 0; color: #333; font-size: 14px; font-weight: 500;">${hour}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #888; font-size: 13px;">📌 Type</td>
+            <td style="padding: 6px 0; color: #333; font-size: 14px;">${meetingTypeLabel[meetingType] ?? meetingType}</td>
+          </tr>
+          ${
+            location
+              ? `
+          <tr>
+            <td style="padding: 6px 0; color: #888; font-size: 13px;">🔗 Lieu / Lien</td>
+            <td style="padding: 6px 0; color: ${accentColor}; font-size: 14px; word-break: break-all;">${location}</td>
+          </tr>`
+              : ''
+          }
+          ${
+            description
+              ? `
+          <tr>
+            <td style="padding: 6px 0; color: #888; font-size: 13px; vertical-align: top;">📝 Note</td>
+            <td style="padding: 6px 0; color: #555; font-size: 14px;">${description}</td>
+          </tr>`
+              : ''
+          }
+        </table>
+      </div>
+
+      <p style="font-size: 13px; color: #999; margin-top: 24px;">
+        Cet email a été envoyé automatiquement par Finora. Si vous pensez avoir reçu cet email par erreur, vous pouvez l'ignorer.
+      </p>
+      `
+    );
+
+    await this.sendEmail(to, `📅 Invitation : ${appointmentTitle}`, html);
+  }
+
   async sendAccountSuspensionEmail(to: string, firstName: string, reason?: string): Promise<void> {
     const html = this.getEmailTemplate(
       'Compte Suspendu',

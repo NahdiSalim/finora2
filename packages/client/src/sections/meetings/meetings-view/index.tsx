@@ -11,7 +11,7 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
-import { Check, Plus, Search, Trash2 } from "lucide-react";
+import { Check, Plus, Search, Trash2, X } from "lucide-react";
 import { PageHeader } from "src/layouts/components/page-header";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
@@ -925,6 +925,9 @@ export default function MeetingsView() {
     setRejectReason("");
   };
 
+  const [touched, setTouched] = useState(false);
+  const handleInputBlur = () => setTouched(true);
+  // then pass onBlur={handleInputBlur} to CustomInput
   // ── Availability layout ───────────────────────────────────────────────────
   if (mode === "availability") {
     return (
@@ -1074,40 +1077,73 @@ export default function MeetingsView() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Refuser la réunion</DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Veuillez saisir la raison de refus.
+        <DialogTitle sx={{ pb: 1 }}>
+          <Typography variant="h6" component="div" sx={{ fontWeight: 600 }}>
+            Refuser la réunion
           </Typography>
-          <CustomInput
-            multiline
-            minRows={3}
-            value={rejectReason}
-            onChange={(e) => setRejectReason(e.target.value)}
-            placeholder="Ex: conflit d'horaire"
-          />
+          <IconButton
+            aria-label="close"
+            onClick={() => setRejectDialogOpen(false)}
+            sx={{ position: "absolute", right: 8, top: 8 }}
+          >
+            <X />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent dividers sx={{ pt: 2 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Typography variant="body1">
+              Êtes-vous sûr de vouloir refuser cette réunion ?
+            </Typography>
+
+            <Typography variant="body2" color="text.secondary">
+              Une raison est requise pour justifier le refus.
+            </Typography>
+
+            <CustomInput
+              multiline
+              minRows={3}
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Ex: conflit d'horaire, indisponibilité, sujet déjà traité..."
+              fullWidth
+              required
+              error={!rejectReason.trim() && touched}
+              helperText={
+                !rejectReason.trim() && touched
+                  ? "Veuillez saisir une raison"
+                  : ""
+              }
+              sx={{ mt: 1 }}
+            />
+          </Box>
         </DialogContent>
-        <DialogActions>
+
+        <DialogActions sx={{ p: 2, justifyContent: "space-between", gap: 1 }}>
           <CustomButton
             variant="outlined"
+            color="info"
+            sx={{ color: theme.palette.info.darker }}
             onClick={() => setRejectDialogOpen(false)}
           >
             Annuler
           </CustomButton>
-          <CustomButton
-            variant="contained"
-            color="error"
-            onClick={handleRejectCancel}
-          >
-            Refuser définitivement
-          </CustomButton>
-          <CustomButton
-            variant="contained"
-            color="warning"
-            onClick={handleRejectReport}
-          >
-            Reporter
-          </CustomButton>
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <CustomButton
+              variant="contained"
+              color="warning"
+              onClick={handleRejectReport}
+            >
+              Reporter
+            </CustomButton>
+            <CustomButton
+              variant="contained"
+              color="error"
+              onClick={handleRejectCancel}
+            >
+              Refuser définitivement
+            </CustomButton>
+          </Box>
         </DialogActions>
       </Dialog>
 

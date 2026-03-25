@@ -3,49 +3,60 @@ model Appointment {
   title       String
   description String?  @db.Text
   type        String   @default("meeting") // 'meeting', 'consultation', 'review', 'other'
-  
+
   // Date and time
-  startTime   DateTime
-  endTime     DateTime
-  duration    Int      // in minutes
-  
+  date        DateTime @db.Date  // date du rendez-vous ex: 2026-04-15
+  hour        String             // heure du rendez-vous ex: "09:00"
+
   // Status
   status      String   @default("pending") // 'pending', 'confirmed', 'rescheduled', 'rejected', 'cancelled', 'completed'
-  
+
   // Location
-  location    String?  // physical address or meeting link
+  location    String?
   meetingType String   @default("in_person") // 'in_person', 'online', 'phone'
-  
+
   // Relations
-  clientId    Int
-  client      User     @relation("ClientAppointments", fields: [clientId], references: [id], onDelete: Cascade)
-  
+  clientId    Int?
+  client      User?    @relation("ClientAppointments", fields: [clientId], references: [id], onDelete: Cascade)
+
   accountantId Int?
   accountant   User?   @relation("AccountantAppointments", fields: [accountantId], references: [id], onDelete: SetNull)
-  
+
   companyId   Int?
   company     Company? @relation("CompanyAppointments", fields: [companyId], references: [id], onDelete: Cascade)
-  
+
   // Rescheduling
   originalAppointmentId Int?
   originalAppointment   Appointment?  @relation("RescheduledAppointments", fields: [originalAppointmentId], references: [id], onDelete: SetNull)
   rescheduledAppointments Appointment[] @relation("RescheduledAppointments")
-  
+
   // Notes
   accountantNotes String?  @db.Text
   clientNotes     String?  @db.Text
   rejectionReason String?  @db.Text
-  
+
+  // Extras
+  color       String?   // hex color for calendar display e.g. "#1976d2"
+  guests      String[]  // array of guest emails
+
   // Timestamps
   confirmedAt DateTime?
   cancelledAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  createdById Int?
+  createdBy   User?     @relation("AppointmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById Int?
+  updatedBy   User?     @relation("AppointmentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  slot        AvailabilitySlot? @relation("AppointmentSlot")
+  reports     AppointmentReport[] @relation("AppointmentReports")
+
   @@index([clientId])
   @@index([accountantId])
   @@index([companyId])
   @@index([status])
-  @@index([startTime])
+  @@index([date])
   @@map("appointments")
 }

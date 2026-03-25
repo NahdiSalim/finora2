@@ -480,8 +480,7 @@ export class AccountantService {
           }
 
           return {
-            id: primaryUser?.id || company.id,
-            companyId: company.id,
+            id: primaryUser?.id ?? null,
             fullName: primaryUser ? `${primaryUser.firstName} ${primaryUser.lastName}` : 'N/A',
             email: primaryUser?.email || company.email,
             phone: primaryUser?.phone || company.phone,

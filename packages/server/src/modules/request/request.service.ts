@@ -96,9 +96,9 @@ export class RequestService {
               file
             );
             attachmentUrls.push(uploadedPath);
-            console.log(`✓ Uploaded: ${fileName}`);
+            console.log(` Uploaded: ${fileName}`);
           } catch (error) {
-            console.error(`✗ Failed to upload ${fileName}:`, error);
+            console.error(`Failed to upload ${fileName}:`, error);
             // Continue without the file if upload fails
           }
         }
@@ -147,9 +147,9 @@ export class RequestService {
               mimeType
             );
             attachmentUrls.push(uploadedPath);
-            console.log(`✓ Copied: ${fileName}`);
+            console.log(`Copied: ${fileName}`);
           } catch (error) {
-            console.error(`✗ Failed to copy document ${doc.name}:`, error);
+            console.error(` Failed to copy document ${doc.name}:`, error);
             // Continue without this document if copy fails
           }
         }
@@ -177,7 +177,7 @@ export class RequestService {
             children: [], // Will be updated with child document IDs
           },
         });
-        console.log(`✓ Folder created: ${requestFolder.name}`);
+        console.log(`Folder created: ${requestFolder.name}`);
 
         const childIds: string[] = [];
 
@@ -209,7 +209,7 @@ export class RequestService {
             });
 
             childIds.push(doc.id.toString());
-            console.log(`✓ Document created: ${fileName}`);
+            console.log(` Document created: ${fileName}`);
           } catch (error) {
             console.error('Error creating document entry:', error);
             // Continue even if document creation fails
@@ -221,7 +221,7 @@ export class RequestService {
           where: { id: requestFolder.id },
           data: { children: childIds },
         });
-        console.log(`✓ Folder updated with ${childIds.length} children`);
+        console.log(`Folder updated with ${childIds.length} children`);
       }
 
       // Update request with attachments

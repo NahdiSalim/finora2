@@ -1,0 +1,35 @@
+model Availability {
+  id            Int       @id @default(autoincrement())
+  accountantId  Int
+  companyId     Int?
+
+  // Recurring slot: dayOfWeek = 'lundi' | 'mardi' | 'mercredi' | 'jeudi' | 'vendredi' | 'samedi' | 'dimanche'
+  isRecurring   Boolean   @default(true)
+  dayOfWeek     String?   // used when isRecurring=true
+
+  // One-off slot: specific date, used when isRecurring=false
+  specificDate  DateTime? @db.Date
+
+  // Time window (stored as "HH:MM" strings for simplicity)
+  startTime     String    // e.g. "09:00"
+  endTime       String    // e.g. "10:00"
+
+  // Slot duration in minutes (e.g. 30 or 60)
+  slotDuration  Int       @default(60)
+
+  isActive      Boolean   @default(true)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accountant    User      @relation("AccountantAvailabilities", fields: [accountantId], references: [id], onDelete: Cascade)
+  company       Company?  @relation("CompanyAvailabilities", fields: [companyId], references: [id], onDelete: SetNull)
+  slots         AvailabilitySlot[]
+
+  @@index([accountantId])
+  @@index([companyId])
+  @@index([dayOfWeek])
+  @@index([specificDate])
+  @@index([isActive])
+  @@map("availabilities")
+}

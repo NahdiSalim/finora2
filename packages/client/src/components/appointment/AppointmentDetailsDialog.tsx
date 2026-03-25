@@ -22,7 +22,6 @@ export default function AppointmentDetailsPanel({
   onClose,
   onConfirm,
   onReject,
-  onEdit,
   onReport,
   onCancel,
   canConfirmReject = true,
@@ -33,7 +32,6 @@ export default function AppointmentDetailsPanel({
   onClose: () => void;
   onConfirm: () => void;
   onReject: () => void;
-  onEdit: () => void;
   onReport?: () => void;
   onCancel?: () => void;
   canConfirmReject?: boolean;
@@ -252,10 +250,6 @@ export default function AppointmentDetailsPanel({
               </CustomButton>
             )}
           </>
-        ) : !isPending && !isConfirmed ? (
-          <CustomButton variant="contained" onClick={onEdit}>
-            Modifier
-          </CustomButton>
         ) : null}
       </Box>
     </Drawer>

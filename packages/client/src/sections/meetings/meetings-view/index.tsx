@@ -23,6 +23,7 @@ import MonthlyAppointmentCalendar from "src/components/appointment/MonthlyAppoin
 import NewAppointmentWizard from "src/components/appointment/NewAppointmentWizard";
 import { CustomPagination } from "src/layouts/components/table-pagination";
 import {
+  type AppointmentItem,
   type AvailabilityItem,
   useCreateAppointmentMutation,
   useCreateAvailabilityMutation,
@@ -695,6 +696,8 @@ export default function MeetingsView() {
   const ROWS_PER_PAGE = 5;
   const [page, setPage] = useState(0); // RTK Query expects 1-based pages
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedAppointmentSnapshot, setSelectedAppointmentSnapshot] =
+    useState<AppointmentItem | null>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -824,8 +827,15 @@ export default function MeetingsView() {
 
   const { data: detailsData } = useGetAppointmentByIdQuery(selectedId!, {
     skip: selectedId == null,
+    refetchOnMountOrArgChange: true,
   });
-  const appointment = detailsData?.data ?? null;
+  const appointment = detailsData?.data ?? selectedAppointmentSnapshot ?? null;
+
+  useEffect(() => {
+    if (!detailsData?.data || selectedId == null) return;
+    if (detailsData.data.id !== selectedId) return;
+    setSelectedAppointmentSnapshot(detailsData.data);
+  }, [detailsData, selectedId]);
 
   const [respondAppointment] = useRespondAppointmentMutation();
   const [createAppointment] = useCreateAppointmentMutation();
@@ -920,8 +930,7 @@ export default function MeetingsView() {
       action: "reject",
       rejectionReason: rejectReason.trim() || undefined,
     }).unwrap();
-    setRejectDialogOpen(false);
-    setRejectReason("");
+    closeRejectModal();
   };
 
   const handleCancelConfirmed = async () => {
@@ -932,12 +941,16 @@ export default function MeetingsView() {
   const handleRejectReport = async () => {
     if (!appointment) return;
     openReportWizardFromAppointment(appointment, rejectReason);
-    setRejectDialogOpen(false);
-    setRejectReason("");
+    closeRejectModal();
   };
 
   const [touched, setTouched] = useState(false);
   const handleInputBlur = () => setTouched(true);
+  const closeRejectModal = () => {
+    setRejectDialogOpen(false);
+    setRejectReason("");
+    setTouched(false);
+  };
   // then pass onBlur={handleInputBlur} to CustomInput
   // ── Availability layout ───────────────────────────────────────────────────
   if (mode === "availability") {
@@ -1006,7 +1019,10 @@ export default function MeetingsView() {
                   period={tab}
                   canConfirmReject={canActOnPending(item)}
                   canReschedule={canActOnReport(item)}
-                  onClick={() => setSelectedId(item.id)}
+                  onClick={() => {
+                    setSelectedAppointmentSnapshot(item);
+                    setSelectedId(item.id);
+                  }}
                   onConfirm={async () => {
                     if (isAccountant) {
                       await respondAppointment({
@@ -1021,10 +1037,12 @@ export default function MeetingsView() {
                     }
                   }}
                   onReject={() => {
+                    setSelectedAppointmentSnapshot(item);
                     setSelectedId(item.id);
                     setRejectDialogOpen(true);
                   }}
                   onReschedule={() => {
+                    setSelectedAppointmentSnapshot(item);
                     openReportWizardFromAppointment(item);
                   }}
                 />
@@ -1052,7 +1070,12 @@ export default function MeetingsView() {
             <MonthlyAppointmentCalendar
               monthDate={calendarMonth}
               appointments={calendarAppointments}
-              onSelectAppointment={setSelectedId}
+              onSelectAppointment={(id) => {
+                const fromCalendar =
+                  calendarAppointments.find((a) => a.id === id) ?? null;
+                setSelectedAppointmentSnapshot(fromCalendar);
+                setSelectedId(id);
+              }}
             />
           </Box>
         </Box>
@@ -1060,31 +1083,31 @@ export default function MeetingsView() {
 
       {/* ── Appointment details dialog ── */}
       <AppointmentDetailsDialog
-        open={selectedId != null}
+        open={selectedId != null && appointment != null}
         appointment={appointment}
         canConfirmReject={canActOnPending(appointment)}
         canReport={canActOnReport(appointment)}
-        onClose={() => setSelectedId(null)}
+        onClose={() => {
+          setSelectedId(null);
+          setSelectedAppointmentSnapshot(null);
+          closeRejectModal();
+        }}
         onConfirm={handleConfirm}
-        onReject={() => setRejectDialogOpen(true)}
+        onReject={() => {
+          setTouched(false);
+          setRejectDialogOpen(true);
+        }}
         onCancel={handleCancelConfirmed}
         onReport={() => {
           if (!appointment) return;
           openReportWizardFromAppointment(appointment);
-        }}
-        onEdit={() => {
-          setWizardMode("create");
-          setWizardInitialValues(undefined);
-          setReportAppointmentId(undefined);
-          setWizardReportReason("");
-          setWizardOpen(true);
         }}
       />
 
       {/* ── Reject reason dialog ── */}
       <Dialog
         open={rejectDialogOpen}
-        onClose={() => setRejectDialogOpen(false)}
+        onClose={closeRejectModal}
         maxWidth="sm"
         fullWidth
       >
@@ -1094,7 +1117,7 @@ export default function MeetingsView() {
           </Typography>
           <IconButton
             aria-label="close"
-            onClick={() => setRejectDialogOpen(false)}
+            onClick={closeRejectModal}
             sx={{ position: "absolute", right: 8, top: 8 }}
           >
             <X />
@@ -1116,6 +1139,7 @@ export default function MeetingsView() {
               minRows={3}
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
+              onBlur={handleInputBlur}
               placeholder="Ex: conflit d'horaire, indisponibilité, sujet déjà traité..."
               fullWidth
               required
@@ -1135,7 +1159,7 @@ export default function MeetingsView() {
             variant="outlined"
             color="info"
             sx={{ color: theme.palette.info.darker }}
-            onClick={() => setRejectDialogOpen(false)}
+            onClick={closeRejectModal}
           >
             Annuler
           </CustomButton>

@@ -25,11 +25,11 @@ export default function AppointmentStatusChip({
   const cfg = MAP[status] ?? MAP.pending;
   const colorMain =
     cfg.color === "success"
-      ? theme.palette.success.main
+      ? theme.palette.success.dark
       : cfg.color === "warning"
         ? theme.palette.warning.main
         : cfg.color === "error"
-          ? theme.palette.error.main
+          ? theme.palette.error.dark
           : cfg.color === "info"
             ? theme.palette.info.main
             : theme.palette.grey[500];

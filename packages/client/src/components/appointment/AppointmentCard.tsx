@@ -218,6 +218,7 @@ export default function AppointmentCard({
             <Box sx={{ display: "flex", gap: 1, ml: 1 }}>
               <CustomButton
                 variant="outlined"
+                color="error"
                 onClick={(e) => {
                   e.stopPropagation();
                   onReject();
@@ -244,8 +245,8 @@ export default function AppointmentCard({
           onReschedule && (
             <Box sx={{ ml: 1 }}>
               <CustomButton
-                variant="outlined"
-                color="warning"
+                variant="contained"
+                color="secondary"
                 onClick={(e) => {
                   e.stopPropagation();
                   onReschedule();

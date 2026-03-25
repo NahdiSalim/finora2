@@ -323,8 +323,14 @@ export class AppointmentService {
     }
 
     const skip = (page - 1) * limit;
-    const where: any = { companyId: accountant.companyId };
 
+    // Show all appointments where this accountant is involved:
+    // either via companyId (same firm) OR directly as accountantId
+    const baseWhere: any = {
+      OR: [{ companyId: accountant.companyId }, { accountantId }],
+    };
+
+    const where: any = { ...baseWhere };
     if (status) where.status = status;
     this.applyPeriodFilter(where, period);
     this.applySearchFilter(where, search);
@@ -364,7 +370,7 @@ export class AppointmentService {
 
     const statusCounts = await this.prisma.appointment.groupBy({
       by: ['status'],
-      where: { companyId: accountant.companyId },
+      where: { OR: [{ companyId: accountant.companyId }, { accountantId }] },
       _count: true,
     });
 

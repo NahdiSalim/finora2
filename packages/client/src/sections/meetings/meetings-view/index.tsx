@@ -41,7 +41,10 @@ import {
   useUpdateAvailabilityMutation,
 } from "src/lib/services/appointmentsApi";
 import { useVerifyUserQuery } from "src/lib/services/authApi";
-import { useGetClientsQuery } from "src/lib/services/clientApi";
+import {
+  useGetClientsQuery,
+  useGetMyAccountantsQuery,
+} from "src/lib/services/clientApi";
 
 type Mode = "appointments" | "availability";
 type TimeTab = "today" | "upcoming" | "past";
@@ -719,6 +722,13 @@ export default function MeetingsView() {
     },
     { skip: isClient },
   );
+  const { data: myAccountantsData } = useGetMyAccountantsQuery(undefined, {
+    skip: !isClient,
+  });
+  const linkedAccountantId =
+    isClient && Array.isArray(myAccountantsData?.data)
+      ? (myAccountantsData.data.find((a) => a?.id != null)?.id ?? undefined)
+      : undefined;
 
   const searchTerm = search.trim();
   useEffect(() => {
@@ -1176,7 +1186,7 @@ export default function MeetingsView() {
             hour: payload.time,
             meetingType: payload.meetingType,
             location: payload.location,
-            accountantId: meId,
+            accountantId: isClient ? linkedAccountantId : meId,
             clientId: payload.clientId,
             clientNotes: payload.guests.length
               ? `Invités: ${payload.guests.join(", ")}`
@@ -1195,7 +1205,7 @@ export default function MeetingsView() {
         }}
         clients={clientsData?.data ?? []}
         clientsLoading={isLoadingClients}
-        accountantId={meId}
+        accountantId={isClient ? linkedAccountantId : meId}
       />
     </PageHeader>
   );

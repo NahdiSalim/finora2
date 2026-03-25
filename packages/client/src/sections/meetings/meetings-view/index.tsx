@@ -24,10 +24,14 @@ import {
   type AvailabilityItem,
   useCreateAppointmentMutation,
   useCreateAvailabilityMutation,
+  useCreateLeaveMutation,
   useDeleteAvailabilityMutation,
+  useDeleteLeaveMutation,
   useGetAllAppointmentsQuery,
   useGetAppointmentByIdQuery,
+  useGetConfirmedThisMonthQuery,
   useGetMyAvailabilitiesQuery,
+  useGetMyLeavesQuery,
   useRespondAppointmentMutation,
   useUpdateAvailabilityMutation,
 } from "src/lib/services/appointmentsApi";
@@ -91,6 +95,7 @@ function AvailabilitySettings() {
   const [vacationEnabled, setVacationEnabled] = useState(false);
   const [vacationStart, setVacationStart] = useState("");
   const [vacationEnd, setVacationEnd] = useState("");
+  const [vacationReason, setVacationReason] = useState("");
   const [duration, setDuration] = useState("30");
   const [enabledDays, setEnabledDays] = useState<Record<string, boolean>>({
     Lundi: true,
@@ -123,9 +128,15 @@ function AvailabilitySettings() {
     useUpdateAvailabilityMutation();
   const [deleteAvailability, { isLoading: isDeletingAvailability }] =
     useDeleteAvailabilityMutation();
+  const { data: leavesData, refetch: refetchLeaves } = useGetMyLeavesQuery();
+  const [createLeave, { isLoading: isCreatingLeave }] =
+    useCreateLeaveMutation();
+  const [deleteLeave, { isLoading: isDeletingLeave }] =
+    useDeleteLeaveMutation();
 
   const isSavingAvailability =
     isCreatingAvailability || isUpdatingAvailability || isDeletingAvailability;
+  const leaves = leavesData?.data ?? [];
 
   const signatureFor = (
     argDuration: string,
@@ -325,6 +336,47 @@ function AvailabilitySettings() {
         e?.data?.message ||
         e?.error ||
         "Échec d'enregistrement des disponibilités.";
+      setSaveError(
+        Array.isArray(backendMessage)
+          ? backendMessage.join(" | ")
+          : String(backendMessage),
+      );
+    }
+  };
+
+  const handleCreateLeave = async () => {
+    setSaveError("");
+    if (!vacationStart || !vacationEnd) return;
+    try {
+      await createLeave({
+        startDate: vacationStart,
+        endDate: vacationEnd,
+        reason: vacationReason.trim() || undefined,
+      }).unwrap();
+      setVacationStart("");
+      setVacationEnd("");
+      setVacationReason("");
+      setVacationEnabled(false);
+      await refetchLeaves();
+    } catch (e: any) {
+      const backendMessage =
+        e?.data?.message || e?.error || "Échec de création du congé.";
+      setSaveError(
+        Array.isArray(backendMessage)
+          ? backendMessage.join(" | ")
+          : String(backendMessage),
+      );
+    }
+  };
+
+  const handleDeleteLeave = async (id: number) => {
+    setSaveError("");
+    try {
+      await deleteLeave(id).unwrap();
+      await refetchLeaves();
+    } catch (e: any) {
+      const backendMessage =
+        e?.data?.message || e?.error || "Échec de suppression du congé.";
       setSaveError(
         Array.isArray(backendMessage)
           ? backendMessage.join(" | ")
@@ -555,11 +607,8 @@ export default function MeetingsView() {
     search: searchTerm || undefined,
   });
   const appointments = data?.data ?? [];
-  const { data: calendarData } = useGetAllAppointmentsQuery({
-    page: 1,
-    limit: 500,
-  });
-  const calendarAppointments = calendarData?.data ?? [];
+  const { data: confirmedThisMonthData } = useGetConfirmedThisMonthQuery();
+  const calendarAppointments = confirmedThisMonthData?.data ?? [];
 
   const { data: todayCountData } = useGetAllAppointmentsQuery({
     page: 1,

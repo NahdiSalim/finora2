@@ -123,14 +123,31 @@ export interface GetAvailableSlotsResponse {
   data: AvailableSlotItem[];
 }
 
+export interface GetConfirmedThisMonthResponse {
+  success: boolean;
+  total: number;
+  data: AppointmentItem[];
+}
+
+export interface LeaveItem {
+  id: number;
+  accountantId: number;
+  startDate: string;
+  endDate: string;
+  reason?: string | null;
+}
+
+export interface GetMyLeavesResponse {
+  success: boolean;
+  data: LeaveItem[];
+}
+
 export interface CreateAppointmentBody {
   title: string;
   description?: string;
   type?: "meeting" | "consultation" | "review" | "other";
-  startTime?: string;
-  endTime?: string;
-  date?: string;
-  hour?: string;
+  date: string;
+  hour: string;
   meetingType?: "in_person" | "online" | "phone";
   location?: string;
   accountantId?: number;
@@ -151,7 +168,7 @@ type GetAllAppointmentsParams = {
 export const appointmentsApi = createApi({
   reducerPath: "appointmentsApi",
   baseQuery: baseQueryWithReauth,
-  tagTypes: ["Appointments", "Availabilities"],
+  tagTypes: ["Appointments", "Availabilities", "ConfirmedThisMonth"],
   endpoints: (builder) => ({
     getAllAppointments: builder.query<
       GetAllAppointmentsResponse,
@@ -194,6 +211,20 @@ export const appointmentsApi = createApi({
       providesTags: (_result, _err, id) => [{ type: "Appointments", id }],
     }),
 
+    getConfirmedThisMonth: builder.query<GetConfirmedThisMonthResponse, void>({
+      query: () => ({
+        url: "/appointments/confirmed/this-month",
+        method: "GET",
+      }),
+      transformResponse: (response: GetConfirmedThisMonthResponse) => ({
+        ...response,
+        data: Array.isArray(response?.data)
+          ? response.data.map((a: any) => normalizeAppointmentItem(a))
+          : [],
+      }),
+      providesTags: [{ type: "ConfirmedThisMonth", id: "LIST" }],
+    }),
+
     createAppointment: builder.mutation<
       { success: boolean; message?: string; data?: AppointmentItem },
       CreateAppointmentBody
@@ -220,10 +251,19 @@ export const appointmentsApi = createApi({
         method: "POST",
         body,
       }),
-      invalidatesTags: (_result, _err, arg) => [
-        { type: "Appointments", id: arg.id },
-        { type: "Appointments", id: "LIST" },
-      ],
+      invalidatesTags: (_result, _err, arg) => {
+        const tags: Array<
+          | { type: "Appointments"; id: number | "LIST" }
+          | { type: "ConfirmedThisMonth"; id: "LIST" }
+        > = [
+          { type: "Appointments", id: arg.id },
+          { type: "Appointments", id: "LIST" },
+        ];
+        if (arg.action === "confirm") {
+          tags.push({ type: "ConfirmedThisMonth", id: "LIST" });
+        }
+        return tags;
+      },
     }),
 
     updateAppointment: builder.mutation<
@@ -295,6 +335,43 @@ export const appointmentsApi = createApi({
       },
     }),
 
+    getMyLeaves: builder.query<GetMyLeavesResponse, void>({
+      query: () => ({ url: "/appointments/leaves/mine", method: "GET" }),
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.data.map((l) => ({
+                type: "Availabilities" as const,
+                id: `leave-${l.id}`,
+              })),
+              { type: "Availabilities", id: "LEAVES-LIST" },
+            ]
+          : [{ type: "Availabilities", id: "LEAVES-LIST" }],
+    }),
+
+    createLeave: builder.mutation<
+      { success: boolean; message?: string; data?: LeaveItem },
+      { startDate: string; endDate: string; reason?: string }
+    >({
+      query: (body) => ({
+        url: "/appointments/leaves",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: [{ type: "Availabilities", id: "LEAVES-LIST" }],
+    }),
+
+    deleteLeave: builder.mutation<
+      { success: boolean; message?: string },
+      number
+    >({
+      query: (id) => ({ url: `/appointments/leaves/${id}`, method: "DELETE" }),
+      invalidatesTags: (_result, _err, id) => [
+        { type: "Availabilities", id: `leave-${id}` },
+        { type: "Availabilities", id: "LEAVES-LIST" },
+      ],
+    }),
+
     createAvailability: builder.mutation<
       { success: boolean; message?: string; data?: AvailabilityItem },
       {
@@ -356,12 +433,16 @@ export const appointmentsApi = createApi({
 export const {
   useGetAllAppointmentsQuery,
   useGetAppointmentByIdQuery,
+  useGetConfirmedThisMonthQuery,
   useCreateAppointmentMutation,
   useRespondAppointmentMutation,
   useUpdateAppointmentMutation,
   useCancelAppointmentMutation,
   useGetMyAvailabilitiesQuery,
   useGetAvailableSlotsQuery,
+  useGetMyLeavesQuery,
+  useCreateLeaveMutation,
+  useDeleteLeaveMutation,
   useCreateAvailabilityMutation,
   useUpdateAvailabilityMutation,
   useDeleteAvailabilityMutation,

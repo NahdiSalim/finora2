@@ -20,6 +20,7 @@ import AppointmentCard from "src/components/appointment/AppointmentCard";
 import AppointmentDetailsDialog from "src/components/appointment/AppointmentDetailsDialog";
 import MonthlyAppointmentCalendar from "src/components/appointment/MonthlyAppointmentCalendar";
 import NewAppointmentWizard from "src/components/appointment/NewAppointmentWizard";
+import { CustomPagination } from "src/layouts/components/table-pagination";
 import {
   type AvailabilityItem,
   useCreateAppointmentMutation,
@@ -32,6 +33,8 @@ import {
   useGetConfirmedThisMonthQuery,
   useGetMyAvailabilitiesQuery,
   useGetMyLeavesQuery,
+  useCancelAppointmentMutation,
+  useReportAppointmentMutation,
   useRespondAppointmentMutation,
   useUpdateAvailabilityMutation,
 } from "src/lib/services/appointmentsApi";
@@ -87,6 +90,24 @@ type InitialSlotSnapshot = {
 
 function formatMonthLabelFr(date: Date) {
   return date.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+}
+
+function toDateInputValue(d: Date) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function deriveSubjectFromAppointment(appointment: any): string {
+  const rawType = appointment?.type ?? "";
+  if (rawType === "review") return "facturation";
+
+  const text =
+    `${appointment?.title ?? ""} ${appointment?.description ?? ""}`.toLowerCase();
+  if (text.includes("budget")) return "budget";
+
+  return "bilan";
 }
 
 // ─── Availability Settings ────────────────────────────────────────────────────
@@ -579,10 +600,18 @@ function AvailabilitySettings() {
 export default function MeetingsView() {
   const [mode, setMode] = useState<Mode>("appointments");
   const [tab, setTab] = useState<TimeTab>("today");
+  const ROWS_PER_PAGE = 10;
+  const [page, setPage] = useState(0); // RTK Query expects 1-based pages
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardMode, setWizardMode] = useState<"create" | "report">("create");
+  const [wizardInitialValues, setWizardInitialValues] = useState<any>();
+  const [reportAppointmentId, setReportAppointmentId] = useState<
+    number | undefined
+  >(undefined);
+  const [wizardReportReason, setWizardReportReason] = useState<string>("");
   const [calendarMonth] = useState(new Date());
   const [search, setSearch] = useState("");
   const theme = useTheme();
@@ -600,9 +629,13 @@ export default function MeetingsView() {
   );
 
   const searchTerm = search.trim();
+  useEffect(() => {
+    setPage(0);
+  }, [tab, searchTerm]);
+
   const { data, isLoading } = useGetAllAppointmentsQuery({
-    page: 1,
-    limit: 100,
+    page: page + 1,
+    limit: ROWS_PER_PAGE,
     period: tab,
     search: searchTerm || undefined,
   });
@@ -644,19 +677,48 @@ export default function MeetingsView() {
 
   const [respondAppointment] = useRespondAppointmentMutation();
   const [createAppointment] = useCreateAppointmentMutation();
+  const [reportAppointment] = useReportAppointmentMutation();
+  const [cancelAppointment] = useCancelAppointmentMutation();
 
   const handleConfirm = async () => {
     if (!selectedId) return;
     await respondAppointment({ id: selectedId, action: "confirm" });
   };
 
-  const handleReject = async () => {
-    if (!selectedId) return;
-    await respondAppointment({
-      id: selectedId,
-      action: "reject",
-      rejectionReason: rejectReason,
+  const openReportWizardFromAppointment = (item: any, reason?: string) => {
+    const start = new Date(item.startTime);
+    const base = Number.isNaN(start.getTime()) ? new Date() : start;
+    const next = new Date(base);
+    next.setDate(base.getDate() + 1);
+
+    setWizardReportReason(reason ?? "");
+    setWizardMode("report");
+    setReportAppointmentId(item.id);
+    setWizardInitialValues({
+      title: item.title,
+      subject: deriveSubjectFromAppointment(item),
+      description: item.description ?? "",
+      date: toDateInputValue(next),
+      time: "",
+      meetingType: item.meetingType,
+      location: item.location ?? "",
+      guests: item.guests ?? [],
+      clientId: item.client?.id,
+      color: item.color ?? null,
     });
+    setWizardOpen(true);
+  };
+
+  const handleRejectCancel = async () => {
+    if (!selectedId) return;
+    await cancelAppointment(selectedId).unwrap();
+    setRejectDialogOpen(false);
+    setRejectReason("");
+  };
+
+  const handleRejectReport = async () => {
+    if (!appointment) return;
+    openReportWizardFromAppointment(appointment, rejectReason);
     setRejectDialogOpen(false);
     setRejectReason("");
   };
@@ -683,7 +745,13 @@ export default function MeetingsView() {
         {
           label: "Nouveau RDV",
           icon: <Plus size={16} />,
-          onClick: () => setWizardOpen(true),
+          onClick: () => {
+            setWizardMode("create");
+            setWizardInitialValues(undefined);
+            setReportAppointmentId(undefined);
+            setWizardReportReason("");
+            setWizardOpen(true);
+          },
           variant: "contained",
           color: "primary",
         },
@@ -751,13 +819,23 @@ export default function MeetingsView() {
                     setRejectDialogOpen(true);
                   }}
                   onReschedule={() => {
-                    setSelectedId(item.id);
-                    // open reschedule dialog/wizard
+                    openReportWizardFromAppointment(item);
                   }}
                 />
               ))
             )}
           </Box>
+
+          {counts[tab] > ROWS_PER_PAGE && (
+            <Box sx={{ mt: 2 }}>
+              <CustomPagination
+                page={page}
+                count={counts[tab]}
+                rowsPerPage={ROWS_PER_PAGE}
+                onPageChange={(_event, newPage) => setPage(newPage)}
+              />
+            </Box>
+          )}
 
           {/* Monthly calendar */}
           <Box sx={{ mt: 3 }}>
@@ -781,7 +859,17 @@ export default function MeetingsView() {
         onClose={() => setSelectedId(null)}
         onConfirm={handleConfirm}
         onReject={() => setRejectDialogOpen(true)}
-        onEdit={() => setWizardOpen(true)}
+        onReport={() => {
+          if (!appointment) return;
+          openReportWizardFromAppointment(appointment);
+        }}
+        onEdit={() => {
+          setWizardMode("create");
+          setWizardInitialValues(undefined);
+          setReportAppointmentId(undefined);
+          setWizardReportReason("");
+          setWizardOpen(true);
+        }}
       />
 
       {/* ── Reject reason dialog ── */}
@@ -814,10 +902,16 @@ export default function MeetingsView() {
           <CustomButton
             variant="contained"
             color="error"
-            onClick={handleReject}
-            disabled={!rejectReason.trim()}
+            onClick={handleRejectCancel}
           >
-            Confirmer
+            Refuser définitivement
+          </CustomButton>
+          <CustomButton
+            variant="contained"
+            color="warning"
+            onClick={handleRejectReport}
+          >
+            Reporter
           </CustomButton>
         </DialogActions>
       </Dialog>
@@ -825,7 +919,17 @@ export default function MeetingsView() {
       {/* ── New appointment wizard ── */}
       <NewAppointmentWizard
         open={wizardOpen}
-        onClose={() => setWizardOpen(false)}
+        onClose={() => {
+          setWizardOpen(false);
+          setWizardMode("create");
+          setWizardInitialValues(undefined);
+          setReportAppointmentId(undefined);
+          setWizardReportReason("");
+        }}
+        mode={wizardMode}
+        initialValues={wizardInitialValues}
+        reportAppointmentId={reportAppointmentId}
+        reportReason={wizardReportReason}
         onSchedule={async (payload) => {
           await createAppointment({
             title: payload.title,
@@ -847,6 +951,14 @@ export default function MeetingsView() {
               : payload.description,
             color: payload.color,
             guests: payload.guests,
+          }).unwrap();
+        }}
+        onReport={async (payload) => {
+          await reportAppointment({
+            id: payload.id,
+            newDate: payload.newDate,
+            newHour: payload.newHour,
+            reason: payload.reason,
           }).unwrap();
         }}
         clients={clientsData?.data ?? []}

@@ -32,6 +32,7 @@ export default function AppointmentDetailsDialog({
   onConfirm,
   onReject,
   onEdit,
+  onReport,
 }: {
   open: boolean;
   appointment: AppointmentItem | null;
@@ -39,9 +40,11 @@ export default function AppointmentDetailsDialog({
   onConfirm: () => void;
   onReject: () => void;
   onEdit: () => void;
+  onReport?: () => void;
 }) {
   const isPending = appointment?.status === "pending";
   const isCompleted = appointment?.status === "completed";
+  const isConfirmed = appointment?.status === "confirmed";
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -168,6 +171,10 @@ export default function AppointmentDetailsDialog({
               Confirmer
             </CustomButton>
           </>
+        ) : isConfirmed && onReport ? (
+          <CustomButton variant="contained" color="warning" onClick={onReport}>
+            Reporter
+          </CustomButton>
         ) : (
           <CustomButton variant="contained" onClick={onEdit}>
             Modifier

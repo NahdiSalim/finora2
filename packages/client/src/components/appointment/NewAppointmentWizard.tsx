@@ -37,21 +37,47 @@ export interface NewAppointmentPayload {
   color?: string;
 }
 
+type WizardMode = "create" | "report";
+
 export default function NewAppointmentWizard({
   open,
   onClose,
+  mode = "create",
   onSchedule,
+  onReport,
+  reportAppointmentId,
+  initialValues,
+  reportReason,
   clients,
   clientsLoading = false,
   accountantId,
 }: {
   open: boolean;
   onClose: () => void;
-  onSchedule: (payload: NewAppointmentPayload) => void | Promise<void>;
+  mode?: WizardMode;
+  onSchedule?: (payload: NewAppointmentPayload) => void | Promise<void>;
+  onReport?: (payload: {
+    id: number;
+    newDate: string;
+    newHour: string;
+    reason?: string;
+  }) => void | Promise<void>;
+  reportAppointmentId?: number;
+  reportReason?: string;
+  initialValues?: Partial<
+    Omit<NewAppointmentPayload, "date" | "time"> & {
+      date?: string; // YYYY-MM-DD
+      time?: string; // HH:MM
+      clientId?: number;
+      color?: string | null;
+    }
+  >;
   clients?: Client[];
   clientsLoading?: boolean;
   accountantId?: number;
 }) {
+  const isReport = mode === "report";
+  const reportMinDate = isReport ? initialValues?.date : undefined;
   const [step, setStep] = useState(0);
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
@@ -145,6 +171,57 @@ export default function NewAppointmentWizard({
     const unique = Array.from(new Set(slots.map((s) => s.startTime)));
     return unique.sort((a, b) => a.localeCompare(b));
   }, [availableSlotsResponse]);
+
+  // When opening the modal, pre-fill fields (used for "Reporter rendez-vous")
+  useEffect(() => {
+    if (!open) return;
+    if (!initialValues) return;
+
+    setTitle(initialValues.title ?? "");
+    setSubject(initialValues.subject ?? "bilan");
+    setDescription(initialValues.description ?? "");
+
+    const nextMeetingType = initialValues.meetingType ?? "in_person";
+    setMeetingType(nextMeetingType);
+
+    const nextLocation = initialValues.location ?? "";
+    if (nextMeetingType === "in_person") {
+      if (nextLocation === "Mon bureau") {
+        setLocationType("my_office");
+        setLocation("");
+      } else if (nextLocation === "Chez le cabinet de comptabilité") {
+        setLocationType("accounting_office");
+        setLocation("");
+      } else {
+        setLocationType("other");
+        setLocation(nextLocation);
+      }
+    } else {
+      // locationType is irrelevant for non in_person modes
+      setLocationType("my_office");
+      setLocation(nextLocation);
+    }
+
+    setGuests(initialValues.guests ?? []);
+    setClientId(
+      initialValues.clientId != null ? String(initialValues.clientId) : "",
+    );
+
+    if (typeof initialValues.color === "string" && initialValues.color) {
+      const normalized = initialValues.color.toLowerCase();
+      const found = colorOptions.find(
+        (opt) => opt.color.toLowerCase() === normalized,
+      );
+      setSelectedColor(found?.id ?? "blue");
+    } else {
+      setSelectedColor("blue");
+    }
+
+    setDate(initialValues.date ?? "");
+    setTime(initialValues.time ?? "");
+
+    setStep(isReport ? 1 : 0);
+  }, [open, initialValues, isReport]);
 
   useEffect(() => {
     if (!date) {
@@ -244,9 +321,13 @@ export default function NewAppointmentWizard({
         }}
       >
         <Box>
-          <Typography variant="h6">Nouveau rendez-vous</Typography>
+          <Typography variant="h6">
+            {isReport ? "Reporter rendez-vous" : "Nouveau rendez-vous"}
+          </Typography>
           <Typography variant="caption" color="text.secondary">
-            Planifiez votre prochaine rencontre avec votre client.
+            {isReport
+              ? "Choisissez un nouveau créneau (date/heure)."
+              : "Planifiez votre prochaine rencontre avec votre client."}
           </Typography>
         </Box>
         <IconButton onClick={resetAndClose}>
@@ -273,9 +354,14 @@ export default function NewAppointmentWizard({
                     display: "flex",
                     flexDirection: "column",
                     gap: 0.75,
-                    cursor: "pointer",
+                    cursor:
+                      isReport && s.value !== 1 ? "not-allowed" : "pointer",
+                    opacity: isReport && s.value !== 1 ? 0.5 : 1,
                   }}
-                  onClick={() => setStep(s.value)}
+                  onClick={() => {
+                    if (isReport && s.value !== 1) return;
+                    setStep(s.value);
+                  }}
                 >
                   {/* Progress bar */}
                   <Box
@@ -312,12 +398,14 @@ export default function NewAppointmentWizard({
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              disabled={isReport}
             />
             <CustomSelect
               label="Sujet"
               required
               value={subject}
               onChange={(e) => setSubject(String(e.target.value))}
+              disabled={isReport}
               displayEmpty
               renderValue={(v) => (v ? String(v) : "Sélectionner un sujet")}
             >
@@ -336,6 +424,7 @@ export default function NewAppointmentWizard({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Informer votre client sur l'objet de la réunion..."
+              disabled={isReport}
             />
             <Typography
               variant="caption"
@@ -344,15 +433,25 @@ export default function NewAppointmentWizard({
             >
               Couleur du rdv
             </Typography>
-            <ColorPicker
-              options={colorOptions}
-              value={selectedColor}
-              onChange={setSelectedColor}
-            />
+            <Box
+              sx={{
+                pointerEvents: isReport ? "none" : "auto",
+                opacity: isReport ? 0.6 : 1,
+              }}
+            >
+              <ColorPicker
+                options={colorOptions}
+                value={selectedColor}
+                onChange={(c) => {
+                  if (!isReport) setSelectedColor(c);
+                }}
+              />
+            </Box>
             <CustomSelect
               label="Client"
               value={clientId}
               onChange={(e) => setClientId(String(e.target.value ?? ""))}
+              disabled={isReport}
               displayEmpty
               renderValue={(v) => {
                 if (!v) return "Sélectionner un client";
@@ -397,6 +496,7 @@ export default function NewAppointmentWizard({
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                inputProps={reportMinDate ? { min: reportMinDate } : undefined}
               />
             </Box>
             <Box>
@@ -567,26 +667,34 @@ export default function NewAppointmentWizard({
 
         {step === 2 && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-            <Typography variant="subtitle2">Ajouter des invités</Typography>
-            <Box
-              sx={{ display: "grid", gap: 1, gridTemplateColumns: "1fr auto" }}
-            >
-              <CustomInput
-                value={guestInput}
-                onChange={(e) => setGuestInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addGuest()}
-                placeholder="Email du participant"
-                error={guestError}
-                helperText={guestError ? "Adresse email invalide" : undefined}
-              />
-              <CustomButton
-                variant="contained"
-                onClick={addGuest}
-                sx={{ minWidth: 44, px: 1.25 }}
+            <Typography variant="subtitle2">
+              {isReport ? "Invités" : "Ajouter des invités"}
+            </Typography>
+            {!isReport && (
+              <Box
+                sx={{
+                  display: "grid",
+                  gap: 1,
+                  gridTemplateColumns: "1fr auto",
+                }}
               >
-                <Plus size={16} />
-              </CustomButton>
-            </Box>
+                <CustomInput
+                  value={guestInput}
+                  onChange={(e) => setGuestInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addGuest()}
+                  placeholder="Email du participant"
+                  error={guestError}
+                  helperText={guestError ? "Adresse email invalide" : undefined}
+                />
+                <CustomButton
+                  variant="contained"
+                  onClick={addGuest}
+                  sx={{ minWidth: 44, px: 1.25 }}
+                >
+                  <Plus size={16} />
+                </CustomButton>
+              </Box>
+            )}
 
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 0.5 }}>
               {guests.map((g) => {
@@ -643,29 +751,31 @@ export default function NewAppointmentWizard({
                         {g}
                       </Typography>
 
-                      {/* Remove button */}
-                      <Box
-                        component="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setGuests((prev) => prev.filter((x) => x !== g));
-                        }}
-                        sx={{
-                          all: "unset",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: 14,
-                          height: 14,
-                          borderRadius: "50%",
-                          color: alpha(avatarColor, 0.6),
-                          flexShrink: 0,
-                          "&:hover": { color: avatarColor },
-                        }}
-                      >
-                        <X size={11} strokeWidth={2.5} />
-                      </Box>
+                      {!isReport && (
+                        /* Remove button (create mode only) */
+                        <Box
+                          component="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setGuests((prev) => prev.filter((x) => x !== g));
+                          }}
+                          sx={{
+                            all: "unset",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: 14,
+                            height: 14,
+                            borderRadius: "50%",
+                            color: alpha(avatarColor, 0.6),
+                            flexShrink: 0,
+                            "&:hover": { color: avatarColor },
+                          }}
+                        >
+                          <X size={11} strokeWidth={2.5} />
+                        </Box>
+                      )}
                     </Box>
                   </Tooltip>
                 );
@@ -680,7 +790,7 @@ export default function NewAppointmentWizard({
         )}
       </DialogContent>
       <DialogActions sx={{ px: 2, pb: 2 }}>
-        {step > 0 && (
+        {!isReport && step > 0 && (
           <CustomButton
             variant="text"
             color="info"
@@ -694,7 +804,7 @@ export default function NewAppointmentWizard({
         <CustomButton variant="outlined" color="info" onClick={resetAndClose}>
           Annuler
         </CustomButton>
-        {step < 2 ? (
+        {step < 2 && !isReport ? (
           <CustomButton
             variant="contained"
             onClick={() => setStep((s) => s + 1)}
@@ -709,18 +819,33 @@ export default function NewAppointmentWizard({
               setSubmitError("");
               setIsSubmitting(true);
               try {
-                await onSchedule({
-                  title,
-                  subject,
-                  description,
-                  date,
-                  time,
-                  meetingType,
-                  location: resolveLocationValue(),
-                  guests,
-                  clientId: clientId ? Number(clientId) : undefined,
-                  color: selectedColorHex,
-                });
+                if (isReport) {
+                  if (!onReport || reportAppointmentId == null) {
+                    throw new Error("Impossible de reporter ce rendez-vous.");
+                  }
+                  await onReport({
+                    id: reportAppointmentId,
+                    newDate: date,
+                    newHour: time,
+                    reason: reportReason ? reportReason.trim() : undefined,
+                  });
+                } else {
+                  if (!onSchedule) {
+                    throw new Error("onSchedule manquant.");
+                  }
+                  await onSchedule({
+                    title,
+                    subject,
+                    description,
+                    date,
+                    time,
+                    meetingType,
+                    location: resolveLocationValue(),
+                    guests,
+                    clientId: clientId ? Number(clientId) : undefined,
+                    color: selectedColorHex,
+                  });
+                }
                 resetAndClose();
               } catch (e: any) {
                 const msg =
@@ -734,9 +859,17 @@ export default function NewAppointmentWizard({
                 setIsSubmitting(false);
               }
             }}
-            disabled={isSubmitting}
+            disabled={
+              isSubmitting ||
+              (isReport
+                ? reportAppointmentId == null ||
+                  !date ||
+                  !time ||
+                  !availableHours.includes(time)
+                : !onSchedule)
+            }
           >
-            Planifier
+            {isReport ? "Reporter" : "Planifier"}
           </CustomButton>
         )}
       </DialogActions>

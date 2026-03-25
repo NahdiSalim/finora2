@@ -42,9 +42,39 @@ export class AuthService {
         include: {
           role: {
             include: {
+              roleActions: {
+                include: {
+                  action: {
+                    select: {
+                      id: true,
+                      name: true,
+                      code: true,
+                      category: true,
+                      pageId: true,
+                    },
+                  },
+                },
+              },
               p_features: {
                 include: {
-                  feature: true,
+                  feature: {
+                    select: {
+                      id: true,
+                      slug: true,
+                    },
+                  },
+                },
+              },
+              p_pages: {
+                include: {
+                  page: {
+                    select: {
+                      id: true,
+                      slug: true,
+                      PageUrl: true,
+                      featureId: true,
+                    },
+                  },
                 },
               },
             },
@@ -71,6 +101,14 @@ export class AuthService {
         );
       }
 
+      if (!user.role) {
+        throw new ApiError(
+          errors.NOT_FOUND.message,
+          errors.NOT_FOUND.code,
+          errors.NOT_FOUND.errorCode
+        );
+      }
+
       const isPasswordValid = await bcrypt.compare(password, user.password);
       console.log('Password valid:', isPasswordValid);
 
@@ -93,14 +131,70 @@ export class AuthService {
 
       await this.jwtTokenService.storeRefreshToken(user.id, refreshToken);
 
+      // Build features structure with pages and actions (same as getCurrentUser)
+      const featuresMap = new Map();
+      const role = user.role;
+
+      // First, create all features
+      role.p_features.forEach((pf) => {
+        if (!featuresMap.has(pf.feature.id)) {
+          featuresMap.set(pf.feature.id, {
+            id: String(pf.feature.id),
+            name: pf.feature.slug,
+            code: pf.feature.slug,
+            pages: [],
+          });
+        }
+      });
+
+      // Then, add pages to their respective features
+      role.p_pages.forEach((pp) => {
+        const feature = featuresMap.get(pp.page.featureId);
+        if (feature) {
+          // Get actions for this page
+          const pageActions = role.roleActions
+            .filter((ra) => ra.action.pageId === pp.page.id)
+            .map((ra) => ({
+              id: String(ra.action.id),
+              name: ra.action.name,
+              code: ra.action.category?.toUpperCase() || 'READ',
+            }));
+
+          feature.pages.push({
+            id: String(pp.page.id),
+            name: pp.page.slug,
+            code: pp.page.slug,
+            route: pp.page.PageUrl,
+            actions: pageActions,
+          });
+        }
+      });
+
+      const features = Array.from(featuresMap.values());
+
       return {
         success: true,
         data: {
           user: {
-            id: user.id,
-            username: user.username,
+            id: String(user.id),
             email: user.email,
-            role: user.role?.nameEn,
+            full_name: user.username,
+            sex: null,
+            dateOfBirth: null,
+            status: user.status,
+            address: null,
+            phone: user.phone || '',
+            is_active: user.status === UserStatus.ACTIVE,
+            is_email_verified: false,
+            created_at: user.createdAt?.toISOString() || new Date().toISOString(),
+            updated_at: user.updatedAt?.toISOString() || new Date().toISOString(),
+            role: {
+              id: String(role.id),
+              name: role.nameEn,
+              code: role.code || role.nameFr.toLowerCase().replace(/\s+/g, '_'),
+              description: role.descriptionEn,
+            },
+            features,
           },
           accessToken,
           refreshToken,

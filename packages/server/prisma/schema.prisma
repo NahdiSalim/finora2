@@ -848,12 +848,17 @@ model RefreshToken {
 model Request {
   id          Int      @id @default(autoincrement())
   subject     String   // Titre de la demande
+  topic       String?  // Sujet (subcategory/specific topic)
   description String?  @db.Text
   type        String   // 'accounting', 'tax', 'consultation', 'document', 'other'
   urgency     String   @default("normal") // 'low', 'normal', 'high', 'urgent'
   status      String   @default("pending") // 'pending', 'in_progress', 'resolved', 'rejected', 'cancelled'
   response    String?  @db.Text
   attachments String[] @default([]) // Array of file paths in MinIO
+  
+  // Desired response date/time
+  desiredResponseDate String?
+  desiredResponseTime String?
   
   // Relations
   clientId    Int

@@ -13,7 +13,7 @@ import { Link as RouterLink, useNavigate } from "react-router-dom";
 
 import { NavigateNext as NavigateNextIcon } from "@mui/icons-material";
 
-import { MoveLeft, Search } from "lucide-react";
+import { ArrowLeft, Search } from "lucide-react";
 
 import { DashboardContent } from "src/layouts/dashboard";
 import CustomButton from "src/components/common/CustomButton";
@@ -34,6 +34,7 @@ type ActionButton = {
   onClick: () => void;
   variant?: "contained" | "outlined" | "text";
   color?: "primary" | "secondary" | "error" | "warning" | "info" | "success";
+  sx?: any;
 };
 
 type BackButton = (() => void) | { onClick?: () => void; path?: string };
@@ -124,8 +125,15 @@ export function PageHeader({
           >
             {/* Back Button */}
             {backButton && (
-              <IconButton size="small" onClick={handleBack} sx={{ mt: 0.5 }}>
-                <MoveLeft fontSize="small" />
+              <IconButton
+                size="small"
+                onClick={handleBack}
+                sx={{
+                  mt: 0.5,
+                  color: "#000000",
+                }}
+              >
+                <ArrowLeft size={40} />
               </IconButton>
             )}
 
@@ -306,6 +314,7 @@ export function PageHeader({
                   sx={{
                     flex: { xs: 1, md: "none" },
                     width: { xs: "100%", sm: "auto" },
+                    ...action.sx,
                   }}
                 >
                   {action.label}
@@ -316,7 +325,7 @@ export function PageHeader({
         </Box>
       </Box>
 
-      {children}
+      <Box sx={{ width: "100%" }}>{children}</Box>
     </DashboardContent>
   );
 }

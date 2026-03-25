@@ -997,7 +997,11 @@ export class AppointmentService {
     // Update appointment date/hour
     const updated = await this.prisma.appointment.update({
       where: { id: appointmentId },
-      data: { date: new Date(dto.newDate + 'T00:00:00.000Z'), hour: dto.newHour } as any,
+      data: {
+        date: new Date(dto.newDate + 'T00:00:00.000Z'),
+        hour: dto.newHour,
+        status: 'pending',
+      } as any,
       include: {
         client: {
           select: {

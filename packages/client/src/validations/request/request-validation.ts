@@ -8,7 +8,8 @@ export const requestValidationSchema = Yup.object({
 
   topic: Yup.string()
     .max(200, "Le sujet ne doit pas dépasser 200 caractères")
-    .optional(),
+    .defined()
+    .default(""),
 
   type: Yup.string()
     .oneOf(
@@ -19,15 +20,16 @@ export const requestValidationSchema = Yup.object({
 
   description: Yup.string()
     .max(5000, "La description ne doit pas dépasser 5000 caractères")
-    .optional(),
+    .defined()
+    .default(""),
 
   urgency: Yup.string()
     .oneOf(["low", "normal", "high", "urgent"], "Priorité invalide")
     .required("La priorité est requise"),
 
-  desiredResponseDate: Yup.string().optional(),
+  desiredResponseDate: Yup.string().defined().default(""),
 
-  desiredResponseTime: Yup.string().optional(),
+  desiredResponseTime: Yup.string().defined().default(""),
 
   attachments: Yup.array()
     .of(
@@ -52,7 +54,8 @@ export const requestValidationSchema = Yup.object({
         }),
     )
     .max(10, "Vous ne pouvez télécharger que 10 fichiers maximum")
-    .optional(),
+    .defined()
+    .default([]),
 });
 
 export type RequestFormData = Yup.InferType<typeof requestValidationSchema>;

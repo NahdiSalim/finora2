@@ -80,14 +80,50 @@ export const clientsApi = createApi({
           : [{ type: "Clients", id: "PARTIAL-LIST" }],
     }),
 
-    // 🔹 CREATE Client
-    createClient: builder.mutation<Client, ClientFormData>({
-      query: (body) => ({
-        url: "/accountant/clients",
-        method: "POST",
-        body,
-      }),
-      invalidatesTags: [{ type: "Clients", id: "PARTIAL-LIST" }],
+    // 🔹 CREATE Client — API: multipart/form-data with field "patentFile", body fields sans countryCode
+    createClient: builder.mutation<
+      Client,
+      ClientFormData & { patente?: File; country?: string }
+    >({
+      query: (arg) => {
+        const hasFile = arg.patente instanceof File;
+        const bodyKeys: (keyof ClientFormData)[] = [
+          "firstName",
+          "lastName",
+          "email",
+          "phone",
+          "companyName",
+          "password",
+          "siret",
+          "vatNumber",
+          "legalForm",
+          "address",
+          "city",
+          "postalCode",
+        ];
+        if (hasFile) {
+          const formData = new FormData();
+          bodyKeys.forEach((key) => {
+            const v = arg[key];
+            if (v != null && v !== "") formData.append(key, String(v));
+          });
+          if (arg.country != null && arg.country !== "")
+            formData.append("country", arg.country);
+          formData.append("patentFile", arg.patente!);
+          return {
+            url: "/accountant/clients",
+            method: "POST",
+            body: formData,
+          };
+        }
+        const { patente, country, countryCode, ...rest } = arg;
+        return {
+          url: "/accountant/clients",
+          method: "POST",
+          body: { ...rest, ...(country ? { country } : {}) },
+        };
+      },
+      invalidatesTags: [{ type: "Clients" }],
     }),
   }),
 });

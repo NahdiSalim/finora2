@@ -51,6 +51,7 @@ export default function NewAppointmentWizard({
   clients,
   clientsLoading = false,
   accountantId,
+  fixedClientId,
 }: {
   open: boolean;
   onClose: () => void;
@@ -75,6 +76,7 @@ export default function NewAppointmentWizard({
   clients?: Client[];
   clientsLoading?: boolean;
   accountantId?: number;
+  fixedClientId?: number;
 }) {
   const isReport = mode === "report";
   const reportMinDate = isReport ? initialValues?.date : undefined;
@@ -91,6 +93,7 @@ export default function NewAppointmentWizard({
   const [guestInput, setGuestInput] = useState("");
   const [guests, setGuests] = useState<string[]>([]);
   const [clientId, setClientId] = useState("");
+  const showClientSelect = fixedClientId == null && !isReport;
   const theme = useTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -222,6 +225,14 @@ export default function NewAppointmentWizard({
 
     setStep(isReport ? 1 : 0);
   }, [open, initialValues, isReport]);
+
+  // Client creation: client connected is fixed by default (no select)
+  useEffect(() => {
+    if (!open) return;
+    if (mode !== "create") return;
+    if (fixedClientId == null) return;
+    setClientId(String(fixedClientId));
+  }, [open, fixedClientId, mode]);
 
   useEffect(() => {
     if (!date) {
@@ -447,37 +458,39 @@ export default function NewAppointmentWizard({
                 }}
               />
             </Box>
-            <CustomSelect
-              label="Client"
-              value={clientId}
-              onChange={(e) => setClientId(String(e.target.value ?? ""))}
-              disabled={isReport}
-              displayEmpty
-              renderValue={(v) => {
-                if (!v) return "Sélectionner un client";
-                const selected = (clients || []).find(
-                  (c) => String(c.id) === String(v),
-                );
-                if (!selected) return String(v);
-                return getClientLabel(selected);
-              }}
-            >
-              <MenuItem value="">
-                <em>
-                  {clientsLoading
-                    ? "Chargement des clients..."
-                    : "Sélectionner un client"}
-                </em>
-              </MenuItem>
-              {(clients || []).map((c) => {
-                const label = getClientLabel(c);
-                return (
-                  <MenuItem key={c.id} value={String(c.id)}>
-                    {label}
-                  </MenuItem>
-                );
-              })}
-            </CustomSelect>
+            {showClientSelect && (
+              <CustomSelect
+                label="Client"
+                value={clientId}
+                onChange={(e) => setClientId(String(e.target.value ?? ""))}
+                disabled={isReport}
+                displayEmpty
+                renderValue={(v) => {
+                  if (!v) return "Sélectionner un client";
+                  const selected = (clients || []).find(
+                    (c) => String(c.id) === String(v),
+                  );
+                  if (!selected) return String(v);
+                  return getClientLabel(selected);
+                }}
+              >
+                <MenuItem value="">
+                  <em>
+                    {clientsLoading
+                      ? "Chargement des clients..."
+                      : "Sélectionner un client"}
+                  </em>
+                </MenuItem>
+                {(clients || []).map((c) => {
+                  const label = getClientLabel(c);
+                  return (
+                    <MenuItem key={c.id} value={String(c.id)}>
+                      {label}
+                    </MenuItem>
+                  );
+                })}
+              </CustomSelect>
+            )}
           </Box>
         )}
 

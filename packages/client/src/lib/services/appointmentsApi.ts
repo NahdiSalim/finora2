@@ -22,6 +22,7 @@ export interface AppointmentItem {
   title: string;
   description?: string | null;
   status: AppointmentStatus;
+  hour?: string | null;
   startTime: string;
   endTime: string;
   duration: number;
@@ -66,10 +67,10 @@ function normalizeAppointmentItem(raw: any): AppointmentItem {
   const hourRaw = typeof item.hour === "string" ? item.hour : "";
   const safeHour = /^\d{2}:\d{2}$/.test(hourRaw) ? hourRaw : "00:00";
 
-  const computedStart =
-    datePart && !item.startTime
-      ? `${datePart}T${safeHour}:00.000Z`
-      : item.startTime;
+  // Keep API hour as local wall-clock time to avoid UTC shift in UI.
+  const computedStart = datePart
+    ? `${datePart}T${safeHour}:00`
+    : item.startTime;
 
   const durationMinutes =
     typeof item.duration === "number" && Number.isFinite(item.duration)

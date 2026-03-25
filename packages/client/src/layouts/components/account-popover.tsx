@@ -18,6 +18,7 @@ import { useRouter, usePathname } from "src/routes/hooks";
 import { useVerifyUserQuery } from "src/lib/services/authApi";
 import { useDashboardBase } from "src/hooks/useDashboardBase";
 import { store } from "src/lib/store";
+import CustomButton from "src/components/common/CustomButton";
 
 // ----------------------------------------------------------------------
 
@@ -247,23 +248,22 @@ export function AccountPopover({
               {displayName}
             </Typography>
             <Typography
-              variant="caption"
               sx={{
                 color: theme.palette.text.secondary,
                 display: "block",
-                mb: 0.5,
+                fontSize: 11,
               }}
             >
               {subtitle}
             </Typography>
             <Typography
-              variant="caption"
               sx={{
-                color: theme.palette.text.disabled,
+                color: theme.palette.grey[700],
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
                 display: "block",
+                fontSize: 11,
               }}
             >
               {email}
@@ -321,9 +321,9 @@ export function AccountPopover({
         )}
 
         <Box sx={{ p: 1.5 }}>
-          <Button
+          <CustomButton
             fullWidth
-            variant="outlined"
+            variant="text"
             color="error"
             size="medium"
             onClick={handleLogout}
@@ -334,7 +334,7 @@ export function AccountPopover({
             }}
           >
             Se déconnecter
-          </Button>
+          </CustomButton>
         </Box>
       </Popover>
     </>

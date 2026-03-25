@@ -300,6 +300,53 @@ export class RequestService {
   }
 
   /**
+   * Get requests accessible to the connected user for chat attachment.
+   * - CLIENT: requests where clientId = userId
+   * - ACCOUNTANT: requests where accountingFirmId = companyId OR assignedToId = userId
+   * - COLLABORATOR: requests where assignedToId = userId OR companyId = companyId
+   */
+  async getChatAccessibleRequests(userId: number, limit = 100) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { companyId: true, role: { select: { code: true } } },
+    });
+    if (!user) return { success: true, data: [] };
+
+    const roleCode = user.role?.code ?? '';
+    let where: any;
+
+    if (roleCode === 'CLIENT') {
+      where = { clientId: userId };
+    } else if (roleCode === 'ACCOUNTANT') {
+      // Include requests linked to the firm OR directly assigned
+      const orClauses: any[] = [{ assignedToId: userId }];
+      if (user.companyId) orClauses.push({ accountingFirmId: user.companyId });
+      where = { OR: orClauses };
+    } else {
+      // COLLABORATOR or other — requests assigned to them or belonging to their company
+      const orClauses: any[] = [{ assignedToId: userId }];
+      if (user.companyId) orClauses.push({ companyId: user.companyId });
+      where = { OR: orClauses };
+    }
+
+    const requests = await this.prisma.request.findMany({
+      where,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        subject: true,
+        type: true,
+        urgency: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+
+    return { success: true, data: requests };
+  }
+
+  /**
    * Get my requests (Client)
    */
   async getMyRequests(clientId: number, page: number = 1, limit: number = 10, status?: string) {
@@ -361,8 +408,8 @@ export class RequestService {
 
         return {
           ...request,
-          attachmentUrls, // URLs présignées pour télécharger
-          attachments: request.attachments, // Chemins originaux (optionnel)
+          attachmentUrls,
+          attachments: request.attachments,
         };
       })
     );

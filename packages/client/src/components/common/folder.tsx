@@ -147,7 +147,7 @@ export function Folder({
         width: 195,
         backgroundColor: "transparent",
         borderRadius: 5,
-        opacity: state === "archived" ? 0.7 : 1,
+        opacity: state === "archived" ? 0.9 : 1,
         cursor:
           state === "archived" && !allowClickWhenArchived
             ? "default"

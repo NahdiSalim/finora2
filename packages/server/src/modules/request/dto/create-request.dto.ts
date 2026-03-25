@@ -77,4 +77,13 @@ export class CreateRequestDto {
   @IsInt()
   @IsOptional()
   accountantId?: number;
+
+  @ApiProperty({
+    example: [3, 7],
+    description: 'IDs of collaborators to auto-assign tasks to for this request',
+    required: false,
+    type: [Number],
+  })
+  @IsOptional()
+  collaboratorIds?: number[];
 }

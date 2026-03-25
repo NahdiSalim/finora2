@@ -19,7 +19,14 @@ import AuthLayout from "src/sections/auth/sign-in-view/Auth-Layout";
 
 export const UserPage = lazy(() => import("src/pages/users"));
 export const CollaboratorPage = lazy(() => import("src/pages/collaborators"));
+export const TaskManagementPage = lazy(
+  () => import("src/pages/collaborators/task-management"),
+);
+export const TaskDetailsPage = lazy(
+  () => import("src/pages/collaborators/task-details"),
+);
 export const ClientPage = lazy(() => import("src/pages/clients"));
+export const RequestPage = lazy(() => import("src/pages/requests"));
 export const ProfilePage = lazy(() => import("src/pages/profile"));
 export const NetworkPage = lazy(() => import("src/pages/network"));
 export const NetworkAccountantProfilePage = lazy(() =>
@@ -146,6 +153,44 @@ export const routesSection: RouteObject[] = [
             ),
           },
           {
+            path: "collaborators/task-management",
+            element: (
+              <PermissionGuard requiredPath="/collaborators">
+                <TaskManagementPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "collaborators/task-management/:taskId",
+            element: (
+              <PermissionGuard requiredPath="/collaborators">
+                <TaskDetailsPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "tasks",
+            element: (
+              <PermissionGuard
+                requiredPath="/collaborators"
+                allowForRoleCodes={["COLLABORATOR", "COLLABORATEUR"]}
+              >
+                <TaskManagementPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "tasks/:taskId",
+            element: (
+              <PermissionGuard
+                requiredPath="/collaborators"
+                allowForRoleCodes={["COLLABORATOR", "COLLABORATEUR"]}
+              >
+                <TaskDetailsPage />
+              </PermissionGuard>
+            ),
+          },
+          {
             path: "clients",
             element: (
               <PermissionGuard requiredPath="/clients">
@@ -197,7 +242,7 @@ export const routesSection: RouteObject[] = [
             path: "requests",
             element: (
               <PermissionGuard requiredPath="/requests">
-                <UserPage />
+                <RequestPage />
               </PermissionGuard>
             ),
           },
@@ -205,7 +250,7 @@ export const routesSection: RouteObject[] = [
             path: "requests/:id",
             element: (
               <PermissionGuard requiredPath="/requests/:id">
-                <UserPage />
+                <RequestPage />
               </PermissionGuard>
             ),
           },

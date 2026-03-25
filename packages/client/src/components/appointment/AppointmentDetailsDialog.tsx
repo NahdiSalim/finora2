@@ -24,6 +24,7 @@ export default function AppointmentDetailsPanel({
   onReject,
   onEdit,
   onReport,
+  onCancel,
   canConfirmReject = true,
   canReport = true,
 }: {
@@ -34,6 +35,7 @@ export default function AppointmentDetailsPanel({
   onReject: () => void;
   onEdit: () => void;
   onReport?: () => void;
+  onCancel?: () => void;
   canConfirmReject?: boolean;
   canReport?: boolean;
 }) {
@@ -233,10 +235,23 @@ export default function AppointmentDetailsPanel({
               Confirmer
             </CustomButton>
           </>
-        ) : isConfirmed && onReport ? (
-          <CustomButton variant="contained" color="warning" onClick={onReport}>
-            Reporter
-          </CustomButton>
+        ) : isConfirmed ? (
+          <>
+            {onCancel && (
+              <CustomButton variant="outlined" color="error" onClick={onCancel}>
+                Annuler le rendez-vous
+              </CustomButton>
+            )}
+            {onReport && (
+              <CustomButton
+                variant="contained"
+                color="warning"
+                onClick={onReport}
+              >
+                Reporter
+              </CustomButton>
+            )}
+          </>
         ) : !isPending && !isConfirmed ? (
           <CustomButton variant="contained" onClick={onEdit}>
             Modifier

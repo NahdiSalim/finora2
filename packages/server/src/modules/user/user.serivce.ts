@@ -74,6 +74,45 @@ export class UserService {
     };
   }
 
+  /**
+   * Get users by role codes (for assignment dropdowns)
+   */
+  async getUsersByRole(roleCodes: string[]) {
+    const users = await this.prisma.user.findMany({
+      where: {
+        role: {
+          code: {
+            in: roleCodes,
+          },
+        },
+        status: 'active',
+        isActive: true,
+      },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: {
+          select: {
+            code: true,
+            nameFr: true,
+            nameEn: true,
+          },
+        },
+      },
+      orderBy: {
+        username: 'asc',
+      },
+    });
+
+    return {
+      success: true,
+      data: users,
+    };
+  }
+
   // Register new user
   public async create(createUserDto: CreateUserDto) {
     const { username, email, password, phone, id_role } = createUserDto;

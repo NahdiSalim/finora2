@@ -239,18 +239,20 @@ export default function AppointmentCard({
           )}
 
         {/* Confirmed — Reporter */}
-        {appointment.status === "confirmed" && onReschedule && (
-          <Box sx={{ ml: 1 }}>
-            <CustomButton
-              variant="contained"
-              color="secondary"
-              onClick={(e) => {
-                e.stopPropagation();
-                onReschedule();
-              }}
-            >
-              Reporter
-            </CustomButton>
+        {appointment.status === "confirmed" && (
+          <Box sx={{ display: "flex", gap: 1, ml: 1 }}>
+            {onReschedule && (
+              <CustomButton
+                variant="contained"
+                color="secondary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReschedule();
+                }}
+              >
+                Reporter
+              </CustomButton>
+            )}
           </Box>
         )}
       </Box>

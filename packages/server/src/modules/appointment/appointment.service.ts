@@ -519,11 +519,7 @@ export class AppointmentService {
   /**
    * Respond to appointment (Accountant)
    */
-  async respondToAppointment(
-    appointmentId: number,
-    dto: RespondAppointmentDto,
-    accountantId: number
-  ) {
+  async respondToAppointment(appointmentId: number, dto: RespondAppointmentDto, userId: number) {
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
     });
@@ -532,18 +528,24 @@ export class AppointmentService {
       throw new ApiError('Appointment not found', 404, 'APPOINTMENT_NOT_FOUND');
     }
 
+    // Both client and accountant can respond
+    if (appointment.clientId !== userId && appointment.accountantId !== userId) {
+      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+    }
+
     if (appointment.status !== 'pending') {
       throw new ApiError('Can only respond to pending appointments', 400, 'INVALID_STATUS');
     }
 
     const isConfirmed = dto.action === AppointmentAction.CONFIRM;
+    const isAccountant = appointment.accountantId === userId;
 
     const updatedAppointment = await this.prisma.appointment.update({
       where: { id: appointmentId },
       data: {
         status: isConfirmed ? 'confirmed' : 'rejected',
-        accountantId: isConfirmed ? accountantId : appointment.accountantId,
-        accountantNotes: dto.notes,
+        accountantNotes: isAccountant ? dto.notes : undefined,
+        clientNotes: !isAccountant ? dto.notes : undefined,
         rejectionReason: dto.rejectionReason,
         confirmedAt: isConfirmed ? new Date() : undefined,
       },
@@ -571,14 +573,17 @@ export class AppointmentService {
       },
     });
 
-    // Notify client about accountant's response
-    if (updatedAppointment.client?.id) {
+    // Notify the other party
+    const recipientId = isAccountant
+      ? updatedAppointment.client?.id
+      : updatedAppointment.accountant?.id;
+    if (recipientId) {
       this.notificationService
         .notify({
-          recipientId: updatedAppointment.client.id,
+          recipientId,
           type: 'appointment',
           action: isConfirmed ? 'confirmed' : 'rejected',
-          actorName: 'Votre comptable',
+          actorName: isAccountant ? 'Votre comptable' : 'Le client',
           data: { appointmentId },
         })
         .catch(() => {});

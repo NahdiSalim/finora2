@@ -176,20 +176,16 @@ export class AppointmentController {
   }
 
   /**
-   * Respond to appointment (Accountant)
+   * Respond to appointment (Accountant or Client)
    */
   @Post(':id/respond')
-  @UseGuards(RolesGuard)
-  @Roles('ACCOUNTANT')
-  @ApiOperation({ summary: '[Accountant] Confirm or reject appointment' })
-  @ApiResponse({ status: 200, description: 'Response sent successfully' })
+  @ApiOperation({ summary: 'Confirm or reject an appointment (accountant or client)' })
   async respondToAppointment(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: RespondAppointmentDto,
     @Req() req: AuthRequest
   ) {
-    const accountantId = req.user!.id;
-    return this.appointmentService.respondToAppointment(id, dto, accountantId);
+    return this.appointmentService.respondToAppointment(id, dto, req.user!.id);
   }
 
   /**

@@ -13,7 +13,7 @@ import {
   Divider,
 } from "@mui/material";
 import { X, Download, Edit, Trash2, Save, UserPlus } from "lucide-react";
-import type { Request, RequestFormData, RequestType } from "src/types/request";
+import type { Request, RequestType } from "src/types/request";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
 import CustomSelect from "src/components/common/CustomSelect";
@@ -31,7 +31,10 @@ import { useForm, Controller } from "react-hook-form";
 import { useAppSelector, useAppDispatch } from "src/hooks/use-redux";
 import { ROLE_CODES } from "src/constants/roles";
 import { yupResolver } from "@hookform/resolvers/yup";
-import { requestValidationSchema } from "src/validations/request/request-validation";
+import {
+  requestValidationSchema,
+  type RequestFormData,
+} from "src/validations/request/request-validation";
 
 type Props = {
   open: boolean;

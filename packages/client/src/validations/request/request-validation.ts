@@ -8,8 +8,8 @@ export const requestValidationSchema = Yup.object({
 
   topic: Yup.string()
     .max(200, "Le sujet ne doit pas dépasser 200 caractères")
-    .defined()
-    .default(""),
+    .default("")
+    .transform((value) => value || ""),
 
   type: Yup.string()
     .oneOf(
@@ -20,16 +20,20 @@ export const requestValidationSchema = Yup.object({
 
   description: Yup.string()
     .max(5000, "La description ne doit pas dépasser 5000 caractères")
-    .defined()
-    .default(""),
+    .default("")
+    .transform((value) => value || ""),
 
   urgency: Yup.string()
     .oneOf(["low", "normal", "high", "urgent"], "Priorité invalide")
     .required("La priorité est requise"),
 
-  desiredResponseDate: Yup.string().defined().default(""),
+  desiredResponseDate: Yup.string()
+    .default("")
+    .transform((value) => value || ""),
 
-  desiredResponseTime: Yup.string().defined().default(""),
+  desiredResponseTime: Yup.string()
+    .default("")
+    .transform((value) => value || ""),
 
   attachments: Yup.array()
     .of(
@@ -54,8 +58,18 @@ export const requestValidationSchema = Yup.object({
         }),
     )
     .max(10, "Vous ne pouvez télécharger que 10 fichiers maximum")
-    .defined()
-    .default([]),
+    .default([])
+    .transform((value) => value || []),
 });
 
-export type RequestFormData = Yup.InferType<typeof requestValidationSchema>;
+// Explicitly define the type to avoid Yup inference issues
+export type RequestFormData = {
+  subject: string;
+  topic: string;
+  type: "accounting" | "tax" | "consultation" | "document" | "other";
+  description: string;
+  urgency: "low" | "normal" | "high" | "urgent";
+  desiredResponseDate: string;
+  desiredResponseTime: string;
+  attachments: File[];
+};

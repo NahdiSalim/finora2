@@ -18,6 +18,8 @@ export default function AppointmentCard({
   onConfirm,
   onReject,
   onReschedule,
+  canConfirmReject = true,
+  canReschedule = true,
 }: {
   appointment: AppointmentItem;
   period: "today" | "upcoming" | "past";
@@ -25,6 +27,8 @@ export default function AppointmentCard({
   onConfirm?: () => void;
   onReject?: () => void;
   onReschedule?: () => void;
+  canConfirmReject?: boolean;
+  canReschedule?: boolean;
 }) {
   const theme = useTheme();
 
@@ -49,10 +53,8 @@ export default function AppointmentCard({
     appointmentDate &&
     appointmentDate.toDateString() === new Date().toDateString();
 
-  // On garde la logique existante pour cacher la date dans l’onglet "today"
   const shouldShowDate = !(period === "today" && isToday);
 
-  // Formatage avec gestion spéciale pour "aujourd'hui"
   let formattedDate = "—";
   if (appointmentDate) {
     if (period === "upcoming" && isToday) {
@@ -143,7 +145,6 @@ export default function AppointmentCard({
                 }}
               >
                 <Calendar size={12} />
-
                 <Tooltip title={formattedDate} arrow>
                   <Typography
                     variant="caption"
@@ -185,7 +186,6 @@ export default function AppointmentCard({
               }}
             >
               {getLocationIcon(appointment.location)}
-
               <Typography
                 variant="caption"
                 sx={{
@@ -211,33 +211,36 @@ export default function AppointmentCard({
         <AppointmentStatusChip status={appointment.status} />
 
         {/* Pending — Refuser / Confirmer */}
-        {appointment.status === "pending" && onConfirm && onReject && (
-          <Box sx={{ display: "flex", gap: 1, ml: 1 }}>
-            <CustomButton
-              variant="outlined"
-              onClick={(e) => {
-                e.stopPropagation();
-                onReject();
-              }}
-            >
-              Refuser
-            </CustomButton>
-
-            <CustomButton
-              variant="contained"
-              onClick={(e) => {
-                e.stopPropagation();
-                onConfirm();
-              }}
-            >
-              Confirmer
-            </CustomButton>
-          </Box>
-        )}
+        {appointment.status === "pending" &&
+          canConfirmReject &&
+          onConfirm &&
+          onReject && (
+            <Box sx={{ display: "flex", gap: 1, ml: 1 }}>
+              <CustomButton
+                variant="outlined"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReject();
+                }}
+              >
+                Refuser
+              </CustomButton>
+              <CustomButton
+                variant="contained"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onConfirm();
+                }}
+              >
+                Confirmer
+              </CustomButton>
+            </Box>
+          )}
 
         {/* Confirmed + upcoming — Reporter */}
         {appointment.status === "confirmed" &&
           new Date(appointment.startTime) > new Date() &&
+          canReschedule &&
           onReschedule && (
             <Box sx={{ ml: 1 }}>
               <CustomButton

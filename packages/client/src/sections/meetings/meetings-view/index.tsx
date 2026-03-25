@@ -32,8 +32,10 @@ import {
   useGetAppointmentByIdQuery,
   useGetConfirmedThisMonthQuery,
   useGetMyAvailabilitiesQuery,
+  useGetMyAppointmentsQuery,
   useGetMyLeavesQuery,
   useCancelAppointmentMutation,
+  useUpdateAppointmentMutation,
   useReportAppointmentMutation,
   useRespondAppointmentMutation,
   useUpdateAvailabilityMutation,
@@ -108,6 +110,18 @@ function deriveSubjectFromAppointment(appointment: any): string {
   if (text.includes("budget")) return "budget";
 
   return "bilan";
+}
+
+function getUserRoleCode(me: any): string {
+  const rawRole = me?.role;
+  if (typeof rawRole === "string") return rawRole.toUpperCase();
+  if (rawRole && typeof rawRole === "object") {
+    const code = String((rawRole as any).code ?? "").toUpperCase();
+    if (code) return code;
+    const name = String((rawRole as any).name ?? "").toUpperCase();
+    if (name) return name;
+  }
+  return "";
 }
 
 // ─── Availability Settings ────────────────────────────────────────────────────
@@ -616,6 +630,9 @@ export default function MeetingsView() {
   const [search, setSearch] = useState("");
   const theme = useTheme();
   const { data: me } = useVerifyUserQuery();
+  const roleCode = getUserRoleCode(me);
+  const isClient = roleCode === "CLIENT";
+  const isAccountant = roleCode === "ACCOUNTANT" || roleCode === "COMPTABLE";
   const rawMeId = me?.id != null ? Number(me.id) : NaN;
   const meId =
     Number.isInteger(rawMeId) && Number.isFinite(rawMeId) && rawMeId > 0
@@ -633,34 +650,83 @@ export default function MeetingsView() {
     setPage(0);
   }, [tab, searchTerm]);
 
-  const { data, isLoading } = useGetAllAppointmentsQuery({
+  const queryParams: {
+    page: number;
+    limit: number;
+    period: TimeTab;
+    search: string | undefined;
+  } = {
     page: page + 1,
     limit: ROWS_PER_PAGE,
     period: tab,
     search: searchTerm || undefined,
-  });
+  };
+  const { data: accountantAppointmentsData, isLoading: isLoadingAll } =
+    useGetAllAppointmentsQuery(queryParams, { skip: isClient });
+  const { data: myAppointmentsData, isLoading: isLoadingMine } =
+    useGetMyAppointmentsQuery(queryParams, { skip: !isClient });
+  const data = isClient ? myAppointmentsData : accountantAppointmentsData;
+  const isLoading = isClient ? isLoadingMine : isLoadingAll;
   const appointments = data?.data ?? [];
   const { data: confirmedThisMonthData } = useGetConfirmedThisMonthQuery();
   const calendarAppointments = confirmedThisMonthData?.data ?? [];
 
-  const { data: todayCountData } = useGetAllAppointmentsQuery({
+  const todayParams: {
+    page: number;
+    limit: number;
+    period: TimeTab;
+    search: string | undefined;
+  } = {
     page: 1,
     limit: 1,
     period: "today",
     search: searchTerm || undefined,
-  });
-  const { data: upcomingCountData } = useGetAllAppointmentsQuery({
+  };
+  const upcomingParams: {
+    page: number;
+    limit: number;
+    period: TimeTab;
+    search: string | undefined;
+  } = {
     page: 1,
     limit: 1,
     period: "upcoming",
     search: searchTerm || undefined,
-  });
-  const { data: pastCountData } = useGetAllAppointmentsQuery({
+  };
+  const pastParams: {
+    page: number;
+    limit: number;
+    period: TimeTab;
+    search: string | undefined;
+  } = {
     page: 1,
     limit: 1,
     period: "past",
     search: searchTerm || undefined,
+  };
+
+  const { data: todayAllData } = useGetAllAppointmentsQuery(todayParams, {
+    skip: isClient,
   });
+  const { data: upcomingAllData } = useGetAllAppointmentsQuery(upcomingParams, {
+    skip: isClient,
+  });
+  const { data: pastAllData } = useGetAllAppointmentsQuery(pastParams, {
+    skip: isClient,
+  });
+  const { data: todayMineData } = useGetMyAppointmentsQuery(todayParams, {
+    skip: !isClient,
+  });
+  const { data: upcomingMineData } = useGetMyAppointmentsQuery(upcomingParams, {
+    skip: !isClient,
+  });
+  const { data: pastMineData } = useGetMyAppointmentsQuery(pastParams, {
+    skip: !isClient,
+  });
+
+  const todayCountData = isClient ? todayMineData : todayAllData;
+  const upcomingCountData = isClient ? upcomingMineData : upcomingAllData;
+  const pastCountData = isClient ? pastMineData : pastAllData;
   const counts = useMemo(
     () => ({
       today: todayCountData?.pagination?.total ?? 0,
@@ -679,10 +745,43 @@ export default function MeetingsView() {
   const [createAppointment] = useCreateAppointmentMutation();
   const [reportAppointment] = useReportAppointmentMutation();
   const [cancelAppointment] = useCancelAppointmentMutation();
+  const [updateAppointment] = useUpdateAppointmentMutation();
+  const headerActions = [
+    {
+      label: "Nouveau RDV",
+      icon: <Plus size={16} />,
+      onClick: () => {
+        setWizardMode("create");
+        setWizardInitialValues(undefined);
+        setReportAppointmentId(undefined);
+        setWizardReportReason("");
+        setWizardOpen(true);
+      },
+      variant: "contained" as const,
+      color: "primary" as const,
+    },
+    ...(isAccountant
+      ? [
+          {
+            label: "Mes disponibilités",
+            onClick: () => setMode("availability"),
+            variant: "contained" as const,
+            color: "secondary" as const,
+          },
+        ]
+      : []),
+  ];
 
   const handleConfirm = async () => {
-    if (!selectedId) return;
-    await respondAppointment({ id: selectedId, action: "confirm" });
+    if (!selectedId || !appointment) return;
+    if (isAccountant) {
+      await respondAppointment({ id: selectedId, action: "confirm" }).unwrap();
+      return;
+    }
+    await updateAppointment({
+      id: selectedId,
+      body: { status: "confirmed" },
+    }).unwrap();
   };
 
   const openReportWizardFromAppointment = (item: any, reason?: string) => {
@@ -707,6 +806,25 @@ export default function MeetingsView() {
       color: item.color ?? null,
     });
     setWizardOpen(true);
+  };
+
+  const canActOnPending = (item: any) => {
+    if (!item || meId == null) return false;
+    const creatorId =
+      item.createdById != null ? Number(item.createdById) : undefined;
+    if (!creatorId || !Number.isFinite(creatorId)) return true;
+    return creatorId !== meId;
+  };
+
+  const canActOnReport = (item: any) => {
+    if (!item || meId == null) return false;
+    const updaterId =
+      item.updatedById != null ? Number(item.updatedById) : undefined;
+    if (updaterId && Number.isFinite(updaterId)) return updaterId !== meId;
+    const creatorId =
+      item.createdById != null ? Number(item.createdById) : undefined;
+    if (creatorId && Number.isFinite(creatorId)) return creatorId !== meId;
+    return true;
   };
 
   const handleRejectCancel = async () => {
@@ -741,27 +859,7 @@ export default function MeetingsView() {
     <PageHeader
       title="Mes Rendez-vous"
       caption="Suivi de vos rendez-vous"
-      actions={[
-        {
-          label: "Nouveau RDV",
-          icon: <Plus size={16} />,
-          onClick: () => {
-            setWizardMode("create");
-            setWizardInitialValues(undefined);
-            setReportAppointmentId(undefined);
-            setWizardReportReason("");
-            setWizardOpen(true);
-          },
-          variant: "contained",
-          color: "primary",
-        },
-        {
-          label: "Mes disponibilités",
-          onClick: () => setMode("availability"),
-          variant: "contained",
-          color: "secondary",
-        },
-      ]}
+      actions={headerActions}
     >
       {/* ── CustomTabs + search ── */}
       <Box mt={2}>
@@ -808,12 +906,21 @@ export default function MeetingsView() {
                   key={item.id}
                   appointment={item}
                   period={tab}
+                  canConfirmReject={canActOnPending(item)}
+                  canReschedule={canActOnReport(item)}
                   onClick={() => setSelectedId(item.id)}
                   onConfirm={async () => {
-                    await respondAppointment({
-                      id: item.id,
-                      action: "confirm",
-                    });
+                    if (isAccountant) {
+                      await respondAppointment({
+                        id: item.id,
+                        action: "confirm",
+                      }).unwrap();
+                    } else {
+                      await updateAppointment({
+                        id: item.id,
+                        body: { status: "confirmed" },
+                      }).unwrap();
+                    }
                   }}
                   onReject={() => {
                     setSelectedId(item.id);
@@ -857,6 +964,8 @@ export default function MeetingsView() {
       <AppointmentDetailsDialog
         open={selectedId != null}
         appointment={appointment}
+        canConfirmReject={canActOnPending(appointment)}
+        canReport={canActOnReport(appointment)}
         onClose={() => setSelectedId(null)}
         onConfirm={handleConfirm}
         onReject={() => setRejectDialogOpen(true)}

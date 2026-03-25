@@ -939,6 +939,103 @@ export class AppointmentService {
     return { success: true, total: appointments.length, data: appointments };
   }
 
+  async getMyRelations(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, companyId: true },
+    });
+
+    if (!user?.companyId) throw new ApiError('Utilisateur sans compagnie', 400, 'NO_COMPANY');
+
+    const isAccountant = (user as any)?.role === 'ACCOUNTANT';
+
+    if (isAccountant) {
+      const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
+        where: { accountingFirmId: user.companyId, status: 'active' },
+        include: {
+          clientCompany: {
+            select: {
+              id: true,
+              name: true,
+              employees: {
+                where: { role: { code: 'CLIENT' } },
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  photo: true,
+                  phone: true,
+                },
+                take: 1,
+              },
+            },
+          },
+        },
+      });
+
+      return {
+        success: true,
+        data: relationships.map((rel: any) => {
+          const u = rel.clientCompany.employees[0] ?? null;
+          return {
+            userId: u?.id ?? null,
+            firstName: u?.firstName ?? null,
+            lastName: u?.lastName ?? null,
+            email: u?.email ?? null,
+            photo: u?.photo ?? null,
+            phone: u?.phone ?? null,
+            companyId: rel.clientCompany.id,
+            companyName: rel.clientCompany.name,
+            relationshipStart: rel.relationshipStart,
+          };
+        }),
+      };
+    } else {
+      const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
+        where: { clientCompanyId: user.companyId, status: 'active' },
+        include: {
+          accountingFirm: {
+            select: {
+              id: true,
+              name: true,
+              employees: {
+                where: { role: { code: 'ACCOUNTANT' } },
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  photo: true,
+                  phone: true,
+                },
+                take: 1,
+              },
+            },
+          },
+        },
+      });
+
+      return {
+        success: true,
+        data: relationships.map((rel: any) => {
+          const u = rel.accountingFirm.employees[0] ?? null;
+          return {
+            userId: u?.id ?? null,
+            firstName: u?.firstName ?? null,
+            lastName: u?.lastName ?? null,
+            email: u?.email ?? null,
+            photo: u?.photo ?? null,
+            phone: u?.phone ?? null,
+            companyId: rel.accountingFirm.id,
+            companyName: rel.accountingFirm.name,
+            relationshipStart: rel.relationshipStart,
+          };
+        }),
+      };
+    }
+  }
+
   async createLeave(dto: CreateLeaveDto, accountantId: number) {
     if (dto.startDate > dto.endDate)
       throw new ApiError('startDate doit être avant endDate', 400, 'INVALID_DATE_RANGE');

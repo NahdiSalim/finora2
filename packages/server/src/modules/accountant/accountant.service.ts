@@ -518,6 +518,59 @@ export class AccountantService {
       throw error;
     }
   }
+  async getMyAccountants(clientId: number) {
+    const client = await this.prisma.user.findUnique({
+      where: { id: clientId },
+      select: { companyId: true },
+    });
+
+    if (!client?.companyId) {
+      throw new ApiError('Client must be associated with a company', 400, 'NO_COMPANY');
+    }
+
+    const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
+      where: { clientCompanyId: client.companyId, status: 'active' },
+      include: {
+        accountingFirm: {
+          include: {
+            employees: {
+              where: { role: { code: RoleCode.ACCOUNTANT } },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                photo: true,
+                phone: true,
+              },
+              take: 1,
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const data = relationships.map((rel) => {
+      const accountant = rel.accountingFirm.employees[0] ?? null;
+      return {
+        id: accountant?.id ?? null,
+        firstName: accountant?.firstName ?? null,
+        lastName: accountant?.lastName ?? null,
+        email: accountant?.email ?? null,
+        photo: accountant?.photo ?? null,
+        phone: accountant?.phone ?? null,
+        company: {
+          id: rel.accountingFirm.id,
+          name: rel.accountingFirm.name,
+        },
+        relationshipStatus: rel.status,
+        relationshipStart: rel.relationshipStart,
+      };
+    });
+
+    return { success: true, data };
+  }
 
   // PUBLIC: Browse all accountant profiles (for visitors)
   async browseAccountants(filters: {

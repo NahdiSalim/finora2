@@ -112,6 +112,17 @@ export class AppointmentController {
   }
 
   /**
+   * Get my relations — accountant gets his clients, client gets his accountants
+   */
+  @Get('relations/mine')
+  @ApiOperation({
+    summary: 'Retourne les comptables (si client) ou les clients (si comptable) en relation active',
+  })
+  async getMyRelations(@Req() req: AuthRequest) {
+    return this.appointmentService.getMyRelations(req.user!.id);
+  }
+
+  /**
    * Get confirmed appointments for current month
    */
   @Get('confirmed/this-month')

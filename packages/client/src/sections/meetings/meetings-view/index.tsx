@@ -904,9 +904,18 @@ export default function MeetingsView() {
 
   const handleRejectCancel = async () => {
     if (!selectedId) return;
-    await cancelAppointment(selectedId).unwrap();
+    await respondAppointment({
+      id: selectedId,
+      action: "reject",
+      rejectionReason: rejectReason.trim() || undefined,
+    }).unwrap();
     setRejectDialogOpen(false);
     setRejectReason("");
+  };
+
+  const handleCancelConfirmed = async () => {
+    if (!selectedId) return;
+    await cancelAppointment(selectedId).unwrap();
   };
 
   const handleRejectReport = async () => {
@@ -1044,6 +1053,7 @@ export default function MeetingsView() {
         onClose={() => setSelectedId(null)}
         onConfirm={handleConfirm}
         onReject={() => setRejectDialogOpen(true)}
+        onCancel={handleCancelConfirmed}
         onReport={() => {
           if (!appointment) return;
           openReportWizardFromAppointment(appointment);

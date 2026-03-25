@@ -33,7 +33,7 @@ export async function seedRolePermissions(prisma: PrismaClient) {
     'UPDATE_PROFILE',
   ];
 
-  // Client permissions: Archive + Documents + Rendez-vous + Demandes + Messagerie + Banques + Réseautage + Profil
+  // Client permissions
   const clientActionCodes = [
     'VIEW_ARCHIVE',
     'VIEW_DOCUMENTS',
@@ -41,6 +41,15 @@ export async function seedRolePermissions(prisma: PrismaClient) {
     'VIEW_DOCUMENT_DETAIL',
     'UPDATE_DOCUMENT',
     'DELETE_DOCUMENT',
+    'VIEW_APPOINTMENTS',
+    'CREATE_APPOINTMENT',
+    'VIEW_APPOINTMENT_DETAIL',
+    'UPDATE_APPOINTMENT',
+    'CANCEL_APPOINTMENT',
+    'REPORT_APPOINTMENT',
+    'VIEW_APPOINTMENTS_CALENDAR',
+    'VIEW_APPOINTMENTS_HISTORY',
+    'VIEW_AVAILABILITY_SLOTS',
     'VIEW_MEETINGS',
     'CREATE_MEETING',
     'VIEW_MEETING_DETAIL',
@@ -61,7 +70,7 @@ export async function seedRolePermissions(prisma: PrismaClient) {
     'UPDATE_PROFILE',
   ];
 
-  // Accountant permissions: Collaborateurs + Demandes + Rendez-vous + Dashboard + Réseautage + Messagerie + Documents + Archive + Tâches + Clients + Profil
+  // Accountant permissions
   const accountantActionCodes = [
     'VIEW_COLLABORATORS',
     'CREATE_COLLABORATOR',
@@ -73,6 +82,15 @@ export async function seedRolePermissions(prisma: PrismaClient) {
     'VIEW_REQUEST_DETAIL',
     'UPDATE_REQUEST',
     'DELETE_REQUEST',
+    'VIEW_APPOINTMENTS',
+    'CREATE_APPOINTMENT',
+    'VIEW_APPOINTMENT_DETAIL',
+    'UPDATE_APPOINTMENT',
+    'CANCEL_APPOINTMENT',
+    'REPORT_APPOINTMENT',
+    'VIEW_APPOINTMENTS_CALENDAR',
+    'VIEW_APPOINTMENTS_HISTORY',
+    'VIEW_AVAILABILITY_SLOTS',
     'VIEW_MEETINGS',
     'CREATE_MEETING',
     'VIEW_MEETING_DETAIL',

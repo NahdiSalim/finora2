@@ -519,11 +519,7 @@ export class AppointmentService {
   /**
    * Respond to appointment (Accountant)
    */
-  async respondToAppointment(
-    appointmentId: number,
-    dto: RespondAppointmentDto,
-    accountantId: number
-  ) {
+  async respondToAppointment(appointmentId: number, dto: RespondAppointmentDto, userId: number) {
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
     });
@@ -532,18 +528,24 @@ export class AppointmentService {
       throw new ApiError('Appointment not found', 404, 'APPOINTMENT_NOT_FOUND');
     }
 
+    // Both client and accountant can respond
+    if (appointment.clientId !== userId && appointment.accountantId !== userId) {
+      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+    }
+
     if (appointment.status !== 'pending') {
       throw new ApiError('Can only respond to pending appointments', 400, 'INVALID_STATUS');
     }
 
     const isConfirmed = dto.action === AppointmentAction.CONFIRM;
+    const isAccountant = appointment.accountantId === userId;
 
     const updatedAppointment = await this.prisma.appointment.update({
       where: { id: appointmentId },
       data: {
         status: isConfirmed ? 'confirmed' : 'rejected',
-        accountantId: isConfirmed ? accountantId : appointment.accountantId,
-        accountantNotes: dto.notes,
+        accountantNotes: isAccountant ? dto.notes : undefined,
+        clientNotes: !isAccountant ? dto.notes : undefined,
         rejectionReason: dto.rejectionReason,
         confirmedAt: isConfirmed ? new Date() : undefined,
       },
@@ -571,14 +573,17 @@ export class AppointmentService {
       },
     });
 
-    // Notify client about accountant's response
-    if (updatedAppointment.client?.id) {
+    // Notify the other party
+    const recipientId = isAccountant
+      ? updatedAppointment.client?.id
+      : updatedAppointment.accountant?.id;
+    if (recipientId) {
       this.notificationService
         .notify({
-          recipientId: updatedAppointment.client.id,
+          recipientId,
           type: 'appointment',
           action: isConfirmed ? 'confirmed' : 'rejected',
-          actorName: 'Votre comptable',
+          actorName: isAccountant ? 'Votre comptable' : 'Le client',
           data: { appointmentId },
         })
         .catch(() => {});
@@ -937,6 +942,103 @@ export class AppointmentService {
     });
 
     return { success: true, total: appointments.length, data: appointments };
+  }
+
+  async getMyRelations(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, companyId: true },
+    });
+
+    if (!user?.companyId) throw new ApiError('Utilisateur sans compagnie', 400, 'NO_COMPANY');
+
+    const isAccountant = (user as any)?.role === 'ACCOUNTANT';
+
+    if (isAccountant) {
+      const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
+        where: { accountingFirmId: user.companyId, status: 'active' },
+        include: {
+          clientCompany: {
+            select: {
+              id: true,
+              name: true,
+              employees: {
+                where: { role: { code: 'CLIENT' } },
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  photo: true,
+                  phone: true,
+                },
+                take: 1,
+              },
+            },
+          },
+        },
+      });
+
+      return {
+        success: true,
+        data: relationships.map((rel: any) => {
+          const u = rel.clientCompany.employees[0] ?? null;
+          return {
+            userId: u?.id ?? null,
+            firstName: u?.firstName ?? null,
+            lastName: u?.lastName ?? null,
+            email: u?.email ?? null,
+            photo: u?.photo ?? null,
+            phone: u?.phone ?? null,
+            companyId: rel.clientCompany.id,
+            companyName: rel.clientCompany.name,
+            relationshipStart: rel.relationshipStart,
+          };
+        }),
+      };
+    } else {
+      const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
+        where: { clientCompanyId: user.companyId, status: 'active' },
+        include: {
+          accountingFirm: {
+            select: {
+              id: true,
+              name: true,
+              employees: {
+                where: { role: { code: 'ACCOUNTANT' } },
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  photo: true,
+                  phone: true,
+                },
+                take: 1,
+              },
+            },
+          },
+        },
+      });
+
+      return {
+        success: true,
+        data: relationships.map((rel: any) => {
+          const u = rel.accountingFirm.employees[0] ?? null;
+          return {
+            userId: u?.id ?? null,
+            firstName: u?.firstName ?? null,
+            lastName: u?.lastName ?? null,
+            email: u?.email ?? null,
+            photo: u?.photo ?? null,
+            phone: u?.phone ?? null,
+            companyId: rel.accountingFirm.id,
+            companyName: rel.accountingFirm.name,
+            relationshipStart: rel.relationshipStart,
+          };
+        }),
+      };
+    }
   }
 
   async createLeave(dto: CreateLeaveDto, accountantId: number) {

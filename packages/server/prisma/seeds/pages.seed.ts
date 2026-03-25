@@ -51,6 +51,18 @@ export async function seedPages(prisma: PrismaClient) {
     // Gestion des rendez-vous
     { PageUrl: '/meetings', slug: 'meetings-list', featureId: gestionRendezVous!.id },
     { PageUrl: '/meetings/:id', slug: 'meeting-detail', featureId: gestionRendezVous!.id },
+    { PageUrl: '/appointments', slug: 'appointments-list', featureId: gestionRendezVous!.id },
+    { PageUrl: '/appointments/:id', slug: 'appointment-detail', featureId: gestionRendezVous!.id },
+    {
+      PageUrl: '/appointments/calendar',
+      slug: 'appointments-calendar',
+      featureId: gestionRendezVous!.id,
+    },
+    {
+      PageUrl: '/appointments/history',
+      slug: 'appointments-history',
+      featureId: gestionRendezVous!.id,
+    },
 
     // Gestion des demandes
     { PageUrl: '/requests', slug: 'requests-list', featureId: gestionDemandes!.id },

@@ -38,6 +38,7 @@ export const requestValidationSchema = Yup.object({
   attachments: Yup.array()
     .of(
       Yup.mixed<File>()
+        .defined()
         .test("fileSize", "Fichier trop volumineux (max 5MB)", (value) => {
           if (!value) return true;
           return (value as File).size <= 5 * 1024 * 1024;

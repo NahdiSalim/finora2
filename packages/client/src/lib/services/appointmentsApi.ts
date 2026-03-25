@@ -37,6 +37,8 @@ export interface AppointmentItem {
   client?: AppointmentUser;
   accountant?: AppointmentUser;
   date?: Date | null;
+  createdById?: number | null;
+  updatedById?: number | null;
 }
 
 export interface GetAllAppointmentsResponse {
@@ -165,6 +167,8 @@ type GetAllAppointmentsParams = {
   search?: string;
 };
 
+type GetMyAppointmentsParams = GetAllAppointmentsParams;
+
 export const appointmentsApi = createApi({
   reducerPath: "appointmentsApi",
   baseQuery: baseQueryWithReauth,
@@ -183,6 +187,41 @@ export const appointmentsApi = createApi({
         if (p.period) search.set("period", p.period);
         if (p.search && p.search.trim()) search.set("search", p.search.trim());
         return { url: `/appointments/all?${search.toString()}`, method: "GET" };
+      },
+      transformResponse: (response: GetAllAppointmentsResponse) => ({
+        ...response,
+        data: Array.isArray(response?.data)
+          ? response.data.map((a: any) => normalizeAppointmentItem(a))
+          : [],
+      }),
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.data.map((a) => ({
+                type: "Appointments" as const,
+                id: a.id,
+              })),
+              { type: "Appointments", id: "LIST" },
+            ]
+          : [{ type: "Appointments", id: "LIST" }],
+    }),
+
+    getMyAppointments: builder.query<
+      GetAllAppointmentsResponse,
+      GetMyAppointmentsParams | void
+    >({
+      query: (params) => {
+        const p: GetMyAppointmentsParams = params ?? {};
+        const search = new URLSearchParams();
+        if (p.page) search.set("page", String(p.page));
+        if (p.limit) search.set("limit", String(p.limit));
+        if (p.status) search.set("status", p.status);
+        if (p.period) search.set("period", p.period);
+        if (p.search && p.search.trim()) search.set("search", p.search.trim());
+        return {
+          url: `/appointments/my-appointments?${search.toString()}`,
+          method: "GET",
+        };
       },
       transformResponse: (response: GetAllAppointmentsResponse) => ({
         ...response,
@@ -448,6 +487,7 @@ export const appointmentsApi = createApi({
 
 export const {
   useGetAllAppointmentsQuery,
+  useGetMyAppointmentsQuery,
   useGetAppointmentByIdQuery,
   useGetConfirmedThisMonthQuery,
   useCreateAppointmentMutation,

@@ -17,12 +17,16 @@ export default function AppointmentCard({
   onConfirm,
   onReject,
   onReschedule,
+  canConfirmReject = true,
+  canReschedule = true,
 }: {
   appointment: AppointmentItem;
   onClick: () => void;
   onConfirm?: () => void;
   onReject?: () => void;
   onReschedule?: () => void;
+  canConfirmReject?: boolean;
+  canReschedule?: boolean;
 }) {
   const fullName =
     [appointment.client?.firstName, appointment.client?.lastName]
@@ -214,46 +218,47 @@ export default function AppointmentCard({
         <AppointmentStatusChip status={appointment.status} />
 
         {/* Pending — Refuser / Confirmer */}
-        {appointment.status === "pending" && onConfirm && onReject && (
-          <Box sx={{ display: "flex", gap: 1, ml: 1 }}>
-            <CustomButton
-              variant="outlined"
-              onClick={(e) => {
-                e.stopPropagation();
-                onReject();
-              }}
-            >
-              Refuser
-            </CustomButton>
-            <CustomButton
-              variant="contained"
-              onClick={(e) => {
-                e.stopPropagation();
-                onConfirm();
-              }}
-            >
-              Confirmer
-            </CustomButton>
-          </Box>
-        )}
-
-        {/* Confirmed + upcoming — Reporter */}
-        {appointment.status === "confirmed" &&
-          new Date(appointment.startTime) > new Date() &&
-          onReschedule && (
-            <Box sx={{ ml: 1 }}>
+        {appointment.status === "pending" &&
+          canConfirmReject &&
+          onConfirm &&
+          onReject && (
+            <Box sx={{ display: "flex", gap: 1, ml: 1 }}>
               <CustomButton
                 variant="outlined"
-                color="warning"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onReschedule();
+                  onReject();
                 }}
               >
-                Reporter
+                Refuser
+              </CustomButton>
+              <CustomButton
+                variant="contained"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onConfirm();
+                }}
+              >
+                Confirmer
               </CustomButton>
             </Box>
           )}
+
+        {/* Confirmed — Reporter */}
+        {appointment.status === "confirmed" && onReschedule && (
+          <Box sx={{ ml: 1 }}>
+            <CustomButton
+              variant="outlined"
+              color="warning"
+              onClick={(e) => {
+                e.stopPropagation();
+                onReschedule();
+              }}
+            >
+              Reporter
+            </CustomButton>
+          </Box>
+        )}
       </Box>
     </Box>
   );

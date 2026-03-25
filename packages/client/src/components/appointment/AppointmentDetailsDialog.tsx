@@ -33,6 +33,8 @@ export default function AppointmentDetailsDialog({
   onReject,
   onEdit,
   onReport,
+  canConfirmReject = true,
+  canReport = true,
 }: {
   open: boolean;
   appointment: AppointmentItem | null;
@@ -41,6 +43,8 @@ export default function AppointmentDetailsDialog({
   onReject: () => void;
   onEdit: () => void;
   onReport?: () => void;
+  canConfirmReject?: boolean;
+  canReport?: boolean;
 }) {
   const isPending = appointment?.status === "pending";
   const isCompleted = appointment?.status === "completed";
@@ -162,7 +166,7 @@ export default function AppointmentDetailsDialog({
         </Grid>
       </DialogContent>
       <DialogActions sx={{ px: 2, pb: 2 }}>
-        {isPending ? (
+        {isPending && canConfirmReject ? (
           <>
             <CustomButton variant="outlined" color="error" onClick={onReject}>
               Refuser
@@ -175,11 +179,11 @@ export default function AppointmentDetailsDialog({
           <CustomButton variant="contained" color="warning" onClick={onReport}>
             Reporter
           </CustomButton>
-        ) : (
+        ) : !isPending && !isConfirmed ? (
           <CustomButton variant="contained" onClick={onEdit}>
             Modifier
           </CustomButton>
-        )}
+        ) : null}
       </DialogActions>
     </Dialog>
   );

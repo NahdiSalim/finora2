@@ -75,6 +75,86 @@ export class ChatService {
     return room;
   }
 
+  async getUserRoomsDebug(userId: number) {
+    // Apply the filter
+    const matchedRooms = await this.prisma.chatRoom.findMany({
+      where: {
+        participants: { has: String(userId) },
+        status: 'active',
+      },
+      include: {
+        createdBy: {
+          select: { id: true, username: true, email: true, firstName: true, lastName: true },
+        },
+      },
+      orderBy: { lastActivity: 'desc' },
+    });
+
+    // Enrich with participant profiles
+    const allParticipantIds = [
+      ...new Set(
+        matchedRooms.flatMap((r) => r.participants.map(Number).filter((id) => id !== userId))
+      ),
+    ];
+
+    const profiles = allParticipantIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: allParticipantIds } },
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            company: { select: { id: true, name: true } },
+            role: { select: { nameFr: true, code: true } },
+          },
+        })
+      : [];
+
+    const profileMap = new Map(profiles.map((p) => [p.id, p]));
+
+    const lastMessageIds = matchedRooms
+      .map((r) => r.lastMessageId)
+      .filter((id): id is number => typeof id === 'number' && id > 0);
+
+    const lastMessages = lastMessageIds.length
+      ? await this.prisma.chatMessage.findMany({
+          where: { id: { in: lastMessageIds } },
+          select: {
+            id: true,
+            roomId: true,
+            content: true,
+            type: true,
+            senderId: true,
+            createdAt: true,
+            attachments: true,
+          },
+        })
+      : [];
+
+    const lastMessageMap = new Map(lastMessages.map((m) => [m.roomId, m]));
+
+    const enriched = matchedRooms.map((room) => ({
+      ...room,
+      participantProfiles: room.participants
+        .map(Number)
+        .filter((id) => id !== userId)
+        .map((id) => profileMap.get(id) ?? null)
+        .filter(Boolean),
+      lastMessage: lastMessageMap.get(room.id) ?? null,
+    }));
+
+    // Return paginated shape expected by frontend
+    return {
+      data: enriched,
+      total: enriched.length,
+      page: 1,
+      pageSize: 50,
+      totalPages: Math.ceil(enriched.length / 50),
+    };
+  }
+
   async getUserRooms(userId: number) {
     const rooms = await this.prisma.chatRoom.findMany({
       where: {
@@ -189,6 +269,7 @@ export class ChatService {
         senderId: userId,
         content: dto.content,
         type: dto.type,
+        attachments: attachmentUrls,
         mentions: dto.mentions ? dto.mentions.map(String) : [],
         documentId: dto.documentId,
         readBy: [String(userId)],
@@ -243,9 +324,8 @@ export class ChatService {
           },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      // Fetch newest first (for pagination), then reverse to get ASC for display
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit,
       skip,
     });
@@ -258,6 +338,7 @@ export class ChatService {
     });
 
     return {
+      // Reverse to ASC order for chat display (oldest at top, newest at bottom)
       messages: messages.reverse(),
       total,
       page,

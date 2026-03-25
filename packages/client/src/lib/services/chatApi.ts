@@ -4,174 +4,296 @@ import { baseQueryWithReauth } from "./baseQueryWithReauth";
 // ==================== TYPES ====================
 
 export interface ChatParticipant {
-    id: number;
-    username?: string;
-    email?: string;
-    firstName?: string;
-    lastName?: string;
+  id: number;
+  username?: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+export interface ChatRoomParticipantProfile {
+  id: number;
+  username: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email: string;
+  company?: { id: number; name: string } | null;
+  role?: { nameFr: string; code?: string } | null;
 }
 
 export interface ChatRoom {
+  id: number;
+  name?: string | null;
+  type: string;
+  description?: string | null;
+  participants: string[];
+  admins?: string[];
+  status: string;
+  lastActivity?: string;
+  lastMessageId?: number;
+  lastMessage?: {
     id: number;
-    name?: string;
-    type: "direct" | "group" | "request" | "ticket" | "meeting" | "company";
-    description?: string;
-    participants: string[];
-    admins: string[];
-    status: string;
-    lastActivity?: string;
-    lastMessageId?: number;
+    roomId: number;
+    content: string;
+    type: string;
+    senderId: number;
     createdAt: string;
-    updatedAt: string;
-    createdBy?: ChatParticipant;
+    attachments?: string[];
+  } | null;
+  participantProfiles?: ChatRoomParticipantProfile[];
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: ChatParticipant;
 }
 
 export interface ChatMessage {
-    id: number;
-    roomId: number;
-    threadId?: number;
-    senderId: number;
-    content: string;
-    type: "text" | "file" | "image" | "system";
-    mentions: string[];
-    documentId?: number;
-    readBy: string[];
-    deleted: boolean;
-    edited: boolean;
-    createdAt: string;
-    updatedAt: string;
-    sender?: ChatParticipant;
-    attachments?: string[];
+  id: number;
+  roomId: number;
+  threadId?: number;
+  senderId: number;
+  content: string;
+  type: string;
+  mentions?: string[];
+  documentId?: number;
+  readBy?: string[];
+  deleted: boolean;
+  edited: boolean;
+  createdAt: string;
+  updatedAt?: string;
+  sender?: ChatParticipant;
+  attachments?: string[];
+}
+
+export interface GetRoomsResponse {
+  data: ChatRoom[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface GetRoomMessagesResponse {
-    messages: ChatMessage[];
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
+  messages: ChatMessage[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 export interface CreateRoomInput {
-    name?: string;
-    type: "direct" | "group" | "request" | "ticket" | "meeting" | "company";
-    description?: string;
-    participants: number[];
-    contextId?: number;
-    contextType?: "request" | "ticket" | "meeting" | "company";
+  name?: string;
+  type: string;
+  description?: string;
+  participants: number[];
+  contextId?: number;
+  contextType?: string;
 }
 
 export interface SendMessageInput {
-    roomId: number;
-    content: string;
-    type?: "text" | "file" | "image" | "system";
-    threadId?: number;
-    mentions?: number[];
-    documentId?: number;
-    attachments?: File[];
+  roomId: number;
+  content: string;
+  type?: string;
+  threadId?: number;
+  mentions?: number[];
+  documentId?: number;
+  attachments?: File[];
+}
+
+export interface SharedDocument {
+  id: number;
+  roomId: number;
+  senderId: number;
+  content: string;
+  type: string;
+  createdAt: string;
+  documentId: number | null;
+  fileUrl: string | null;
+}
+
+export interface GetSharedDocumentsResponse {
+  data: SharedDocument[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface GetSharedDocumentsParams {
+  roomId: number;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface UserRequest {
+  id: number;
+  subject: string;
+  type: string;
+  urgency: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface GetUserRequestsResponse {
+  success: boolean;
+  data: UserRequest[];
 }
 
 // ==================== API ====================
 
 export const chatApi = createApi({
-    reducerPath: "chatApi",
-    baseQuery: baseQueryWithReauth,
-    tagTypes: ["ChatRooms", "ChatMessages"],
-    endpoints: (builder) => ({
-        getUserRooms: builder.query<ChatRoom[], void>({
-            query: () => ({ url: "/chat/rooms", method: "GET" }),
-            providesTags: [{ type: "ChatRooms", id: "LIST" }],
-        }),
-
-        getRoomById: builder.query<ChatRoom, number>({
-            query: (id) => ({ url: `/chat/rooms/${id}`, method: "GET" }),
-            providesTags: (_result, _err, id) => [{ type: "ChatRooms", id }],
-        }),
-
-        createRoom: builder.mutation<ChatRoom, CreateRoomInput>({
-            query: (body) => ({ url: "/chat/rooms", method: "POST", body }),
-            invalidatesTags: [{ type: "ChatRooms", id: "LIST" }],
-        }),
-
-        getRoomMessages: builder.query<
-            GetRoomMessagesResponse,
-            { roomId: number; page?: number; limit?: number }
-        >({
-            query: ({ roomId, page = 1, limit = 50 }) => ({
-                url: `/chat/rooms/${roomId}/messages?page=${page}&limit=${limit}`,
-                method: "GET",
-            }),
-            providesTags: (_result, _err, { roomId }) => [
-                { type: "ChatMessages", id: `room-${roomId}` },
-            ],
-        }),
-
-        sendMessage: builder.mutation<ChatMessage, SendMessageInput>({
-            query: ({ attachments, ...rest }) => {
-                if (attachments && attachments.length > 0) {
-                    const formData = new FormData();
-                    formData.append("roomId", String(rest.roomId));
-                    formData.append("content", rest.content);
-                    formData.append("type", rest.type ?? "text");
-                    if (rest.threadId) formData.append("threadId", String(rest.threadId));
-                    if (rest.mentions?.length)
-                        formData.append("mentions", rest.mentions.join(","));
-                    if (rest.documentId)
-                        formData.append("documentId", String(rest.documentId));
-                    attachments.forEach((file) => formData.append("attachments", file));
-                    return { url: "/chat/messages", method: "POST", body: formData };
-                }
-                return { url: "/chat/messages", method: "POST", body: rest };
-            },
-            invalidatesTags: (_result, _err, { roomId }) => [
-                { type: "ChatMessages", id: `room-${roomId}` },
-                { type: "ChatRooms", id: "LIST" },
-            ],
-        }),
-
-        markAsRead: builder.mutation<void, number>({
-            query: (messageId) => ({
-                url: `/chat/messages/${messageId}/read`,
-                method: "POST",
-            }),
-        }),
-
-        editMessage: builder.mutation<
-            ChatMessage,
-            { messageId: number; content: string; roomId: number }
-        >({
-            query: ({ messageId, content }) => ({
-                url: `/chat/messages/${messageId}`,
-                method: "PUT",
-                body: { content },
-            }),
-            invalidatesTags: (_result, _err, { roomId }) => [
-                { type: "ChatMessages", id: `room-${roomId}` },
-            ],
-        }),
-
-        deleteMessage: builder.mutation<
-            void,
-            { messageId: number; roomId: number }
-        >({
-            query: ({ messageId }) => ({
-                url: `/chat/messages/${messageId}`,
-                method: "DELETE",
-            }),
-            invalidatesTags: (_result, _err, { roomId }) => [
-                { type: "ChatMessages", id: `room-${roomId}` },
-            ],
-        }),
+  reducerPath: "chatApi",
+  baseQuery: baseQueryWithReauth,
+  tagTypes: ["ChatRooms", "ChatMessages"],
+  endpoints: (builder) => ({
+    // Returns paginated { data: ChatRoom[], total, page, pageSize, totalPages }
+    getUserRooms: builder.query<GetRoomsResponse, void>({
+      query: () => ({ url: "/chat/rooms", method: "GET" }),
+      providesTags: [{ type: "ChatRooms", id: "LIST" }],
+      keepUnusedDataFor: 0,
     }),
+
+    getRoomById: builder.query<ChatRoom, number>({
+      query: (id) => ({ url: `/chat/rooms/${id}`, method: "GET" }),
+      providesTags: (_result, _err, id) => [{ type: "ChatRooms", id }],
+    }),
+
+    createRoom: builder.mutation<ChatRoom, CreateRoomInput>({
+      query: (body) => ({ url: "/chat/rooms", method: "POST", body }),
+      invalidatesTags: [{ type: "ChatRooms", id: "LIST" }],
+    }),
+
+    findOrCreateDirectRoom: builder.mutation<
+      ChatRoom,
+      { targetUserId: number }
+    >({
+      query: ({ targetUserId }) => ({
+        url: "/chat/rooms/direct",
+        method: "POST",
+        body: { targetUserId },
+      }),
+      invalidatesTags: [{ type: "ChatRooms", id: "LIST" }],
+    }),
+
+    getRoomMessages: builder.query<GetRoomMessagesResponse, number>({
+      query: (roomId) => ({
+        url: `/chat/rooms/${roomId}/messages`,
+        method: "GET",
+      }),
+      providesTags: (_result, _err, roomId) => [
+        { type: "ChatMessages", id: roomId },
+      ],
+      keepUnusedDataFor: 0,
+    }),
+
+    sendMessage: builder.mutation<ChatMessage, SendMessageInput>({
+      query: ({ attachments, ...rest }) => {
+        if (attachments && attachments.length > 0) {
+          const formData = new FormData();
+          formData.append("roomId", String(rest.roomId));
+          formData.append("content", rest.content);
+          formData.append("type", rest.type ?? "text");
+          if (rest.threadId) formData.append("threadId", String(rest.threadId));
+          if (rest.mentions?.length)
+            formData.append("mentions", rest.mentions.join(","));
+          if (rest.documentId)
+            formData.append("documentId", String(rest.documentId));
+          attachments.forEach((file) => formData.append("attachments", file));
+          return { url: "/chat/messages", method: "POST", body: formData };
+        }
+        return { url: "/chat/messages", method: "POST", body: rest };
+      },
+      invalidatesTags: (_result, _err, { roomId }) => [
+        { type: "ChatMessages", id: roomId },
+        { type: "ChatRooms", id: "LIST" },
+      ],
+    }),
+
+    sendFileMessage: builder.mutation<
+      ChatMessage,
+      { roomId: number; file: File }
+    >({
+      query: ({ roomId, file }) => {
+        const body = new FormData();
+        body.append("roomId", String(roomId));
+        body.append("type", "file");
+        body.append("content", file.name);
+        body.append("attachments", file);
+        return { url: "/chat/messages", method: "POST", body };
+      },
+    }),
+
+    markAsRead: builder.mutation<void, number>({
+      query: (messageId) => ({
+        url: `/chat/messages/${messageId}/read`,
+        method: "POST",
+      }),
+    }),
+
+    editMessage: builder.mutation<
+      ChatMessage,
+      { messageId: number; content: string; roomId: number }
+    >({
+      query: ({ messageId, content }) => ({
+        url: `/chat/messages/${messageId}`,
+        method: "PUT",
+        body: { content },
+      }),
+      invalidatesTags: (_result, _err, { roomId }) => [
+        { type: "ChatMessages", id: roomId },
+      ],
+    }),
+
+    deleteMessage: builder.mutation<
+      void,
+      { messageId: number; roomId: number }
+    >({
+      query: ({ messageId }) => ({
+        url: `/chat/messages/${messageId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (_result, _err, { roomId }) => [
+        { type: "ChatMessages", id: roomId },
+      ],
+    }),
+
+    getSharedDocuments: builder.query<
+      GetSharedDocumentsResponse,
+      GetSharedDocumentsParams
+    >({
+      query: ({ roomId, page = 1, pageSize = 20 }) => ({
+        url: `/chat/rooms/${roomId}/shared-documents?page=${page}&pageSize=${pageSize}`,
+        method: "GET",
+      }),
+      providesTags: (_result, _err, { roomId }) => [
+        { type: "ChatMessages", id: `shared-${roomId}` },
+      ],
+      keepUnusedDataFor: 0,
+    }),
+
+    getUserRequests: builder.query<
+      GetUserRequestsResponse,
+      { role?: string; limit?: number }
+    >({
+      query: ({ limit = 100 }) => ({
+        url: `/requests/chat-accessible?limit=${limit}`,
+        method: "GET",
+      }),
+      keepUnusedDataFor: 0,
+    }),
+  }),
 });
 
 export const {
-    useGetUserRoomsQuery,
-    useGetRoomByIdQuery,
-    useCreateRoomMutation,
-    useGetRoomMessagesQuery,
-    useSendMessageMutation,
-    useMarkAsReadMutation,
-    useEditMessageMutation,
-    useDeleteMessageMutation,
+  useGetUserRoomsQuery,
+  useGetRoomByIdQuery,
+  useCreateRoomMutation,
+  useFindOrCreateDirectRoomMutation,
+  useGetRoomMessagesQuery,
+  useSendMessageMutation,
+  useSendFileMessageMutation,
+  useMarkAsReadMutation,
+  useEditMessageMutation,
+  useDeleteMessageMutation,
+  useGetSharedDocumentsQuery,
+  useGetUserRequestsQuery,
 } = chatApi;

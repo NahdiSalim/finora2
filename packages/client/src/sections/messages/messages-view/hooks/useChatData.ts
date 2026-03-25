@@ -2,129 +2,168 @@ import { useMemo } from "react";
 import { useSelector } from "react-redux";
 import type { RootState } from "src/lib/store";
 import {
-    useGetUserRoomsQuery,
-    useGetRoomMessagesQuery,
-    useSendMessageMutation,
-    useMarkAsReadMutation,
-    type ChatRoom,
-    type ChatMessage,
+  useGetUserRoomsQuery,
+  useGetRoomMessagesQuery,
+  useSendMessageMutation,
+  useMarkAsReadMutation,
+  type ChatRoom,
+  type ChatMessage,
 } from "src/lib/services/chatApi";
 import type { Conversation, Message } from "../data/types";
 
-// Map a ChatRoom to the frontend Conversation type
 function mapRoomToConversation(
-    room: ChatRoom,
-    currentUserId: number,
+  room: ChatRoom,
+  currentUserId: number,
 ): Conversation {
-    // For direct rooms, the "other" participant is the one that's not the current user
-    const otherParticipantId = room.participants.find(
-        (p) => p !== String(currentUserId),
-    );
+  const profiles = room.participantProfiles ?? [];
+  const other =
+    profiles.find((p) => Number(p.id) !== currentUserId) ?? profiles[0] ?? null;
 
-    const name = room.name ?? `Conversation ${room.id}`;
-    const initial = name.charAt(0).toUpperCase();
+  const otherRoleCode = (other?.role?.code ?? "").toUpperCase();
+  const category =
+    otherRoleCode === "CLIENT"
+      ? ("client" as const)
+      : ("collaborateur" as const);
 
-    return {
-        id: room.id,
-        name,
-        role: room.type === "direct" ? "Direct" : room.type,
-        preview: "",
-        fullDate: room.lastActivity ?? room.updatedAt,
-        time: new Date(room.lastActivity ?? room.updatedAt).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-        }),
-        avatar: initial,
-        avatarColor: "#D9D9D9",
-        avatarTextColor: "#666666",
-        online: false,
-        unreadCount: 0,
-        phone: "",
-        category: "client",
-    };
-}
+  let name: string;
+  let role: string;
+  let avatar: string;
 
-// Map a ChatMessage to the frontend Message type
-function mapApiMessageToMessage(
-    msg: ChatMessage,
-    currentUserId: number,
-): Message {
-    const date = new Date(msg.createdAt).toISOString().split("T")[0];
-    const time = new Date(msg.createdAt).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-    });
+  if (other) {
+    const fullName =
+      [other.firstName, other.lastName].filter(Boolean).join(" ") ||
+      other.username ||
+      other.email;
+    name = fullName;
+    role = other.role?.nameFr ?? "";
+    avatar = fullName
+      .split(" ")
+      .map((w) => w[0])
+      .filter(Boolean)
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+  } else {
+    name = room.name || "Conversation";
+    role = room.type;
+    avatar = (room.name || "??")
+      .split(" ")
+      .map((w) => w[0])
+      .filter(Boolean)
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+  }
 
-    const isMine = msg.senderId === currentUserId;
-
-    if (msg.type === "file" || msg.type === "image") {
-        const url = msg.attachments?.[0] ?? "";
-        const fileName = url.split("/").pop() ?? "Fichier";
-        return {
-            id: msg.id,
-            type: "file",
-            mine: isMine,
-            time,
-            date,
-            file: {
-                name: fileName,
-                size: "",
-                type: msg.type === "image" ? "image/jpeg" : "application/octet-stream",
-                url,
-            },
-        };
+  let preview = "";
+  if (room.lastMessage) {
+    const lm = room.lastMessage;
+    const isOwn = Number(lm.senderId) === currentUserId;
+    let body: string;
+    if (lm.type === "file") {
+      body = `📎 ${lm.content || "fichier"}`;
+    } else {
+      body = lm.content || "";
     }
+    preview = isOwn ? `Vous : ${body}` : body;
+  }
 
+  const lastDate =
+    room.lastActivity ?? room.updatedAt ?? new Date().toISOString();
+
+  return {
+    id: room.id,
+    name,
+    role,
+    preview,
+    fullDate: lastDate,
+    time: new Date(lastDate).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    avatar,
+    avatarColor: "#D9D9D9",
+    avatarTextColor: "#666666",
+    online: false,
+    unreadCount: 0,
+    phone: "",
+    category,
+  };
+}
+
+function mapApiMessageToMessage(
+  msg: ChatMessage,
+  currentUserId: number,
+): Message {
+  const date = new Date(msg.createdAt).toISOString().split("T")[0];
+  const time = new Date(msg.createdAt).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const isMine = msg.senderId === currentUserId;
+
+  if (msg.type === "file" || msg.type === "image") {
+    const url = msg.attachments?.[0] ?? "";
+    const fileName = msg.content || url.split("/").pop() || "Fichier";
     return {
-        id: msg.id,
-        type: "text",
-        text: msg.content,
-        mine: isMine,
-        time,
-        date,
+      id: msg.id,
+      type: "file" as const,
+      mine: isMine,
+      time,
+      date,
+      file: { name: fileName, size: "", type: "pdf", url },
     };
+  }
+
+  return {
+    id: msg.id,
+    type: "text" as const,
+    text: msg.content,
+    mine: isMine,
+    time,
+    date,
+  };
 }
 
-// Hook to get all rooms as conversations
 export function useConversations() {
-    const currentUserId = useSelector(
-        (state: RootState) => state.auth.user?.id,
-    );
+  const currentUserId = useSelector((state: RootState) => state.auth.user?.id);
+  const uid = currentUserId ? Number(currentUserId) : 0;
 
-    const { data: rooms = [], isLoading, error } = useGetUserRoomsQuery();
+  // getUserRooms returns GetRoomsResponse: { data: ChatRoom[], total, page, pageSize, totalPages }
+  const {
+    data: roomsResponse,
+    isLoading,
+    error,
+  } = useGetUserRoomsQuery(undefined, {
+    refetchOnMountOrArgChange: true,
+  });
 
-    const conversations = useMemo(
-        () =>
-            rooms.map((room) =>
-                mapRoomToConversation(room, currentUserId ? Number(currentUserId) : 0),
-            ),
-        [rooms, currentUserId],
-    );
+  // Extract the array — roomsResponse is the paginated object, not the array itself
+  const rooms: ChatRoom[] = roomsResponse?.data ?? [];
 
-    return { conversations, isLoading, error };
+  const conversations = useMemo(
+    () => rooms.map((room) => mapRoomToConversation(room, uid)),
+    [rooms, uid],
+  );
+
+  return { conversations, isLoading, error };
 }
 
-// Hook to get messages for a specific room
 export function useRoomMessages(roomId: number) {
-    const currentUserId = useSelector(
-        (state: RootState) => state.auth.user?.id,
-    );
+  const currentUserId = useSelector((state: RootState) => state.auth.user?.id);
+  const uid = currentUserId ? Number(currentUserId) : 0;
 
-    const {
-        data,
-        isLoading,
-        error,
-    } = useGetRoomMessagesQuery({ roomId }, { skip: !roomId });
+  const { data, isLoading, error } = useGetRoomMessagesQuery(roomId, {
+    skip: !roomId,
+    refetchOnMountOrArgChange: true,
+  });
 
-    const messages = useMemo(
-        () =>
-            (data?.messages ?? []).map((msg) =>
-                mapApiMessageToMessage(msg, currentUserId ? Number(currentUserId) : 0),
-            ),
-        [data, currentUserId],
-    );
+  const messages = useMemo(
+    () => (data?.messages ?? []).map((msg) => mapApiMessageToMessage(msg, uid)),
+    [data, uid],
+  );
 
-    return { messages, isLoading, error };
+  return { messages, isLoading, error };
 }
 
 export { useSendMessageMutation, useMarkAsReadMutation };

@@ -266,6 +266,22 @@ export const appointmentsApi = createApi({
       },
     }),
 
+    reportAppointment: builder.mutation<
+      { success: boolean; message?: string; data?: AppointmentItem },
+      { id: number; newDate: string; newHour: string; reason?: string }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/appointments/${id}/report`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (_result, _err, arg) => [
+        { type: "Appointments", id: arg.id },
+        { type: "Appointments", id: "LIST" },
+        { type: "ConfirmedThisMonth", id: "LIST" },
+      ],
+    }),
+
     updateAppointment: builder.mutation<
       { success: boolean; message?: string; data?: AppointmentItem },
       { id: number; body: Record<string, unknown> }
@@ -436,6 +452,7 @@ export const {
   useGetConfirmedThisMonthQuery,
   useCreateAppointmentMutation,
   useRespondAppointmentMutation,
+  useReportAppointmentMutation,
   useUpdateAppointmentMutation,
   useCancelAppointmentMutation,
   useGetMyAvailabilitiesQuery,

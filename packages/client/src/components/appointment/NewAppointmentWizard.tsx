@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   FormControlLabel,
@@ -10,15 +10,15 @@ import {
   useTheme,
 } from "@mui/material";
 import { MapPin, Phone, Video, Plus, X, MoveLeft } from "lucide-react";
-import CustomButton from "src/components/common/CustomButton";
-import CustomInput from "src/components/common/CustomInput";
-import CustomSelect from "src/components/common/CustomSelect";
+import CustomButton from "../common/CustomButton";
+import CustomInput from "../common/CustomInput";
+import CustomSelect from "../common/CustomSelect";
 import MenuItem from "@mui/material/MenuItem";
 import CustomAccordion from "../common/CustomAccordion";
 import ColorPicker from "../common/ColorPicker";
 import { alpha } from "@mui/material/styles";
-import type { Client } from "src/lib/services/clientApi";
-import { useGetAvailableSlotsQuery } from "src/lib/services/appointmentsApi";
+import type { Client } from "../../lib/services/clientApi";
+import { useGetAvailableSlotsQuery } from "../../lib/services/appointmentsApi";
 
 export interface NewAppointmentPayload {
   title: string;

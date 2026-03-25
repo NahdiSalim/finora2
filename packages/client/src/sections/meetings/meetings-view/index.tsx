@@ -807,6 +807,7 @@ export default function MeetingsView() {
                 <AppointmentCard
                   key={item.id}
                   appointment={item}
+                  period={tab}
                   onClick={() => setSelectedId(item.id)}
                   onConfirm={async () => {
                     await respondAppointment({

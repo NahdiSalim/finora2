@@ -1,6 +1,6 @@
 import { Avatar, Box, Tooltip, Typography, useTheme } from "@mui/material";
 import { Building, Calendar, Clock3, MapPin, Video } from "lucide-react";
-import type { AppointmentItem } from "src/lib/services/appointmentsApi";
+import { type AppointmentItem } from "src/lib/services/appointmentsApi";
 import AppointmentStatusChip from "./AppointmentStatusChip";
 import CustomButton from "src/components/common/CustomButton";
 
@@ -13,17 +13,21 @@ function formatTime(iso: string) {
 
 export default function AppointmentCard({
   appointment,
+  period,
   onClick,
   onConfirm,
   onReject,
   onReschedule,
 }: {
   appointment: AppointmentItem;
+  period: "today" | "upcoming" | "past";
   onClick: () => void;
   onConfirm?: () => void;
   onReject?: () => void;
   onReschedule?: () => void;
 }) {
+  const theme = useTheme();
+
   const fullName =
     [appointment.client?.firstName, appointment.client?.lastName]
       .filter(Boolean)
@@ -31,7 +35,6 @@ export default function AppointmentCard({
     appointment.client?.username ||
     appointment.client?.email ||
     "Client";
-  const theme = useTheme();
 
   const getLocationIcon = (location?: string | null) => {
     if (location === "Virtuel") return <Video size={12} />;
@@ -46,15 +49,22 @@ export default function AppointmentCard({
     appointmentDate &&
     appointmentDate.toDateString() === new Date().toDateString();
 
-  const formattedDate = appointmentDate
-    ? isToday
-      ? "Aujourd'hui"
-      : appointmentDate.toLocaleDateString("fr-FR", {
-          day: "2-digit",
-          month: "long",
-          year: "numeric",
-        })
-    : "—";
+  // On garde la logique existante pour cacher la date dans l’onglet "today"
+  const shouldShowDate = !(period === "today" && isToday);
+
+  // Formatage avec gestion spéciale pour "aujourd'hui"
+  let formattedDate = "—";
+  if (appointmentDate) {
+    if (period === "upcoming" && isToday) {
+      formattedDate = "Aujourd'hui";
+    } else {
+      formattedDate = appointmentDate.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      });
+    }
+  }
 
   return (
     <Box
@@ -76,7 +86,6 @@ export default function AppointmentCard({
         sx={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "flex-start",
           gap: 1.5,
           width: "50%",
         }}
@@ -84,10 +93,12 @@ export default function AppointmentCard({
         <Avatar sx={{ width: 36, height: 36 }}>
           {fullName.slice(0, 1).toUpperCase()}
         </Avatar>
+
         <Box sx={{ width: "100%" }}>
           <Typography variant="body2" noWrap fontWeight={600}>
             {appointment.title}
           </Typography>
+
           <Box
             sx={{
               display: "flex",
@@ -121,42 +132,32 @@ export default function AppointmentCard({
             </Box>
 
             {/* Date */}
-            <Box
-              sx={{
-                minWidth: 0,
-                display: "flex",
-                alignItems: "center",
-                gap: 0.5,
-                px: 1,
-                borderRight: `1px solid ${theme.palette.info.lighter}`,
-              }}
-            >
-              <Calendar size={12} />
-
-              <Tooltip
-                title={
-                  appointmentDate
-                    ? appointmentDate.toLocaleDateString("fr-FR", {
-                        day: "2-digit",
-                        month: "long",
-                        year: "numeric",
-                      })
-                    : "—"
-                }
-                arrow
+            {shouldShowDate && (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.5,
+                  px: 1,
+                  borderRight: `1px solid ${theme.palette.info.lighter}`,
+                }}
               >
-                <Typography
-                  variant="caption"
-                  sx={{
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {formattedDate}
-                </Typography>
-              </Tooltip>
-            </Box>
+                <Calendar size={12} />
+
+                <Tooltip title={formattedDate} arrow>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {formattedDate}
+                  </Typography>
+                </Tooltip>
+              </Box>
+            )}
 
             {/* Time */}
             <Box
@@ -185,18 +186,16 @@ export default function AppointmentCard({
             >
               {getLocationIcon(appointment.location)}
 
-              <Tooltip title={appointment.location || "Mon bureau"} arrow>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {appointment.location || "Mon bureau"}
-                </Typography>
-              </Tooltip>
+              <Typography
+                variant="caption"
+                sx={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {appointment.location || "Mon bureau"}
+              </Typography>
             </Box>
           </Box>
         </Box>
@@ -205,8 +204,6 @@ export default function AppointmentCard({
       <Box
         sx={{
           display: "flex",
-          flexDirection: "row",
-          justifyContent: "center",
           alignItems: "center",
           gap: 1,
         }}
@@ -225,6 +222,7 @@ export default function AppointmentCard({
             >
               Refuser
             </CustomButton>
+
             <CustomButton
               variant="contained"
               onClick={(e) => {

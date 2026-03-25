@@ -11,13 +11,7 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
-import {
-  Check,
-  Plus,
-  Search,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Check, Plus, Search, Trash2, X } from "lucide-react";
 import { PageHeader } from "src/layouts/components/page-header";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
@@ -573,8 +567,8 @@ function AvailabilitySettings() {
           <Box
             sx={{
               display: "flex",
-              gap: 1,
-              alignItems: "flex-end",
+              gap: 1.5,
+              alignItems: "flex-start",
               mb: 1,
             }}
           >
@@ -591,15 +585,89 @@ function AvailabilitySettings() {
               value={vacationEnd}
               onChange={(e) => setVacationEnd(e.target.value)}
             />
+
+            <Box sx={{ flex: 1, minWidth: 240 }}>
+              <CustomInput
+                label="Raison (optionnel)"
+                value={vacationReason}
+                onChange={(e) => setVacationReason(e.target.value)}
+                placeholder="Ex: mission / formation / etc."
+              />
+            </Box>
+
             <CustomButton
               variant="contained"
-              disabled={!vacationStart || !vacationEnd}
+              onClick={handleCreateLeave}
+              disabled={!vacationStart || !vacationEnd || isCreatingLeave}
               size="large"
             >
               <Check size={16} />
             </CustomButton>
           </Box>
         )}
+
+        <Box sx={{ mt: vacationEnabled ? 0 : 1 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            Mes congés
+          </Typography>
+
+          {leaves.length === 0 ? (
+            <Typography variant="caption" color="text.secondary">
+              Aucun congé déclaré.
+            </Typography>
+          ) : (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              {leaves.map((l) => {
+                const start = l.startDate
+                  ? new Date(l.startDate).toLocaleDateString("fr-FR")
+                  : "";
+                const end = l.endDate
+                  ? new Date(l.endDate).toLocaleDateString("fr-FR")
+                  : "";
+                return (
+                  <Box
+                    key={l.id}
+                    sx={{
+                      p: 1.25,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 2,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 1.5,
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" fontWeight={600} noWrap>
+                        {start && end ? `${start} - ${end}` : "Congé"}
+                      </Typography>
+                      {l.reason ? (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: "block", mt: 0.25 }}
+                          noWrap
+                        >
+                          {l.reason}
+                        </Typography>
+                      ) : null}
+                    </Box>
+
+                    <IconButton
+                      size="small"
+                      onClick={() => handleDeleteLeave(l.id)}
+                      disabled={isDeletingLeave}
+                      aria-label={`Supprimer le congé ${l.id}`}
+                    >
+                      <Trash2 size={16} />
+                    </IconButton>
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
+        </Box>
       </Box>
 
       <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}>
@@ -620,7 +688,7 @@ function AvailabilitySettings() {
 export default function MeetingsView() {
   const [mode, setMode] = useState<Mode>("appointments");
   const [tab, setTab] = useState<TimeTab>("today");
-  const ROWS_PER_PAGE = 10;
+  const ROWS_PER_PAGE = 5;
   const [page, setPage] = useState(0); // RTK Query expects 1-based pages
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -649,6 +717,7 @@ export default function MeetingsView() {
       page: 1,
       limit: 200,
     },
+    { skip: isClient },
   );
 
   const searchTerm = search.trim();
@@ -1081,6 +1150,7 @@ export default function MeetingsView() {
         mode={wizardMode}
         initialValues={wizardInitialValues}
         reportAppointmentId={reportAppointmentId}
+        fixedClientId={isClient ? meId : undefined}
         reportReason={wizardReportReason}
         onSchedule={async (payload) => {
           await createAppointment({

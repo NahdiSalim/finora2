@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Box,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   FormControlLabel,
   IconButton,
   Radio,
@@ -306,20 +302,16 @@ export default function NewAppointmentWizard({
   ];
 
   return (
-    <Dialog
-      open={open}
-      onClose={resetAndClose}
-      fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: 4, // softer corners
-          overflow: "hidden", // keeps rounded corners clean
-          bgcolor: "background.paper",
-        },
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        bgcolor: "background.paper",
       }}
     >
       {/* Title with subtle border and clean close button */}
-      <DialogTitle
+      <Box
         sx={{
           px: 3,
           pt: 3,
@@ -329,6 +321,7 @@ export default function NewAppointmentWizard({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          flexShrink: 0,
         }}
       >
         <Box>
@@ -344,8 +337,17 @@ export default function NewAppointmentWizard({
         <IconButton onClick={resetAndClose}>
           <X size={18} />
         </IconButton>
-      </DialogTitle>
-      <DialogContent dividers>
+      </Box>
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: "auto",
+          px: 3,
+          py: 2,
+          borderTop: "1px solid",
+          borderColor: "divider",
+        }}
+      >
         {/* Custom stepper with labels and progress bar */}
         {/* Custom stepper with segmented progress bar */}
         <Box sx={{ mb: 3 }}>
@@ -801,8 +803,19 @@ export default function NewAppointmentWizard({
             ) : null}
           </Box>
         )}
-      </DialogContent>
-      <DialogActions sx={{ px: 2, pb: 2 }}>
+      </Box>
+      <Box
+        sx={{
+          px: 2,
+          pb: 2,
+          pt: 1.5,
+          display: "flex",
+          alignItems: "center",
+          borderTop: "1px solid",
+          borderColor: "divider",
+          flexShrink: 0,
+        }}
+      >
         {!isReport && step > 0 && (
           <CustomButton
             variant="text"
@@ -885,7 +898,7 @@ export default function NewAppointmentWizard({
             {isReport ? "Reporter" : "Planifier"}
           </CustomButton>
         )}
-      </DialogActions>
-    </Dialog>
+      </Box>
+    </Box>
   );
 }

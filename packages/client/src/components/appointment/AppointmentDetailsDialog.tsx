@@ -1,13 +1,4 @@
-import {
-  Box,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Grid,
-  IconButton,
-  Typography,
-} from "@mui/material";
+import { Box, Drawer, Grid, IconButton, Typography } from "@mui/material";
 import { Calendar, Download, MapPin, Phone, User2, X } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
@@ -25,7 +16,7 @@ function formatDateTime(iso?: string | null) {
   });
 }
 
-export default function AppointmentDetailsDialog({
+export default function AppointmentDetailsPanel({
   open,
   appointment,
   onClose,
@@ -36,8 +27,8 @@ export default function AppointmentDetailsDialog({
   canConfirmReject = true,
   canReport = true,
 }: {
-  open: boolean;
   appointment: AppointmentItem | null;
+  open: boolean;
   onClose: () => void;
   onConfirm: () => void;
   onReject: () => void;
@@ -51,32 +42,70 @@ export default function AppointmentDetailsDialog({
   const isConfirmed = appointment?.status === "confirmed";
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle
+    <Drawer
+      anchor="right"
+      open={open}
+      onClose={onClose}
+      sx={{ zIndex: (theme) => theme.zIndex.modal + 10 }}
+      slotProps={{
+        paper: {
+          sx: {
+            width: { xs: "95%", sm: 480 },
+            height: "calc(100% - 32px)",
+            top: "16px",
+            right: { xs: "13px", sm: "16px" },
+            borderRadius: 3,
+            overflow: "hidden",
+          },
+        },
+      }}
+    >
+      {/* HEADER */}
+      <Box
         sx={{
+          px: 3,
+          pt: 3,
+          pb: 1.5,
+          borderBottom: "1px solid",
+          borderColor: "divider",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          flexShrink: 0,
         }}
       >
         <Box>
-          <Typography variant="h6">
+          <Typography fontSize={20} fontWeight={500}>
             {appointment?.title || "Détails du rendez-vous"}
           </Typography>
+
           {appointment?.status && (
-            <AppointmentStatusChip status={appointment.status} />
+            <Box sx={{ mt: 0.5 }}>
+              <AppointmentStatusChip status={appointment.status} />
+            </Box>
           )}
         </Box>
+
         <IconButton onClick={onClose}>
           <X size={18} />
         </IconButton>
-      </DialogTitle>
-      <DialogContent dividers>
+      </Box>
+
+      {/* BODY */}
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: "auto",
+          px: 3,
+          py: 2,
+        }}
+      >
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="caption" color="text.secondary">
               Date et heure
             </Typography>
+
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
               <Calendar size={14} />
               <Typography variant="body2">
@@ -84,10 +113,12 @@ export default function AppointmentDetailsDialog({
               </Typography>
             </Box>
           </Grid>
+
           <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="caption" color="text.secondary">
               Comptable
             </Typography>
+
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
               <User2 size={14} />
               <Typography variant="body2">
@@ -100,10 +131,12 @@ export default function AppointmentDetailsDialog({
               </Typography>
             </Box>
           </Grid>
+
           <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="caption" color="text.secondary">
               Lieu
             </Typography>
+
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
               <MapPin size={14} />
               <Typography variant="body2">
@@ -111,19 +144,23 @@ export default function AppointmentDetailsDialog({
               </Typography>
             </Box>
           </Grid>
+
           <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="caption" color="text.secondary">
               Téléphone
             </Typography>
+
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
               <Phone size={14} />
               <Typography variant="body2">+216 98 765 432</Typography>
             </Box>
           </Grid>
+
           <Grid size={{ xs: 12 }}>
             <Typography variant="caption" color="text.secondary">
               Description
             </Typography>
+
             <CustomInput
               multiline
               minRows={3}
@@ -131,11 +168,13 @@ export default function AppointmentDetailsDialog({
               disabled
             />
           </Grid>
+
           {isCompleted && (
             <Grid size={{ xs: 12 }}>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
                 PV de la réunion
               </Typography>
+
               <Box
                 sx={{
                   p: 1.25,
@@ -151,12 +190,14 @@ export default function AppointmentDetailsDialog({
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     {appointment?.minutesFileName || "PV 12/03/2025.pdf"}
                   </Typography>
+
                   <Typography variant="caption" color="text.secondary">
                     {appointment?.minutesFileSizeKb
                       ? `${appointment.minutesFileSizeKb} Kb`
                       : "500 Kb"}
                   </Typography>
                 </Box>
+
                 <IconButton size="small">
                   <Download size={16} />
                 </IconButton>
@@ -164,13 +205,30 @@ export default function AppointmentDetailsDialog({
             </Grid>
           )}
         </Grid>
-      </DialogContent>
-      <DialogActions sx={{ px: 2, pb: 2 }}>
+      </Box>
+
+      {/* FOOTER */}
+      <Box
+        sx={{
+          px: 2,
+          pb: 2,
+          pt: 1.5,
+          display: "flex",
+          alignItems: "center",
+          borderTop: "1px solid",
+          borderColor: "divider",
+          flexShrink: 0,
+          gap: 1,
+        }}
+      >
+        <Box sx={{ flex: 1 }} />
+
         {isPending && canConfirmReject ? (
           <>
             <CustomButton variant="outlined" color="error" onClick={onReject}>
               Refuser
             </CustomButton>
+
             <CustomButton variant="contained" onClick={onConfirm}>
               Confirmer
             </CustomButton>
@@ -184,7 +242,7 @@ export default function AppointmentDetailsDialog({
             Modifier
           </CustomButton>
         ) : null}
-      </DialogActions>
-    </Dialog>
+      </Box>
+    </Drawer>
   );
 }

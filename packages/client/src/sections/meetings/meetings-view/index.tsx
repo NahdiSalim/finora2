@@ -6,6 +6,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Drawer,
   IconButton,
   Switch,
   Typography,
@@ -1138,7 +1139,8 @@ export default function MeetingsView() {
       </Dialog>
 
       {/* ── New appointment wizard ── */}
-      <NewAppointmentWizard
+      <Drawer
+        anchor="right"
         open={wizardOpen}
         onClose={() => {
           setWizardOpen(false);
@@ -1147,46 +1149,66 @@ export default function MeetingsView() {
           setReportAppointmentId(undefined);
           setWizardReportReason("");
         }}
-        mode={wizardMode}
-        initialValues={wizardInitialValues}
-        reportAppointmentId={reportAppointmentId}
-        fixedClientId={isClient ? meId : undefined}
-        reportReason={wizardReportReason}
-        onSchedule={async (payload) => {
-          await createAppointment({
-            title: payload.title,
-            description: payload.description,
-            type:
-              payload.subject === "facturation"
-                ? "review"
-                : payload.subject === "budget"
-                  ? "consultation"
-                  : "consultation",
-            date: payload.date,
-            hour: payload.time,
-            meetingType: payload.meetingType,
-            location: payload.location,
-            accountantId: meId,
-            clientId: payload.clientId,
-            clientNotes: payload.guests.length
-              ? `Invités: ${payload.guests.join(", ")}`
-              : payload.description,
-            color: payload.color,
-            guests: payload.guests,
-          }).unwrap();
+        sx={{ zIndex: (theme2) => theme2.zIndex.modal + 10 }}
+        slotProps={{
+          paper: {
+            sx: {
+              width: { xs: "95%", sm: 520 },
+              height: "calc(100% - 32px)",
+              top: "16px",
+              right: { xs: "13px", sm: "16px" },
+              borderRadius: 3,
+              overflow: "hidden",
+            },
+          },
         }}
-        onReport={async (payload) => {
-          await reportAppointment({
-            id: payload.id,
-            newDate: payload.newDate,
-            newHour: payload.newHour,
-            reason: payload.reason,
-          }).unwrap();
-        }}
-        clients={clientsData?.data ?? []}
-        clientsLoading={isLoadingClients}
-        accountantId={meId}
-      />
+      >
+        <NewAppointmentWizard
+          open={wizardOpen}
+          onClose={() => {
+            setWizardOpen(false);
+            setWizardMode("create");
+            setWizardInitialValues(undefined);
+            setReportAppointmentId(undefined);
+            setWizardReportReason("");
+          }}
+          mode={wizardMode}
+          initialValues={wizardInitialValues}
+          reportAppointmentId={reportAppointmentId}
+          fixedClientId={isClient ? meId : undefined}
+          reportReason={wizardReportReason}
+          onSchedule={async (payload) => {
+            await createAppointment({
+              title: payload.title,
+              description: payload.description,
+              type:
+                payload.subject === "facturation" ? "review" : "consultation",
+              date: payload.date,
+              hour: payload.time,
+              meetingType: payload.meetingType,
+              location: payload.location,
+              accountantId: meId,
+              clientId: payload.clientId,
+              clientNotes: payload.guests.length
+                ? `Invités: ${payload.guests.join(", ")}`
+                : payload.description,
+              color: payload.color,
+              guests: payload.guests,
+            }).unwrap();
+          }}
+          onReport={async (payload) => {
+            await reportAppointment({
+              id: payload.id,
+              newDate: payload.newDate,
+              newHour: payload.newHour,
+              reason: payload.reason,
+            }).unwrap();
+          }}
+          clients={clientsData?.data ?? []}
+          clientsLoading={isLoadingClients}
+          accountantId={meId}
+        />
+      </Drawer>
     </PageHeader>
   );
 }

@@ -133,7 +133,7 @@ export function PageHeader({
                   color: "#000000",
                 }}
               >
-                <ArrowLeft size={40} />
+                <ArrowLeft size={22} />
               </IconButton>
             )}
 

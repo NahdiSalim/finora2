@@ -8,6 +8,8 @@ import type {
   RoleType,
 } from "src/types/user";
 
+const API_BASE = import.meta.env.VITE_API_URL ?? "";
+
 export interface Role {
   id: string;
   name: string;
@@ -211,6 +213,29 @@ export const usersApi = createApi({
         },
       }),
       invalidatesTags: ["Users"],
+    }),
+
+    exportUsers: builder.mutation<
+      { blob: Blob; filename: string },
+      { lang?: "fr" | "en" } | void
+    >({
+      queryFn: async (arg) => {
+        const lang = arg?.lang ?? "fr";
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/users/export?lang=${lang}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) {
+          const err = await res.text().catch(() => "Export failed");
+          return { error: { status: res.status, data: err } as any };
+        }
+        const disposition = res.headers.get("Content-Disposition");
+        const filename =
+          disposition?.match(/filename="?([^";]+)"?/)?.[1]?.trim() ??
+          `users_${lang}.csv`;
+        const blob = await res.blob();
+        return { data: { blob, filename } };
+      },
     }),
 
     getResidenceTypesForSelect: builder.infiniteQuery<
@@ -421,4 +446,5 @@ export const {
   useGetRegionsForSelectInfiniteQuery,
   useGetUsersForSelectInfiniteQuery,
   useUpdateCompleteProfileMutation,
+  useExportUsersMutation,
 } = usersApi;

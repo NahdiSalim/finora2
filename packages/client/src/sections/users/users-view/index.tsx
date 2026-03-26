@@ -7,14 +7,14 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
-import { Search } from "lucide-react";
+import { Download, Search } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "src/layouts/components/page-header";
 import { Scrollbar } from "src/components/scrollbar";
 import { DataTable } from "src/layouts/components/custom-table";
 import { CustomPagination } from "src/layouts/components/table-pagination";
-import { FolderTabNavigation } from "src/layouts/components/folder-tab-navigation";
+import { FolderTabNavigation } from "src/components/common/CustomTabs";
 import CustomInput from "src/components/common/CustomInput";
 import CustomSelect from "src/components/common/CustomSelect";
 import { Label } from "src/components/label";
@@ -25,6 +25,7 @@ import {
   useGetUserByIdQuery,
   useGetUsersQuery,
   useManageUserStatusMutation,
+  useExportUsersMutation,
 } from "src/lib/services/usersApi";
 import type { User } from "src/types/user";
 import { useAlert } from "src/contexts/AlertContext";
@@ -41,6 +42,45 @@ const ROLE_TABS: Array<{ id: RoleTab; label: string; apiRoleCode?: string }> = [
   { id: "accountant", label: "Comptables", apiRoleCode: "ACCOUNTANT" },
   { id: "collaborator", label: "Collaborateurs", apiRoleCode: "COLLABORATOR" },
 ];
+
+const toSafeNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const resolveRoleTabCountsFromApi = (
+  apiData: unknown,
+): Partial<Record<RoleTab, number>> => {
+  const root = (apiData ?? {}) as Record<string, unknown>;
+  const countsSource =
+    (root.counts as Record<string, unknown> | undefined) ??
+    (root.roleCounts as Record<string, unknown> | undefined) ??
+    {};
+
+  const read = (...keys: string[]): number | null => {
+    for (const key of keys) {
+      const val = toSafeNumber((countsSource as Record<string, unknown>)[key]);
+      if (val != null) return val;
+    }
+    return null;
+  };
+
+  return {
+    all:
+      read("all", "total", "users", "allUsers") ??
+      toSafeNumber((root.pagination as any)?.total) ??
+      undefined,
+    client: read("client", "clients", "CLIENT") ?? undefined,
+    accountant:
+      read("accountant", "accountants", "comptable", "ACCOUNTANT") ?? undefined,
+    collaborator:
+      read("collaborator", "collaborators", "COLLABORATOR") ?? undefined,
+  };
+};
 
 const getRoleCode = (user: User): string =>
   (typeof user.role === "string"
@@ -122,6 +162,7 @@ export default function UsersView() {
 
   const totalCount = data?.pagination?.total ?? 0;
   const [manageUserStatus] = useManageUserStatusMutation();
+  const [exportUsers, { isLoading: isExporting }] = useExportUsersMutation();
 
   const { data: userById } = useGetUserByIdQuery(id ?? "", {
     skip: !id,
@@ -145,8 +186,14 @@ export default function UsersView() {
       if (rc === "COLLABORATOR" || rc === "COLLABORATEUR")
         counts.collaborator += 1;
     });
-    return counts;
-  }, [users, totalCount]);
+    const apiCounts = resolveRoleTabCountsFromApi(data);
+    return {
+      all: apiCounts.all ?? counts.all,
+      client: apiCounts.client ?? counts.client,
+      accountant: apiCounts.accountant ?? counts.accountant,
+      collaborator: apiCounts.collaborator ?? counts.collaborator,
+    };
+  }, [users, totalCount, data]);
 
   const openDetail = (user: User) => {
     setSelectedUser(user);
@@ -186,6 +233,23 @@ export default function UsersView() {
         }
       },
     );
+  };
+
+  const handleExport = async () => {
+    try {
+      const { blob, filename } = await exportUsers({ lang: "fr" }).unwrap();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showAlert("Export utilisateurs lancé", "success");
+    } catch {
+      showAlert("Erreur lors de l'export utilisateurs", "error");
+    }
   };
 
   const columns = [
@@ -259,6 +323,15 @@ export default function UsersView() {
     <PageHeader
       title="Users"
       caption="Gérez les utilisateurs et filtrez par rôle."
+      actions={[
+        {
+          label: isExporting ? "Export..." : "Exporter Excel",
+          icon: <Download size={16} />,
+          onClick: handleExport,
+          variant: "outlined",
+          color: "secondary",
+        },
+      ]}
     >
       <Card sx={{ bgcolor: "white", borderRadius: 3, p: 2 }}>
         <FolderTabNavigation

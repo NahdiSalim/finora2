@@ -18,9 +18,17 @@ export async function seedRolePermissions(prisma: PrismaClient) {
     },
   });
 
-  // Admin permissions: Dashboard + Gestion des comptes comptables + Profil
+  // Admin permissions: Dashboard + Gestion des comptes comptables + Profil + Gestion des utilisateurs
   const adminActionCodes = [
     'VIEW_DASHBOARD',
+    'VIEW_USERS',
+    'CREATE_USER',
+    'VIEW_USER_DETAIL',
+    'UPDATE_USER',
+    'ACTIVATE_USER',
+    'SUSPEND_USER',
+    'DELETE_USER',
+    'EXPORT_USERS',
     'VIEW_ACCOUNTANTS',
     'CREATE_ACCOUNTANT',
     'VIEW_PENDING_ACCOUNTANTS',

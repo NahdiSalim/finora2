@@ -13,6 +13,56 @@ export async function seedActions(prisma: PrismaClient) {
       pageSlug: 'dashboard-view',
     },
 
+    // Gestion des utilisateurs (super admin)
+    {
+      name: 'Voir la liste des utilisateurs',
+      code: 'VIEW_USERS',
+      category: 'read',
+      pageSlug: 'users-list',
+    },
+    {
+      name: 'Créer un utilisateur',
+      code: 'CREATE_USER',
+      category: 'write',
+      pageSlug: 'users-list',
+    },
+    {
+      name: "Voir le détail d'un utilisateur",
+      code: 'VIEW_USER_DETAIL',
+      category: 'read',
+      pageSlug: 'user-detail',
+    },
+    {
+      name: 'Modifier un utilisateur',
+      code: 'UPDATE_USER',
+      category: 'write',
+      pageSlug: 'user-detail',
+    },
+    {
+      name: 'Activer un utilisateur',
+      code: 'ACTIVATE_USER',
+      category: 'write',
+      pageSlug: 'user-detail',
+    },
+    {
+      name: 'Suspendre un utilisateur',
+      code: 'SUSPEND_USER',
+      category: 'write',
+      pageSlug: 'user-detail',
+    },
+    {
+      name: 'Supprimer un utilisateur',
+      code: 'DELETE_USER',
+      category: 'write',
+      pageSlug: 'user-detail',
+    },
+    {
+      name: 'Exporter les utilisateurs',
+      code: 'EXPORT_USERS',
+      category: 'read',
+      pageSlug: 'users-list',
+    },
+
     // Gestion des comptes comptables
     {
       name: 'Voir la liste des comptables',

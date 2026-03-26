@@ -45,11 +45,16 @@ export function useChatSocket(options: UseChatSocketOptions = {}) {
     connectSocket();
     const socket = getSocket();
 
-    const onConnect = () => {};
+    const onConnect = () => {
+      console.log("[useChatSocket] connected:", { socketId: socket.id });
+    };
     const onDisconnect = (reason: string) =>
-      console.warn("[socket] disconnected:", reason);
+      console.warn("[useChatSocket] disconnected:", {
+        reason,
+        socketId: socket.id,
+      });
     const onConnectError = (err: Error) =>
-      console.error("[socket] connect_error:", err.message);
+      console.error("[useChatSocket] connect_error:", err.message);
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
@@ -85,10 +90,18 @@ export function useChatSocket(options: UseChatSocketOptions = {}) {
   // ── Emitters ────────────────────────────────────────────────────────────
 
   const joinRoom = (roomId: number) => {
+    console.log("[useChatSocket] room:join emit:", {
+      roomId,
+      socketId: getSocket().id,
+    });
     getSocket().emit("room:join", { roomId });
   };
 
   const leaveRoom = (roomId: number) => {
+    console.log("[useChatSocket] room:leave emit:", {
+      roomId,
+      socketId: getSocket().id,
+    });
     getSocket().emit("room:leave", { roomId });
   };
 

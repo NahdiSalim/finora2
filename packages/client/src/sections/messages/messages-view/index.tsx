@@ -18,7 +18,7 @@ import type { SocketMessage } from "./hooks/useChatSocket";
 
 import { useConversations, useRoomMessages } from "./hooks/useChatData";
 import { useSendMessageMutation, chatApi } from "src/lib/services/chatApi";
-import { disconnectSocket } from "src/lib/socket";
+import { disconnectSocket, isSocketConnected } from "src/lib/socket";
 
 import type { RootState } from "src/lib/store";
 import type { Conversation, Message } from "./data/types";
@@ -63,11 +63,26 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   // Typing indicator state: set of roomIds where the other user is typing
   const [typingRooms, setTypingRooms] = useState<Set<number>>(new Set());
 
+  // Buffer realtime messages that arrive before the active conversation is ready.
+  // This prevents "works for sender, not for recipient until refresh" cases caused by timing.
+  const pendingRealtimeByRoomRef = useRef<Map<number, SocketMessage[]>>(
+    new Map(),
+  );
+
   // ── Socket ────────────────────────────────────────────────────────────────
   const { joinRoom, leaveRoom, emitTyping } = useChatSocket({
     onMessageNew: (msg: SocketMessage) => {
       const d = new Date(msg.createdAt);
       const isMine = msg.senderId === currentUid;
+      const activeRoomId = selectedConversationRef.current;
+
+      console.log("[MessagesView] message:new received:", {
+        msgId: msg.id,
+        msgRoomId: msg.roomId,
+        activeRoomId,
+        currentUid,
+        socketConnected: isSocketConnected(),
+      });
 
       console.log(
         "[onMessageNew] id:",
@@ -83,27 +98,62 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       );
 
       // 1. Inject into getRoomMessages cache for that room
-      dispatch(
-        chatApi.util.updateQueryData("getRoomMessages", msg.roomId, (draft) => {
-          if (draft.messages.some((m) => m.id === msg.id)) {
-            return;
-          }
-          draft.messages.push({
-            id: msg.id,
-            roomId: msg.roomId,
-            senderId: msg.senderId,
-            content: msg.content,
-            type: msg.type,
-            createdAt: msg.createdAt,
-            deleted: false,
-            edited: false,
-            fileUrl: msg.fileUrl ?? null,
-            attachments: msg.attachments,
-            sender: msg.sender,
-          });
-          draft.total += 1;
-        }),
-      );
+      // Only update messages for the currently visible conversation.
+      if (activeRoomId && msg.roomId === activeRoomId) {
+        console.log("[MessagesView] updating cache for active conversation:", {
+          roomId: msg.roomId,
+          msgId: msg.id,
+        });
+        dispatch(
+          chatApi.util.updateQueryData(
+            "getRoomMessages",
+            msg.roomId,
+            (draft) => {
+              if (draft.messages.some((m) => m.id === msg.id)) {
+                console.log(
+                  "[MessagesView] message already in cache; skipping:",
+                  {
+                    roomId: msg.roomId,
+                    msgId: msg.id,
+                  },
+                );
+                return;
+              }
+              draft.messages.push({
+                id: msg.id,
+                roomId: msg.roomId,
+                senderId: msg.senderId,
+                content: msg.content,
+                type: msg.type,
+                createdAt: msg.createdAt,
+                deleted: false,
+                edited: false,
+                fileUrl: msg.fileUrl ?? null,
+                attachments: msg.attachments,
+                sender: msg.sender,
+              });
+              draft.total += 1;
+              console.log("[MessagesView] cache updated:", {
+                roomId: msg.roomId,
+                msgId: msg.id,
+              });
+            },
+          ),
+        );
+      } else {
+        // Cache might not exist yet because useRoomMessages is skipped until roomId is non-zero.
+        // Buffer it and flush when/if the user opens that room.
+        const existing = pendingRealtimeByRoomRef.current.get(msg.roomId) ?? [];
+        pendingRealtimeByRoomRef.current.set(msg.roomId, [...existing, msg]);
+        console.log(
+          "[MessagesView] buffering message:new (room not active yet):",
+          {
+            msgId: msg.id,
+            msgRoomId: msg.roomId,
+            activeRoomId,
+          },
+        );
+      }
 
       // 2. Update rooms list preview + reorder
       dispatch(
@@ -113,15 +163,12 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
             return;
           }
 
-          const body =
-            msg.type === "file"
-              ? `📎 ${msg.content?.split("/").pop() || "fichier"}`
-              : msg.content;
-
           room.lastMessage = {
             id: msg.id,
             roomId: msg.roomId,
-            content: isMine ? `Vous : ${body}` : body,
+            // Store raw content. The "Vous :" prefix must be derived in
+            // mapRoomToConversation() based on (lastMessage.senderId === currentUserId).
+            content: msg.content,
             type: msg.type,
             senderId: msg.senderId,
             createdAt: msg.createdAt,
@@ -140,22 +187,58 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
           );
         }),
       );
+
+      // Prevent stale optimistic preview overrides from overriding the
+      // computed preview for the current authenticated user.
+      setConversationOverrides((prev) => {
+        if (!prev[msg.roomId]) return prev;
+        const next = { ...prev };
+        delete next[msg.roomId];
+        return next;
+      });
     },
 
     onMessageUpdated: (msg: SocketMessage) => {
-      dispatch(
-        chatApi.util.updateQueryData("getRoomMessages", msg.roomId, (draft) => {
-          const existing = draft.messages.find((m) => m.id === msg.id);
-          if (existing) {
-            existing.content = msg.content;
-            existing.edited = true;
-          }
-        }),
-      );
+      const activeRoomId = selectedConversationRef.current;
+      console.log("[MessagesView] message:updated received:", {
+        msgId: msg.id,
+        msgRoomId: msg.roomId,
+        activeRoomId,
+      });
+      if (activeRoomId && msg.roomId === activeRoomId) {
+        dispatch(
+          chatApi.util.updateQueryData(
+            "getRoomMessages",
+            msg.roomId,
+            (draft) => {
+              const existing = draft.messages.find((m) => m.id === msg.id);
+              if (existing) {
+                existing.content = msg.content;
+                existing.edited = true;
+                console.log(
+                  "[MessagesView] cache updated for message:updated:",
+                  {
+                    roomId: msg.roomId,
+                    msgId: msg.id,
+                  },
+                );
+              }
+            },
+          ),
+        );
+      }
     },
 
     onMessageDeleted: ({ messageId, roomId }) => {
       if (!roomId) return;
+
+      const activeRoomId = selectedConversationRef.current;
+      console.log("[MessagesView] message:deleted received:", {
+        msgId: messageId,
+        msgRoomId: roomId,
+        activeRoomId,
+      });
+      if (!activeRoomId || roomId !== activeRoomId) return;
 
       dispatch(
         chatApi.util.updateQueryData("getRoomMessages", roomId, (draft) => {
@@ -186,6 +269,44 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       leaveRoom(selectedConversation);
     };
   }, [selectedConversation, joinRoom, leaveRoom]);
+
+  // Flush any buffered realtime messages when the room becomes active.
+  useEffect(() => {
+    const roomId = selectedConversation;
+    if (!roomId) return;
+
+    const pending = pendingRealtimeByRoomRef.current.get(roomId);
+    if (!pending || pending.length === 0) return;
+
+    console.log("[MessagesView] flushing buffered realtime messages:", {
+      roomId,
+      count: pending.length,
+    });
+
+    pendingRealtimeByRoomRef.current.delete(roomId);
+
+    pending.forEach((msg) => {
+      dispatch(
+        chatApi.util.updateQueryData("getRoomMessages", roomId, (draft) => {
+          if (draft.messages.some((m) => m.id === msg.id)) return;
+          draft.messages.push({
+            id: msg.id,
+            roomId: msg.roomId,
+            senderId: msg.senderId,
+            content: msg.content,
+            type: msg.type,
+            createdAt: msg.createdAt,
+            deleted: false,
+            edited: false,
+            fileUrl: msg.fileUrl ?? null,
+            attachments: msg.attachments,
+            sender: msg.sender,
+          });
+          draft.total += 1;
+        }),
+      );
+    });
+  }, [selectedConversation, dispatch]);
 
   // Disconnect socket when leaving the messages page
   // Use disconnectSocket (not destroySocket) so the singleton survives StrictMode double-mount
@@ -328,6 +449,38 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       } catch {
         // Keep optimistic message visible even on error
       }
+    }
+  };
+
+  const handleSendFile = async (file: File) => {
+    const roomId = selectedConversationRef.current;
+    if (!roomId) return;
+
+    const messageType = file.type?.startsWith("image/") ? "image" : "file";
+    console.log("[MessagesView] sending file via REST:", {
+      roomId,
+      fileName: file.name,
+      mimeType: file.type,
+      size: file.size,
+      messageType,
+    });
+
+    try {
+      const saved = await triggerSendMessage({
+        roomId,
+        content: file.name,
+        type: messageType,
+        attachments: [file],
+      }).unwrap();
+
+      console.log("[MessagesView] file saved + message:new expected:", {
+        messageId: saved.id,
+        savedType: saved.type,
+        hasFileUrl: !!saved.fileUrl,
+        fileUrlPreview: saved.fileUrl ? saved.fileUrl.slice(0, 40) : null,
+      });
+    } catch (err) {
+      console.error("[MessagesView] file send failed:", err);
     }
   };
 
@@ -580,6 +733,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                   emitTyping(selectedConversation, typing)
                 }
                 onMessagesChange={handleMessagesChange}
+                onSendFile={handleSendFile}
                 onOpenMedia={() => {
                   setMobileView("media");
                   onOpenMedia?.();
@@ -728,6 +882,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                     emitTyping(selectedConversation, typing)
                   }
                   onMessagesChange={handleMessagesChange}
+                  onSendFile={handleSendFile}
                   onOpenMedia={() => {
                     setDesktopView("media");
                     onOpenMedia?.();

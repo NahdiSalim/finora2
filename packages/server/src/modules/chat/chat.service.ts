@@ -235,6 +235,16 @@ export class ChatService {
 
     // Upload des fichiers si présents
     if (files && files.length > 0) {
+      console.log('[ChatService] sendMessage file upload:', {
+        roomId: dto.roomId,
+        dtoType: dto.type,
+        filesCount: files.length,
+        firstFile: {
+          originalname: files[0].originalname,
+          mimetype: files[0].mimetype,
+          size: files[0].size,
+        },
+      });
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         select: { companyId: true },
@@ -263,6 +273,12 @@ export class ChatService {
     // Créer le message
     // For file messages: store objectName in content field (no attachments[] column in schema)
     const messageContent = attachmentUrls.length > 0 ? attachmentUrls[0] : dto.content;
+    console.log('[ChatService] messageContent computed:', {
+      hasAttachments: attachmentUrls.length > 0,
+      messageContent: attachmentUrls.length > 0 ? messageContent : '(dto.content)',
+      dtoContent: dto.content,
+      dtoType: dto.type,
+    });
 
     const message = await this.prisma.chatMessage.create({
       data: {
@@ -287,6 +303,14 @@ export class ChatService {
         },
       },
     });
+    console.log('[ChatService] chatMessage created:', {
+      id: message.id,
+      roomId: message.roomId,
+      senderId: message.senderId,
+      type: message.type,
+      contentPrefix:
+        typeof message.content === 'string' ? message.content.slice(0, 30) : message.content,
+    });
 
     // Mettre à jour lastActivity de la salle
     await this.prisma.chatRoom.update({
@@ -297,9 +321,19 @@ export class ChatService {
       },
     });
 
+    let fileUrl: string | null = null;
+    if ((dto.type === 'file' || dto.type === 'image') && messageContent) {
+      try {
+        fileUrl = await this.minioService.getPresignedUrl(messageContent, 7 * 24 * 60 * 60);
+      } catch {
+        fileUrl = null;
+      }
+    }
+
     return {
       ...message,
       attachments: attachmentUrls,
+      fileUrl,
     };
   }
 
@@ -324,7 +358,7 @@ export class ChatService {
     // Generate presigned URLs for file messages (content = MinIO objectName)
     const messages = await Promise.all(
       rawMessages.map(async (msg) => {
-        if (msg.type === 'file' && msg.content) {
+        if ((msg.type === 'file' || msg.type === 'image') && msg.content) {
           try {
             const fileUrl = await this.minioService.getPresignedUrl(msg.content, 7 * 24 * 60 * 60);
             return { ...msg, fileUrl };
@@ -426,7 +460,11 @@ export class ChatService {
       },
     });
 
-    return { message: 'Message supprimé avec succès' };
+    return {
+      message: 'Message supprimé avec succès',
+      messageId,
+      roomId: message.roomId,
+    };
   }
 
   // ==================== SHARED DOCUMENTS ====================

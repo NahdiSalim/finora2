@@ -18,6 +18,7 @@ type ChatWindowProps = {
   isCommunicationConfirmed: boolean;
   onMessagesChange: (messages: Message[]) => void;
   onSendMessage?: (content: string) => void;
+  onSendFile?: (file: File) => void;
   onOpenMedia?: () => void;
   onBack?: () => void;
   /** True when the other participant is typing (driven by socket) */
@@ -44,6 +45,7 @@ export default function ChatWindow({
   isCommunicationConfirmed,
   onMessagesChange,
   onSendMessage,
+  onSendFile,
   onOpenMedia,
   onBack,
   isRemoteTyping = false,
@@ -57,16 +59,14 @@ export default function ChatWindow({
   const [inputValue, setInputValue] = useState("");
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const messagesBottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setInputValue("");
   }, [conversationId]);
 
   useEffect(() => {
-    if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop =
-        messagesContainerRef.current.scrollHeight;
-    }
+    messagesBottomRef.current?.scrollIntoView({ behavior: "instant" });
   }, [messages, conversationId]);
 
   // Emit typing start/stop when user types
@@ -146,6 +146,14 @@ export default function ChatWindow({
     }
 
     if (file) {
+      console.log("[ChatWindow] file selected; sending callback:", {
+        fileName: file.name,
+        mimeType: file.type,
+        size: file.size,
+        conversationId,
+      });
+      onSendFile?.(file);
+
       const newMessage: Message = {
         id: Date.now(),
         type: "file",
@@ -292,6 +300,8 @@ export default function ChatWindow({
             {`••• ${currentConversation?.name} est en train d'écrire ...`}
           </Typography>
         )}
+
+        <div ref={messagesBottomRef} />
       </Box>
 
       <Box

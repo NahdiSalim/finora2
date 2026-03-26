@@ -196,6 +196,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (message.roomId) {
         this.server.to(`room:${message.roomId}`).emit('message:deleted', {
           messageId: data.messageId,
+          roomId: message.roomId,
         });
       }
 

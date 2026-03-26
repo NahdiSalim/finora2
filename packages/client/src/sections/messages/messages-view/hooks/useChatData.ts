@@ -60,8 +60,9 @@ function mapRoomToConversation(
     const lm = room.lastMessage;
     const isOwn = Number(lm.senderId) === currentUserId;
     let body: string;
-    if (lm.type === "file") {
-      body = `📎 ${lm.content || "fichier"}`;
+    if (lm.type === "file" || lm.type === "image") {
+      const fileName = lm.content?.split("/").pop() || "fichier";
+      body = `📎 ${fileName}`;
     } else {
       body = lm.content || "";
     }

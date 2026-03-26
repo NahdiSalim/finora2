@@ -142,6 +142,15 @@ export class ChatController {
     const userId = req.user?.id ?? req.user?.sub;
     console.log('==== POST /chat/messages ====');
     console.log('userId:', userId, '| roomId:', dto.roomId, '| type:', dto.type);
+    console.log('dto.content:', dto.content);
+    console.log('files received:', files?.length ?? 0);
+    files?.forEach((f, idx) => {
+      console.log(`file[${idx}]:`, {
+        originalname: f.originalname,
+        mimetype: f.mimetype,
+        size: f.size,
+      });
+    });
     const message = await this.chatService.sendMessage(Number(userId), dto, files);
     console.log('message saved, id:', message.id, '| broadcasting to room:', dto.roomId);
     // Broadcast to all room participants via socket so both sides receive in real-time
@@ -173,7 +182,17 @@ export class ChatController {
   @ApiResponse({ status: 200, description: 'Message supprimé' })
   async deleteMessage(@Request() req, @Param('id', ParseIntPipe) id: number) {
     const userId = req.user?.id ?? req.user?.sub;
-    return this.chatService.deleteMessage(id, Number(userId));
+    const result = await this.chatService.deleteMessage(id, Number(userId));
+
+    // Keep realtime state in sync for clients connected via WebSocket
+    if (result?.roomId) {
+      this.chatGateway.server.to(`room:${result.roomId}`).emit('message:deleted', {
+        messageId: id,
+        roomId: result.roomId,
+      });
+    }
+
+    return result;
   }
 
   @Post('messages/:id/read')

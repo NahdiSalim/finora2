@@ -8,6 +8,7 @@ import {
   useTheme,
   alpha,
   Avatar,
+  Tooltip,
 } from "@mui/material";
 import { Plus, Eye, Trash2, Search, ChevronDown } from "lucide-react";
 import RequestStatusChip from "src/components/request/RequestStatusChip";
@@ -246,21 +247,29 @@ export default function RequestView() {
     table.onResetPage();
   };
 
-  // Define table columns
   const columns: Column<Request>[] = [
     {
       id: "subject",
       label: "Titre de la demande",
+      // Add width for better control
+      width: 280, // or use minWidth: 200, flex: 1
       render: (request: Request) => (
-        <Typography
-          variant="body2"
-          sx={{
-            fontWeight: 500,
-            color: theme.palette.text.primary,
-          }}
-        >
-          {request.subject}
-        </Typography>
+        <Tooltip title={request.subject} arrow placement="top-start">
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 500,
+              color: theme.palette.text.primary,
+              // Truncate long subjects with ellipsis
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              maxWidth: "100%", // Ensures truncation within cell
+            }}
+          >
+            {request.subject}
+          </Typography>
+        </Tooltip>
       ),
     },
     // Conditional client column for accountants
@@ -269,75 +278,97 @@ export default function RequestView() {
           {
             id: "client",
             label: "Client",
-            render: (request: Request) => (
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                <Avatar
-                  sx={{
-                    width: 36,
-                    height: 36,
-                    backgroundColor: theme.palette.primary.main,
-                    fontSize: 14,
-                    fontWeight: 600,
-                  }}
-                >
-                  {request.client?.firstName?.charAt(0) || ""}
-                  {request.client?.lastName?.charAt(0) || ""}
-                </Avatar>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    fontWeight: 500,
-                    color: theme.palette.text.primary,
-                  }}
-                >
-                  {request.client?.firstName} {request.client?.lastName}
-                </Typography>
-              </Box>
-            ),
+            width: 220,
+            render: (request: Request) => {
+              const fullName = request.client
+                ? `${request.client.firstName} ${request.client.lastName}`
+                : "";
+              return (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                  <Avatar
+                    sx={{
+                      width: 36,
+                      height: 36,
+                      backgroundColor: theme.palette.primary.main,
+                      fontSize: 14,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {request.client?.firstName?.charAt(0) || ""}
+                    {request.client?.lastName?.charAt(0) || ""}
+                  </Avatar>
+                  <Tooltip title={fullName} arrow>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: theme.palette.text.primary,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {fullName}
+                    </Typography>
+                  </Tooltip>
+                </Box>
+              );
+            },
           },
         ]
       : []),
     {
       id: "assignedTo",
       label: "Assigné à",
-      render: (request: Request) => (
-        <Box>
-          {request.assignedTo ? (
-            <Typography
-              variant="body2"
-              sx={{
-                fontWeight: 500,
-                color: theme.palette.text.primary,
-              }}
-            >
-              {request.assignedTo.firstName} {request.assignedTo.lastName}
-            </Typography>
-          ) : (
-            <Typography
-              variant="body2"
-              sx={{
-                color: theme.palette.text.disabled,
-                fontStyle: "italic",
-              }}
-            >
-              Non assigné
-            </Typography>
-          )}
-          {request.convertedToTask?.assignee && (
-            <Typography
-              variant="caption"
-              sx={{
-                color: theme.palette.info.main,
-                fontSize: 11,
-                fontWeight: 500,
-              }}
-            >
-              → {request.convertedToTask.assignee.firstName}{" "}
-              {request.convertedToTask.assignee.lastName}
-            </Typography>
-          )}
-        </Box>
-      ),
+      width: 200,
+      render: (request: Request) => {
+        const assignedName = request.assignedTo
+          ? `${request.assignedTo.firstName} ${request.assignedTo.lastName}`
+          : "Non assigné";
+        const taskAssigneeName = request.convertedToTask?.assignee
+          ? `${request.convertedToTask.assignee.firstName} ${request.convertedToTask.assignee.lastName}`
+          : null;
+
+        return (
+          <Box>
+            <Tooltip title={assignedName} arrow placement="top-start">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: request.assignedTo
+                    ? theme.palette.text.primary
+                    : theme.palette.text.disabled,
+                  fontStyle: request.assignedTo ? "normal" : "italic",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {assignedName}
+              </Typography>
+            </Tooltip>
+            {taskAssigneeName && (
+              <Tooltip
+                title={`Converti en tâche assignée à ${taskAssigneeName}`}
+                arrow
+              >
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: theme.palette.info.main,
+                    fontSize: 11,
+                    display: "block",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  → {taskAssigneeName}
+                </Typography>
+              </Tooltip>
+            )}
+          </Box>
+        );
+      },
     },
     {
       id: "status",
@@ -368,6 +399,7 @@ export default function RequestView() {
           />
         </Box>
       ),
+      width: 120,
       render: (request: Request) => (
         <RequestStatusChip status={request.status} size="small" />
       ),
@@ -401,6 +433,7 @@ export default function RequestView() {
           />
         </Box>
       ),
+      width: 100,
       render: (request: Request) => (
         <RequestPriorityChip urgency={request.urgency} size="small" />
       ),
@@ -408,6 +441,7 @@ export default function RequestView() {
     {
       id: "createdAt",
       label: "Date de création",
+      width: 120,
       render: (request: Request) => (
         <Typography variant="body2" color="text.secondary">
           {formatDate(request.createdAt)}
@@ -417,6 +451,7 @@ export default function RequestView() {
     {
       id: "desiredResponseDate",
       label: "Date souhaitée",
+      width: 120,
       render: (request: Request) => (
         <Typography variant="body2" color="text.secondary">
           {request.desiredResponseDate
@@ -428,6 +463,7 @@ export default function RequestView() {
     {
       id: "desiredResponseTime",
       label: "Heure souhaitée",
+      width: 120,
       render: (request: Request) => (
         <Typography variant="body2" color="text.secondary">
           {request.desiredResponseTime || "-"}
@@ -438,61 +474,77 @@ export default function RequestView() {
       id: "actions",
       label: "Action",
       align: "center",
+      width: 80, // Fixed width for actions column
       render: (request: Request) => (
         <Box sx={{ display: "flex", gap: 1, justifyContent: "center" }}>
-          {/* View Details Button */}
-          <IconButton
-            size="small"
-            onClick={() => handleOpenViewDrawer(request)}
-            sx={{
-              width: 32,
-              height: 32,
-              border: `1px solid ${theme.palette.grey[300]}`,
-              borderRadius: 1.5,
-              color: theme.palette.text.secondary,
-              "&:hover": {
-                borderColor: theme.palette.primary.main,
-                color: theme.palette.primary.main,
-                bgcolor: alpha(theme.palette.primary.main, 0.08),
-              },
-            }}
-          >
-            <Eye size={16} />
-          </IconButton>
-
-          {/* Delete Button - Only for clients, disabled for resolved requests */}
-          {isClient && (
+          {/* View Details Button with Tooltip */}
+          <Tooltip title="Voir les détails" arrow>
             <IconButton
               size="small"
-              onClick={() => {
-                if (request.status !== "resolved") {
-                  openDeleteModal(request.id);
-                }
-              }}
-              disabled={request.status === "resolved"}
+              onClick={() => handleOpenViewDrawer(request)}
               sx={{
                 width: 32,
                 height: 32,
                 border: `1px solid ${theme.palette.grey[300]}`,
                 borderRadius: 1.5,
-                color:
-                  request.status === "resolved"
-                    ? theme.palette.grey[400]
-                    : theme.palette.text.secondary,
-                "&:hover":
-                  request.status !== "resolved"
-                    ? {
-                        borderColor: theme.palette.error.main,
-                        color: theme.palette.error.main,
-                        bgcolor: alpha(theme.palette.error.main, 0.08),
-                      }
-                    : {},
-                cursor:
-                  request.status === "resolved" ? "not-allowed" : "pointer",
+                color: theme.palette.text.secondary,
+                "&:hover": {
+                  borderColor: theme.palette.primary.main,
+                  color: theme.palette.primary.main,
+                  bgcolor: alpha(theme.palette.primary.main, 0.08),
+                },
               }}
             >
-              <Trash2 size={16} />
+              <Eye size={16} />
             </IconButton>
+          </Tooltip>
+
+          {/* Delete Button with Tooltip - Only for clients, disabled for resolved requests */}
+          {isClient && (
+            <Tooltip
+              title={
+                request.status === "resolved"
+                  ? "Impossible de supprimer une demande résolue"
+                  : "Supprimer la demande"
+              }
+              arrow
+            >
+              <span>
+                {" "}
+                {/* Wrapper to allow tooltip on disabled button */}
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    if (request.status !== "resolved") {
+                      openDeleteModal(request.id);
+                    }
+                  }}
+                  disabled={request.status === "resolved"}
+                  sx={{
+                    width: 32,
+                    height: 32,
+                    border: `1px solid ${theme.palette.grey[300]}`,
+                    borderRadius: 1.5,
+                    color:
+                      request.status === "resolved"
+                        ? theme.palette.grey[400]
+                        : theme.palette.text.secondary,
+                    "&:hover":
+                      request.status !== "resolved"
+                        ? {
+                            borderColor: theme.palette.error.main,
+                            color: theme.palette.error.main,
+                            bgcolor: alpha(theme.palette.error.main, 0.08),
+                          }
+                        : {},
+                    cursor:
+                      request.status === "resolved" ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <Trash2 size={16} />
+                </IconButton>
+              </span>
+            </Tooltip>
           )}
         </Box>
       ),

@@ -8,9 +8,7 @@ import { UpdateUserDto } from './update-user.dto';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { Prisma } from '@prisma/client';
-import { HashService } from 'src/common/crypto/hash.service';
 import { JwtTokenService } from 'src/common/jwt/jwt-token.service';
-import { FileUploadService, FileCategory } from 'src/common/services/file-upload.service';
 import { MinioService } from 'src/common/services/minio.service';
 import { UserStatus } from 'src/common/enums/user-status.enum';
 import * as bcrypt from 'bcrypt';
@@ -20,9 +18,7 @@ import { stringify } from 'csv-stringify/sync';
 export class UserService {
   constructor(
     private prisma: PrismaService,
-    private hashService: HashService,
     private jwtTokenService: JwtTokenService,
-    private fileUploadService: FileUploadService,
     private minioService: MinioService
   ) {}
 
@@ -54,7 +50,7 @@ export class UserService {
       where.status = status;
     }
 
-    const [total, data] = await Promise.all([
+    const [total, data, roleCounts] = await Promise.all([
       this.prisma.user.count({ where }),
       this.prisma.user.findMany({
         where,
@@ -76,11 +72,34 @@ export class UserService {
         },
         orderBy: { createdAt: 'desc' },
       }),
+      this.prisma.user
+        .groupBy({
+          by: ['id_role'],
+          _count: { id: true },
+          where: {
+            role: {
+              code: { in: ['ACCOUNTANT', 'COLLABORATOR', 'CLIENT'] },
+            },
+          },
+        })
+        .then(async (groups) => {
+          const roles = await this.prisma.role.findMany({
+            where: { code: { in: ['ACCOUNTANT', 'COLLABORATOR', 'CLIENT'] } },
+            select: { id: true, code: true },
+          });
+          const map: Record<string, number> = { ACCOUNTANT: 0, COLLABORATOR: 0, CLIENT: 0 };
+          for (const g of groups) {
+            const r = roles.find((r) => r.id === g.id_role);
+            if (r) map[r.code] = g._count.id;
+          }
+          return map;
+        }),
     ]);
 
     return {
       success: true,
       data,
+      counts: roleCounts,
       pagination: {
         total,
         page,

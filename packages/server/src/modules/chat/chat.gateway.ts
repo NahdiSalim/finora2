@@ -43,7 +43,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // Vérifier le token
       const payload = this.jwtService.verify(token);
-      const userId = payload.sub;
+      const userId = payload.id ?? payload.sub; // JWT puts id in payload.id, not payload.sub
 
       // Stocker la connexion
       client.data.userId = userId;

@@ -9,8 +9,20 @@ export class MinioService implements OnModuleInit {
   private minioClient: Minio.Client;
   private bucketName: string;
 
+  // Static flag: bucket check runs only once across all instances
+  private static bucketInitialized = false;
+  private static sharedClient: Minio.Client | null = null;
+  private static sharedBucketName: string | null = null;
+
   constructor(private configService: ConfigService) {
     const endpoint = this.configService.get<string>('MINIO_ENDPOINT')!;
+
+    // Reuse shared client if already created
+    if (MinioService.sharedClient) {
+      this.minioClient = MinioService.sharedClient;
+      this.bucketName = MinioService.sharedBucketName!;
+      return;
+    }
 
     // Skip initialization if MinIO is disabled
     if (!endpoint || endpoint === 'disabled' || endpoint === 'your-minio-endpoint') {
@@ -31,13 +43,17 @@ export class MinioService implements OnModuleInit {
       accessKey,
       secretKey,
     });
+
+    MinioService.sharedClient = this.minioClient;
+    MinioService.sharedBucketName = this.bucketName;
   }
 
   async onModuleInit() {
-    // Skip if MinIO client was not initialized
-    if (!this.minioClient) {
+    // Skip if already initialized or client not available
+    if (MinioService.bucketInitialized || !this.minioClient) {
       return;
     }
+    MinioService.bucketInitialized = true;
 
     try {
       const exists = await this.minioClient.bucketExists(this.bucketName);

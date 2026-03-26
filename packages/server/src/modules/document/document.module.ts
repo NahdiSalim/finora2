@@ -4,15 +4,14 @@ import { DocumentService } from './document.service';
 import { InvoiceExtractionController } from './invoice-extraction.controller';
 import { InvoiceExtractionService } from './invoice-extraction.service';
 import { PrismaModule } from '../../../prisma/prisma.module';
-import { CommonModule } from '../../common/common.module';
-import { AuthService } from '../auth/auth.service';
-import { MailService } from '../mail/mail.service';
+import { AuthModule } from '../auth/auth.module';
 import { NotificationModule } from '../notification/notification.module';
 
 @Module({
-  imports: [PrismaModule, CommonModule, forwardRef(() => NotificationModule)],
+  imports: [PrismaModule, AuthModule, forwardRef(() => NotificationModule)],
+  // CommonModule and MailModule are @Global() — no need to import here
   controllers: [DocumentController, InvoiceExtractionController],
-  providers: [DocumentService, InvoiceExtractionService, AuthService, MailService],
+  providers: [DocumentService, InvoiceExtractionService],
   exports: [DocumentService, InvoiceExtractionService],
 })
 export class DocumentModule {}

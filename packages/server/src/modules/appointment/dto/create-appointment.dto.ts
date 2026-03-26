@@ -86,6 +86,16 @@ export class CreateAppointmentDto {
   accountantId?: number;
 
   @ApiProperty({
+    example: 5,
+    description: 'ID du slot de disponibilité choisi (retourné par GET /appointments/slots)',
+    required: false,
+  })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  availabilitySlotId?: number;
+
+  @ApiProperty({
     example: 'Documents à préparer: bilans, factures',
     description: 'Client notes',
     required: false,

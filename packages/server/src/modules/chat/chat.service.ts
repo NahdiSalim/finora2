@@ -75,6 +75,85 @@ export class ChatService {
     return room;
   }
 
+  async getUserRoomsDebug(userId: number) {
+    // Apply the filter
+    const matchedRooms = await this.prisma.chatRoom.findMany({
+      where: {
+        participants: { has: String(userId) },
+        status: 'active',
+      },
+      include: {
+        createdBy: {
+          select: { id: true, username: true, email: true, firstName: true, lastName: true },
+        },
+      },
+      orderBy: { lastActivity: 'desc' },
+    });
+
+    // Enrich with participant profiles
+    const allParticipantIds = [
+      ...new Set(
+        matchedRooms.flatMap((r) => r.participants.map(Number).filter((id) => id !== userId))
+      ),
+    ];
+
+    const profiles = allParticipantIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: allParticipantIds } },
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            company: { select: { id: true, name: true } },
+            role: { select: { nameFr: true, code: true } },
+          },
+        })
+      : [];
+
+    const profileMap = new Map(profiles.map((p) => [p.id, p]));
+
+    const lastMessageIds = matchedRooms
+      .map((r) => r.lastMessageId)
+      .filter((id): id is number => typeof id === 'number' && id > 0);
+
+    const lastMessages = lastMessageIds.length
+      ? await this.prisma.chatMessage.findMany({
+          where: { id: { in: lastMessageIds } },
+          select: {
+            id: true,
+            roomId: true,
+            content: true,
+            type: true,
+            senderId: true,
+            createdAt: true,
+          },
+        })
+      : [];
+
+    const lastMessageMap = new Map(lastMessages.map((m) => [m.roomId, m]));
+
+    const enriched = matchedRooms.map((room) => ({
+      ...room,
+      participantProfiles: room.participants
+        .map(Number)
+        .filter((id) => id !== userId)
+        .map((id) => profileMap.get(id) ?? null)
+        .filter(Boolean),
+      lastMessage: lastMessageMap.get(room.id) ?? null,
+    }));
+
+    // Return paginated shape expected by frontend
+    return {
+      data: enriched,
+      total: enriched.length,
+      page: 1,
+      pageSize: 50,
+      totalPages: Math.ceil(enriched.length / 50),
+    };
+  }
+
   async getUserRooms(userId: number) {
     const rooms = await this.prisma.chatRoom.findMany({
       where: {
@@ -182,12 +261,15 @@ export class ChatService {
     }
 
     // Créer le message
+    // For file messages: store objectName in content field (no attachments[] column in schema)
+    const messageContent = attachmentUrls.length > 0 ? attachmentUrls[0] : dto.content;
+
     const message = await this.prisma.chatMessage.create({
       data: {
         roomId: dto.roomId,
         threadId: dto.threadId,
         senderId: userId,
-        content: dto.content,
+        content: messageContent,
         type: dto.type,
         mentions: dto.mentions ? dto.mentions.map(String) : [],
         documentId: dto.documentId,
@@ -222,40 +304,37 @@ export class ChatService {
   }
 
   async getRoomMessages(roomId: number, userId: number, limit: number = 50, page: number = 1) {
-    // Vérifier que l'utilisateur est participant
     await this.getRoomById(roomId, userId);
-
     const skip = (page - 1) * limit;
 
-    const messages = await this.prisma.chatMessage.findMany({
-      where: {
-        roomId,
-        deleted: false,
-      },
+    const rawMessages = await this.prisma.chatMessage.findMany({
+      where: { roomId, deleted: false },
       include: {
         sender: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
+          select: { id: true, username: true, email: true, firstName: true, lastName: true },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit,
       skip,
     });
 
-    const total = await this.prisma.chatMessage.count({
-      where: {
-        roomId,
-        deleted: false,
-      },
-    });
+    const total = await this.prisma.chatMessage.count({ where: { roomId, deleted: false } });
+
+    // Generate presigned URLs for file messages (content = MinIO objectName)
+    const messages = await Promise.all(
+      rawMessages.map(async (msg) => {
+        if (msg.type === 'file' && msg.content) {
+          try {
+            const fileUrl = await this.minioService.getPresignedUrl(msg.content, 7 * 24 * 60 * 60);
+            return { ...msg, fileUrl };
+          } catch {
+            return { ...msg, fileUrl: null };
+          }
+        }
+        return { ...msg, fileUrl: null };
+      })
+    );
 
     return {
       messages: messages.reverse(),
@@ -348,6 +427,49 @@ export class ChatService {
     });
 
     return { message: 'Message supprimé avec succès' };
+  }
+
+  // ==================== SHARED DOCUMENTS ====================
+
+  async getSharedDocuments(roomId: number, userId: number, page = 1, pageSize = 20) {
+    await this.getRoomById(roomId, userId);
+    const skip = (page - 1) * pageSize;
+
+    const [messages, total] = await Promise.all([
+      this.prisma.chatMessage.findMany({
+        where: { roomId, deleted: false, type: 'file' },
+        select: {
+          id: true,
+          roomId: true,
+          senderId: true,
+          content: true,
+          type: true,
+          createdAt: true,
+          documentId: true,
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: pageSize,
+        skip,
+      }),
+      this.prisma.chatMessage.count({ where: { roomId, deleted: false, type: 'file' } }),
+    ]);
+
+    // content = MinIO objectName — generate presigned URL
+    const data = await Promise.all(
+      messages.map(async (msg) => {
+        let fileUrl: string | null = null;
+        if (msg.content) {
+          try {
+            fileUrl = await this.minioService.getPresignedUrl(msg.content, 7 * 24 * 60 * 60);
+          } catch {
+            fileUrl = null;
+          }
+        }
+        return { ...msg, fileUrl };
+      })
+    );
+
+    return { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
   }
 
   // ==================== SEARCH ====================

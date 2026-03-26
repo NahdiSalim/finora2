@@ -1,23 +1,26 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Badge from "@mui/material/Badge";
+import CircularProgress from "@mui/material/CircularProgress";
 import { useTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import type { Dayjs } from "dayjs";
-
 import { useSelector } from "react-redux";
+import { useAppDispatch } from "src/hooks/use-redux";
+
 import ConversationsList from "./views/ConversationsList";
 import ChatWindow from "./views/ChatWindow";
 import SharedMediaView from "./views/SharedMediaView";
+
 import { useChatSocket } from "./hooks/useChatSocket";
+import type { SocketMessage } from "./hooks/useChatSocket";
+
+import { useConversations, useRoomMessages } from "./hooks/useChatData";
+import { useSendMessageMutation, chatApi } from "src/lib/services/chatApi";
+import { disconnectSocket } from "src/lib/socket";
+
 import type { RootState } from "src/lib/store";
-
-import {
-  conversations as initialConversations,
-  messagesByConversation as initialMessagesByConversation,
-} from "./data/mock";
-
 import type { Conversation, Message } from "./data/types";
 
 type MessagesViewProps = {
@@ -30,90 +33,198 @@ const MOBILE_HEADER_HEIGHT = 88;
 export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const dispatch = useAppDispatch();
 
-  const currentUserId = useSelector((state: RootState) => state.auth.user?.id);
+  const rawUserId = useSelector((state: RootState) => state.auth.user?.id);
+  const currentUid = rawUserId ? Number(rawUserId) : 0;
 
-  const { joinRoom, leaveRoom, sendMessage } = useChatSocket({
-    onMessageNew: (msg) => {
-      // Ignorer l'écho de nos propres messages (déjà dans l'état local)
-      if (currentUserId && msg.senderId === Number(currentUserId)) return;
+  // ── API data ──────────────────────────────────────────────────────────────
+  const { conversations: apiConversations, isLoading: roomsLoading } =
+    useConversations();
+  const [triggerSendMessage] = useSendMessageMutation();
 
-      setAllMessagesByConversation((prev) => {
-        const existing = prev[msg.roomId] ?? [];
-        // Déduplication par id réel
-        if (existing.some((m) => m.id === msg.id)) return prev;
-        const date = msg.createdAt.slice(0, 10);
-        const time = new Date(msg.createdAt).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-        const newMessage: Message = {
-          id: msg.id,
-          type: "text",
-          text: msg.content,
-          mine: false,
-          time,
-          date,
-        };
-        return { ...prev, [msg.roomId]: [...existing, newMessage] };
-      });
-
-      setAllConversations((prev) =>
-        prev.map((c) =>
-          c.id !== msg.roomId
-            ? c
-            : {
-                ...c,
-                preview: msg.content,
-                time: new Date(msg.createdAt).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
-                fullDate: msg.createdAt,
-                unreadCount:
-                  msg.roomId !== selectedConversation
-                    ? c.unreadCount + 1
-                    : c.unreadCount,
-              },
-        ),
-      );
-    },
-  });
-
-  const [selectedConversation, setSelectedConversation] = useState<number>(1);
+  // ── Local state ───────────────────────────────────────────────────────────
+  const [selectedConversation, setSelectedConversation] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedDateFilter, setSelectedDateFilter] = useState<Dayjs | null>(
     null,
   );
-
   const [desktopView, setDesktopView] = useState<"chat" | "media">("chat");
   const [mobileView, setMobileView] = useState<"list" | "chat" | "media">(
     "list",
   );
 
-  const [allMessagesByConversation, setAllMessagesByConversation] = useState<
-    Record<number, Message[]>
-  >(initialMessagesByConversation);
-
-  const [allConversations, setAllConversations] =
-    useState<Conversation[]>(initialConversations);
-
+  // Ref to always have current selectedConversation in socket callbacks
+  const selectedConversationRef = useRef(selectedConversation);
   useEffect(() => {
+    selectedConversationRef.current = selectedConversation;
+  }, [selectedConversation]);
+
+  // Typing indicator state: set of roomIds where the other user is typing
+  const [typingRooms, setTypingRooms] = useState<Set<number>>(new Set());
+
+  // ── Socket ────────────────────────────────────────────────────────────────
+  const { joinRoom, leaveRoom, emitTyping } = useChatSocket({
+    onMessageNew: (msg: SocketMessage) => {
+      const d = new Date(msg.createdAt);
+      const isMine = msg.senderId === currentUid;
+
+      // 1. Inject into getRoomMessages cache for that room
+      dispatch(
+        chatApi.util.updateQueryData("getRoomMessages", msg.roomId, (draft) => {
+          if (draft.messages.some((m) => m.id === msg.id)) return;
+          draft.messages.push({
+            id: msg.id,
+            roomId: msg.roomId,
+            senderId: msg.senderId,
+            content: msg.content,
+            type: msg.type,
+            createdAt: msg.createdAt,
+            deleted: false,
+            edited: false,
+            fileUrl: msg.fileUrl ?? null,
+            attachments: msg.attachments,
+            sender: msg.sender,
+          });
+          draft.total += 1;
+        }),
+      );
+
+      // 2. Update rooms list preview + reorder
+      dispatch(
+        chatApi.util.updateQueryData("getUserRooms", undefined, (draft) => {
+          const room = draft.data.find((r) => r.id === msg.roomId);
+          if (!room) return;
+
+          const body =
+            msg.type === "file"
+              ? `📎 ${msg.content?.split("/").pop() || "fichier"}`
+              : msg.content;
+
+          room.lastMessage = {
+            id: msg.id,
+            roomId: msg.roomId,
+            content: isMine ? `Vous : ${body}` : body,
+            type: msg.type,
+            senderId: msg.senderId,
+            createdAt: msg.createdAt,
+          };
+          room.lastActivity = msg.createdAt;
+
+          // Bubble room to top
+          const idx = draft.data.findIndex((r) => r.id === msg.roomId);
+          if (idx > 0) {
+            const [moved] = draft.data.splice(idx, 1);
+            draft.data.unshift(moved);
+          }
+        }),
+      );
+    },
+
+    onMessageUpdated: (msg: SocketMessage) => {
+      dispatch(
+        chatApi.util.updateQueryData("getRoomMessages", msg.roomId, (draft) => {
+          const existing = draft.messages.find((m) => m.id === msg.id);
+          if (existing) {
+            existing.content = msg.content;
+            existing.edited = true;
+          }
+        }),
+      );
+    },
+
+    onMessageDeleted: ({ messageId, roomId }) => {
+      if (!roomId) return;
+
+      dispatch(
+        chatApi.util.updateQueryData("getRoomMessages", roomId, (draft) => {
+          const idx = draft.messages.findIndex((m) => m.id === messageId);
+          if (idx !== -1) draft.messages.splice(idx, 1);
+        }),
+      );
+    },
+
+    onTyping: ({ roomId, userId, typing }) => {
+      if (userId === currentUid) return;
+
+      setTypingRooms((prev) => {
+        const next = new Set(prev);
+        if (typing) next.add(roomId);
+        else next.delete(roomId);
+        return next;
+      });
+    },
+  });
+
+  // Join/leave room via socket when selected conversation changes
+  useEffect(() => {
+    if (!selectedConversation) return undefined;
+
     joinRoom(selectedConversation);
     return () => {
       leaveRoom(selectedConversation);
     };
   }, [selectedConversation, joinRoom, leaveRoom]);
 
-  useEffect(() => {
-    setAllMessagesByConversation(initialMessagesByConversation);
-    setAllConversations(initialConversations);
-  }, []);
+  // Disconnect socket on unmount
+  useEffect(
+    () => () => {
+      disconnectSocket();
+    },
+    [],
+  );
 
+  // Local overrides for optimistic UI (preview text, unread counts)
+  const [conversationOverrides, setConversationOverrides] = useState<
+    Record<number, Partial<Conversation>>
+  >({});
+
+  const allConversations: Conversation[] = useMemo(
+    () =>
+      apiConversations.map((c) => ({
+        ...c,
+        ...(conversationOverrides[c.id] ?? {}),
+      })),
+    [apiConversations, conversationOverrides],
+  );
+
+  // Auto-select first conversation when rooms load
   useEffect(() => {
-    if (!isMobile) {
-      setMobileView("list");
+    if (allConversations.length > 0 && selectedConversation === 0) {
+      setSelectedConversation(allConversations[0].id);
     }
+  }, [allConversations, selectedConversation]);
+
+  // ── Messages for selected room ────────────────────────────────────────────
+  const { messages: apiMessages } = useRoomMessages(selectedConversation);
+
+  // Optimistic local messages for messages sent by the current user
+  const [localMessages, setLocalMessages] = useState<Record<number, Message[]>>(
+    {},
+  );
+
+  const currentMessages: Message[] = useMemo(() => {
+    const base = apiMessages;
+    const extra = localMessages[selectedConversation] ?? [];
+    const ids = new Set(base.map((m) => m.id));
+    return [...base, ...extra.filter((m) => !ids.has(m.id))];
+  }, [apiMessages, localMessages, selectedConversation]);
+
+  // Clear optimistic messages once API confirms them
+  useEffect(() => {
+    if (apiMessages.length === 0) return;
+
+    setLocalMessages((prev) => {
+      if (!prev[selectedConversation]?.length) return prev;
+      const updated = { ...prev };
+      delete updated[selectedConversation];
+      return updated;
+    });
+  }, [apiMessages, selectedConversation]);
+
+  // ── Sync mobile view ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isMobile) setMobileView("list");
   }, [isMobile]);
 
   useEffect(() => {
@@ -121,7 +232,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       document.body.removeAttribute("data-hide-bottom-nav");
     } else {
       const shouldHide = mobileView === "chat" || mobileView === "media";
-
       if (shouldHide) {
         document.body.setAttribute("data-hide-bottom-nav", "true");
       } else {
@@ -134,32 +244,72 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     };
   }, [isMobile, mobileView]);
 
+  // ── Handlers ──────────────────────────────────────────────────────────────
   const handleSelectConversation = (id: number) => {
     setSelectedConversation(id);
 
-    if (isMobile) {
-      setMobileView("chat");
-    } else {
-      setDesktopView("chat");
-    }
+    if (isMobile) setMobileView("chat");
+    else setDesktopView("chat");
 
-    setAllConversations((prev) =>
-      prev.map((conversation) =>
-        conversation.id === id
-          ? { ...conversation, unreadCount: 0 }
-          : conversation,
-      ),
-    );
+    setConversationOverrides((prev) => ({
+      ...prev,
+      [id]: { ...(prev[id] ?? {}), unreadCount: 0 },
+    }));
   };
 
-  const handleSearchChange = (value: string) => {
-    setSearchTerm(value);
-  };
-
-  const handleDateFilterChange = (value: Dayjs | null) => {
+  const handleSearchChange = (value: string) => setSearchTerm(value);
+  const handleDateFilterChange = (value: Dayjs | null) =>
     setSelectedDateFilter(value);
+
+  const handleMessagesChange = async (updatedMessages: Message[]) => {
+    const lastMessage = updatedMessages[updatedMessages.length - 1];
+    if (!lastMessage || !lastMessage.mine) return;
+
+    // Optimistic update
+    setLocalMessages((prev) => ({
+      ...prev,
+      [selectedConversation]: [
+        ...(prev[selectedConversation] ?? []),
+        lastMessage,
+      ],
+    }));
+
+    // Update conversation preview optimistically
+    let previewText = "";
+    if (lastMessage.type === "text") previewText = lastMessage.text ?? "";
+    else if (lastMessage.type === "file")
+      previewText = `📎 ${lastMessage.file?.name ?? "Fichier"}`;
+    else if (lastMessage.type === "request")
+      previewText = `🔗 ${lastMessage.request?.title ?? "Demande"}`;
+
+    setConversationOverrides((prev) => ({
+      ...prev,
+      [selectedConversation]: {
+        ...(prev[selectedConversation] ?? {}),
+        preview: `Vous : ${previewText}`,
+        time: lastMessage.time,
+        fullDate: new Date().toISOString(),
+      },
+    }));
+
+    // Send typing stop when sending a message
+    emitTyping(selectedConversation, false);
+
+    // Send to API (text messages only; file handling stays in ChatWindow)
+    if (lastMessage.type === "text" && lastMessage.text) {
+      try {
+        await triggerSendMessage({
+          roomId: selectedConversation,
+          content: lastMessage.text,
+          type: "text",
+        }).unwrap();
+      } catch {
+        // Keep optimistic message visible even on error
+      }
+    }
   };
 
+  // ── Derived state ─────────────────────────────────────────────────────────
   const filteredConversations = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -183,81 +333,42 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     if (filteredConversations.length === 0) return;
 
     const selectedStillExists = filteredConversations.some(
-      (conversation) => conversation.id === selectedConversation,
+      (c) => c.id === selectedConversation,
     );
 
     if (!selectedStillExists) {
       setSelectedConversation(filteredConversations[0].id);
-
-      if (isMobile) {
-        setMobileView("list");
-      } else {
-        setDesktopView("chat");
-      }
+      if (isMobile) setMobileView("list");
+      else setDesktopView("chat");
     }
   }, [filteredConversations, selectedConversation, isMobile]);
 
   const hasSelectedConversation = filteredConversations.some(
-    (conversation) => conversation.id === selectedConversation,
+    (c) => c.id === selectedConversation,
   );
 
-  const currentMessages = useMemo(() => {
-    return allMessagesByConversation[selectedConversation] || [];
-  }, [allMessagesByConversation, selectedConversation]);
-
-  const totalUnreadMessages = useMemo(() => {
-    return allConversations.reduce(
-      (total, conversation) => total + (conversation.unreadCount || 0),
-      0,
-    );
-  }, [allConversations]);
+  const totalUnreadMessages = useMemo(
+    () =>
+      allConversations.reduce((total, c) => total + (c.unreadCount || 0), 0),
+    [allConversations],
+  );
 
   const showEmptyState =
     filteredConversations.length === 0 || !hasSelectedConversation;
 
-  const handleMessagesChange = (updatedMessages: Message[]) => {
-    const lastMessage = updatedMessages[updatedMessages.length - 1];
+  const currentConversation = useMemo(
+    () => allConversations.find((c) => c.id === selectedConversation),
+    [allConversations, selectedConversation],
+  );
 
-    setAllMessagesByConversation((prev) => ({
-      ...prev,
-      [selectedConversation]: updatedMessages,
-    }));
+  const allMessagesByConversation = useMemo(
+    () => ({ [selectedConversation]: currentMessages }),
+    [selectedConversation, currentMessages],
+  );
 
-    if (!lastMessage) return;
+  const isRemoteTyping = typingRooms.has(selectedConversation);
 
-    setAllConversations((prev) => {
-      const updatedConversations = prev.map((conversation) => {
-        if (conversation.id !== selectedConversation) {
-          return conversation;
-        }
-
-        let previewText = "";
-
-        if (lastMessage.type === "text") {
-          previewText = lastMessage.text || "";
-        } else if (lastMessage.type === "file") {
-          previewText = `📎 ${lastMessage.file?.name || "Fichier"}`;
-        } else if (lastMessage.type === "request") {
-          previewText = `🔗 ${lastMessage.request?.title || "Demande"}`;
-        }
-
-        const preview = lastMessage.mine ? `Vous: ${previewText}` : previewText;
-
-        return {
-          ...conversation,
-          preview,
-          time: lastMessage.time,
-          fullDate: new Date().toISOString(),
-        };
-      });
-
-      return [...updatedConversations].sort(
-        (a, b) =>
-          new Date(b.fullDate).getTime() - new Date(a.fullDate).getTime(),
-      );
-    });
-  };
-
+  // ── Render helpers ────────────────────────────────────────────────────────
   const renderContentHeader = () => (
     <Box
       sx={{
@@ -349,6 +460,21 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     </Paper>
   );
 
+  if (roomsLoading) {
+    return (
+      <Box
+        sx={{
+          height: "calc(100vh - 120px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <CircularProgress size={32} />
+      </Box>
+    );
+  }
+
   if (isMobile) {
     return (
       <>
@@ -424,12 +550,14 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
             ) : (
               <ChatWindow
                 conversationId={selectedConversation}
+                conversation={currentConversation}
                 messages={currentMessages}
                 isCommunicationConfirmed
-                onMessagesChange={handleMessagesChange}
-                onSendMessage={(content) =>
-                  sendMessage(selectedConversation, content)
+                isRemoteTyping={isRemoteTyping}
+                onTypingChange={(typing) =>
+                  emitTyping(selectedConversation, typing)
                 }
+                onMessagesChange={handleMessagesChange}
                 onOpenMedia={() => {
                   setMobileView("media");
                   onOpenMedia?.();
@@ -570,12 +698,14 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
               ) : (
                 <ChatWindow
                   conversationId={selectedConversation}
+                  conversation={currentConversation}
                   messages={currentMessages}
                   isCommunicationConfirmed
-                  onMessagesChange={handleMessagesChange}
-                  onSendMessage={(content) =>
-                    sendMessage(selectedConversation, content)
+                  isRemoteTyping={isRemoteTyping}
+                  onTypingChange={(typing) =>
+                    emitTyping(selectedConversation, typing)
                   }
+                  onMessagesChange={handleMessagesChange}
                   onOpenMedia={() => {
                     setDesktopView("media");
                     onOpenMedia?.();

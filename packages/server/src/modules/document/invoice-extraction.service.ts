@@ -241,7 +241,6 @@ export class InvoiceExtractionService {
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
       });
-      console.log(response, 'fileeeee');
       const extractedData = response.data;
       if (!extractedData || typeof extractedData !== 'object') {
         throw new Error('API returned empty or invalid response');
@@ -690,15 +689,6 @@ export class InvoiceExtractionService {
 
     if (!document || document.isFolder || document.status !== 'active') {
       throw new ApiError(MSG.document.not_found, 404, 'DOCUMENT_NOT_FOUND');
-    }
-
-    // 2. Check if document is in "traite" or "enregistre" status (allow re-save)
-    if (!['traite', 'enregistre'].includes(document.processingStatus)) {
-      throw new ApiError(
-        MSG.invoice.invalid_status(document.processingStatus),
-        400,
-        'INVALID_STATUS'
-      );
     }
 
     try {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Badge from "@mui/material/Badge";
@@ -6,13 +6,19 @@ import CircularProgress from "@mui/material/CircularProgress";
 import { useTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import type { Dayjs } from "dayjs";
+import { useSelector } from "react-redux";
+import { useAppDispatch } from "src/hooks/use-redux";
 
 import ConversationsList from "./views/ConversationsList";
 import ChatWindow from "./views/ChatWindow";
 import SharedMediaView from "./views/SharedMediaView";
 
 import { useConversations, useRoomMessages } from "./hooks/useChatData";
-import { useSendMessageMutation } from "src/lib/services/chatApi";
+import { useChatSocket } from "./hooks/useChatSocket";
+import type { SocketMessage } from "./hooks/useChatSocket";
+import { useSendMessageMutation, chatApi } from "src/lib/services/chatApi";
+import { disconnectSocket } from "src/lib/socket";
+import type { RootState } from "src/lib/store";
 
 import type { Conversation, Message } from "./data/types";
 
@@ -26,6 +32,10 @@ const MOBILE_HEADER_HEIGHT = 88;
 export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const dispatch = useAppDispatch();
+
+  const rawUserId = useSelector((state: RootState) => state.auth.user?.id);
+  const currentUid = rawUserId ? Number(rawUserId) : 0;
 
   // ── API data ──────────────────────────────────────────────────────────────
   const { conversations: apiConversations, isLoading: roomsLoading } =
@@ -35,16 +45,140 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   // ── Local state ───────────────────────────────────────────────────────────
   const [selectedConversation, setSelectedConversation] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState<string>("");
-  const [selectedDateFilter, setSelectedDateFilter] = useState<Dayjs | null>(null);
+  const [selectedDateFilter, setSelectedDateFilter] = useState<Dayjs | null>(
+    null,
+  );
   const [desktopView, setDesktopView] = useState<"chat" | "media">("chat");
-  const [mobileView, setMobileView] = useState<"list" | "chat" | "media">("list");
+  const [mobileView, setMobileView] = useState<"list" | "chat" | "media">(
+    "list",
+  );
+
+  // Ref to always have current selectedConversation in socket callbacks
+  const selectedConversationRef = useRef(selectedConversation);
+  useEffect(() => {
+    selectedConversationRef.current = selectedConversation;
+  }, [selectedConversation]);
+
+  // Typing indicator state: set of roomIds where the other user is typing
+  const [typingRooms, setTypingRooms] = useState<Set<number>>(new Set());
+
+  // ── Socket ────────────────────────────────────────────────────────────────
+  const { joinRoom, leaveRoom, emitTyping } = useChatSocket({
+    onMessageNew: (msg: SocketMessage) => {
+      const d = new Date(msg.createdAt);
+      const date = d.toISOString().split("T")[0];
+      const time = d.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      const isMine = msg.senderId === currentUid;
+
+      // 1. Inject into getRoomMessages cache for that room
+      dispatch(
+        chatApi.util.updateQueryData("getRoomMessages", msg.roomId, (draft) => {
+          if (draft.messages.some((m) => m.id === msg.id)) return;
+          draft.messages.push({
+            id: msg.id,
+            roomId: msg.roomId,
+            senderId: msg.senderId,
+            content: msg.content,
+            type: msg.type,
+            createdAt: msg.createdAt,
+            deleted: false,
+            edited: false,
+            fileUrl: msg.fileUrl ?? null,
+            attachments: msg.attachments,
+            sender: msg.sender,
+          });
+          draft.total += 1;
+        }),
+      );
+
+      // 2. Update rooms list preview + reorder
+      dispatch(
+        chatApi.util.updateQueryData("getUserRooms", undefined, (draft) => {
+          const room = draft.data.find((r) => r.id === msg.roomId);
+          if (!room) return;
+          const body =
+            msg.type === "file"
+              ? `📎 ${msg.content?.split("/").pop() || "fichier"}`
+              : msg.content;
+          room.lastMessage = {
+            id: msg.id,
+            roomId: msg.roomId,
+            content: isMine ? `Vous : ${body}` : body,
+            type: msg.type,
+            senderId: msg.senderId,
+            createdAt: msg.createdAt,
+          };
+          room.lastActivity = msg.createdAt;
+          // Bubble room to top
+          const idx = draft.data.findIndex((r) => r.id === msg.roomId);
+          if (idx > 0) {
+            const [moved] = draft.data.splice(idx, 1);
+            draft.data.unshift(moved);
+          }
+        }),
+      );
+    },
+
+    onMessageUpdated: (msg: SocketMessage) => {
+      // Update the message content in the cache
+      dispatch(
+        chatApi.util.updateQueryData("getRoomMessages", msg.roomId, (draft) => {
+          const existing = draft.messages.find((m) => m.id === msg.id);
+          if (existing) {
+            existing.content = msg.content;
+            existing.edited = true;
+          }
+        }),
+      );
+    },
+
+    onMessageDeleted: ({ messageId, roomId }) => {
+      if (!roomId) return;
+      dispatch(
+        chatApi.util.updateQueryData("getRoomMessages", roomId, (draft) => {
+          const idx = draft.messages.findIndex((m) => m.id === messageId);
+          if (idx !== -1) draft.messages.splice(idx, 1);
+        }),
+      );
+    },
+
+    onTyping: ({ roomId, userId, typing }) => {
+      // Ignore own typing events
+      if (userId === currentUid) return;
+      setTypingRooms((prev) => {
+        const next = new Set(prev);
+        if (typing) next.add(roomId);
+        else next.delete(roomId);
+        return next;
+      });
+    },
+  });
+
+  // Join/leave room via socket when selected conversation changes
+  useEffect(() => {
+    if (!selectedConversation) return undefined;
+    joinRoom(selectedConversation);
+    return () => {
+      leaveRoom(selectedConversation);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedConversation]);
+
+  // Disconnect socket on unmount
+  useEffect(
+    () => () => {
+      disconnectSocket();
+    },
+    [],
+  );
 
   // Local overrides for optimistic UI (preview text, unread counts)
   const [conversationOverrides, setConversationOverrides] = useState<
     Record<number, Partial<Conversation>>
   >({});
-
-  // Merge API conversations with local overrides
   const allConversations: Conversation[] = useMemo(
     () =>
       apiConversations.map((c) => ({
@@ -64,8 +198,10 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   // ── Messages for selected room ────────────────────────────────────────────
   const { messages: apiMessages } = useRoomMessages(selectedConversation);
 
-  // Optimistic local messages (appended before server confirms)
-  const [localMessages, setLocalMessages] = useState<Record<number, Message[]>>({});
+  // Optimistic local messages for messages sent by the current user (before API confirms)
+  const [localMessages, setLocalMessages] = useState<Record<number, Message[]>>(
+    {},
+  );
 
   const currentMessages: Message[] = useMemo(() => {
     const base = apiMessages;
@@ -74,9 +210,11 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     return [...base, ...extra.filter((m) => !ids.has(m.id))];
   }, [apiMessages, localMessages, selectedConversation]);
 
-  // Clear optimistic messages when API messages update
+  // Clear optimistic messages once API confirms them
   useEffect(() => {
+    if (apiMessages.length === 0) return;
     setLocalMessages((prev) => {
+      if (!prev[selectedConversation]?.length) return prev;
       const updated = { ...prev };
       delete updated[selectedConversation];
       return updated;
@@ -117,7 +255,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   };
 
   const handleSearchChange = (value: string) => setSearchTerm(value);
-  const handleDateFilterChange = (value: Dayjs | null) => setSelectedDateFilter(value);
+  const handleDateFilterChange = (value: Dayjs | null) =>
+    setSelectedDateFilter(value);
 
   const handleMessagesChange = async (updatedMessages: Message[]) => {
     const lastMessage = updatedMessages[updatedMessages.length - 1];
@@ -176,7 +315,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       const matchesDate = !selectedDateFilter
         ? true
         : conversation.fullDate.slice(0, 10) ===
-        selectedDateFilter.format("YYYY-MM-DD");
+          selectedDateFilter.format("YYYY-MM-DD");
       return matchesSearch && matchesDate;
     });
   }, [allConversations, searchTerm, selectedDateFilter]);
@@ -199,10 +338,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
 
   const totalUnreadMessages = useMemo(
     () =>
-      allConversations.reduce(
-        (total, c) => total + (c.unreadCount || 0),
-        0,
-      ),
+      allConversations.reduce((total, c) => total + (c.unreadCount || 0), 0),
     [allConversations],
   );
 

@@ -19,6 +19,10 @@ type ChatWindowProps = {
   onMessagesChange: (messages: Message[]) => void;
   onOpenMedia?: () => void;
   onBack?: () => void;
+  /** True when the other participant is typing (driven by socket) */
+  isRemoteTyping?: boolean;
+  /** Called when the local user starts/stops typing */
+  onTypingChange?: (typing: boolean) => void;
 };
 
 function htmlToText(html: string) {
@@ -40,6 +44,8 @@ export default function ChatWindow({
   onMessagesChange,
   onOpenMedia,
   onBack,
+  isRemoteTyping = false,
+  onTypingChange,
 }: ChatWindowProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -47,7 +53,7 @@ export default function ChatWindow({
   const currentConversation = conversation;
 
   const [inputValue, setInputValue] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -61,27 +67,21 @@ export default function ChatWindow({
     }
   }, [messages, conversationId]);
 
-  useEffect(() => {
-    let startTypingTimer: ReturnType<typeof setTimeout> | undefined;
-    let stopTypingTimer: ReturnType<typeof setTimeout> | undefined;
+  // Emit typing start/stop when user types
+  const handleInputChange = (val: string) => {
+    setInputValue(val);
+    if (!onTypingChange) return;
+    onTypingChange(true);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => onTypingChange(false), 2000);
+  };
 
-    if (isCommunicationConfirmed && messages.length > 0) {
-      startTypingTimer = setTimeout(() => {
-        setIsTyping(true);
-
-        stopTypingTimer = setTimeout(() => {
-          setIsTyping(false);
-        }, 1800);
-      }, 1200);
-    } else {
-      setIsTyping(false);
-    }
-
-    return () => {
-      if (startTypingTimer) clearTimeout(startTypingTimer);
-      if (stopTypingTimer) clearTimeout(stopTypingTimer);
-    };
-  }, [messages, isCommunicationConfirmed]);
+  useEffect(
+    () => () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    },
+    [],
+  );
 
   const formatDateLabel = (date: string) => {
     const today = new Date().toISOString().split("T")[0];
@@ -274,7 +274,7 @@ export default function ChatWindow({
           })
         )}
 
-        {isTyping && (
+        {isRemoteTyping && (
           <Typography
             sx={{
               mt: 1.25,
@@ -322,7 +322,7 @@ export default function ChatWindow({
 
         <MessageInput
           value={inputValue}
-          onChange={setInputValue}
+          onChange={handleInputChange}
           onSend={handleSendMessage}
           requests={messageRequests}
           disabled={!isCommunicationConfirmed}

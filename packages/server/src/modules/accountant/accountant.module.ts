@@ -6,14 +6,13 @@ import {
 } from './accountant.controller';
 import { AccountantService } from './accountant.service';
 import { PrismaModule } from 'prisma/prisma.module';
-import { MailModule } from '../mail/mail.module';
-import { AuthService } from '../auth/auth.service';
-import { CommonModule } from 'src/common/common.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [PrismaModule, MailModule, CommonModule],
+  imports: [PrismaModule, AuthModule],
+  // CommonModule and MailModule are @Global() — no need to import here
   controllers: [AccountantController, PublicAccountantsController, AccountantProfileController],
-  providers: [AccountantService, AuthService],
+  providers: [AccountantService],
   exports: [AccountantService],
 })
 export class AccountantModule {}

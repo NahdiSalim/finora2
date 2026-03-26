@@ -17,6 +17,7 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ChatService } from './chat.service';
+import { ChatGateway } from './chat.gateway';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { SearchMessagesDto } from './dto/search-messages.dto';
@@ -26,7 +27,10 @@ import { SearchMessagesDto } from './dto/search-messages.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('chat')
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly chatGateway: ChatGateway
+  ) {}
 
   // ==================== ROOMS ====================
 
@@ -62,6 +66,24 @@ export class ChatController {
       Number(userId),
       limit ? parseInt(limit, 10) : 50,
       page ? parseInt(page, 10) : 1
+    );
+  }
+
+  @Get('rooms/:id/shared-documents')
+  @ApiOperation({ summary: "Obtenir les documents partagés d'une salle" })
+  @ApiResponse({ status: 200, description: 'Documents partagés paginés' })
+  async getSharedDocuments(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string
+  ) {
+    const userId = req.user?.id ?? req.user?.sub;
+    return this.chatService.getSharedDocuments(
+      id,
+      Number(userId),
+      page ? parseInt(page, 10) : 1,
+      pageSize ? parseInt(pageSize, 10) : 20
     );
   }
 
@@ -118,7 +140,10 @@ export class ChatController {
     @UploadedFiles() files?: Express.Multer.File[]
   ) {
     const userId = req.user?.id ?? req.user?.sub;
-    return this.chatService.sendMessage(Number(userId), dto, files);
+    const message = await this.chatService.sendMessage(Number(userId), dto, files);
+    // Broadcast to all room participants via socket so both sides receive in real-time
+    this.chatGateway.server.to(`room:${dto.roomId}`).emit('message:new', message);
+    return message;
   }
 
   @Put('messages/:id')

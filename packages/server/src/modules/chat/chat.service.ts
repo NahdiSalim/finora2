@@ -128,7 +128,6 @@ export class ChatService {
             type: true,
             senderId: true,
             createdAt: true,
-            attachments: true,
           },
         })
       : [];
@@ -262,14 +261,16 @@ export class ChatService {
     }
 
     // Créer le message
+    // For file messages: store objectName in content field (no attachments[] column in schema)
+    const messageContent = attachmentUrls.length > 0 ? attachmentUrls[0] : dto.content;
+
     const message = await this.prisma.chatMessage.create({
       data: {
         roomId: dto.roomId,
         threadId: dto.threadId,
         senderId: userId,
-        content: dto.content,
+        content: messageContent,
         type: dto.type,
-        attachments: attachmentUrls,
         mentions: dto.mentions ? dto.mentions.map(String) : [],
         documentId: dto.documentId,
         readBy: [String(userId)],
@@ -303,42 +304,39 @@ export class ChatService {
   }
 
   async getRoomMessages(roomId: number, userId: number, limit: number = 50, page: number = 1) {
-    // Vérifier que l'utilisateur est participant
     await this.getRoomById(roomId, userId);
-
     const skip = (page - 1) * limit;
 
-    const messages = await this.prisma.chatMessage.findMany({
-      where: {
-        roomId,
-        deleted: false,
-      },
+    const rawMessages = await this.prisma.chatMessage.findMany({
+      where: { roomId, deleted: false },
       include: {
         sender: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
+          select: { id: true, username: true, email: true, firstName: true, lastName: true },
         },
       },
-      // Fetch newest first (for pagination), then reverse to get ASC for display
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit,
       skip,
     });
 
-    const total = await this.prisma.chatMessage.count({
-      where: {
-        roomId,
-        deleted: false,
-      },
-    });
+    const total = await this.prisma.chatMessage.count({ where: { roomId, deleted: false } });
+
+    // Generate presigned URLs for file messages (content = MinIO objectName)
+    const messages = await Promise.all(
+      rawMessages.map(async (msg) => {
+        if (msg.type === 'file' && msg.content) {
+          try {
+            const fileUrl = await this.minioService.getPresignedUrl(msg.content, 7 * 24 * 60 * 60);
+            return { ...msg, fileUrl };
+          } catch {
+            return { ...msg, fileUrl: null };
+          }
+        }
+        return { ...msg, fileUrl: null };
+      })
+    );
 
     return {
-      // Reverse to ASC order for chat display (oldest at top, newest at bottom)
       messages: messages.reverse(),
       total,
       page,
@@ -429,6 +427,49 @@ export class ChatService {
     });
 
     return { message: 'Message supprimé avec succès' };
+  }
+
+  // ==================== SHARED DOCUMENTS ====================
+
+  async getSharedDocuments(roomId: number, userId: number, page = 1, pageSize = 20) {
+    await this.getRoomById(roomId, userId);
+    const skip = (page - 1) * pageSize;
+
+    const [messages, total] = await Promise.all([
+      this.prisma.chatMessage.findMany({
+        where: { roomId, deleted: false, type: 'file' },
+        select: {
+          id: true,
+          roomId: true,
+          senderId: true,
+          content: true,
+          type: true,
+          createdAt: true,
+          documentId: true,
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: pageSize,
+        skip,
+      }),
+      this.prisma.chatMessage.count({ where: { roomId, deleted: false, type: 'file' } }),
+    ]);
+
+    // content = MinIO objectName — generate presigned URL
+    const data = await Promise.all(
+      messages.map(async (msg) => {
+        let fileUrl: string | null = null;
+        if (msg.content) {
+          try {
+            fileUrl = await this.minioService.getPresignedUrl(msg.content, 7 * 24 * 60 * 60);
+          } catch {
+            fileUrl = null;
+          }
+        }
+        return { ...msg, fileUrl };
+      })
+    );
+
+    return { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
   }
 
   // ==================== SEARCH ====================

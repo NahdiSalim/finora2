@@ -103,8 +103,11 @@ function mapApiMessageToMessage(
   const isMine = msg.senderId === currentUserId;
 
   if (msg.type === "file" || msg.type === "image") {
-    const url = msg.attachments?.[0] ?? "";
-    const fileName = msg.content || url.split("/").pop() || "Fichier";
+    // content = MinIO objectName, fileUrl = presigned URL from backend
+    const url = msg.fileUrl || "";
+    // Extract display name from objectName path (last segment after last /)
+    const objectName = msg.content || "";
+    const fileName = objectName.split("/").pop() || objectName || "Fichier";
     return {
       id: msg.id,
       type: "file" as const,
@@ -136,6 +139,7 @@ export function useConversations() {
     error,
   } = useGetUserRoomsQuery(undefined, {
     refetchOnMountOrArgChange: true,
+    // No polling — real-time updates handled by WebSocket
   });
 
   // Extract the array — roomsResponse is the paginated object, not the array itself
@@ -156,6 +160,7 @@ export function useRoomMessages(roomId: number) {
   const { data, isLoading, error } = useGetRoomMessagesQuery(roomId, {
     skip: !roomId,
     refetchOnMountOrArgChange: true,
+    // No polling — real-time updates handled by WebSocket
   });
 
   const messages = useMemo(

@@ -55,6 +55,10 @@ export interface KanbanColumn {
   title: string;
   color: string;
   tasks: Task[];
+  currentPage?: number;
+  totalTasks?: number;
+  hasMore?: boolean;
+  isLoading?: boolean;
 }
 
 export const COLUMN_CONFIG_ACCOUNTANT: Record<

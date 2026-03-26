@@ -8,12 +8,13 @@ import {
   useTheme,
   alpha,
 } from "@mui/material";
-import { Plus, Search, Eye, Trash2 } from "lucide-react";
+import { Plus, Eye, Trash2, Search } from "lucide-react";
 
 import { useTable } from "src/hooks/use-table";
 import { DataTable, type Column } from "src/layouts/components/custom-table";
 import { CustomPagination } from "src/layouts/components/table-pagination";
 import { FolderTabNavigation } from "src/layouts/components/folder-tab-navigation";
+import CustomInput from "src/components/common/CustomInput";
 import {
   useGetMyAssignedRequestsQuery,
   useGetAllRequestsQuery,
@@ -24,7 +25,6 @@ import RequestModal from "../modal/RequestModal";
 import ViewRequestDrawer from "../drawer/ViewRequestDrawer";
 import DeleteConfirmModal from "src/components/common/DeleteConfirmModal";
 import { PageHeader } from "src/layouts/components/page-header";
-import CustomInput from "src/components/common/CustomInput";
 import type { Request, RequestStatus } from "src/types/request";
 import { useAppSelector } from "src/hooks/use-redux";
 import { ROLE_CODES } from "src/constants/roles";
@@ -124,9 +124,9 @@ export default function RequestView() {
   const [viewTab, setViewTab] = useState<"my_requests" | "client_requests">(
     "my_requests",
   ); // For accountants
-  const [searchValue, setSearchValue] = useState("");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [requestToDelete, setRequestToDelete] = useState<number | null>(null);
+  const [searchValue, setSearchValue] = useState("");
 
   const [deleteRequest, { isLoading: isDeleting }] = useDeleteRequestMutation();
 
@@ -170,8 +170,12 @@ export default function RequestView() {
       limit: table.rowsPerPage,
       status: getStatusFilter(),
       sortBy: "createdAt",
+      search: searchValue.trim() || undefined,
     },
-    { skip: !isAccountant || viewTab !== "my_requests" },
+    {
+      skip: !isAccountant || viewTab !== "my_requests",
+      refetchOnMountOrArgChange: true,
+    },
   );
 
   // For accountants: get all unassigned client requests (Demandes des clients)
@@ -185,8 +189,12 @@ export default function RequestView() {
       limit: table.rowsPerPage,
       status: getStatusFilter(),
       sortBy: "createdAt",
+      search: searchValue.trim() || undefined,
     },
-    { skip: !isAccountant || viewTab !== "client_requests" },
+    {
+      skip: !isAccountant || viewTab !== "client_requests",
+      refetchOnMountOrArgChange: true,
+    },
   );
 
   const {
@@ -198,8 +206,12 @@ export default function RequestView() {
       page: table.page + 1,
       limit: table.rowsPerPage,
       status: getStatusFilter(),
+      search: searchValue.trim() || undefined,
     },
-    { skip: !isClient },
+    {
+      skip: !isClient,
+      refetchOnMountOrArgChange: true,
+    },
   );
 
   // Select data based on role and view tab
@@ -220,41 +232,8 @@ export default function RequestView() {
     }
   }
 
-  // Filter requests based on search value
-  const allRequests = data?.data || [];
-  const filteredRequests = allRequests.filter((request: Request) => {
-    if (!searchValue.trim()) return true;
-
-    const searchLower = searchValue.toLowerCase();
-
-    // Search in subject
-    if (request.subject?.toLowerCase().includes(searchLower)) return true;
-
-    // Search in description
-    if (request.description?.toLowerCase().includes(searchLower)) return true;
-
-    // Search in topic
-    if (request.topic?.toLowerCase().includes(searchLower)) return true;
-
-    // Search in client name
-    if (request.client?.firstName?.toLowerCase().includes(searchLower))
-      return true;
-    if (request.client?.lastName?.toLowerCase().includes(searchLower))
-      return true;
-
-    // Search in client email
-    if (request.client?.email?.toLowerCase().includes(searchLower)) return true;
-
-    // Search in assigned user name
-    if (request.assignedTo?.firstName?.toLowerCase().includes(searchLower))
-      return true;
-    if (request.assignedTo?.lastName?.toLowerCase().includes(searchLower))
-      return true;
-
-    return false;
-  });
-
-  const requests = filteredRequests;
+  // Get requests from backend (already paginated and filtered by search)
+  const requests = data?.data || [];
   const totalCount = data?.pagination?.total || 0;
   const counts = data?.counts || {
     pending: 0,
@@ -312,7 +291,6 @@ export default function RequestView() {
       setShowDeleteModal(false);
       setRequestToDelete(null);
     } catch (error) {
-      console.error("Error deleting request:", error);
       showAlert("Erreur lors de la suppression de la demande", "error");
     }
   };
@@ -336,15 +314,30 @@ export default function RequestView() {
             id: "client",
             label: "Client",
             render: (request: Request) => (
-              <Typography
-                variant="body2"
-                sx={{
-                  fontWeight: 500,
-                  color: theme.palette.text.primary,
-                }}
-              >
-                {request.client?.firstName} {request.client?.lastName}
-              </Typography>
+              <Box>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 500,
+                    color: theme.palette.text.primary,
+                  }}
+                >
+                  {request.client?.firstName} {request.client?.lastName}
+                </Typography>
+                {request.convertedToTask?.assignee && (
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: theme.palette.info.main,
+                      fontSize: 11,
+                      fontWeight: 500,
+                    }}
+                  >
+                    → {request.convertedToTask.assignee.firstName}{" "}
+                    {request.convertedToTask.assignee.lastName}
+                  </Typography>
+                )}
+              </Box>
             ),
           },
         ]
@@ -366,7 +359,7 @@ export default function RequestView() {
     },
     {
       id: "createdAt",
-      label: "Date",
+      label: "Date de création",
       render: (request: Request) => (
         <Typography variant="body2" color="text.secondary">
           {formatDate(request.createdAt)}
@@ -385,12 +378,21 @@ export default function RequestView() {
     },
     {
       id: "desiredResponseDate",
-      label: "Date limite",
+      label: "Date souhaitée",
       render: (request: Request) => (
         <Typography variant="body2" color="text.secondary">
           {request.desiredResponseDate
             ? formatDate(request.desiredResponseDate)
             : "-"}
+        </Typography>
+      ),
+    },
+    {
+      id: "desiredResponseTime",
+      label: "Heure souhaitée",
+      render: (request: Request) => (
+        <Typography variant="body2" color="text.secondary">
+          {request.desiredResponseTime || "-"}
         </Typography>
       ),
     },
@@ -552,27 +554,21 @@ export default function RequestView() {
           {/* Search Bar */}
           <Box
             sx={{
-              p: 3,
-              pb: 2,
+              p: { xs: 2, sm: 2.5 },
               borderBottom: `1px solid ${theme.palette.grey[200]}`,
-              display: "flex",
-              justifyContent: "flex-start",
             }}
           >
             <Box
               sx={{
-                width: { xs: "100%", sm: "40%", md: "30%", lg: "20%" },
-                minWidth: "200px",
+                width: { xs: "100%", sm: "60%", md: "35%", lg: "25%" },
+                minWidth: { sm: 200 },
               }}
             >
               <CustomInput
                 fullWidth
-                placeholder="Rechercher ..."
+                placeholder="Rechercher"
                 value={searchValue}
-                onChange={(e) => {
-                  setSearchValue(e.target.value);
-                  table.onResetPage();
-                }}
+                onChange={(e) => setSearchValue(e.target.value)}
                 startIcon={<Search size={20} />}
               />
             </Box>

@@ -70,7 +70,7 @@ export function TaskCard({
     try {
       await archiveTask(task.id).unwrap();
     } catch (err) {
-      console.error("Failed to archive task:", err);
+      // Failed to archive task
     }
   };
 

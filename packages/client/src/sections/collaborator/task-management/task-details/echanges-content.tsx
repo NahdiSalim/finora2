@@ -41,7 +41,7 @@ export function EchangesContent({
         onCommentAdded();
       }
     } catch (error) {
-      console.error("Failed to add comment:", error);
+      // Failed to add comment
     }
   };
 

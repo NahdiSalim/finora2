@@ -28,6 +28,7 @@ export const requestApi = createApi({
         if (params.status) searchParams.append("status", params.status);
         if (params.urgency) searchParams.append("urgency", params.urgency);
         if (params.sortBy) searchParams.append("sortBy", params.sortBy);
+        if (params.search) searchParams.append("search", params.search);
 
         return {
           url: `/requests/assigned-to-me?${searchParams.toString()}`,
@@ -56,6 +57,7 @@ export const requestApi = createApi({
         if (params.status) searchParams.append("status", params.status);
         if (params.urgency) searchParams.append("urgency", params.urgency);
         if (params.sortBy) searchParams.append("sortBy", params.sortBy);
+        if (params.search) searchParams.append("search", params.search);
 
         return {
           url: `/requests/all?${searchParams.toString()}`,
@@ -82,6 +84,7 @@ export const requestApi = createApi({
         if (params.page) searchParams.append("page", params.page.toString());
         if (params.limit) searchParams.append("limit", params.limit.toString());
         if (params.status) searchParams.append("status", params.status);
+        if (params.search) searchParams.append("search", params.search);
 
         return {
           url: `/requests/my-requests?${searchParams.toString()}`,

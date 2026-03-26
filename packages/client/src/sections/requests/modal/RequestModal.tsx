@@ -91,7 +91,6 @@ export default function RequestModal({ open, onClose }: Props) {
       reset();
       onClose();
     } catch (error) {
-      console.error("Error creating request:", error);
       showAlert("Erreur lors de la création de la demande", "error");
     }
   };
@@ -235,9 +234,9 @@ export default function RequestModal({ open, onClose }: Props) {
                     error={!!errors.urgency}
                     helperText={errors.urgency?.message}
                   >
-                    <MenuItem value="low">Low</MenuItem>
+                    <MenuItem value="low">Faible</MenuItem>
                     <MenuItem value="normal">Normal</MenuItem>
-                    <MenuItem value="high">High</MenuItem>
+                    <MenuItem value="high">Élevé</MenuItem>
                     <MenuItem value="urgent">Urgent</MenuItem>
                   </CustomSelect>
                 )}

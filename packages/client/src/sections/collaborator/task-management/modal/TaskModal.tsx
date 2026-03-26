@@ -130,7 +130,6 @@ export default function TaskModal({
         onTaskCreated();
       }
     } catch (error: any) {
-      console.error("Failed to create task:", error);
       setSubmitError(
         error?.data?.message || "Erreur lors de la création de la tâche",
       );

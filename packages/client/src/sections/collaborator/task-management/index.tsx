@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { useLocation } from "react-router-dom";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import {
   Box,
   MenuItem,
@@ -22,12 +22,14 @@ import {
 } from "src/lib/services/tasksApi";
 import type { KanbanColumn, Task } from "./types";
 import { COLUMN_CONFIG_ACCOUNTANT, COLUMN_CONFIG_COLLABORATOR } from "./types";
-import { useAppSelector } from "src/hooks/use-redux";
+import { useAppSelector , useAppDispatch } from "src/hooks/use-redux";
 import { ROLE_CODES } from "src/constants/roles";
 
 export default function TaskManagementView() {
   const theme = useTheme();
   const location = useLocation();
+  const dispatch = useAppDispatch();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAppSelector((state) => state.auth);
   const isMesTasks =
     location.pathname.includes("/tasks") &&
@@ -41,99 +43,204 @@ export default function TaskManagementView() {
     userRoleUpper === "COMPTABLE" ||
     userRoleUpper === ROLE_CODES.ADMINISTRATOR ||
     userRoleUpper === "ADMINISTRATEUR";
-  const [searchValue, setSearchValue] = useState("");
-  const [dateFilter, setDateFilter] = useState("today");
+
+  // Initialize states from URL params
+  const [searchValue, setSearchValue] = useState(
+    searchParams.get("search") || "",
+  );
+  const [dateFilter, setDateFilter] = useState(
+    searchParams.get("dateFilter") || "today",
+  );
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [selectedColumnId, setSelectedColumnId] = useState<
     KanbanColumn["id"] | undefined
   >();
 
-  const skipAccountantQuery = isMesTasks;
-  const skipCollaboratorQuery = !isMesTasks;
+  // Pagination state per column
+  const [columnPages, setColumnPages] = useState<
+    Record<KanbanColumn["id"], number>
+  >({
+    todo: 1,
+    in_progress: 1,
+    in_review: 1,
+    completed: 1,
+  });
 
-  const {
-    data: accountantTasksData,
-    isLoading: isLoadingAccountant,
-    error: errorAccountant,
-    refetch: refetchAccountant,
-  } = useGetMyCreatedTasksQuery(
-    { page: 1, limit: 100 },
-    { skip: skipAccountantQuery },
-  );
+  // Accumulated tasks per column across pages
+  const [accumulatedTasks, setAccumulatedTasks] = useState<
+    Record<KanbanColumn["id"], Task[]>
+  >({
+    todo: [],
+    in_progress: [],
+    in_review: [],
+    completed: [],
+  });
 
-  const {
-    data: collaboratorTasksData,
-    isLoading: isLoadingCollaborator,
-    error: errorCollaborator,
-    refetch: refetchCollaborator,
-  } = useGetMyTasksQuery(
-    { page: 1, limit: 100 },
-    { skip: skipCollaboratorQuery },
-  );
-
-  const tasksData = isMesTasks ? collaboratorTasksData : accountantTasksData;
-  const isLoading = isMesTasks ? isLoadingCollaborator : isLoadingAccountant;
-  const error = isMesTasks ? errorCollaborator : errorAccountant;
-  const refetch = isMesTasks ? refetchCollaborator : refetchAccountant;
-
+  const TASKS_PER_PAGE = 3;
   const COLUMN_CONFIG = isMesTasks
     ? COLUMN_CONFIG_COLLABORATOR
     : COLUMN_CONFIG_ACCOUNTANT;
 
-  const columns = useMemo<KanbanColumn[]>(() => {
-    if (!tasksData?.data) {
-      return Object.entries(COLUMN_CONFIG).map(([id, config]) => ({
-        id: id as KanbanColumn["id"],
-        title: config.title,
-        color: config.color,
-        tasks: [],
-      }));
+  // Fetch tasks for each column separately
+  const columnStatuses: KanbanColumn["id"][] = [
+    "todo",
+    "in_progress",
+    "in_review",
+    "completed",
+  ];
+
+  const getQueryHook = () =>
+    isMesTasks ? useGetMyTasksQuery : useGetMyCreatedTasksQuery;
+  const QueryHook = getQueryHook();
+
+  // Fetch data for each column (always fresh on parameter change)
+  const todoQuery = QueryHook(
+    {
+      page: columnPages.todo,
+      limit: TASKS_PER_PAGE,
+      status: "todo",
+      search: searchValue.trim() || undefined,
+      dateFilter: dateFilter || undefined,
+    },
+    {
+      skip: false,
+      refetchOnMountOrArgChange: true,
+    },
+  );
+
+  const inProgressQuery = QueryHook(
+    {
+      page: columnPages.in_progress,
+      limit: TASKS_PER_PAGE,
+      status: "in_progress",
+      search: searchValue.trim() || undefined,
+      dateFilter: dateFilter || undefined,
+    },
+    {
+      skip: false,
+      refetchOnMountOrArgChange: true,
+    },
+  );
+
+  const inReviewQuery = QueryHook(
+    {
+      page: columnPages.in_review,
+      limit: TASKS_PER_PAGE,
+      status: "in_review",
+      search: searchValue.trim() || undefined,
+      dateFilter: dateFilter || undefined,
+    },
+    {
+      skip: false,
+      refetchOnMountOrArgChange: true,
+    },
+  );
+
+  const completedQuery = QueryHook(
+    {
+      page: columnPages.completed,
+      limit: TASKS_PER_PAGE,
+      status: "completed",
+      search: searchValue.trim() || undefined,
+      dateFilter: dateFilter || undefined,
+    },
+    {
+      skip: false,
+      refetchOnMountOrArgChange: true,
+    },
+  );
+
+  const columnQueries = {
+    todo: todoQuery,
+    in_progress: inProgressQuery,
+    in_review: inReviewQuery,
+    completed: completedQuery,
+  };
+
+  // Sync state with URL params on mount and navigation
+  useEffect(() => {
+    const urlSearch = searchParams.get("search") || "";
+    const urlDateFilter = searchParams.get("dateFilter") || "today";
+
+    if (urlSearch !== searchValue) {
+      setSearchValue(urlSearch);
     }
+    if (urlDateFilter !== dateFilter) {
+      setDateFilter(urlDateFilter);
+    }
+  }, [searchParams]);
 
-    const filteredTasks = tasksData.data.filter((task: Task) => {
-      if (task.status === "cancelled" || task.status === "archived")
-        return false;
-
-      if (searchValue.trim()) {
-        const search = searchValue.toLowerCase();
-        return (
-          task.title.toLowerCase().includes(search) ||
-          task.description?.toLowerCase().includes(search) ||
-          task.assignee?.firstName?.toLowerCase().includes(search) ||
-          task.assignee?.lastName?.toLowerCase().includes(search)
-        );
-      }
-
-      return true;
+  // Reset to page 1 and clear accumulated tasks when search or date filter changes
+  useEffect(() => {
+    setColumnPages({
+      todo: 1,
+      in_progress: 1,
+      in_review: 1,
+      completed: 1,
     });
-
-    const columnMap: Record<KanbanColumn["id"], Task[]> = {
+    setAccumulatedTasks({
       todo: [],
       in_progress: [],
       in_review: [],
       completed: [],
-    };
+    });
+  }, [searchValue, dateFilter]);
 
-    filteredTasks.forEach((task: Task) => {
-      if (task.status in columnMap) {
-        columnMap[task.status as KanbanColumn["id"]].push(task);
+  // Accumulate tasks when new data arrives
+  useEffect(() => {
+    columnStatuses.forEach((status) => {
+      const query = columnQueries[status];
+      if (query.data?.data && !query.isLoading) {
+        setAccumulatedTasks((prev) => {
+          const currentPage = columnPages[status];
+          const queryData = query.data;
+
+          if (!queryData) return prev;
+
+          if (currentPage === 1) {
+            // Reset on page 1
+            return { ...prev, [status]: queryData.data };
+          } else {
+            // Append new tasks, avoiding duplicates
+            const existingIds = new Set(prev[status].map((t) => t.id));
+            const newTasks = queryData.data.filter(
+              (t) => !existingIds.has(t.id),
+            );
+            return { ...prev, [status]: [...prev[status], ...newTasks] };
+          }
+        });
       }
     });
+  }, [
+    todoQuery.data,
+    inProgressQuery.data,
+    inReviewQuery.data,
+    completedQuery.data,
+    columnPages,
+  ]);
 
-    const columnOrder: KanbanColumn["id"][] = [
-      "todo",
-      "in_progress",
-      "in_review",
-      "completed",
-    ];
+  const isLoading = Object.values(columnQueries).some(
+    (q) => q.isLoading && q.originalArgs?.page === 1,
+  );
+  const error = Object.values(columnQueries).find((q) => q.error)?.error;
 
-    return columnOrder.map((id) => ({
-      id,
-      title: COLUMN_CONFIG[id].title,
-      color: COLUMN_CONFIG[id].color,
-      tasks: columnMap[id] || [],
-    }));
-  }, [tasksData, searchValue, COLUMN_CONFIG]);
+  const columns = useMemo<KanbanColumn[]>(() => {
+    return columnStatuses.map((status) => {
+      const query = columnQueries[status];
+      const pagination = query.data?.pagination;
+
+      return {
+        id: status,
+        title: COLUMN_CONFIG[status].title,
+        color: COLUMN_CONFIG[status].color,
+        tasks: accumulatedTasks[status],
+        currentPage: columnPages[status],
+        totalTasks: pagination?.total || 0,
+        hasMore: pagination ? pagination.page < pagination.totalPages : false,
+        isLoading: query.isLoading,
+      };
+    });
+  }, [columnQueries, columnPages, COLUMN_CONFIG, accumulatedTasks]);
 
   const handleAddTask = (columnId?: KanbanColumn["id"]) => {
     setSelectedColumnId(columnId);
@@ -146,7 +253,66 @@ export default function TaskManagementView() {
   };
 
   const handleTaskCreated = () => {
-    refetch();
+    // Reset pagination and refetch all columns
+    setColumnPages({
+      todo: 1,
+      in_progress: 1,
+      in_review: 1,
+      completed: 1,
+    });
+    setAccumulatedTasks({
+      todo: [],
+      in_progress: [],
+      in_review: [],
+      completed: [],
+    });
+    Object.values(columnQueries).forEach((q) => q.refetch());
+  };
+
+  const handleLoadMore = useCallback((columnId: KanbanColumn["id"]) => {
+    setColumnPages((prev) => ({
+      ...prev,
+      [columnId]: prev[columnId] + 1,
+    }));
+  }, []);
+
+  const handleTaskMoved = useCallback(
+    (
+      taskId: number,
+      fromColumn: KanbanColumn["id"],
+      toColumn: KanbanColumn["id"],
+    ) => {
+      setAccumulatedTasks((prev) => {
+        const task = prev[fromColumn].find((t) => t.id === taskId);
+        if (!task) return prev;
+
+        return {
+          ...prev,
+          [fromColumn]: prev[fromColumn].filter((t) => t.id !== taskId),
+          [toColumn]: [...prev[toColumn], { ...task, status: toColumn }],
+        };
+      });
+    },
+    [],
+  );
+
+  // Update URL params when filters change
+  const handleSearchChange = (value: string) => {
+    setSearchValue(value);
+    const params = new URLSearchParams(searchParams);
+    if (value) {
+      params.set("search", value);
+    } else {
+      params.delete("search");
+    }
+    setSearchParams(params, { replace: true });
+  };
+
+  const handleDateFilterChange = (value: string) => {
+    setDateFilter(value);
+    const params = new URLSearchParams(searchParams);
+    params.set("dateFilter", value);
+    setSearchParams(params, { replace: true });
   };
 
   return (
@@ -264,7 +430,7 @@ export default function TaskManagementView() {
               fullWidth
               placeholder="Rechercher"
               value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               startIcon={<Search size={20} />}
             />
           </Box>
@@ -303,7 +469,7 @@ export default function TaskManagementView() {
             </Box>
             <CustomSelect
               value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value as string)}
+              onChange={(e) => handleDateFilterChange(e.target.value as string)}
               sx={{
                 flex: 1,
                 minWidth: 0,
@@ -357,6 +523,8 @@ export default function TaskManagementView() {
           <KanbanBoard
             columns={columns}
             onAddTask={handleAddTask}
+            onLoadMore={handleLoadMore}
+            onTaskMoved={handleTaskMoved}
             isCollaboratorView={isMesTasks}
             isAccountant={!isMesTasks && isAccountant}
           />

@@ -71,7 +71,7 @@ export function DocumentsContent({ task, onUpdate }: DocumentsContentProps) {
       setFileSlots([null]);
       if (onUpdate) onUpdate();
     } catch (error) {
-      console.error("Failed to upload files:", error);
+      // Failed to upload files
     }
   };
 
@@ -99,7 +99,7 @@ export function DocumentsContent({ task, onUpdate }: DocumentsContentProps) {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      console.error("Download error:", error);
+      // Download error
     }
   };
 

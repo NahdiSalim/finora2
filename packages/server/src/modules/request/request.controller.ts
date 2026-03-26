@@ -74,14 +74,21 @@ export class RequestController {
     required: false,
     enum: ['pending', 'in_progress', 'resolved', 'rejected', 'cancelled'],
   })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by subject, topic, description, or type',
+  })
   async getMyRequests(
     @Req() req: AuthRequest,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-    @Query('status') status?: string
+    @Query('status') status?: string,
+    @Query('search') search?: string
   ) {
     const clientId = req.user!.id;
-    return this.requestService.getMyRequests(clientId, page || 1, limit || 10, status);
+    return this.requestService.getMyRequests(clientId, page || 1, limit || 10, status, search);
   }
 
   /**
@@ -108,13 +115,20 @@ export class RequestController {
     required: false,
     enum: ['urgency', 'createdAt'],
   })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by subject, topic, description, type, or client name',
+  })
   async getMyAssignedRequests(
     @Req() req: AuthRequest,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('status') status?: string,
     @Query('urgency') urgency?: string,
-    @Query('sortBy') sortBy?: 'urgency' | 'createdAt'
+    @Query('sortBy') sortBy?: 'urgency' | 'createdAt',
+    @Query('search') search?: string
   ) {
     const accountantId = req.user!.id;
     return this.requestService.getMyAssignedRequests(
@@ -123,7 +137,8 @@ export class RequestController {
       limit || 10,
       status,
       urgency,
-      sortBy
+      sortBy,
+      search
     );
   }
 
@@ -151,13 +166,20 @@ export class RequestController {
     required: false,
     enum: ['urgency', 'createdAt'],
   })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by subject, topic, description, type, or client name',
+  })
   async getAllRequests(
     @Req() req: AuthRequest,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('status') status?: string,
     @Query('urgency') urgency?: string,
-    @Query('sortBy') sortBy?: 'urgency' | 'createdAt'
+    @Query('sortBy') sortBy?: 'urgency' | 'createdAt',
+    @Query('search') search?: string
   ) {
     const accountantId = req.user!.id;
     return this.requestService.getAllRequests(
@@ -166,7 +188,8 @@ export class RequestController {
       limit || 10,
       status,
       urgency,
-      sortBy
+      sortBy,
+      search
     );
   }
 

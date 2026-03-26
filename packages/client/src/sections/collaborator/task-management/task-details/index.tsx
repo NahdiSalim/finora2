@@ -10,6 +10,7 @@ import { SimpleTabs } from "./simple-tabs";
 import { TaskDetailsContent } from "./task-details-content";
 import { DocumentsContent } from "./documents-content";
 import { EchangesContent } from "./echanges-content";
+import ArchiveConfirmModal from "src/components/common/ArchiveConfirmModal";
 import {
   useGetTaskByIdQuery,
   useStartTaskMutation,
@@ -24,6 +25,7 @@ export default function TaskDetailsView() {
   const location = useLocation();
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState("details");
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
   const { user } = useAppSelector((state) => state.auth);
 
   const {
@@ -70,7 +72,7 @@ export default function TaskDetailsView() {
       await startTask(task.id).unwrap();
       refetch();
     } catch (err) {
-      console.error("Failed to start task:", err);
+      // Failed to start task
     }
   };
 
@@ -80,7 +82,7 @@ export default function TaskDetailsView() {
       await submitForReview(task.id).unwrap();
       refetch();
     } catch (err) {
-      console.error("Failed to submit task for review:", err);
+      // Failed to submit task for review
     }
   };
 
@@ -90,17 +92,22 @@ export default function TaskDetailsView() {
       await completeTask(task.id).unwrap();
       refetch();
     } catch (err) {
-      console.error("Failed to complete task:", err);
+      // Failed to complete task
     }
   };
 
-  const handleArchiveTask = async () => {
+  const handleArchiveTask = () => {
+    setShowArchiveModal(true);
+  };
+
+  const handleConfirmArchive = async () => {
     if (!task) return;
     try {
       await archiveTask(task.id).unwrap();
+      setShowArchiveModal(false);
       handleBack();
     } catch (err) {
-      console.error("Failed to archive task:", err);
+      // Failed to archive task
     }
   };
 
@@ -320,6 +327,16 @@ export default function TaskDetailsView() {
           </Card>
         </Box>
       </Box>
+
+      {/* Archive Confirmation Modal */}
+      <ArchiveConfirmModal
+        open={showArchiveModal}
+        onClose={() => setShowArchiveModal(false)}
+        onConfirm={handleConfirmArchive}
+        title="Archiver cette tâche ?"
+        message="La tâche archivée sera masquée de la vue principale. Cette action peut être inversée."
+        isLoading={isArchiving}
+      />
     </PageHeader>
   );
 }

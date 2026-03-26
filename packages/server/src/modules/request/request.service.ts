@@ -333,12 +333,27 @@ export class RequestService {
   /**
    * Get my requests (Client)
    */
-  async getMyRequests(clientId: number, page: number = 1, limit: number = 10, status?: string) {
+  async getMyRequests(
+    clientId: number,
+    page: number = 1,
+    limit: number = 10,
+    status?: string,
+    search?: string
+  ) {
     const skip = (page - 1) * limit;
     const where: any = { clientId };
 
     if (status) {
       where.status = status;
+    }
+
+    if (search && search.trim()) {
+      where.OR = [
+        { subject: { contains: search.trim(), mode: 'insensitive' } },
+        { topic: { contains: search.trim(), mode: 'insensitive' } },
+        { description: { contains: search.trim(), mode: 'insensitive' } },
+        { type: { contains: search.trim(), mode: 'insensitive' } },
+      ];
     }
 
     const [total, requests] = await Promise.all([
@@ -452,12 +467,13 @@ export class RequestService {
     limit: number = 10,
     status?: string,
     urgency?: string,
-    sortBy: 'urgency' | 'createdAt' = 'createdAt'
+    sortBy: 'urgency' | 'createdAt' = 'createdAt',
+    search?: string
   ) {
     const skip = (page - 1) * limit;
     const where: any = {
       assignedToId: accountantId,
-      convertedToTaskId: null, // Only show requests not converted to tasks
+      // Removed convertedToTaskId: null filter to show all requests including those assigned to collaborators
     };
 
     if (status) {
@@ -466,6 +482,17 @@ export class RequestService {
 
     if (urgency) {
       where.urgency = urgency;
+    }
+
+    if (search && search.trim()) {
+      where.OR = [
+        { subject: { contains: search.trim(), mode: 'insensitive' } },
+        { topic: { contains: search.trim(), mode: 'insensitive' } },
+        { description: { contains: search.trim(), mode: 'insensitive' } },
+        { type: { contains: search.trim(), mode: 'insensitive' } },
+        { client: { firstName: { contains: search.trim(), mode: 'insensitive' } } },
+        { client: { lastName: { contains: search.trim(), mode: 'insensitive' } } },
+      ];
     }
 
     const orderBy: any = {};
@@ -508,13 +535,29 @@ export class RequestService {
               lastName: true,
             },
           },
+          convertedToTask: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              assignee: {
+                select: {
+                  id: true,
+                  username: true,
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                },
+              },
+            },
+          },
         },
       }),
       this.prisma.request.groupBy({
         by: ['status'],
         where: {
           assignedToId: accountantId,
-          convertedToTaskId: null, // Only count requests not converted to tasks
+          // Removed convertedToTaskId: null filter to count all requests including those assigned to collaborators
         },
         _count: true,
       }),
@@ -557,7 +600,8 @@ export class RequestService {
     limit: number = 10,
     status?: string,
     urgency?: string,
-    sortBy: 'urgency' | 'createdAt' = 'createdAt'
+    sortBy: 'urgency' | 'createdAt' = 'createdAt',
+    search?: string
   ) {
     // Get accountant's company
     const accountant = await this.prisma.user.findUnique({
@@ -578,6 +622,17 @@ export class RequestService {
 
     if (urgency) {
       where.urgency = urgency;
+    }
+
+    if (search && search.trim()) {
+      where.OR = [
+        { subject: { contains: search.trim(), mode: 'insensitive' } },
+        { topic: { contains: search.trim(), mode: 'insensitive' } },
+        { description: { contains: search.trim(), mode: 'insensitive' } },
+        { type: { contains: search.trim(), mode: 'insensitive' } },
+        { client: { firstName: { contains: search.trim(), mode: 'insensitive' } } },
+        { client: { lastName: { contains: search.trim(), mode: 'insensitive' } } },
+      ];
     }
 
     const orderBy: any = {};
@@ -618,13 +673,22 @@ export class RequestService {
               id: true,
               title: true,
               status: true,
+              assignee: {
+                select: {
+                  id: true,
+                  username: true,
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                },
+              },
             },
           },
         },
       }),
     ]);
 
-    // Count by status (only unassigned requests)
+    // Count by status
     const statusCounts = await this.prisma.request.groupBy({
       by: ['status'],
       where: { accountingFirmId: accountant.companyId },
@@ -842,116 +906,130 @@ export class RequestService {
       updateData.desiredResponseTime = dto.desiredResponseTime;
 
     // Handle assignment changes
-    if (dto.assignedToId !== undefined && dto.assignedToId !== null) {
-      // Validate that the assignee is an accountant or collaborator
-      const assignee = await this.prisma.user.findUnique({
-        where: { id: dto.assignedToId },
-        include: {
-          role: {
-            select: {
-              code: true,
-            },
-          },
-        },
-      });
-
-      if (!assignee) {
-        throw new ApiError('Assignee user not found', 404, 'ASSIGNEE_NOT_FOUND');
-      }
-
-      if (assignee.role?.code !== 'ACCOUNTANT' && assignee.role?.code !== 'COLLABORATOR') {
-        throw new ApiError(
-          'Only accountants and collaborators can be assigned to requests',
-          400,
-          'INVALID_ASSIGNEE_ROLE'
-        );
-      }
-
-      // If assigning to a COLLABORATOR, convert to task automatically
-      if (assignee.role?.code === 'COLLABORATOR') {
-        // Map urgency to priority
-        const priorityMap = {
-          low: 'low',
-          normal: 'medium',
-          high: 'high',
-          urgent: 'urgent',
-        };
-
-        // Check if request is already converted to a task
+    // Check if assignedToId is explicitly being set (could be a number or null)
+    // The DTO Transform already converts empty strings to null
+    if (dto.assignedToId !== undefined) {
+      // If it's null or 0, unassign
+      if (dto.assignedToId === null || dto.assignedToId === 0) {
+        updateData.assignedToId = null;
+        // If there's a converted task, cancel it
         if (request.convertedToTaskId) {
-          // Update existing task's assignee
           await this.prisma.task.update({
             where: { id: request.convertedToTaskId },
-            data: {
-              assigneeId: dto.assignedToId,
-              title: dto.subject || undefined,
-              description: dto.description || undefined,
-              type: dto.type || undefined,
-              priority: dto.urgency ? priorityMap[dto.urgency] : undefined,
-              dueDate: dto.desiredResponseDate ? new Date(dto.desiredResponseDate) : undefined,
-            },
+            data: { status: 'cancelled' },
           });
-
-          updateData.status = 'in_progress';
-          updateData.assignedToId = userId; // Keep accountant as the request owner
-
-          // Notify the new collaborator
-          this.notificationService
-            .notify({
-              recipientId: assignee.id,
-              type: 'task',
-              action: 'assigned',
-              actorName: 'Votre comptable',
-              data: { taskId: request.convertedToTaskId },
-            })
-            .catch(() => {});
-        } else {
-          // Create new task for the collaborator
-          const task = await this.prisma.task.create({
-            data: {
-              title: dto.subject || request.subject,
-              description: dto.description || request.description || '',
-              type: dto.type || request.type,
-              priority: priorityMap[dto.urgency || request.urgency] || 'medium',
-              dueDate: dto.desiredResponseDate
-                ? new Date(dto.desiredResponseDate)
-                : request.desiredResponseDate
-                  ? new Date(request.desiredResponseDate)
-                  : null,
-              assigneeId: dto.assignedToId,
-              createdById: userId,
-              clientId: request.clientId,
-              companyId: request.companyId,
-              requestId: request.id,
-              attachments: attachmentUrls,
-            },
-          });
-
-          // Mark request as converted
-          updateData.convertedToTaskId = task.id;
-          updateData.convertedAt = new Date();
-          updateData.status = 'in_progress';
-          updateData.assignedToId = userId; // Keep accountant as the assigned person for the request
-
-          // Notify the collaborator
-          this.notificationService
-            .notify({
-              recipientId: assignee.id,
-              type: 'task',
-              action: 'assigned',
-              actorName: 'Votre comptable',
-              data: { taskId: task.id },
-            })
-            .catch(() => {});
+          // Clear the conversion reference
+          updateData.convertedToTaskId = null;
+          updateData.convertedAt = null;
         }
       } else {
-        // Assigning to an ACCOUNTANT - keep as request
-        updateData.assignedToId = dto.assignedToId;
-        // Note: Status is NOT automatically changed per requirement #5
+        // Validate that the assignee is an accountant or collaborator
+        const assignee = await this.prisma.user.findUnique({
+          where: { id: dto.assignedToId as number },
+          include: {
+            role: {
+              select: {
+                code: true,
+              },
+            },
+          },
+        });
+
+        if (!assignee) {
+          throw new ApiError('Assignee user not found', 404, 'ASSIGNEE_NOT_FOUND');
+        }
+
+        if (assignee.role?.code !== 'ACCOUNTANT' && assignee.role?.code !== 'COLLABORATOR') {
+          throw new ApiError(
+            'Only accountants and collaborators can be assigned to requests',
+            400,
+            'INVALID_ASSIGNEE_ROLE'
+          );
+        }
+
+        // If assigning to a COLLABORATOR, convert to task automatically
+        if (assignee.role?.code === 'COLLABORATOR') {
+          // Map urgency to priority
+          const priorityMap = {
+            low: 'low',
+            normal: 'medium',
+            high: 'high',
+            urgent: 'urgent',
+          };
+
+          // Check if request is already converted to a task
+          if (request.convertedToTaskId) {
+            // Update existing task's assignee
+            await this.prisma.task.update({
+              where: { id: request.convertedToTaskId },
+              data: {
+                assigneeId: dto.assignedToId,
+                title: dto.subject || undefined,
+                description: dto.description || undefined,
+                type: dto.type || undefined,
+                priority: dto.urgency ? priorityMap[dto.urgency] : undefined,
+                dueDate: dto.desiredResponseDate ? new Date(dto.desiredResponseDate) : undefined,
+              },
+            });
+
+            updateData.status = 'in_progress';
+            updateData.assignedToId = userId; // Keep accountant as the request owner
+
+            // Notify the new collaborator
+            this.notificationService
+              .notify({
+                recipientId: assignee.id,
+                type: 'task',
+                action: 'assigned',
+                actorName: 'Votre comptable',
+                data: { taskId: request.convertedToTaskId },
+              })
+              .catch(() => {});
+          } else {
+            // Create new task for the collaborator
+            const task = await this.prisma.task.create({
+              data: {
+                title: dto.subject || request.subject,
+                description: dto.description || request.description || '',
+                type: dto.type || request.type,
+                priority: priorityMap[dto.urgency || request.urgency] || 'medium',
+                dueDate: dto.desiredResponseDate
+                  ? new Date(dto.desiredResponseDate)
+                  : request.desiredResponseDate
+                    ? new Date(request.desiredResponseDate)
+                    : null,
+                assigneeId: dto.assignedToId,
+                createdById: userId,
+                clientId: request.clientId,
+                companyId: request.companyId,
+                requestId: request.id,
+                attachments: attachmentUrls,
+              },
+            });
+
+            // Mark request as converted
+            updateData.convertedToTaskId = task.id;
+            updateData.convertedAt = new Date();
+            updateData.status = 'in_progress';
+            updateData.assignedToId = userId; // Keep accountant as the assigned person for the request
+
+            // Notify the collaborator
+            this.notificationService
+              .notify({
+                recipientId: assignee.id,
+                type: 'task',
+                action: 'assigned',
+                actorName: 'Votre comptable',
+                data: { taskId: task.id },
+              })
+              .catch(() => {});
+          }
+        } else {
+          // Assigning to an ACCOUNTANT - keep as request
+          updateData.assignedToId = dto.assignedToId as number;
+          // Note: Status is NOT automatically changed per requirement #5
+        }
       }
-    } else if (dto.assignedToId === null || dto.assignedToId === undefined) {
-      // Explicitly allow null to unassign (when sent as null or empty string converted to null)
-      updateData.assignedToId = null;
     }
 
     // Update attachments if new files were uploaded

@@ -21,10 +21,17 @@ import {
   useReorderTasksMutation,
 } from "src/lib/services/tasksApi";
 import type { KanbanColumn, Task } from "./types";
+import ArchiveConfirmModal from "src/components/common/ArchiveConfirmModal";
 
 interface KanbanBoardProps {
   columns: KanbanColumn[];
   onAddTask?: (columnId: KanbanColumn["id"]) => void;
+  onLoadMore?: (columnId: KanbanColumn["id"]) => void;
+  onTaskMoved?: (
+    taskId: number,
+    fromColumn: KanbanColumn["id"],
+    toColumn: KanbanColumn["id"],
+  ) => void;
   isCollaboratorView?: boolean;
   isAccountant?: boolean;
 }
@@ -32,6 +39,8 @@ interface KanbanBoardProps {
 export function KanbanBoard({
   columns,
   onAddTask,
+  onLoadMore,
+  onTaskMoved,
   isCollaboratorView = false,
   isAccountant = false,
 }: KanbanBoardProps) {
@@ -39,8 +48,12 @@ export function KanbanBoard({
   const [activeId, setActiveId] = useState<number | null>(null);
   const [localColumns, setLocalColumns] = useState<KanbanColumn[]>(columns);
   const [updateTask] = useUpdateTaskMutation();
-  const [archiveTask] = useArchiveTaskMutation();
+  const [archiveTask, { isLoading: isArchiving }] = useArchiveTaskMutation();
   const [reorderTasks] = useReorderTasksMutation();
+  const [showArchiveAllModal, setShowArchiveAllModal] = useState(false);
+  const [columnToArchive, setColumnToArchive] = useState<
+    KanbanColumn["id"] | null
+  >(null);
 
   const STORAGE_KEY = `kanban-order-${isCollaboratorView ? "collaborator" : "accountant"}`;
 
@@ -50,14 +63,9 @@ export function KanbanBoard({
       columnsToSave.forEach((col) => {
         orderMap[col.id] = col.tasks.map((t) => t.id);
       });
-      console.log(
-        "💾 Saving task order to localStorage:",
-        STORAGE_KEY,
-        orderMap,
-      );
       localStorage.setItem(STORAGE_KEY, JSON.stringify(orderMap));
     } catch (error) {
-      console.error("Failed to save task order to localStorage:", error);
+      // Failed to save task order to localStorage
     }
   };
 
@@ -75,39 +83,19 @@ export function KanbanBoard({
     columnId: string,
     tasks: Task[],
   ): Promise<void> => {
-    try {
-      const columnOffset = getColumnOrderOffset(columnId);
-      const reorderedTasks = tasks.map((task, index) => ({
-        id: task.id,
-        order: columnOffset + index,
-      }));
+    const columnOffset = getColumnOrderOffset(columnId);
+    const reorderedTasks = tasks.map((task, index) => ({
+      id: task.id,
+      order: columnOffset + index,
+    }));
 
-      console.log(
-        `🌐 Saving task order to backend for column ${columnId}:`,
-        reorderedTasks,
-      );
-
-      await reorderTasks({
-        tasks: reorderedTasks,
-        status: columnId,
-      }).unwrap();
-
-      console.log("✅ Backend order saved successfully");
-    } catch (error) {
-      console.error("❌ Failed to save task order to backend:", error);
-      throw error;
-    }
+    await reorderTasks({
+      tasks: reorderedTasks,
+      status: columnId,
+    }).unwrap();
   };
 
   useEffect(() => {
-    console.log(
-      "🔵 Setting columns from backend with order field:",
-      columns.map((col) => ({
-        id: col.id,
-        taskIds: col.tasks.map((t) => t.id),
-        orders: col.tasks.map((t) => t.order),
-      })),
-    );
     setLocalColumns(columns);
   }, [columns]);
 
@@ -196,7 +184,6 @@ export function KanbanBoard({
         try {
           await saveTaskOrderToBackend(sourceColumn.id, newTasks);
         } catch (error) {
-          console.error("Failed to persist order, reverting:", error);
           setLocalColumns(localColumns);
         }
       }
@@ -224,6 +211,11 @@ export function KanbanBoard({
       try {
         await updateTask({ id: taskId, data: formData }).unwrap();
 
+        // Notify parent about the move
+        if (onTaskMoved) {
+          onTaskMoved(taskId, sourceColumn.id, targetColumn.id);
+        }
+
         // Update order for both source and target columns
         const sourceCol = updatedColumns.find(
           (col) => col.id === sourceColumn.id,
@@ -239,7 +231,6 @@ export function KanbanBoard({
           await saveTaskOrderToBackend(targetColumn.id, targetCol.tasks);
         }
       } catch (error) {
-        console.error("Failed to update task status:", error);
         setLocalColumns(localColumns);
       }
     }
@@ -323,13 +314,23 @@ export function KanbanBoard({
       try {
         await saveTaskOrderToBackend(columnId, targetCol.tasks);
       } catch (error) {
-        console.error("Failed to persist sorted order:", error);
+        // Failed to persist sorted order
       }
     }
   };
 
-  const handleArchiveAll = async (columnId: KanbanColumn["id"]) => {
+  const handleArchiveAll = (columnId: KanbanColumn["id"]) => {
     if (columnId !== "completed") return;
+
+    const completedColumn = localColumns.find((col) => col.id === "completed");
+    if (!completedColumn || completedColumn.tasks.length === 0) return;
+
+    setColumnToArchive(columnId);
+    setShowArchiveAllModal(true);
+  };
+
+  const handleConfirmArchiveAll = async () => {
+    if (!columnToArchive) return;
 
     const completedColumn = localColumns.find((col) => col.id === "completed");
     if (!completedColumn || completedColumn.tasks.length === 0) return;
@@ -338,8 +339,10 @@ export function KanbanBoard({
       await Promise.all(
         completedColumn.tasks.map((task) => archiveTask(task.id).unwrap()),
       );
+      setShowArchiveAllModal(false);
+      setColumnToArchive(null);
     } catch (err) {
-      console.error("Failed to archive all tasks:", err);
+      // Failed to archive all tasks
     }
   };
 
@@ -380,6 +383,7 @@ export function KanbanBoard({
             onAddTask={isCollaboratorView ? undefined : onAddTask}
             onSortByPriority={handleSortByPriority}
             onArchiveAll={handleArchiveAll}
+            onLoadMore={onLoadMore}
             isAccountant={isAccountant}
           />
         ))}
@@ -392,6 +396,19 @@ export function KanbanBoard({
           </Box>
         ) : null}
       </DragOverlay>
+
+      {/* Archive All Confirmation Modal */}
+      <ArchiveConfirmModal
+        open={showArchiveAllModal}
+        onClose={() => {
+          setShowArchiveAllModal(false);
+          setColumnToArchive(null);
+        }}
+        onConfirm={handleConfirmArchiveAll}
+        title="Archiver toutes les tâches terminées ?"
+        message="Les tâches archivées seront masquées de la vue principale. Cette action peut être inversée."
+        isLoading={isArchiving}
+      />
     </DndContext>
   );
 }

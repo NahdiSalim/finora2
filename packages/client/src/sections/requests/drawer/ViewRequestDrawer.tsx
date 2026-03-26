@@ -199,7 +199,6 @@ export default function ViewRequestDrawer({
       setShowDeleteModal(false);
       onClose();
     } catch (error) {
-      console.error("Error deleting request:", error);
       showAlert("Erreur lors de la suppression de la demande", "error");
     }
   };
@@ -241,7 +240,6 @@ export default function ViewRequestDrawer({
 
       showAlert("Demande mise à jour avec succès", "success");
     } catch (error) {
-      console.error("Error updating request:", error);
       showAlert("Erreur lors de la mise à jour de la demande", "error");
     }
   };
@@ -308,7 +306,6 @@ export default function ViewRequestDrawer({
         );
       }
     } catch (error) {
-      console.error("Error updating assignment:", error);
       showAlert("Erreur lors de la mise à jour de l'assignation", "error");
       // Revert to previous value on error
       setAssignedUserId(localRequest.assignedToId || null);
@@ -382,7 +379,6 @@ export default function ViewRequestDrawer({
       }
       setIsEditMode(false);
     } catch (error) {
-      console.error("Error updating request:", error);
       showAlert("Erreur lors de la mise à jour de la demande", "error");
     }
   };
@@ -674,6 +670,39 @@ export default function ViewRequestDrawer({
               </Box>
             </Box>
 
+            {/* Collaborator Assignment Info - Show for accountants */}
+            {isAccountant && localRequest.convertedToTask?.assignee && (
+              <Box
+                sx={{
+                  mb: 2,
+                  p: 1.5,
+                  bgcolor: alpha(theme.palette.info.main, 0.08),
+                  borderRadius: 2,
+                  border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
+                  animation: open
+                    ? "fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.15s both"
+                    : "none",
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  fontWeight={600}
+                  sx={{ mb: 0.5, display: "block", fontSize: 10 }}
+                >
+                  COLLABORATEUR ASSIGNÉ
+                </Typography>
+                <Typography
+                  variant="body2"
+                  fontWeight={500}
+                  sx={{ fontSize: 13 }}
+                >
+                  {localRequest.convertedToTask.assignee.firstName}{" "}
+                  {localRequest.convertedToTask.assignee.lastName}
+                </Typography>
+              </Box>
+            )}
+
             {/* Accountant Info (if assigned) - Show for clients */}
             {!isAccountant &&
               (localRequest.assignedTo || localRequest.respondedAt) && (
@@ -711,6 +740,22 @@ export default function ViewRequestDrawer({
                         <Typography variant="body2" sx={{ fontSize: 13 }}>
                           {localRequest.assignedTo.firstName ||
                             localRequest.assignedTo.username}
+                        </Typography>
+                      </Box>
+                    )}
+                    {localRequest.convertedToTask?.assignee && (
+                      <Box>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          fontWeight={600}
+                          sx={{ mb: 0.5, display: "block", fontSize: 10 }}
+                        >
+                          COLLABORATEUR ASSIGNÉ
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontSize: 13 }}>
+                          {localRequest.convertedToTask.assignee.firstName}{" "}
+                          {localRequest.convertedToTask.assignee.lastName}
                         </Typography>
                       </Box>
                     )}
@@ -1244,11 +1289,13 @@ export default function ViewRequestDrawer({
                   fontWeight: 600,
                 }}
               >
-                {assignedUserId
-                  ? assignedUserId === Number(user?.id)
-                    ? "Assigné à moi"
-                    : `Assigné à ${assignableUsers.find((u) => u.id === assignedUserId)?.username || "Utilisateur"}`
-                  : "Assigner la demande"}
+                {localRequest.convertedToTask?.assignee
+                  ? `Assigné à ${localRequest.convertedToTask.assignee.firstName} ${localRequest.convertedToTask.assignee.lastName}`
+                  : assignedUserId
+                    ? assignedUserId === Number(user?.id)
+                      ? "Assigné à moi"
+                      : `Assigné à ${assignableUsers.find((u) => u.id === assignedUserId)?.username || "Utilisateur"}`
+                    : "Assigner la demande"}
               </CustomButton>
             )}
 
@@ -1381,9 +1428,10 @@ export default function ViewRequestDrawer({
         }}
       >
         {/* Show "Me" option only on client_requests page */}
-        {pageContext === "client_requests" && (
-          <>
+        {pageContext === "client_requests" &&
+          [
             <MenuItem
+              key="me"
               onClick={() => handleAssignUser(Number(user?.id))}
               selected={assignedUserId === Number(user?.id)}
               sx={{
@@ -1408,10 +1456,11 @@ export default function ViewRequestDrawer({
                   {user?.full_name || user?.email}
                 </Typography>
               </Box>
-            </MenuItem>
-            {assignableUsers.length > 0 && <Divider sx={{ my: 0.5 }} />}
-          </>
-        )}
+            </MenuItem>,
+            assignableUsers.length > 0 && (
+              <Divider key="divider-me" sx={{ my: 0.5 }} />
+            ),
+          ].filter(Boolean)}
 
         {/* Show collaborators */}
         {assignableUsers.length > 0 ? (
@@ -1475,26 +1524,25 @@ export default function ViewRequestDrawer({
         )}
 
         {/* Unassign option */}
-        {assignedUserId && (
-          <>
-            <Divider sx={{ my: 0.5 }} />
-            <MenuItem
-              onClick={() => handleAssignUser(null)}
-              sx={{
-                py: 1.5,
-                px: 2,
-                color: theme.palette.error.main,
-                "&:hover": {
-                  bgcolor: alpha(theme.palette.error.main, 0.08),
-                },
-              }}
-            >
-              <Typography variant="body2" fontWeight={600}>
-                Désassigner
-              </Typography>
-            </MenuItem>
-          </>
-        )}
+        {(assignedUserId || localRequest.convertedToTask?.assignee) && [
+          <Divider key="divider-unassign" sx={{ my: 0.5 }} />,
+          <MenuItem
+            key="unassign"
+            onClick={() => handleAssignUser(null)}
+            sx={{
+              py: 1.5,
+              px: 2,
+              color: theme.palette.error.main,
+              "&:hover": {
+                bgcolor: alpha(theme.palette.error.main, 0.08),
+              },
+            }}
+          >
+            <Typography variant="body2" fontWeight={600}>
+              Désassigner
+            </Typography>
+          </MenuItem>,
+        ]}
       </Menu>
 
       {/* Delete Confirmation Modal */}

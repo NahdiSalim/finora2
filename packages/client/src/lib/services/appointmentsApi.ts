@@ -1,0 +1,507 @@
+import { createApi } from "@reduxjs/toolkit/query/react";
+import { baseQueryWithReauth } from "./baseQueryWithReauth";
+
+export type AppointmentStatus =
+  | "pending"
+  | "confirmed"
+  | "rescheduled"
+  | "rejected"
+  | "cancelled"
+  | "completed";
+
+export interface AppointmentUser {
+  id: number;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  username?: string | null;
+}
+
+export interface AppointmentItem {
+  id: number;
+  title: string;
+  description?: string | null;
+  status: AppointmentStatus;
+  hour?: string | null;
+  startTime: string;
+  endTime: string;
+  duration: number;
+  meetingType: "in_person" | "online" | "phone";
+  location?: string | null;
+  color?: string | null; // ← add this line
+  rejectionReason?: string | null;
+  accountantNotes?: string | null;
+  clientNotes?: string | null;
+  minutesFileName?: string | null;
+  minutesFileSizeKb?: number | null;
+  minutesFileUrl?: string | null;
+  client?: AppointmentUser;
+  accountant?: AppointmentUser;
+  date?: Date | null;
+  createdById?: number | null;
+  updatedById?: number | null;
+}
+
+export interface GetAllAppointmentsResponse {
+  success: boolean;
+  data: AppointmentItem[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  counts?: Partial<Record<AppointmentStatus, number>>;
+}
+
+export interface GetAppointmentByIdResponse {
+  success: boolean;
+  data: AppointmentItem;
+}
+
+function normalizeAppointmentItem(raw: any): AppointmentItem {
+  const item = { ...(raw ?? {}) } as any;
+
+  const dateRaw = typeof item.date === "string" ? item.date : "";
+  const datePart = dateRaw.includes("T") ? dateRaw.split("T")[0] : dateRaw;
+  const hourRaw = typeof item.hour === "string" ? item.hour : "";
+  const safeHour = /^\d{2}:\d{2}$/.test(hourRaw) ? hourRaw : "00:00";
+
+  // Keep API hour as local wall-clock time to avoid UTC shift in UI.
+  const computedStart = datePart
+    ? `${datePart}T${safeHour}:00`
+    : item.startTime;
+
+  const durationMinutes =
+    typeof item.duration === "number" && Number.isFinite(item.duration)
+      ? item.duration
+      : 60;
+
+  let computedEnd = item.endTime;
+  if (!computedEnd && computedStart) {
+    const startDate = new Date(computedStart);
+    if (!Number.isNaN(startDate.getTime())) {
+      computedEnd = new Date(
+        startDate.getTime() + durationMinutes * 60 * 1000,
+      ).toISOString();
+    }
+  }
+
+  return {
+    ...item,
+    startTime: computedStart ?? "",
+    endTime: computedEnd ?? computedStart ?? "",
+  } as AppointmentItem;
+}
+
+export interface AvailabilityItem {
+  id: number;
+  accountantId: number;
+  isRecurring: boolean;
+  dayOfWeek?: string | null;
+  specificDate?: string | null;
+  startTime: string;
+  endTime: string;
+  slotDuration: number;
+  isActive: boolean;
+}
+
+export interface GetMyAvailabilitiesResponse {
+  success: boolean;
+  data: AvailabilityItem[];
+}
+
+export interface AvailableSlotItem {
+  id: number;
+  availabilityId: number;
+  accountantId: number;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: "available" | "booked";
+}
+
+export interface GetAvailableSlotsResponse {
+  success: boolean;
+  data: AvailableSlotItem[];
+}
+
+export interface GetConfirmedThisMonthResponse {
+  success: boolean;
+  total: number;
+  data: AppointmentItem[];
+}
+
+export interface LeaveItem {
+  id: number;
+  accountantId: number;
+  startDate: string;
+  endDate: string;
+  reason?: string | null;
+}
+
+export interface GetMyLeavesResponse {
+  success: boolean;
+  data: LeaveItem[];
+}
+
+export interface CreateAppointmentBody {
+  title: string;
+  description?: string;
+  type?: "meeting" | "consultation" | "review" | "other";
+  date: string;
+  hour: string;
+  meetingType?: "in_person" | "online" | "phone";
+  location?: string;
+  accountantId?: number;
+  clientId?: number;
+  clientNotes?: string;
+  color?: string;
+  guests?: string[];
+}
+
+type GetAllAppointmentsParams = {
+  page?: number;
+  limit?: number;
+  status?: AppointmentStatus;
+  period?: "today" | "upcoming" | "past";
+  search?: string;
+};
+
+type GetMyAppointmentsParams = GetAllAppointmentsParams;
+
+export const appointmentsApi = createApi({
+  reducerPath: "appointmentsApi",
+  baseQuery: baseQueryWithReauth,
+  tagTypes: ["Appointments", "Availabilities", "ConfirmedThisMonth"],
+  endpoints: (builder) => ({
+    getAllAppointments: builder.query<
+      GetAllAppointmentsResponse,
+      GetAllAppointmentsParams | void
+    >({
+      query: (params) => {
+        const p: GetAllAppointmentsParams = params ?? {};
+        const search = new URLSearchParams();
+        if (p.page) search.set("page", String(p.page));
+        if (p.limit) search.set("limit", String(p.limit));
+        if (p.status) search.set("status", p.status);
+        if (p.period) search.set("period", p.period);
+        if (p.search && p.search.trim()) search.set("search", p.search.trim());
+        return { url: `/appointments/all?${search.toString()}`, method: "GET" };
+      },
+      transformResponse: (response: GetAllAppointmentsResponse) => ({
+        ...response,
+        data: Array.isArray(response?.data)
+          ? response.data.map((a: any) => normalizeAppointmentItem(a))
+          : [],
+      }),
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.data.map((a) => ({
+                type: "Appointments" as const,
+                id: a.id,
+              })),
+              { type: "Appointments", id: "LIST" },
+            ]
+          : [{ type: "Appointments", id: "LIST" }],
+    }),
+
+    getMyAppointments: builder.query<
+      GetAllAppointmentsResponse,
+      GetMyAppointmentsParams | void
+    >({
+      query: (params) => {
+        const p: GetMyAppointmentsParams = params ?? {};
+        const search = new URLSearchParams();
+        if (p.page) search.set("page", String(p.page));
+        if (p.limit) search.set("limit", String(p.limit));
+        if (p.status) search.set("status", p.status);
+        if (p.period) search.set("period", p.period);
+        if (p.search && p.search.trim()) search.set("search", p.search.trim());
+        return {
+          url: `/appointments/my-appointments?${search.toString()}`,
+          method: "GET",
+        };
+      },
+      transformResponse: (response: GetAllAppointmentsResponse) => ({
+        ...response,
+        data: Array.isArray(response?.data)
+          ? response.data.map((a: any) => normalizeAppointmentItem(a))
+          : [],
+      }),
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.data.map((a) => ({
+                type: "Appointments" as const,
+                id: a.id,
+              })),
+              { type: "Appointments", id: "LIST" },
+            ]
+          : [{ type: "Appointments", id: "LIST" }],
+    }),
+
+    getAppointmentById: builder.query<GetAppointmentByIdResponse, number>({
+      query: (id) => ({ url: `/appointments/${id}`, method: "GET" }),
+      transformResponse: (response: GetAppointmentByIdResponse) => ({
+        ...response,
+        data: normalizeAppointmentItem(response?.data),
+      }),
+      providesTags: (_result, _err, id) => [{ type: "Appointments", id }],
+    }),
+
+    getConfirmedThisMonth: builder.query<GetConfirmedThisMonthResponse, void>({
+      query: () => ({
+        url: "/appointments/confirmed/this-month",
+        method: "GET",
+      }),
+      transformResponse: (response: GetConfirmedThisMonthResponse) => ({
+        ...response,
+        data: Array.isArray(response?.data)
+          ? response.data.map((a: any) => normalizeAppointmentItem(a))
+          : [],
+      }),
+      providesTags: [{ type: "ConfirmedThisMonth", id: "LIST" }],
+    }),
+
+    createAppointment: builder.mutation<
+      { success: boolean; message?: string; data?: AppointmentItem },
+      CreateAppointmentBody
+    >({
+      query: (body) => ({
+        url: "/appointments",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: [{ type: "Appointments", id: "LIST" }],
+    }),
+
+    respondAppointment: builder.mutation<
+      { success: boolean; message?: string; data?: AppointmentItem },
+      {
+        id: number;
+        action: "confirm" | "reject";
+        notes?: string;
+        rejectionReason?: string;
+      }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/appointments/${id}/respond`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (_result, _err, arg) => {
+        const tags: Array<
+          | { type: "Appointments"; id: number | "LIST" }
+          | { type: "ConfirmedThisMonth"; id: "LIST" }
+        > = [
+          { type: "Appointments", id: arg.id },
+          { type: "Appointments", id: "LIST" },
+        ];
+        if (arg.action === "confirm") {
+          tags.push({ type: "ConfirmedThisMonth", id: "LIST" });
+        }
+        return tags;
+      },
+    }),
+
+    reportAppointment: builder.mutation<
+      { success: boolean; message?: string; data?: AppointmentItem },
+      { id: number; newDate: string; newHour: string; reason?: string }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/appointments/${id}/report`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (_result, _err, arg) => [
+        { type: "Appointments", id: arg.id },
+        { type: "Appointments", id: "LIST" },
+        { type: "ConfirmedThisMonth", id: "LIST" },
+      ],
+    }),
+
+    updateAppointment: builder.mutation<
+      { success: boolean; message?: string; data?: AppointmentItem },
+      { id: number; body: Record<string, unknown> }
+    >({
+      query: ({ id, body }) => ({
+        url: `/appointments/${id}`,
+        method: "PUT",
+        body,
+      }),
+      invalidatesTags: (_result, _err, arg) => [
+        { type: "Appointments", id: arg.id },
+        { type: "Appointments", id: "LIST" },
+      ],
+    }),
+
+    cancelAppointment: builder.mutation<
+      { success: boolean; message?: string },
+      number
+    >({
+      query: (id) => ({ url: `/appointments/${id}/cancel`, method: "POST" }),
+      invalidatesTags: (_result, _err, id) => [
+        { type: "Appointments", id },
+        { type: "Appointments", id: "LIST" },
+      ],
+    }),
+
+    getMyAvailabilities: builder.query<
+      GetMyAvailabilitiesResponse,
+      { onlyActive?: boolean } | void
+    >({
+      query: (params) => {
+        const p = params ?? {};
+        const search = new URLSearchParams();
+        if (typeof p.onlyActive === "boolean") {
+          search.set("onlyActive", String(p.onlyActive));
+        }
+        const q = search.toString();
+        return {
+          url: `/appointments/availability/mine${q ? `?${q}` : ""}`,
+          method: "GET",
+        };
+      },
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.data.map((a) => ({
+                type: "Availabilities" as const,
+                id: a.id,
+              })),
+              { type: "Availabilities", id: "LIST" },
+            ]
+          : [{ type: "Availabilities", id: "LIST" }],
+    }),
+
+    getAvailableSlots: builder.query<
+      GetAvailableSlotsResponse,
+      { accountantId: number; date: string }
+    >({
+      query: ({ accountantId, date }) => {
+        const search = new URLSearchParams();
+        search.set("accountantId", String(accountantId));
+        search.set("date", date);
+        return {
+          url: `/appointments/slots/available?${search.toString()}`,
+          method: "GET",
+        };
+      },
+    }),
+
+    getMyLeaves: builder.query<GetMyLeavesResponse, void>({
+      query: () => ({ url: "/appointments/leaves/mine", method: "GET" }),
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.data.map((l) => ({
+                type: "Availabilities" as const,
+                id: `leave-${l.id}`,
+              })),
+              { type: "Availabilities", id: "LEAVES-LIST" },
+            ]
+          : [{ type: "Availabilities", id: "LEAVES-LIST" }],
+    }),
+
+    createLeave: builder.mutation<
+      { success: boolean; message?: string; data?: LeaveItem },
+      { startDate: string; endDate: string; reason?: string }
+    >({
+      query: (body) => ({
+        url: "/appointments/leaves",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: [{ type: "Availabilities", id: "LEAVES-LIST" }],
+    }),
+
+    deleteLeave: builder.mutation<
+      { success: boolean; message?: string },
+      number
+    >({
+      query: (id) => ({ url: `/appointments/leaves/${id}`, method: "DELETE" }),
+      invalidatesTags: (_result, _err, id) => [
+        { type: "Availabilities", id: `leave-${id}` },
+        { type: "Availabilities", id: "LEAVES-LIST" },
+      ],
+    }),
+
+    createAvailability: builder.mutation<
+      { success: boolean; message?: string; data?: AvailabilityItem },
+      {
+        isRecurring: boolean;
+        dayOfWeek?: string;
+        specificDate?: string;
+        startTime: string;
+        endTime: string;
+        slotDuration?: number;
+      }
+    >({
+      query: (body) => ({
+        url: "/appointments/availability",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: [{ type: "Availabilities", id: "LIST" }],
+    }),
+
+    updateAvailability: builder.mutation<
+      { success: boolean; message?: string; data?: AvailabilityItem },
+      {
+        id: number;
+        body: {
+          startTime?: string;
+          endTime?: string;
+          slotDuration?: number;
+          isActive?: boolean;
+        };
+      }
+    >({
+      query: ({ id, body }) => ({
+        url: `/appointments/availability/${id}`,
+        method: "PUT",
+        body,
+      }),
+      invalidatesTags: (_result, _err, arg) => [
+        { type: "Availabilities", id: arg.id },
+        { type: "Availabilities", id: "LIST" },
+      ],
+    }),
+
+    deleteAvailability: builder.mutation<
+      { success: boolean; message?: string },
+      number
+    >({
+      query: (id) => ({
+        url: `/appointments/availability/${id}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (_result, _err, id) => [
+        { type: "Availabilities", id },
+        { type: "Availabilities", id: "LIST" },
+      ],
+    }),
+  }),
+});
+
+export const {
+  useGetAllAppointmentsQuery,
+  useGetMyAppointmentsQuery,
+  useGetAppointmentByIdQuery,
+  useGetConfirmedThisMonthQuery,
+  useCreateAppointmentMutation,
+  useRespondAppointmentMutation,
+  useReportAppointmentMutation,
+  useUpdateAppointmentMutation,
+  useCancelAppointmentMutation,
+  useGetMyAvailabilitiesQuery,
+  useGetAvailableSlotsQuery,
+  useGetMyLeavesQuery,
+  useCreateLeaveMutation,
+  useDeleteLeaveMutation,
+  useCreateAvailabilityMutation,
+  useUpdateAvailabilityMutation,
+  useDeleteAvailabilityMutation,
+} = appointmentsApi;

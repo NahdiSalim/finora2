@@ -115,10 +115,6 @@ export class AccountantController {
   @ApiOperation({ summary: 'Get all clients of accountant firm' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
-  @ApiResponse({
-    status: 200,
-    description: 'List of clients retrieved successfully',
-  })
   async getClients(
     @Req() req: AuthRequest,
     @Query('page') page?: string,
@@ -131,6 +127,13 @@ export class AccountantController {
       page ? parseInt(page) : 1,
       limit ? parseInt(limit) : 10
     );
+  }
+
+  @Get('my-accountants')
+  @Roles(RoleCode.CLIENT)
+  @ApiOperation({ summary: '[Client] Get my accountants (active relationships)' })
+  async getMyAccountants(@Req() req: AuthRequest) {
+    return await this.accountantService.getMyAccountants(req.user!.id);
   }
 }
 

@@ -15,6 +15,7 @@ import { documentsApi } from "./services/documentsApi";
 import { requestApi } from "./services/requestApi";
 import { tasksApi } from "./services/tasksApi";
 import { invoicesApi } from "./services/invoicesApi";
+import { appointmentsApi } from "./services/appointmentsApi";
 import { locationApi } from "./services/locationApi";
 
 const apiMiddlewares = [
@@ -33,6 +34,7 @@ const apiMiddlewares = [
   requestApi.middleware,
   tasksApi.middleware,
   invoicesApi.middleware,
+  appointmentsApi.middleware,
   locationApi.middleware,
 ];
 
@@ -51,6 +53,7 @@ const apiResetters = [
   requestApi.util.resetApiState,
   tasksApi.util.resetApiState,
   invoicesApi.util.resetApiState,
+  appointmentsApi.util.resetApiState,
   locationApi.util.resetApiState,
 ];
 
@@ -71,6 +74,7 @@ const appReducer = combineReducers({
   [requestApi.reducerPath]: requestApi.reducer,
   [tasksApi.reducerPath]: tasksApi.reducer,
   [invoicesApi.reducerPath]: invoicesApi.reducer,
+  [appointmentsApi.reducerPath]: appointmentsApi.reducer,
   [locationApi.reducerPath]: locationApi.reducer,
 });
 

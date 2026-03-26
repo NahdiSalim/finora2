@@ -48,11 +48,38 @@ export interface ClientsResponse {
   pagination: ClientsPagination;
 }
 
+export interface MyAccountantItem {
+  id: number | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  photo?: string | null;
+  phone?: string | null;
+  company?: {
+    id: number;
+    name: string;
+  };
+  relationshipStatus?: string;
+  relationshipStart?: string | null;
+}
+
+export interface MyAccountantsResponse {
+  success: boolean;
+  data: MyAccountantItem[];
+}
+
 export const clientsApi = createApi({
   reducerPath: "clientsApi",
   baseQuery: baseQueryWithReauth,
   tagTypes: ["Clients"],
   endpoints: (builder) => ({
+    getMyAccountants: builder.query<MyAccountantsResponse, void>({
+      query: () => ({
+        url: "/accountant/my-accountants",
+        method: "GET",
+      }),
+    }),
+
     // 🔹 GET Clients
     getClients: builder.query<
       ClientsResponse,
@@ -128,4 +155,8 @@ export const clientsApi = createApi({
   }),
 });
 
-export const { useGetClientsQuery, useCreateClientMutation } = clientsApi;
+export const {
+  useGetMyAccountantsQuery,
+  useGetClientsQuery,
+  useCreateClientMutation,
+} = clientsApi;

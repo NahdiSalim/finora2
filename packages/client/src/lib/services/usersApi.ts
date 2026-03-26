@@ -67,6 +67,9 @@ type GetUsersQueryArg = {
   page?: number;
   limit?: number;
   search?: string;
+  role?: string;
+  status?: string;
+  roleCode?: string;
   clientVerificationStatus?: string;
   isActiveStatus?: string;
 };
@@ -86,6 +89,9 @@ export const usersApi = createApi({
         page = 1,
         limit = 5,
         search,
+        role,
+        status,
+        roleCode,
         clientVerificationStatus,
         isActiveStatus,
       } = {}) => {
@@ -95,15 +101,26 @@ export const usersApi = createApi({
         if (search && search.trim()) {
           params.append("search", search.trim());
         }
+        const effectiveRole = role || roleCode;
+        if (effectiveRole) {
+          params.append("role", effectiveRole);
+        }
+        const effectiveStatus =
+          status ||
+          (isActiveStatus === "true"
+            ? "active"
+            : isActiveStatus === "false"
+              ? "suspended"
+              : undefined);
+        if (effectiveStatus) {
+          params.append("status", effectiveStatus);
+        }
         if (clientVerificationStatus) {
           params.append("clientVerificationStatus", clientVerificationStatus);
         }
-        if (isActiveStatus) {
-          params.append("isActiveStatus", isActiveStatus);
-        }
 
         return {
-          url: `/users/all?${params.toString()}`,
+          url: `/users?${params.toString()}`,
           method: "GET",
         };
       },
@@ -138,20 +155,39 @@ export const usersApi = createApi({
     }),
 
     getUserById: builder.query<User, string>({
-      query: (id) => `/auth/backoffice/${id}`,
-      transformResponse: (response: UserByIdResponse) => response.user,
+      query: (id) => `/users/${id}`,
+      transformResponse: (response: UserByIdResponse | User) =>
+        (response as UserByIdResponse)?.user ?? (response as User),
       providesTags: ["Users"],
     }),
 
     manageUserStatus: builder.mutation<
       void,
-      { userId: string; is_active?: boolean; status?: string }
+      {
+        userId: string | number;
+        action?: "activate" | "suspend";
+        reason?: string;
+        is_active?: boolean;
+        status?: string;
+      }
     >({
-      query: ({ userId, is_active, status }) => ({
-        url: `/auth/${userId}/status`,
-        method: "PATCH",
-        body: { is_active, status },
-      }),
+      query: ({ userId, action, reason, is_active, status }) => {
+        if (status === "DELETED") {
+          return {
+            url: `/users/${userId}`,
+            method: "DELETE",
+          };
+        }
+
+        const resolvedAction =
+          action ?? (is_active === false ? "suspend" : "activate");
+
+        return {
+          url: `/users/${userId}/status?action=${resolvedAction}`,
+          method: "PUT",
+          body: reason ? { reason } : undefined,
+        };
+      },
       invalidatesTags: ["Users"],
     }),
 

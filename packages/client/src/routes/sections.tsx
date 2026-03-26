@@ -199,6 +199,22 @@ export const routesSection: RouteObject[] = [
             ),
           },
           {
+            path: "users",
+            element: (
+              <PermissionGuard requiredPath="/users">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "users/:id",
+            element: (
+              <PermissionGuard requiredPath="/users">
+                <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
             path: "dashboard",
             element: (
               <PermissionGuard requiredPath="/dashboard">

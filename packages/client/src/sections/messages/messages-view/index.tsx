@@ -69,10 +69,25 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       const d = new Date(msg.createdAt);
       const isMine = msg.senderId === currentUid;
 
+      console.log(
+        "[onMessageNew] id:",
+        msg.id,
+        "| roomId:",
+        msg.roomId,
+        "| senderId:",
+        msg.senderId,
+        "| currentUid:",
+        currentUid,
+        "| isMine:",
+        isMine,
+      );
+
       // 1. Inject into getRoomMessages cache for that room
       dispatch(
         chatApi.util.updateQueryData("getRoomMessages", msg.roomId, (draft) => {
-          if (draft.messages.some((m) => m.id === msg.id)) return;
+          if (draft.messages.some((m) => m.id === msg.id)) {
+            return;
+          }
           draft.messages.push({
             id: msg.id,
             roomId: msg.roomId,
@@ -94,7 +109,9 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       dispatch(
         chatApi.util.updateQueryData("getUserRooms", undefined, (draft) => {
           const room = draft.data.find((r) => r.id === msg.roomId);
-          if (!room) return;
+          if (!room) {
+            return;
+          }
 
           const body =
             msg.type === "file"
@@ -117,6 +134,10 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
             const [moved] = draft.data.splice(idx, 1);
             draft.data.unshift(moved);
           }
+          console.log(
+            "[cache getUserRooms] updated preview:",
+            room.lastMessage.content,
+          );
         }),
       );
     },
@@ -166,7 +187,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     };
   }, [selectedConversation, joinRoom, leaveRoom]);
 
-  // Disconnect socket on unmount
+  // Disconnect socket when leaving the messages page
+  // Use disconnectSocket (not destroySocket) so the singleton survives StrictMode double-mount
   useEffect(
     () => () => {
       disconnectSocket();

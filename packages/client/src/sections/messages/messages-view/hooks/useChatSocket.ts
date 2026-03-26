@@ -45,6 +45,16 @@ export function useChatSocket(options: UseChatSocketOptions = {}) {
     connectSocket();
     const socket = getSocket();
 
+    const onConnect = () => {};
+    const onDisconnect = (reason: string) =>
+      console.warn("[socket] disconnected:", reason);
+    const onConnectError = (err: Error) =>
+      console.error("[socket] connect_error:", err.message);
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("connect_error", onConnectError);
+
     const onMessageNew = (msg: SocketMessage) =>
       optsRef.current.onMessageNew?.(msg);
 
@@ -62,6 +72,9 @@ export function useChatSocket(options: UseChatSocketOptions = {}) {
     socket.on("user:typing", onTyping);
 
     return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("connect_error", onConnectError);
       socket.off("message:new", onMessageNew);
       socket.off("message:updated", onMessageUpdated);
       socket.off("message:deleted", onMessageDeleted);

@@ -140,9 +140,14 @@ export class ChatController {
     @UploadedFiles() files?: Express.Multer.File[]
   ) {
     const userId = req.user?.id ?? req.user?.sub;
+    console.log('==== POST /chat/messages ====');
+    console.log('userId:', userId, '| roomId:', dto.roomId, '| type:', dto.type);
     const message = await this.chatService.sendMessage(Number(userId), dto, files);
+    console.log('message saved, id:', message.id, '| broadcasting to room:', dto.roomId);
     // Broadcast to all room participants via socket so both sides receive in real-time
     this.chatGateway.server.to(`room:${dto.roomId}`).emit('message:new', message);
+    console.log('message:new emitted');
+    console.log('============================');
     return message;
   }
 
@@ -155,7 +160,12 @@ export class ChatController {
     @Body('content') content: string
   ) {
     const userId = req.user?.id ?? req.user?.sub;
-    return this.chatService.editMessage(id, Number(userId), content);
+    const message = await this.chatService.editMessage(id, Number(userId), content);
+    // Broadcast to all room participants so the edit is visible in real-time
+    if (message.roomId) {
+      this.chatGateway.server.to(`room:${message.roomId}`).emit('message:updated', message);
+    }
+    return message;
   }
 
   @Delete('messages/:id')

@@ -56,6 +56,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // Rejoindre automatiquement les salles de l'utilisateur
       const rooms = await this.chatService.getUserRooms(userId);
+      console.log(
+        `User ${userId} auto-joining ${rooms.length} rooms:`,
+        rooms.map((r) => r.id)
+      );
       rooms.forEach((room) => {
         client.join(`room:${room.id}`);
       });

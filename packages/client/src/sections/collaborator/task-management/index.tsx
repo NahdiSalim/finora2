@@ -5,14 +5,11 @@ import {
   MenuItem,
   useTheme,
   Card,
-  Typography,
   CircularProgress,
   Alert,
 } from "@mui/material";
 import { Plus, Search, Calendar } from "lucide-react";
-import { DashboardContent } from "src/layouts/dashboard";
 import CustomInput from "src/components/common/CustomInput";
-import CustomButton from "src/components/common/CustomButton";
 import CustomSelect from "src/components/common/CustomSelect";
 import { KanbanBoard } from "./kanban-board";
 import TaskModal from "./modal/TaskModal";
@@ -24,6 +21,7 @@ import type { KanbanColumn, Task } from "./types";
 import { COLUMN_CONFIG_ACCOUNTANT, COLUMN_CONFIG_COLLABORATOR } from "./types";
 import { useAppSelector } from "src/hooks/use-redux";
 import { ROLE_CODES } from "src/constants/roles";
+import { PageHeader } from "src/layouts/components/page-header";
 
 export default function TaskManagementView() {
   const theme = useTheme();
@@ -150,90 +148,31 @@ export default function TaskManagementView() {
   };
 
   return (
-    <DashboardContent
-      maxWidth={false}
-      sx={{
-        pt: 0,
-        pl: { lg: 0 },
-        pr: { lg: 1.5 },
-      }}
-    >
-      {/* Title Container */}
-      <Card
-        sx={{
-          bgcolor: "white",
-          borderRadius: 3,
-          p: { xs: 1.5, sm: 2 },
-          mb: 1.5,
-        }}
-      >
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: { xs: "wrap", md: "nowrap" },
-            gap: 2,
-          }}
-        >
-          {/* Left Side - Title and Caption */}
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography
-              variant="h4"
-              sx={{
-                fontWeight: 700,
-                fontSize: { xs: 20, sm: 24, md: 28 },
-                color: theme.palette.text.primary,
-                mb: 0.5,
-              }}
-            >
-              {isMesTasks ? "Mes tâches" : "Gestion des tâches"}
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                fontSize: { xs: 13, sm: 14 },
-                color: theme.palette.text.secondary,
-                display: { xs: "none", sm: "block" },
-              }}
-            >
-              {isMesTasks
-                ? "Consultez et gérez vos tâches assignées."
-                : "Gérez votre équipe et suivez leurs performances."}
-            </Typography>
-          </Box>
-
-          {/* Right Side - Action Button (Accountant only) */}
-          {!isMesTasks && (
-            <Box sx={{ flexShrink: 0 }}>
-              <CustomButton
-                variant="contained"
-                color="primary"
-                startIcon={<Plus size={18} />}
-                onClick={() => handleAddTask()}
-                sx={{
+    <PageHeader
+      title={isMesTasks ? "Mes tâches" : "Gestion des tâches"}
+      caption={
+        isMesTasks
+          ? "Consultez et gérez vos tâches assignées."
+          : "Gérez votre équipe et suivez leurs performances."
+      }
+      actions={
+        !isMesTasks
+          ? [
+              {
+                label: "Ajouter une tâche",
+                icon: <Plus size={18} />,
+                onClick: handleAddTask,
+                variant: "contained",
+                color: "primary",
+                sx: {
                   fontSize: { xs: 13, sm: 14 },
                   px: { xs: 2, sm: 3 },
-                }}
-              >
-                <Box
-                  component="span"
-                  sx={{ display: { xs: "none", sm: "inline" } }}
-                >
-                  Ajouter une tâche
-                </Box>
-                <Box
-                  component="span"
-                  sx={{ display: { xs: "inline", sm: "none" } }}
-                >
-                  Ajouter
-                </Box>
-              </CustomButton>
-            </Box>
-          )}
-        </Box>
-      </Card>
-
+                },
+              },
+            ]
+          : []
+      }
+    >
       {/* Content Container - Search Bar and Kanban Board */}
       <Card
         sx={{
@@ -372,6 +311,6 @@ export default function TaskManagementView() {
           onTaskCreated={handleTaskCreated}
         />
       )}
-    </DashboardContent>
+    </PageHeader>
   );
 }

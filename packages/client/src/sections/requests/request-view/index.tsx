@@ -7,6 +7,7 @@ import {
   Typography,
   useTheme,
   alpha,
+  Avatar,
 } from "@mui/material";
 import { Plus, Search, Eye, Trash2 } from "lucide-react";
 
@@ -336,15 +337,29 @@ export default function RequestView() {
             id: "client",
             label: "Client",
             render: (request: Request) => (
-              <Typography
-                variant="body2"
-                sx={{
-                  fontWeight: 500,
-                  color: theme.palette.text.primary,
-                }}
-              >
-                {request.client?.firstName} {request.client?.lastName}
-              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <Avatar
+                  sx={{
+                    width: 36,
+                    height: 36,
+                    backgroundColor: theme.palette.primary.main,
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  {request.client?.firstName?.charAt(0) || ""}
+                  {request.client?.lastName?.charAt(0) || ""}
+                </Avatar>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 500,
+                    color: theme.palette.text.primary,
+                  }}
+                >
+                  {request.client?.firstName} {request.client?.lastName}
+                </Typography>
+              </Box>
             ),
           },
         ]
@@ -547,35 +562,28 @@ export default function RequestView() {
             border: `1px solid ${theme.palette.grey[200]}`,
             borderTop: "none",
             mt: 0,
+            p: 2,
           }}
         >
           {/* Search Bar */}
           <Box
             sx={{
-              p: 3,
               pb: 2,
               borderBottom: `1px solid ${theme.palette.grey[200]}`,
               display: "flex",
               justifyContent: "flex-start",
             }}
           >
-            <Box
-              sx={{
-                width: { xs: "100%", sm: "40%", md: "30%", lg: "20%" },
-                minWidth: "200px",
+            <CustomInput
+              fullWidth
+              placeholder="Rechercher ..."
+              value={searchValue}
+              onChange={(e) => {
+                setSearchValue(e.target.value);
+                table.onResetPage();
               }}
-            >
-              <CustomInput
-                fullWidth
-                placeholder="Rechercher ..."
-                value={searchValue}
-                onChange={(e) => {
-                  setSearchValue(e.target.value);
-                  table.onResetPage();
-                }}
-                startIcon={<Search size={20} />}
-              />
-            </Box>
+              startIcon={<Search size={20} />}
+            />
           </Box>
 
           {/* Table Container */}

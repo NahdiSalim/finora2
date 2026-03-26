@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ApiError } from '../../common/errors/api-error';
+import { MSG } from '../../common/messages';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { UpdateRequestDto, RequestStatus } from './dto/update-request.dto';
 import { RespondRequestDto } from './dto/respond-request.dto';
@@ -27,7 +28,7 @@ export class RequestService {
 
       // Validate subject field
       if (!dto.subject || dto.subject.trim() === '') {
-        throw new ApiError('Subject is required', 400, 'SUBJECT_REQUIRED');
+        throw new ApiError(MSG.request.subject_required, 400, 'SUBJECT_REQUIRED');
       }
 
       // Get client's company
@@ -37,7 +38,7 @@ export class RequestService {
       });
 
       if (!client?.companyId) {
-        throw new ApiError('Client must belong to a company', 400, 'NO_COMPANY');
+        throw new ApiError(MSG.request.no_company, 400, 'NO_COMPANY');
       }
 
       // Find the accountant's firm linked to this client
@@ -318,7 +319,7 @@ export class RequestService {
 
       return {
         success: true,
-        message: 'Request created successfully',
+        message: MSG.request.created,
         data: {
           ...updatedRequest,
           attachmentUrls: attachmentPresignedUrls,
@@ -566,7 +567,7 @@ export class RequestService {
     });
 
     if (!accountant?.companyId) {
-      throw new ApiError('Accountant must belong to a company', 400, 'NO_COMPANY');
+      throw new ApiError(MSG.accountant.no_company, 400, 'NO_COMPANY');
     }
 
     const skip = (page - 1) * limit;
@@ -737,7 +738,7 @@ export class RequestService {
     });
 
     if (!request) {
-      throw new ApiError('Request not found', 404, 'REQUEST_NOT_FOUND');
+      throw new ApiError(MSG.request.not_found, 404, 'REQUEST_NOT_FOUND');
     }
 
     // Check access rights
@@ -751,7 +752,7 @@ export class RequestService {
       request.assignedToId !== userId &&
       request.companyId !== user?.companyId
     ) {
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.request.access_denied, 403, 'ACCESS_DENIED');
     }
 
     // Generate presigned URLs for attachments
@@ -794,12 +795,12 @@ export class RequestService {
     });
 
     if (!request) {
-      throw new ApiError('Request not found', 404, 'REQUEST_NOT_FOUND');
+      throw new ApiError(MSG.request.not_found, 404, 'REQUEST_NOT_FOUND');
     }
 
     // Check access rights
     if (request.clientId !== userId && request.assignedToId !== userId) {
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.request.access_denied, 403, 'ACCESS_DENIED');
     }
 
     // Handle file uploads if provided
@@ -1013,7 +1014,7 @@ export class RequestService {
 
     return {
       success: true,
-      message: 'Request updated successfully',
+      message: MSG.request.updated,
       data: updatedRequest,
     };
   }
@@ -1023,7 +1024,7 @@ export class RequestService {
     });
 
     if (!request) {
-      throw new ApiError('Request not found', 404, 'REQUEST_NOT_FOUND');
+      throw new ApiError(MSG.request.not_found, 404, 'REQUEST_NOT_FOUND');
     }
 
     const updatedRequest = await this.prisma.request.update({
@@ -1065,7 +1066,7 @@ export class RequestService {
 
     return {
       success: true,
-      message: 'Response sent successfully',
+      message: MSG.request.responded,
       data: updatedRequest,
     };
   }
@@ -1082,10 +1083,10 @@ export class RequestService {
     });
 
     if (!request) {
-      throw new ApiError('Request not found', 404, 'REQUEST_NOT_FOUND');
+      throw new ApiError(MSG.request.not_found, 404, 'REQUEST_NOT_FOUND');
     }
     if (request.convertedToTaskId) {
-      throw new ApiError('Request already converted to task', 400, 'ALREADY_CONVERTED');
+      throw new ApiError(MSG.request.already_converted, 400, 'ALREADY_CONVERTED');
     }
 
     // Map urgency to priority
@@ -1136,7 +1137,7 @@ export class RequestService {
 
     return {
       success: true,
-      message: 'Request converted to task successfully',
+      message: MSG.request.converted,
       data: {
         request: {
           id: request.id,
@@ -1157,12 +1158,12 @@ export class RequestService {
     });
 
     if (!request) {
-      throw new ApiError('Request not found', 404, 'REQUEST_NOT_FOUND');
+      throw new ApiError(MSG.request.not_found, 404, 'REQUEST_NOT_FOUND');
     }
 
     // Only client can delete their own request
     if (request.clientId !== userId) {
-      throw new ApiError('Only request creator can delete', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.request.creator_only_delete, 403, 'ACCESS_DENIED');
     }
     await this.prisma.request.delete({
       where: { id: requestId },
@@ -1170,7 +1171,7 @@ export class RequestService {
 
     return {
       success: true,
-      message: 'Request deleted successfully',
+      message: MSG.request.deleted,
     };
   }
 }

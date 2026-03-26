@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { MinioService } from '../../common/services/minio.service';
 import { ApiError } from '../../common/errors/api-error';
+import { MSG } from '../../common/messages';
 
 @Injectable()
 export class DocumentVersionService {
@@ -24,7 +25,7 @@ export class DocumentVersionService {
     const document = await this.prisma.document.findUnique({ where: { id: documentId } });
 
     if (!document || document.isFolder || document.status === 'deleted') {
-      throw new ApiError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
+      throw new ApiError(MSG.document.not_found, 404, 'DOCUMENT_NOT_FOUND');
     }
 
     // Access check
@@ -33,7 +34,7 @@ export class DocumentVersionService {
       (document.companyId && (await this.validateRelationship(userCompanyId, document.companyId)));
 
     if (!hasAccess) {
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.document.access_denied, 403, 'ACCESS_DENIED');
     }
 
     const nextVersion = (document.currentVersion ?? 1) + 1;
@@ -84,7 +85,7 @@ export class DocumentVersionService {
     const document = await this.prisma.document.findUnique({ where: { id: documentId } });
 
     if (!document || document.isFolder || document.status === 'deleted') {
-      throw new ApiError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
+      throw new ApiError(MSG.document.not_found, 404, 'DOCUMENT_NOT_FOUND');
     }
 
     const hasAccess =
@@ -92,7 +93,7 @@ export class DocumentVersionService {
       (document.companyId && (await this.validateRelationship(userCompanyId, document.companyId)));
 
     if (!hasAccess) {
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.document.access_denied, 403, 'ACCESS_DENIED');
     }
 
     const skip = (page - 1) * limit;
@@ -150,7 +151,7 @@ export class DocumentVersionService {
     const document = await this.prisma.document.findUnique({ where: { id: documentId } });
 
     if (!document || document.isFolder || document.status === 'deleted') {
-      throw new ApiError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
+      throw new ApiError(MSG.document.not_found, 404, 'DOCUMENT_NOT_FOUND');
     }
 
     const hasAccess =
@@ -158,13 +159,13 @@ export class DocumentVersionService {
       (document.companyId && (await this.validateRelationship(userCompanyId, document.companyId)));
 
     if (!hasAccess) {
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.document.access_denied, 403, 'ACCESS_DENIED');
     }
 
     const version = await this.prisma.documentVersion.findUnique({ where: { id: versionId } });
 
     if (!version || version.documentId !== documentId) {
-      throw new ApiError('Version not found', 404, 'VERSION_NOT_FOUND');
+      throw new ApiError(MSG.document.version_not_found, 404, 'VERSION_NOT_FOUND');
     }
 
     const nextVersion = (document.currentVersion ?? 1) + 1;

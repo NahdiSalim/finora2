@@ -577,17 +577,18 @@ export class TaskService {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
     }
 
-    // Collaborators cannot set status to 'completed' or 'archived' — only accountants can
+    // Role-based status restrictions
     const isAccountant = userRole === 'ACCOUNTANT' || task.createdById === userId;
-    if (dto.status === TaskStatus.COMPLETED && !isAccountant) {
-      throw new ApiError(
-        'Only accountants can mark a task as completed. Use "in_review" instead.',
-        403,
-        'FORBIDDEN_STATUS'
-      );
-    }
+    const isCollaborator = task.assigneeId === userId && !isAccountant;
+
+    // Only accountants can archive tasks
     if (dto.status === TaskStatus.ARCHIVED && !isAccountant) {
       throw new ApiError('Only accountants can archive a task.', 403, 'FORBIDDEN_STATUS');
+    }
+
+    // Only accountants can move tasks to "in_review" status
+    if (dto.status === TaskStatus.IN_REVIEW && !isAccountant) {
+      throw new ApiError('Only accountants can move tasks to review.', 403, 'FORBIDDEN_STATUS');
     }
 
     // Upload new attachments to MinIO if provided
@@ -750,23 +751,17 @@ export class TaskService {
   }
 
   /**
-   * Submit task for review (Collaborator) — replaces completeTask for collaborators
+   * Submit task for review (Accountant only - to send completed tasks back to review)
    */
   async submitForReview(taskId: number, userId: number) {
     return this.updateTask(taskId, { status: TaskStatus.IN_REVIEW, progress: 90 }, userId);
   }
 
   /**
-   * Mark task as completed (Accountant only)
+   * Mark task as completed (Collaborator and Accountant)
    */
   async completeTask(taskId: number, userId: number) {
-    return this.updateTask(
-      taskId,
-      { status: TaskStatus.COMPLETED, progress: 100 },
-      userId,
-      undefined,
-      'ACCOUNTANT'
-    );
+    return this.updateTask(taskId, { status: TaskStatus.COMPLETED, progress: 100 }, userId);
   }
 
   /**

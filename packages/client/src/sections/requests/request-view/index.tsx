@@ -8,12 +8,14 @@ import {
   useTheme,
   alpha,
 } from "@mui/material";
-import { Plus, Eye, Trash2, Search } from "lucide-react";
+import { Plus, Eye, Trash2, Search, ChevronDown } from "lucide-react";
+import RequestStatusChip from "src/components/request/RequestStatusChip";
+import RequestPriorityChip from "src/components/request/RequestPriorityChip";
 
 import { useTable } from "src/hooks/use-table";
 import { DataTable, type Column } from "src/layouts/components/custom-table";
 import { CustomPagination } from "src/layouts/components/table-pagination";
-import { FolderTabNavigation } from "src/layouts/components/folder-tab-navigation";
+import { FolderTabNavigation } from "src/components/common/CustomTabs";
 import CustomInput from "src/components/common/CustomInput";
 import {
   useGetMyAssignedRequestsQuery,
@@ -31,86 +33,6 @@ import { ROLE_CODES } from "src/constants/roles";
 import dayjs from "dayjs";
 import { useAlert } from "src/contexts/AlertContext";
 
-// Status badge component
-const StatusBadge = ({ status }: { status: RequestStatus }) => {
-  const statusConfig = {
-    resolved: {
-      label: "Terminé",
-      text: "#10B981",
-    },
-    in_progress: {
-      label: "En cours",
-      text: "#8B5CF6",
-    },
-    pending: {
-      label: "En attente",
-      text: "#F59E0B",
-    },
-    rejected: {
-      label: "Rejeté",
-      text: "#EF4444",
-    },
-    cancelled: {
-      label: "Annulé",
-      text: "#6B7280",
-    },
-  };
-
-  const config = statusConfig[status] || statusConfig.pending;
-
-  return (
-    <Typography
-      variant="body2"
-      sx={{
-        color: config.text,
-        fontWeight: 600,
-        fontSize: 14,
-      }}
-    >
-      {config.label}
-    </Typography>
-  );
-};
-
-// Priority badge component
-const PriorityBadge = ({ urgency }: { urgency: string }) => {
-  const priorityConfig = {
-    urgent: {
-      label: "Urgent",
-      text: "#EF4444",
-    },
-    high: {
-      label: "High",
-      text: "#F97316",
-    },
-    normal: {
-      label: "Normal",
-      text: "#F59E0B",
-    },
-    low: {
-      label: "Low",
-      text: "#6366F1",
-    },
-  };
-
-  const config =
-    priorityConfig[urgency as keyof typeof priorityConfig] ||
-    priorityConfig.normal;
-
-  return (
-    <Typography
-      variant="body2"
-      sx={{
-        color: config.text,
-        fontWeight: 600,
-        fontSize: 14,
-      }}
-    >
-      {config.label}
-    </Typography>
-  );
-};
-
 export default function RequestView() {
   const theme = useTheme();
   const table = useTable();
@@ -123,10 +45,14 @@ export default function RequestView() {
   const [selectedTab, setSelectedTab] = useState<string>("all");
   const [viewTab, setViewTab] = useState<"my_requests" | "client_requests">(
     "my_requests",
-  ); // For accountants
+  );
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [requestToDelete, setRequestToDelete] = useState<number | null>(null);
   const [searchValue, setSearchValue] = useState("");
+  const [sortBy, setSortBy] = useState<
+    "urgency" | "status" | "createdAt" | undefined
+  >(undefined);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const [deleteRequest, { isLoading: isDeleting }] = useDeleteRequestMutation();
 
@@ -169,7 +95,8 @@ export default function RequestView() {
       page: table.page + 1,
       limit: table.rowsPerPage,
       status: getStatusFilter(),
-      sortBy: "createdAt",
+      sortBy,
+      sortOrder,
       search: searchValue.trim() || undefined,
     },
     {
@@ -188,7 +115,8 @@ export default function RequestView() {
       page: table.page + 1,
       limit: table.rowsPerPage,
       status: getStatusFilter(),
-      sortBy: "createdAt",
+      sortBy,
+      sortOrder,
       search: searchValue.trim() || undefined,
     },
     {
@@ -206,6 +134,8 @@ export default function RequestView() {
       page: table.page + 1,
       limit: table.rowsPerPage,
       status: getStatusFilter(),
+      sortBy,
+      sortOrder,
       search: searchValue.trim() || undefined,
     },
     {
@@ -305,43 +235,18 @@ export default function RequestView() {
     return dayjs(dateString).format("DD/MM/YY");
   };
 
+  const handleSort = (field: "urgency" | "status" | "createdAt") => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(field);
+      setSortOrder("desc");
+    }
+    table.onResetPage();
+  };
+
   // Define table columns
   const columns: Column<Request>[] = [
-    // Conditional client column for accountants
-    ...(isAccountant
-      ? [
-          {
-            id: "client",
-            label: "Client",
-            render: (request: Request) => (
-              <Box>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    fontWeight: 500,
-                    color: theme.palette.text.primary,
-                  }}
-                >
-                  {request.client?.firstName} {request.client?.lastName}
-                </Typography>
-                {request.convertedToTask?.assignee && (
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: theme.palette.info.main,
-                      fontSize: 11,
-                      fontWeight: 500,
-                    }}
-                  >
-                    → {request.convertedToTask.assignee.firstName}{" "}
-                    {request.convertedToTask.assignee.lastName}
-                  </Typography>
-                )}
-              </Box>
-            ),
-          },
-        ]
-      : []),
     {
       id: "subject",
       label: "Titre de la demande",
@@ -357,6 +262,134 @@ export default function RequestView() {
         </Typography>
       ),
     },
+    // Conditional client column for accountants
+    ...(isAccountant
+      ? [
+          {
+            id: "client",
+            label: "Client",
+            render: (request: Request) => (
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 500,
+                  color: theme.palette.text.primary,
+                }}
+              >
+                {request.client?.firstName} {request.client?.lastName}
+              </Typography>
+            ),
+          },
+        ]
+      : []),
+    {
+      id: "assignedTo",
+      label: "Assigné à",
+      render: (request: Request) => (
+        <Box>
+          {request.assignedTo ? (
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 500,
+                color: theme.palette.text.primary,
+              }}
+            >
+              {request.assignedTo.firstName} {request.assignedTo.lastName}
+            </Typography>
+          ) : (
+            <Typography
+              variant="body2"
+              sx={{
+                color: theme.palette.text.disabled,
+                fontStyle: "italic",
+              }}
+            >
+              Non assigné
+            </Typography>
+          )}
+          {request.convertedToTask?.assignee && (
+            <Typography
+              variant="caption"
+              sx={{
+                color: theme.palette.info.main,
+                fontSize: 11,
+                fontWeight: 500,
+              }}
+            >
+              → {request.convertedToTask.assignee.firstName}{" "}
+              {request.convertedToTask.assignee.lastName}
+            </Typography>
+          )}
+        </Box>
+      ),
+    },
+    {
+      id: "status",
+      label: (
+        <Box
+          component="span"
+          onClick={() => handleSort("status")}
+          sx={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 0.5,
+            cursor: "pointer",
+            userSelect: "none",
+            "&:hover": { opacity: 0.7 },
+          }}
+        >
+          Statut
+          <ChevronDown
+            size={14}
+            style={{
+              transform:
+                sortBy === "status" && sortOrder === "asc"
+                  ? "rotate(180deg)"
+                  : "none",
+              transition: "transform 0.2s",
+              opacity: sortBy === "status" ? 1 : 0.3,
+            }}
+          />
+        </Box>
+      ),
+      render: (request: Request) => (
+        <RequestStatusChip status={request.status} size="small" />
+      ),
+    },
+    {
+      id: "urgency",
+      label: (
+        <Box
+          component="span"
+          onClick={() => handleSort("urgency")}
+          sx={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 0.5,
+            cursor: "pointer",
+            userSelect: "none",
+            "&:hover": { opacity: 0.7 },
+          }}
+        >
+          Priorité
+          <ChevronDown
+            size={14}
+            style={{
+              transform:
+                sortBy === "urgency" && sortOrder === "asc"
+                  ? "rotate(180deg)"
+                  : "none",
+              transition: "transform 0.2s",
+              opacity: sortBy === "urgency" ? 1 : 0.3,
+            }}
+          />
+        </Box>
+      ),
+      render: (request: Request) => (
+        <RequestPriorityChip urgency={request.urgency} size="small" />
+      ),
+    },
     {
       id: "createdAt",
       label: "Date de création",
@@ -365,16 +398,6 @@ export default function RequestView() {
           {formatDate(request.createdAt)}
         </Typography>
       ),
-    },
-    {
-      id: "status",
-      label: "Statut",
-      render: (request: Request) => <StatusBadge status={request.status} />,
-    },
-    {
-      id: "urgency",
-      label: "Priorité",
-      render: (request: Request) => <PriorityBadge urgency={request.urgency} />,
     },
     {
       id: "desiredResponseDate",

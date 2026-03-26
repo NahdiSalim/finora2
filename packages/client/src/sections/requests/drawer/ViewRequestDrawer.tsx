@@ -12,7 +12,7 @@ import {
   Menu,
   Divider,
 } from "@mui/material";
-import { X, Download, Edit, Trash2, Save, UserPlus } from "lucide-react";
+import { X, Download, Edit, Trash2, Save, UserPlus, Send } from "lucide-react";
 import type { Request, RequestType } from "src/types/request";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
@@ -25,6 +25,7 @@ import {
   useDeleteRequestMutation,
   useUpdateRequestMutation,
   useGetUsersByRoleQuery,
+  useRespondToRequestMutation,
 } from "src/lib/services/requestApi";
 import { tasksApi } from "src/lib/services/tasksApi";
 import { useForm, Controller } from "react-hook-form";
@@ -56,6 +57,8 @@ export default function ViewRequestDrawer({
   const dispatch = useAppDispatch();
   const [deleteRequest, { isLoading: isDeleting }] = useDeleteRequestMutation();
   const [updateRequest, { isLoading: isUpdating }] = useUpdateRequestMutation();
+  const [respondToRequest, { isLoading: isResponding }] =
+    useRespondToRequestMutation();
   const [isEditMode, setIsEditMode] = useState(false);
   const [assignedUserId, setAssignedUserId] = useState<number | null>(null);
   const [localRequest, setLocalRequest] = useState<Request | null>(null);
@@ -63,6 +66,9 @@ export default function ViewRequestDrawer({
   const [assignMenuAnchorEl, setAssignMenuAnchorEl] =
     useState<null | HTMLElement>(null);
   const isAssignMenuOpen = Boolean(assignMenuAnchorEl);
+  const [showResponseView, setShowResponseView] = useState(false);
+  const [responseNote, setResponseNote] = useState("");
+  const [responseFiles, setResponseFiles] = useState<File[]>([]);
 
   // Get current user and check role
   const { user } = useAppSelector((state) => state.auth);
@@ -185,6 +191,9 @@ export default function ViewRequestDrawer({
     if (!open) {
       setIsEditMode(false);
       setLocalRequest(null);
+      setShowResponseView(false);
+      setResponseNote("");
+      setResponseFiles([]);
     }
   }, [open]);
 
@@ -383,6 +392,45 @@ export default function ViewRequestDrawer({
     }
   };
 
+  const handleSubmitResponse = async () => {
+    if (!localRequest) return;
+
+    if (!responseNote && responseFiles.length === 0) {
+      showAlert("Veuillez ajouter une note ou des fichiers", "warning");
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+
+      if (responseNote) {
+        formData.append("response", responseNote);
+      }
+
+      if (responseFiles.length > 0) {
+        responseFiles.forEach((file) => {
+          formData.append("responseAttachments", file);
+        });
+      }
+
+      const result = await respondToRequest({
+        id: localRequest.id,
+        data: formData,
+      }).unwrap();
+
+      if (result.data) {
+        setLocalRequest(result.data);
+      }
+
+      showAlert("Réponse envoyée avec succès", "success");
+      setResponseNote("");
+      setResponseFiles([]);
+      setShowResponseView(false);
+    } catch (error) {
+      showAlert("Erreur lors de l'envoi de la réponse", "error");
+    }
+  };
+
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return "-";
     return dayjs(dateString).format("DD/MM/YYYY, HH:mm");
@@ -436,39 +484,17 @@ export default function ViewRequestDrawer({
       anchor="right"
       open={open}
       onClose={onClose}
-      transitionDuration={{
-        enter: 400,
-        exit: 300,
-      }}
-      sx={{
-        zIndex: theme.zIndex.drawer + 2,
-      }}
-      ModalProps={{
-        keepMounted: false,
-        sx: {
-          zIndex: theme.zIndex.drawer + 2,
-        },
-      }}
-      BackdropProps={{
-        sx: {
-          backgroundColor: alpha(theme.palette.grey[900], 0.5),
-          backdropFilter: "blur(4px)",
-          transition: "backdrop-filter 0.3s ease-in-out !important",
-        },
-      }}
-      PaperProps={{
-        sx: {
-          width: { xs: "100%", sm: "90%", md: 480 },
-          maxWidth: { xs: "100%", sm: 420, md: 480 },
-          height: isMobile ? "100%" : "calc(100vh - 48px)",
-          marginTop: isMobile ? 0 : "24px",
-          marginBottom: isMobile ? 0 : "24px",
-          borderTopLeftRadius: isMobile ? 0 : 20,
-          borderBottomLeftRadius: isMobile ? 0 : 20,
-          bgcolor: theme.palette.grey[50],
-          boxShadow: "-8px 0 24px rgba(0, 0, 0, 0.12)",
-          transition:
-            "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease-in-out !important",
+      sx={{ zIndex: (theme2) => theme2.zIndex.modal + 10 }}
+      slotProps={{
+        paper: {
+          sx: {
+            width: { xs: "95%", sm: 520 },
+            height: "calc(100% - 32px)",
+            top: "16px",
+            right: { xs: "13px", sm: "16px" },
+            borderRadius: 3,
+            overflow: "hidden",
+          },
         },
       }}
     >
@@ -571,8 +597,8 @@ export default function ViewRequestDrawer({
           },
         }}
       >
-        {!isEditMode ? (
-          // VIEW MODE
+        {!isEditMode && !showResponseView ? (
+          // DETAILS TAB - VIEW MODE
           <>
             {/* Info Grid - Client, Date, and Type */}
             <Box
@@ -950,7 +976,389 @@ export default function ViewRequestDrawer({
                   </Box>
                 </Box>
               )}
+
+            {/* Documents ajoutés par le comptable - Show if accountant has responded */}
+            {localRequest.respondedAt && (
+              <Box
+                sx={{
+                  mb: 2,
+                  animation: open
+                    ? "fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.7s both"
+                    : "none",
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  fontWeight={600}
+                  sx={{ mb: 1, display: "block", fontSize: 10 }}
+                >
+                  DOCUMENTS AJOUTÉS PAR LE COMPTABLE
+                </Typography>
+                <Box
+                  sx={{
+                    p: 1.5,
+                    bgcolor: alpha(theme.palette.success.main, 0.08),
+                    borderRadius: 2,
+                    border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
+                  }}
+                >
+                  {/* Response Note */}
+                  {localRequest.response && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        fontWeight={600}
+                        sx={{ mb: 0.5, display: "block", fontSize: 10 }}
+                      >
+                        NOTE
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          whiteSpace: "pre-wrap",
+                          fontSize: 13,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {localRequest.response}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* Response Timestamp */}
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", mb: 1, fontSize: 11 }}
+                  >
+                    Ajouté le {formatDate(localRequest.respondedAt)}
+                  </Typography>
+
+                  {/* Response Files */}
+                  {localRequest.responseAttachments &&
+                    localRequest.responseAttachments.length > 0 && (
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 1,
+                        }}
+                      >
+                        {localRequest.responseAttachments.map(
+                          (attachment, index) => {
+                            const filename =
+                              attachment.split("/").pop() ||
+                              `file-${index + 1}`;
+                            const fileExtension = filename
+                              .split(".")
+                              .pop()
+                              ?.toLowerCase();
+                            const isPDF = fileExtension === "pdf";
+
+                            return (
+                              <Box
+                                key={index}
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 1,
+                                  p: 1,
+                                  bgcolor: theme.palette.common.white,
+                                  borderRadius: 1.5,
+                                  border: `1px solid ${theme.palette.divider}`,
+                                }}
+                              >
+                                {/* File Icon */}
+                                <Box
+                                  sx={{
+                                    width: 32,
+                                    height: 32,
+                                    bgcolor: "#10B981",
+                                    borderRadius: 1,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  <Typography
+                                    variant="caption"
+                                    fontWeight={700}
+                                    color="white"
+                                    sx={{ fontSize: 9 }}
+                                  >
+                                    {isPDF
+                                      ? "PDF"
+                                      : fileExtension?.toUpperCase() || "FILE"}
+                                  </Typography>
+                                </Box>
+
+                                {/* File Info */}
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                  <Typography
+                                    variant="body2"
+                                    fontWeight={500}
+                                    sx={{
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                      fontSize: 12,
+                                    }}
+                                  >
+                                    {filename}
+                                  </Typography>
+                                </Box>
+
+                                {/* Download Button */}
+                                <IconButton
+                                  size="small"
+                                  onClick={() =>
+                                    downloadAttachment(attachment, filename)
+                                  }
+                                  sx={{
+                                    width: 28,
+                                    height: 28,
+                                    border: `1px solid ${theme.palette.divider}`,
+                                    borderRadius: 1,
+                                    color: theme.palette.text.secondary,
+                                    "&:hover": {
+                                      bgcolor: alpha(
+                                        theme.palette.success.main,
+                                        0.08,
+                                      ),
+                                      borderColor: theme.palette.success.main,
+                                      color: theme.palette.success.main,
+                                    },
+                                  }}
+                                >
+                                  <Download size={14} />
+                                </IconButton>
+                              </Box>
+                            );
+                          },
+                        )}
+                      </Box>
+                    )}
+                </Box>
+              </Box>
+            )}
           </>
+        ) : !isEditMode && showResponseView ? (
+          // RESPONSE VIEW - Accountant only
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+              animation: "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+            }}
+          >
+            {/* Back to Details Button */}
+            <Box>
+              <CustomButton
+                variant="text"
+                onClick={() => setShowResponseView(false)}
+                startIcon={
+                  <Box
+                    sx={{
+                      transform: "rotate(180deg)",
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Send size={16} />
+                  </Box>
+                }
+                sx={{
+                  color: "text.secondary",
+                  "&:hover": {
+                    bgcolor: alpha(theme.palette.grey[500], 0.08),
+                  },
+                }}
+              >
+                Retour aux détails
+              </CustomButton>
+            </Box>
+
+            {localRequest.respondedAt ? (
+              // Already responded - Show disabled state
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: alpha(theme.palette.info.main, 0.08),
+                  borderRadius: 2,
+                  border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
+                  textAlign: "center",
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Vous avez déjà répondu à cette demande le{" "}
+                  {formatDate(localRequest.respondedAt)}
+                </Typography>
+              </Box>
+            ) : (
+              <>
+                {/* Response Note */}
+                <Box>
+                  <CustomInput
+                    label="Note de réponse"
+                    placeholder="Ajoutez votre réponse à la demande du client..."
+                    fullWidth
+                    multiline
+                    rows={6}
+                    value={responseNote}
+                    onChange={(e) => setResponseNote(e.target.value)}
+                  />
+                </Box>
+
+                {/* Response Files - Using FileUpload component */}
+                <Box>
+                  <FileUpload
+                    label="Pièces jointes de réponse"
+                    value={null}
+                    onChange={(file) => {
+                      if (file) {
+                        setResponseFiles((prev) => [...prev, file]);
+                      }
+                    }}
+                    helperText="Cliquez pour ajouter des fichiers (vous pouvez en ajouter plusieurs)"
+                    maxSize={5}
+                    acceptedFiles={[
+                      ".pdf",
+                      ".doc",
+                      ".docx",
+                      ".xls",
+                      ".xlsx",
+                      ".jpg",
+                      ".jpeg",
+                      ".png",
+                    ]}
+                  />
+                </Box>
+
+                {/* Display selected files */}
+                {responseFiles.length > 0 && (
+                  <Box
+                    sx={{
+                      p: 1.5,
+                      bgcolor: theme.palette.common.white,
+                      borderRadius: 2,
+                      border: `1px solid ${theme.palette.divider}`,
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      fontWeight={600}
+                      sx={{ mb: 1, display: "block", fontSize: 10 }}
+                    >
+                      FICHIERS SÉLECTIONNÉS ({responseFiles.length})
+                    </Typography>
+                    <Box
+                      sx={{ display: "flex", flexDirection: "column", gap: 1 }}
+                    >
+                      {responseFiles.map((file, index) => {
+                        const fileExtension = file.name
+                          .split(".")
+                          .pop()
+                          ?.toLowerCase();
+                        const isPDF = fileExtension === "pdf";
+                        return (
+                          <Box
+                            key={index}
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1,
+                              p: 1,
+                              bgcolor: alpha(theme.palette.grey[100], 0.5),
+                              borderRadius: 1,
+                            }}
+                          >
+                            {/* File Icon */}
+                            <Box
+                              sx={{
+                                width: 28,
+                                height: 28,
+                                bgcolor: "#10B981",
+                                borderRadius: 1,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0,
+                              }}
+                            >
+                              <Typography
+                                variant="caption"
+                                fontWeight={700}
+                                color="white"
+                                sx={{ fontSize: 8 }}
+                              >
+                                {isPDF
+                                  ? "PDF"
+                                  : fileExtension?.toUpperCase() || "FILE"}
+                              </Typography>
+                            </Box>
+                            <Typography
+                              variant="body2"
+                              fontSize={12}
+                              sx={{
+                                flex: 1,
+                                minWidth: 0,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {file.name}
+                            </Typography>
+                            <IconButton
+                              size="small"
+                              onClick={() =>
+                                setResponseFiles((prev) =>
+                                  prev.filter((_, i) => i !== index),
+                                )
+                              }
+                              sx={{
+                                color: "error.main",
+                                width: 24,
+                                height: 24,
+                              }}
+                            >
+                              <X size={14} />
+                            </IconButton>
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  </Box>
+                )}
+
+                {/* Submit Response Button */}
+                <CustomButton
+                  variant="contained"
+                  startIcon={<Send size={18} />}
+                  onClick={handleSubmitResponse}
+                  disabled={
+                    isResponding ||
+                    (!responseNote && responseFiles.length === 0)
+                  }
+                  fullWidth
+                  loading={isResponding}
+                  sx={{
+                    bgcolor: "#10B981",
+                    "&:hover": {
+                      bgcolor: "#059669",
+                    },
+                  }}
+                >
+                  Envoyer la réponse
+                </CustomButton>
+              </>
+            )}
+          </Box>
         ) : (
           // EDIT MODE
           <Box
@@ -1275,28 +1683,57 @@ export default function ViewRequestDrawer({
       >
         {!isEditMode ? (
           <>
-            {/* Assignment Button for Accountants - Full Width at Bottom */}
+            {/* Accountant Actions */}
             {isAccountant && (
-              <CustomButton
-                variant="contained"
-                color="primary"
-                startIcon={<UserPlus size={18} />}
-                onClick={handleOpenAssignMenu}
-                fullWidth
-                size="large"
+              <Box
                 sx={{
-                  fontSize: 14,
-                  fontWeight: 600,
+                  display: "flex",
+                  gap: 1,
+                  flexDirection: { xs: "column", sm: "row" },
                 }}
               >
-                {localRequest.convertedToTask?.assignee
-                  ? `Assigné à ${localRequest.convertedToTask.assignee.firstName} ${localRequest.convertedToTask.assignee.lastName}`
-                  : assignedUserId
-                    ? assignedUserId === Number(user?.id)
-                      ? "Assigné à moi"
-                      : `Assigné à ${assignableUsers.find((u) => u.id === assignedUserId)?.username || "Utilisateur"}`
-                    : "Assigner la demande"}
-              </CustomButton>
+                <CustomButton
+                  variant="contained"
+                  color="primary"
+                  startIcon={<UserPlus size={18} />}
+                  onClick={handleOpenAssignMenu}
+                  fullWidth
+                  size="large"
+                  sx={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  {localRequest.convertedToTask?.assignee
+                    ? `Assigné à ${localRequest.convertedToTask.assignee.firstName} ${localRequest.convertedToTask.assignee.lastName}`
+                    : assignedUserId
+                      ? assignedUserId === Number(user?.id)
+                        ? "Assigné à moi"
+                        : `Assigné à ${assignableUsers.find((u) => u.id === assignedUserId)?.username || "Utilisateur"}`
+                      : "Assigner la demande"}
+                </CustomButton>
+
+                {/* Response Button - Only show if not yet responded */}
+                {!localRequest.respondedAt && (
+                  <CustomButton
+                    variant="contained"
+                    startIcon={<Send size={18} />}
+                    onClick={() => setShowResponseView(true)}
+                    fullWidth
+                    size="large"
+                    sx={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      bgcolor: "#10B981",
+                      "&:hover": {
+                        bgcolor: "#059669",
+                      },
+                    }}
+                  >
+                    Répondre
+                  </CustomButton>
+                )}
+              </Box>
             )}
 
             {/* Client Actions */}

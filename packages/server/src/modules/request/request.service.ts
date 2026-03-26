@@ -338,6 +338,8 @@ export class RequestService {
     page: number = 1,
     limit: number = 10,
     status?: string,
+    sortBy?: 'urgency' | 'status' | 'createdAt',
+    sortOrder: 'asc' | 'desc' = 'desc',
     search?: string
   ) {
     const skip = (page - 1) * limit;
@@ -356,15 +358,22 @@ export class RequestService {
       ];
     }
 
+    const orderBy: any = {};
+    if (sortBy === 'urgency') {
+      orderBy.urgency = sortOrder;
+    } else if (sortBy === 'status') {
+      orderBy.status = sortOrder;
+    } else {
+      orderBy.createdAt = sortOrder;
+    }
+
     const [total, requests] = await Promise.all([
       this.prisma.request.count({ where }),
       this.prisma.request.findMany({
         where,
         skip,
         take: limit,
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy,
         include: {
           client: {
             select: {
@@ -395,10 +404,11 @@ export class RequestService {
       }),
     ]);
 
-    // Generate presigned URLs for attachments
+    // Generate presigned URLs for attachments and response attachments
     const requestsWithUrls = await Promise.all(
       requests.map(async (request) => {
         const attachmentUrls: string[] = [];
+        const responseAttachmentUrls: string[] = [];
 
         if (request.attachments && Array.isArray(request.attachments)) {
           for (const attachmentPath of request.attachments) {
@@ -415,10 +425,27 @@ export class RequestService {
           }
         }
 
+        const responseAttachments = (request as any).responseAttachments;
+        if (responseAttachments && Array.isArray(responseAttachments)) {
+          for (const attachmentPath of responseAttachments) {
+            try {
+              const url = await this.minioService.getPresignedUrl(
+                attachmentPath,
+                7 * 24 * 60 * 60 // 7 days
+              );
+              responseAttachmentUrls.push(url);
+            } catch (error) {
+              console.error('Error generating presigned URL for response attachment:', error);
+              responseAttachmentUrls.push(attachmentPath); // Fallback to path
+            }
+          }
+        }
+
         return {
           ...request,
           attachmentUrls, // URLs présignées pour télécharger
           attachments: request.attachments, // Chemins originaux (optionnel)
+          responseAttachments: responseAttachmentUrls,
         };
       })
     );
@@ -467,13 +494,13 @@ export class RequestService {
     limit: number = 10,
     status?: string,
     urgency?: string,
-    sortBy: 'urgency' | 'createdAt' = 'createdAt',
+    sortBy?: 'urgency' | 'status' | 'createdAt',
+    sortOrder: 'asc' | 'desc' = 'desc',
     search?: string
   ) {
     const skip = (page - 1) * limit;
     const where: any = {
       assignedToId: accountantId,
-      // Removed convertedToTaskId: null filter to show all requests including those assigned to collaborators
     };
 
     if (status) {
@@ -497,10 +524,11 @@ export class RequestService {
 
     const orderBy: any = {};
     if (sortBy === 'urgency') {
-      const urgencyOrder = ['urgent', 'high', 'normal', 'low'];
-      orderBy.urgency = 'asc';
+      orderBy.urgency = sortOrder;
+    } else if (sortBy === 'status') {
+      orderBy.status = sortOrder;
     } else {
-      orderBy.createdAt = 'desc';
+      orderBy.createdAt = sortOrder;
     }
 
     const [total, requests, statusCounts] = await Promise.all([
@@ -578,9 +606,55 @@ export class RequestService {
       }
     });
 
+    // Generate presigned URLs for attachments and response attachments
+    const requestsWithUrls = await Promise.all(
+      requests.map(async (request) => {
+        const attachmentUrls: string[] = [];
+        const responseAttachmentUrls: string[] = [];
+
+        if (request.attachments && Array.isArray(request.attachments)) {
+          for (const attachmentPath of request.attachments) {
+            try {
+              const url = await this.minioService.getPresignedUrl(
+                attachmentPath,
+                7 * 24 * 60 * 60 // 7 days
+              );
+              attachmentUrls.push(url);
+            } catch (error) {
+              console.error('Error generating presigned URL for attachment:', error);
+              attachmentUrls.push(attachmentPath); // Fallback to path
+            }
+          }
+        }
+
+        const responseAttachments = (request as any).responseAttachments;
+        if (responseAttachments && Array.isArray(responseAttachments)) {
+          for (const attachmentPath of responseAttachments) {
+            try {
+              const url = await this.minioService.getPresignedUrl(
+                attachmentPath,
+                7 * 24 * 60 * 60 // 7 days
+              );
+              responseAttachmentUrls.push(url);
+            } catch (error) {
+              console.error('Error generating presigned URL for response attachment:', error);
+              responseAttachmentUrls.push(attachmentPath); // Fallback to path
+            }
+          }
+        }
+
+        return {
+          ...request,
+          attachmentUrls, // URLs présignées pour télécharger
+          attachments: request.attachments, // Chemins originaux (optionnel)
+          responseAttachments: responseAttachmentUrls,
+        };
+      })
+    );
+
     return {
       success: true,
-      data: requests,
+      data: requestsWithUrls,
       pagination: {
         total,
         page,
@@ -600,7 +674,8 @@ export class RequestService {
     limit: number = 10,
     status?: string,
     urgency?: string,
-    sortBy: 'urgency' | 'createdAt' = 'createdAt',
+    sortBy?: 'urgency' | 'status' | 'createdAt',
+    sortOrder: 'asc' | 'desc' = 'desc',
     search?: string
   ) {
     // Get accountant's company
@@ -637,9 +712,11 @@ export class RequestService {
 
     const orderBy: any = {};
     if (sortBy === 'urgency') {
-      orderBy.urgency = 'desc';
+      orderBy.urgency = sortOrder;
+    } else if (sortBy === 'status') {
+      orderBy.status = sortOrder;
     } else {
-      orderBy.createdAt = 'desc';
+      orderBy.createdAt = sortOrder;
     }
 
     const [total, requests] = await Promise.all([
@@ -710,10 +787,11 @@ export class RequestService {
       }
     });
 
-    // Generate presigned URLs for attachments
+    // Generate presigned URLs for attachments and response attachments
     const requestsWithUrls = await Promise.all(
       requests.map(async (request) => {
         const attachmentUrls: string[] = [];
+        const responseAttachmentUrls: string[] = [];
 
         if (request.attachments && Array.isArray(request.attachments)) {
           for (const attachmentPath of request.attachments) {
@@ -730,10 +808,27 @@ export class RequestService {
           }
         }
 
+        const responseAttachments = (request as any).responseAttachments;
+        if (responseAttachments && Array.isArray(responseAttachments)) {
+          for (const attachmentPath of responseAttachments) {
+            try {
+              const url = await this.minioService.getPresignedUrl(
+                attachmentPath,
+                7 * 24 * 60 * 60 // 7 days
+              );
+              responseAttachmentUrls.push(url);
+            } catch (error) {
+              console.error('Error generating presigned URL for response attachment:', error);
+              responseAttachmentUrls.push(attachmentPath); // Fallback to path
+            }
+          }
+        }
+
         return {
           ...request,
           attachmentUrls, // URLs présignées pour télécharger
           attachments: request.attachments, // Chemins originaux (optionnel)
+          responseAttachments: responseAttachmentUrls,
         };
       })
     );
@@ -818,8 +913,10 @@ export class RequestService {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
     }
 
-    // Generate presigned URLs for attachments
+    // Generate presigned URLs for attachments and response attachments
     const attachmentUrls: string[] = [];
+    const responseAttachmentUrls: string[] = [];
+
     if (request.attachments && Array.isArray(request.attachments)) {
       for (const attachmentPath of request.attachments) {
         try {
@@ -835,11 +932,27 @@ export class RequestService {
       }
     }
 
+    if (request.responseAttachments && Array.isArray(request.responseAttachments)) {
+      for (const attachmentPath of request.responseAttachments) {
+        try {
+          const url = await this.minioService.getPresignedUrl(
+            attachmentPath,
+            7 * 24 * 60 * 60 // 7 days
+          );
+          responseAttachmentUrls.push(url);
+        } catch (error) {
+          console.error('Error generating presigned URL for response attachment:', error);
+          responseAttachmentUrls.push(attachmentPath); // Fallback to path
+        }
+      }
+    }
+
     return {
       success: true,
       data: {
         ...request,
         attachmentUrls, // URLs présignées pour télécharger
+        responseAttachments: responseAttachmentUrls,
       },
     };
   }
@@ -1095,19 +1208,56 @@ export class RequestService {
       data: updatedRequest,
     };
   }
-  async respondToRequest(requestId: number, dto: RespondRequestDto, accountantId: number) {
+  async respondToRequest(
+    requestId: number,
+    dto: RespondRequestDto,
+    accountantId: number,
+    files?: Express.Multer.File[]
+  ) {
     const request = await this.prisma.request.findUnique({
       where: { id: requestId },
+      include: {
+        client: {
+          select: { companyId: true },
+        },
+      },
     });
 
     if (!request) {
       throw new ApiError('Request not found', 404, 'REQUEST_NOT_FOUND');
     }
 
+    // Get accountant's company for MinIO bucket
+    const accountant = await this.prisma.user.findUnique({
+      where: { id: accountantId },
+      select: { companyId: true },
+    });
+
+    if (!accountant?.companyId) {
+      throw new ApiError('Accountant must belong to a company', 400, 'NO_COMPANY');
+    }
+
+    // Upload response attachments to MinIO if provided
+    const responseAttachmentUrls: string[] = [];
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const fileName = `request-response-${Date.now()}-${file.originalname}`;
+        const filePath = `requests/responses/${fileName}`;
+
+        try {
+          await this.minioService.uploadFile(accountant.companyId, filePath, file);
+          responseAttachmentUrls.push(filePath);
+        } catch (error) {
+          console.error('MinIO upload error:', error);
+        }
+      }
+    }
+
     const updatedRequest = await this.prisma.request.update({
       where: { id: requestId },
       data: {
         response: dto.response,
+        responseAttachments: responseAttachmentUrls,
         status: 'in_progress',
         assignedToId: accountantId,
         respondedAt: new Date(),

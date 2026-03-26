@@ -207,10 +207,12 @@ export class TaskController {
   }
 
   /**
-   * Submit task for review (Collaborator)
+   * Submit task for review (Accountant only - to send completed tasks back to review)
    */
   @Put(':id/review')
-  @ApiOperation({ summary: '[Collaborator] Submit task for review' })
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Send task back to review' })
   @ApiResponse({ status: 200, description: 'Task submitted for review' })
   async submitForReview(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
     const userId = req.user!.id;
@@ -218,12 +220,10 @@ export class TaskController {
   }
 
   /**
-   * Complete task (Accountant only)
+   * Complete task (Collaborator and Accountant)
    */
   @Put(':id/complete')
-  @UseGuards(RolesGuard)
-  @Roles('ACCOUNTANT')
-  @ApiOperation({ summary: '[Accountant] Mark task as completed' })
+  @ApiOperation({ summary: '[Collaborator/Accountant] Mark task as completed' })
   @ApiResponse({ status: 200, description: 'Task completed' })
   async completeTask(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
     const userId = req.user!.id;

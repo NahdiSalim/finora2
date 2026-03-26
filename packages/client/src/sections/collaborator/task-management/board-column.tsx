@@ -185,6 +185,7 @@ export function BoardColumn({
                 size="small"
                 onClick={handleArchiveAll}
                 sx={{
+                  display: { xs: "none", sm: "flex" },
                   width: { xs: 26, sm: 28 },
                   height: { xs: 26, sm: 28 },
                   color: "#64748B",

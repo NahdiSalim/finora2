@@ -12,8 +12,10 @@ import {
   CircularProgress,
   Alert,
   Chip,
+  Autocomplete,
+  TextField,
 } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import type { SubmitHandler } from "react-hook-form";
 import { Controller, useForm } from "react-hook-form";
 import { X, Plus } from "lucide-react";
@@ -23,7 +25,10 @@ import CustomButton from "src/components/common/CustomButton";
 import CustomSelect from "src/components/common/CustomSelect";
 import FileUpload from "src/components/common/FileUpload";
 import { useCreateTaskMutation } from "src/lib/services/tasksApi";
-import { useGetCollaboratorsQuery } from "src/lib/services/collaboratorsApi";
+import {
+  useGetCollaboratorsQuery,
+  type Collaborator,
+} from "src/lib/services/collaboratorsApi";
 import { useGetClientsQuery } from "src/lib/services/clientApi";
 import type { KanbanColumn } from "../types";
 
@@ -54,13 +59,41 @@ export default function TaskModal({
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [fileSlots, setFileSlots] = useState<Array<File | null>>([null]);
   const [submitError, setSubmitError] = useState<string>("");
+  const [collaboratorSearch, setCollaboratorSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedCollaborators, setSelectedCollaborators] = useState<
+    Collaborator[]
+  >([]);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(collaboratorSearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [collaboratorSearch]);
 
   const [createTask, { isLoading: isCreating }] = useCreateTaskMutation();
-  const { data: collaboratorsData } = useGetCollaboratorsQuery({
-    page: 1,
-    limit: 100,
-  });
+  const { data: collaboratorsData, isLoading: isLoadingCollaborators } =
+    useGetCollaboratorsQuery(
+      {
+        page: 1,
+        limit: 50,
+        search: debouncedSearch || undefined,
+      },
+      {
+        refetchOnMountOrArgChange: true,
+      },
+    );
   const { data: clientsData } = useGetClientsQuery({ page: 1, limit: 100 });
+
+  // Combine selected collaborators with search results
+  const allCollaborators = useMemo(() => {
+    const dataCollabs = collaboratorsData?.data || [];
+    const selectedIds = new Set(selectedCollaborators.map((c) => c.id));
+    const filteredData = dataCollabs.filter((c) => !selectedIds.has(c.id));
+    return [...selectedCollaborators, ...filteredData];
+  }, [collaboratorsData, selectedCollaborators]);
 
   const {
     register,
@@ -94,6 +127,8 @@ export default function TaskModal({
       });
       setFileSlots([null]);
       setSubmitError("");
+      setSelectedCollaborators([]);
+      setCollaboratorSearch("");
     }
   }, [open, reset]);
 
@@ -333,56 +368,92 @@ export default function TaskModal({
             </Grid>
           </Grid>
 
-          {/* Collaborateurs (Multiple Selection) */}
+          {/* Collaborateurs (Multiple Selection with Search) */}
           <Controller
             name="assigneeIds"
             control={control}
             rules={{ required: "Au moins un collaborateur est requis" }}
-            render={({ field }) => (
-              <CustomSelect
-                {...field}
-                label="Assigner à"
-                required
+            render={({ field: { onChange } }) => (
+              <Autocomplete
                 multiple
-                error={!!errors.assigneeIds}
-                helperText={errors.assigneeIds?.message}
-                displayEmpty
-                renderValue={(selected) => {
-                  if (!selected || (selected as number[]).length === 0) {
-                    return (
-                      <Typography color="text.secondary" fontSize={14}>
-                        Sélectionner un ou plusieurs collaborateurs
-                      </Typography>
-                    );
-                  }
-                  return (
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      {(selected as number[]).map((value) => {
-                        const collab = collaboratorsData?.data.find(
-                          (c) => Number(c.id) === value,
-                        );
-                        return (
-                          <Chip
-                            key={value}
-                            label={
-                              collab
-                                ? `${collab.firstName} ${collab.lastName}`
-                                : value
-                            }
-                            size="small"
-                          />
-                        );
-                      })}
-                    </Box>
-                  );
+                freeSolo={false}
+                options={allCollaborators}
+                value={selectedCollaborators}
+                onChange={(_, newValue) => {
+                  setSelectedCollaborators(newValue);
+                  onChange(newValue.map((collab) => Number(collab.id)));
                 }}
-              >
-                {collaboratorsData?.data.map((collab) => (
-                  <MenuItem key={collab.id} value={Number(collab.id)}>
-                    {collab.firstName} {collab.lastName} ({collab.email})
-                  </MenuItem>
-                ))}
-              </CustomSelect>
+                onInputChange={(_, newInputValue) => {
+                  setCollaboratorSearch(newInputValue);
+                }}
+                inputValue={collaboratorSearch}
+                getOptionLabel={(option) =>
+                  `${option.firstName} ${option.lastName}`
+                }
+                isOptionEqualToValue={(option, selectedValue) =>
+                  option.id === selectedValue.id
+                }
+                loading={isLoadingCollaborators}
+                filterOptions={(x) => x}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Assigner à"
+                    required
+                    error={!!errors.assigneeIds}
+                    helperText={errors.assigneeIds?.message}
+                    placeholder="Rechercher un collaborateur..."
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {isLoadingCollaborators ? (
+                            <CircularProgress color="inherit" size={20} />
+                          ) : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        borderRadius: "10px",
+                        bgcolor: "white",
+                        "&:hover .MuiOutlinedInput-notchedOutline": {
+                          borderColor: theme.palette.grey[600],
+                        },
+                        "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                          borderColor: theme.palette.primary.main,
+                          borderWidth: "1.5px",
+                        },
+                      },
+                    }}
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>
+                    <Box>
+                      <Typography variant="body2" fontWeight={500}>
+                        {option.firstName} {option.lastName}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {option.email}
+                      </Typography>
+                    </Box>
+                  </li>
+                )}
+                renderTags={(tagValue, getTagProps) =>
+                  tagValue.map((option, index) => (
+                    <Chip
+                      {...getTagProps({ index })}
+                      key={option.id}
+                      label={`${option.firstName} ${option.lastName}`}
+                      size="small"
+                    />
+                  ))
+                }
+                noOptionsText="Aucun collaborateur trouvé"
+                sx={{ width: "100%" }}
+              />
             )}
           />
 

@@ -854,7 +854,8 @@ model Request {
   urgency     String   @default("normal") // 'low', 'normal', 'high', 'urgent'
   status      String   @default("pending") // 'pending', 'in_progress', 'resolved', 'rejected', 'cancelled'
   response    String?  @db.Text
-  attachments String[] @default([]) // Array of file paths in MinIO
+  attachments String[] @default([]) // Array of file paths in MinIO (client attachments)
+  responseAttachments String[] @default([]) // Array of file paths for accountant response
   
   // Desired response date/time
   desiredResponseDate String?

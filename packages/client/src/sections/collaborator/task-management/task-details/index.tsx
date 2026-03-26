@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Box, Card, useTheme, CircularProgress, Alert } from "@mui/material";
-import { Loader2, Check, Send, Archive } from "lucide-react";
+import { Loader2, Check, Send } from "lucide-react";
 import { PageHeader } from "src/layouts/components/page-header";
 import { useDashboardBase } from "src/hooks/useDashboardBase";
 import { useAppSelector } from "src/hooks/use-redux";
@@ -135,17 +135,17 @@ export default function TaskDetailsView() {
     if (task.status === "in_progress") {
       if (isCollaborator) {
         return {
-          label: "Soumettre pour révision",
-          icon: <Send size={18} />,
-          onClick: handleSubmitForReview,
+          label: "Marquer comme terminé",
+          icon: <Check size={18} />,
+          onClick: handleCompleteTask,
           variant: "contained" as const,
-          color: "primary" as const,
-          disabled: isSubmitting,
+          color: "success" as const,
+          disabled: isCompleting,
           sx: {
             borderRadius: 1.5,
-            bgcolor: "#8B5CF6",
+            bgcolor: "#10B981",
             "&:hover": {
-              bgcolor: "#7C3AED",
+              bgcolor: "#059669",
             },
           },
         };
@@ -172,18 +172,17 @@ export default function TaskDetailsView() {
 
     if (task.status === "completed" && isAccountant) {
       return {
-        label: "Archiver",
-        icon: <Archive size={18} />,
-        onClick: handleArchiveTask,
+        label: "Marquer comme à revoir",
+        icon: <Send size={18} />,
+        onClick: handleSubmitForReview,
         variant: "contained" as const,
-        color: "secondary" as const,
-        disabled: isArchiving,
+        color: "primary" as const,
+        disabled: isSubmitting,
         sx: {
           borderRadius: 1.5,
-          bgcolor: "#64748B",
-          color: "white",
+          bgcolor: "#8B5CF6",
           "&:hover": {
-            bgcolor: "#475569",
+            bgcolor: "#7C3AED",
           },
         },
       };

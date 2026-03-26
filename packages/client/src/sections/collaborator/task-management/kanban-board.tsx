@@ -158,6 +158,17 @@ export function KanbanBoard({
 
     if (!targetColumn) return;
 
+    // Validate move restrictions
+    // Collaborators cannot move to "in_review" column
+    if (isCollaboratorView && targetColumn.id === "in_review") {
+      return;
+    }
+
+    // Accountants cannot move to "completed" column (only collaborators can)
+    if (isAccountant && targetColumn.id === "completed") {
+      return;
+    }
+
     if (sourceColumn.id === targetColumn.id) {
       const oldIndex = sourceColumn.tasks.findIndex((t) => t.id === taskId);
       let newIndex: number;

@@ -160,14 +160,14 @@ export function TaskCard({
       <Box
         sx={{
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
+          flexDirection: "column",
           mt: { xs: 1, sm: 1.5 },
           pt: { xs: 1, sm: 1.5 },
           borderTop: `1px solid ${theme.palette.grey[200]}`,
+          gap: 1,
         }}
       >
-        {/* Left: Date and Avatars */}
+        {/* First Row: Date and Avatars */}
         <Box
           sx={{
             display: "flex",
@@ -206,40 +206,48 @@ export function TaskCard({
           </Avatar>
         </Box>
 
-        {/* Right: Comments, Files, and Archive Button */}
+        {/* Second Row: Comments, Files on left, Archive on right */}
         <Box
           sx={{
             display: "flex",
             alignItems: "center",
-            gap: { xs: 1, sm: 1.5 },
+            justifyContent: "space-between",
           }}
         >
-          {/* Comments */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            <MessageCircle size={14} color={theme.palette.text.secondary} />
-            <Typography
-              variant="caption"
-              sx={{
-                fontSize: { xs: 11, sm: 12 },
-                color: theme.palette.text.secondary,
-              }}
-            >
-              {task.comments?.length || 0}
-            </Typography>
-          </Box>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: { xs: 1, sm: 1.5 },
+            }}
+          >
+            {/* Comments */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <MessageCircle size={14} color={theme.palette.text.secondary} />
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: { xs: 11, sm: 12 },
+                  color: theme.palette.text.secondary,
+                }}
+              >
+                {task.comments?.length || 0}
+              </Typography>
+            </Box>
 
-          {/* Files */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            <Folder size={14} color={theme.palette.text.secondary} />
-            <Typography
-              variant="caption"
-              sx={{
-                fontSize: { xs: 11, sm: 12 },
-                color: theme.palette.text.secondary,
-              }}
-            >
-              {task.attachments?.length || 0}
-            </Typography>
+            {/* Files */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <Folder size={14} color={theme.palette.text.secondary} />
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: { xs: 11, sm: 12 },
+                  color: theme.palette.text.secondary,
+                }}
+              >
+                {task.attachments?.length || 0}
+              </Typography>
+            </Box>
           </Box>
 
           {/* Archive Button - Only for completed tasks and accountants */}

@@ -55,18 +55,28 @@ export class UserController {
 
   @Get()
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 5 })
-  @ApiQuery({ name: 'search', required: false, type: String, example: 'admin' })
-  @ApiOkResponse({ description: 'List of users' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({
+    name: 'role',
+    required: false,
+    enum: ['ADMINISTRATOR', 'ACCOUNTANT', 'COLLABORATOR', 'CLIENT'],
+  })
+  @ApiQuery({ name: 'status', required: false, enum: ['active', 'pending', 'suspended'] })
+  @ApiOkResponse({ description: 'Liste des utilisateurs' })
   async findAll(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('search') search?: string
+    @Query('search') search?: string,
+    @Query('role') role?: string,
+    @Query('status') status?: string
   ) {
     return await this.userService.getAll(
-      page ? Number(page) : undefined,
-      limit ? Number(limit) : undefined,
-      search
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 10,
+      search,
+      role,
+      status
     );
   }
 
@@ -107,28 +117,19 @@ export class UserController {
     return await this.userService.create(createUserDto);
   }
 
-  @Patch(':id/toggle-active')
-  @ApiOkResponse({ description: 'User activation toggled successfully' })
-  @ApiBadRequestResponse({ description: 'Cannot toggle a super-admin' })
-  @ApiNotFoundResponse({ description: 'User not found' })
-  async toggleActive(@Param('id') id: number) {
-    return this.userService.toggleActive(id);
-  }
-
-  @Put(':id/suspend')
+  @Put(':id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMINISTRATOR')
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Suspend any user account (admin only, except administrators)' })
-  @ApiOkResponse({ description: 'User account suspended successfully' })
-  @ApiBadRequestResponse({ description: 'Cannot suspend administrator accounts' })
-  @ApiNotFoundResponse({ description: 'User not found' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - Only administrators can suspend users',
-  })
-  async suspendUser(@Param('id', ParseIntPipe) id: number, @Body() dto: SuspendUserDto) {
-    return this.userService.suspendUser(id, dto.reason);
+  @ApiOperation({ summary: 'Activer ou suspendre un utilisateur' })
+  @ApiQuery({ name: 'action', required: true, enum: ['activate', 'suspend'] })
+  @ApiOkResponse({ description: 'Statut mis à jour avec succès' })
+  async updateUserStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('action') action: 'activate' | 'suspend',
+    @Body() body?: { reason?: string }
+  ) {
+    return this.userService.updateUserStatus(id, action, body?.reason);
   }
 
   @Patch('profile/complete')

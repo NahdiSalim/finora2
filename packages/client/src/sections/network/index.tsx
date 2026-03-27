@@ -21,11 +21,14 @@ import CustomSelect from "src/components/common/CustomSelect";
 import CustomInput from "src/components/common/CustomInput";
 import { useDashboardBase } from "src/hooks/useDashboardBase";
 import { useGetPublicAccountantsQuery } from "src/lib/services/publicAccountantsApi";
+import { useVerifyUserQuery } from "src/lib/services/authApi";
+import { useSendRelationshipInvitationMutation } from "src/lib/services/relationshipsApi";
 import {
   ALL_SPECIALTIES_FOR_FILTER,
   RATING_FILTER_OPTIONS,
 } from "src/lib/constants/specialties";
 import { Search } from "lucide-react";
+import { useAlert } from "src/contexts/AlertContext";
 
 export default function NetworkView() {
   const theme = useTheme();
@@ -39,6 +42,9 @@ export default function NetworkView() {
   const [contactAccountantId, setContactAccountantId] = useState<number | null>(
     null,
   );
+  const { showAlert } = useAlert();
+  const { data: me } = useVerifyUserQuery();
+  const [sendRelationshipInvitation] = useSendRelationshipInvitationMutation();
 
   const ratingOption = RATING_FILTER_OPTIONS.find(
     (o) => o.value === ratingRange,
@@ -88,8 +94,15 @@ export default function NetworkView() {
         description: item.company?.description ?? item.company?.address ?? "",
         featured: false,
         accountantId: item.id,
+        companyId: item.company?.id,
       } as Accountant;
     }) ?? [];
+
+  const roleCode =
+    typeof me?.role === "string"
+      ? me.role.toUpperCase()
+      : (me?.role?.code ?? "").toUpperCase();
+  const isClient = roleCode === "CLIENT";
 
   const handleSearch = () => {
     const next = searchDraft.trim();
@@ -265,6 +278,24 @@ export default function NetworkView() {
                 data={accountant}
                 getProfilePath={(id) =>
                   `${dashboardBase}/network/accountant/${id}`
+                }
+                scheduleButtonLabel={isClient ? "Inviter" : "Planifier"}
+                onScheduleClick={
+                  isClient && accountant.companyId
+                    ? async () => {
+                        try {
+                          await sendRelationshipInvitation({
+                            targetCompanyId: accountant.companyId!,
+                          }).unwrap();
+                          showAlert("Invitation envoyée", "success");
+                        } catch {
+                          showAlert(
+                            "Erreur lors de l'envoi de l'invitation",
+                            "error",
+                          );
+                        }
+                      }
+                    : undefined
                 }
                 onMessageClick={(id) => {
                   setContactAccountantId(id);

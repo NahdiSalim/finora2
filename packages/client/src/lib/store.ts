@@ -17,6 +17,7 @@ import { tasksApi } from "./services/tasksApi";
 import { invoicesApi } from "./services/invoicesApi";
 import { appointmentsApi } from "./services/appointmentsApi";
 import { locationApi } from "./services/locationApi";
+import { notificationsApi } from "./services/notificationsApi";
 
 const apiMiddlewares = [
   authApi.middleware,
@@ -36,6 +37,7 @@ const apiMiddlewares = [
   invoicesApi.middleware,
   appointmentsApi.middleware,
   locationApi.middleware,
+  notificationsApi.middleware,
 ];
 
 const apiResetters = [
@@ -55,6 +57,7 @@ const apiResetters = [
   invoicesApi.util.resetApiState,
   appointmentsApi.util.resetApiState,
   locationApi.util.resetApiState,
+  notificationsApi.util.resetApiState,
 ];
 
 const appReducer = combineReducers({
@@ -76,6 +79,7 @@ const appReducer = combineReducers({
   [invoicesApi.reducerPath]: invoicesApi.reducer,
   [appointmentsApi.reducerPath]: appointmentsApi.reducer,
   [locationApi.reducerPath]: locationApi.reducer,
+  [notificationsApi.reducerPath]: notificationsApi.reducer,
 });
 
 const baseStore = configureStore({

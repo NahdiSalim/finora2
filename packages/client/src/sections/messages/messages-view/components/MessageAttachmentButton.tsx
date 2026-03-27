@@ -7,18 +7,24 @@ import Typography from "@mui/material/Typography";
 import { useTheme } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
-import { FileText, Paperclip } from "lucide-react";
+import { FileText, Paperclip, CheckSquare, Calendar } from "lucide-react";
 
 type MessageAttachmentButtonProps = {
   disabled?: boolean;
   onFileSelect: (file: File) => void;
   onRequestClick?: () => void;
+  onTaskClick?: () => void;
+  onAppointmentClick?: () => void;
+  recipientType?: "client" | "collaborator" | null;
 };
 
 export default function MessageAttachmentButton({
   disabled = false,
   onFileSelect,
   onRequestClick,
+  onTaskClick,
+  onAppointmentClick,
+  recipientType,
 }: MessageAttachmentButtonProps) {
   const theme = useTheme();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -26,7 +32,6 @@ export default function MessageAttachmentButton({
 
   const open = Boolean(anchorEl);
 
-  // 👇 بدلناها toggle
   const handleToggleMenu = (event: React.MouseEvent<HTMLElement>) => {
     if (disabled) return;
 
@@ -43,10 +48,22 @@ export default function MessageAttachmentButton({
 
   const handleRequestClick = () => {
     onRequestClick?.();
+    handleCloseMenu();
+  };
+
+  const handleTaskClick = () => {
+    onTaskClick?.();
+    handleCloseMenu();
+  };
+
+  const handleAppointmentClick = () => {
+    onAppointmentClick?.();
+    handleCloseMenu();
   };
 
   const handleFileMenuClick = () => {
     fileInputRef.current?.click();
+    handleCloseMenu();
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,45 +139,6 @@ export default function MessageAttachmentButton({
         }}
       >
         <MenuItem
-          onClick={handleRequestClick}
-          sx={{
-            minHeight: 48,
-            px: 1.25,
-            py: 0.75,
-            borderRadius: "14px",
-            gap: 1.25,
-            "&:hover": {
-              backgroundColor: "#F9FAFB",
-            },
-          }}
-        >
-          <Box
-            sx={{
-              width: 22,
-              height: 22,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#2F6BFF",
-              flexShrink: 0,
-            }}
-          >
-            <FileText size={16} strokeWidth={2} />
-          </Box>
-
-          <Typography
-            sx={{
-              fontSize: 14,
-              fontWeight: 400,
-              lineHeight: "21px",
-              color: "#344054",
-            }}
-          >
-            Joindre une demande
-          </Typography>
-        </MenuItem>
-
-        <MenuItem
           onClick={handleFileMenuClick}
           sx={{
             minHeight: 48,
@@ -198,6 +176,129 @@ export default function MessageAttachmentButton({
             Joindre un fichier
           </Typography>
         </MenuItem>
+
+        {recipientType === "client" && (
+          <>
+            <MenuItem
+              onClick={handleRequestClick}
+              sx={{
+                minHeight: 48,
+                px: 1.25,
+                py: 0.75,
+                borderRadius: "14px",
+                gap: 1.25,
+                "&:hover": {
+                  backgroundColor: "#F9FAFB",
+                },
+              }}
+            >
+              <Box
+                sx={{
+                  width: 22,
+                  height: 22,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#2F6BFF",
+                  flexShrink: 0,
+                }}
+              >
+                <FileText size={16} strokeWidth={2} />
+              </Box>
+
+              <Typography
+                sx={{
+                  fontSize: 14,
+                  fontWeight: 400,
+                  lineHeight: "21px",
+                  color: "#344054",
+                }}
+              >
+                Joindre une demande
+              </Typography>
+            </MenuItem>
+
+            <MenuItem
+              onClick={handleAppointmentClick}
+              sx={{
+                minHeight: 48,
+                px: 1.25,
+                py: 0.75,
+                borderRadius: "14px",
+                gap: 1.25,
+                "&:hover": {
+                  backgroundColor: "#F9FAFB",
+                },
+              }}
+            >
+              <Box
+                sx={{
+                  width: 22,
+                  height: 22,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#2F6BFF",
+                  flexShrink: 0,
+                }}
+              >
+                <Calendar size={16} strokeWidth={2} />
+              </Box>
+
+              <Typography
+                sx={{
+                  fontSize: 14,
+                  fontWeight: 400,
+                  lineHeight: "21px",
+                  color: "#344054",
+                }}
+              >
+                Joindre un rendez-vous
+              </Typography>
+            </MenuItem>
+          </>
+        )}
+
+        {recipientType === "collaborator" && (
+          <MenuItem
+            onClick={handleTaskClick}
+            sx={{
+              minHeight: 48,
+              px: 1.25,
+              py: 0.75,
+              borderRadius: "14px",
+              gap: 1.25,
+              "&:hover": {
+                backgroundColor: "#F9FAFB",
+              },
+            }}
+          >
+            <Box
+              sx={{
+                width: 22,
+                height: 22,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#2F6BFF",
+                flexShrink: 0,
+              }}
+            >
+              <CheckSquare size={16} strokeWidth={2} />
+            </Box>
+
+            <Typography
+              sx={{
+                fontSize: 14,
+                fontWeight: 400,
+                lineHeight: "21px",
+                color: "#344054",
+              }}
+            >
+              Joindre une tâche
+            </Typography>
+          </MenuItem>
+        )}
       </Menu>
 
       <input

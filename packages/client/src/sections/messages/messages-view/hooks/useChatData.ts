@@ -99,6 +99,29 @@ function mapRoomToConversation(
   };
 }
 
+const REQUEST_TYPE_LABELS: Record<string, string> = {
+  accounting: "Comptabilité",
+  tax: "Fiscalité",
+  consultation: "Consultation",
+  document: "Document",
+  other: "Autre",
+};
+
+const REQUEST_STATUS_LABELS: Record<string, string> = {
+  pending: "En attente",
+  in_progress: "En cours",
+  resolved: "Terminé",
+  rejected: "Rejeté",
+  cancelled: "Annulé",
+};
+
+const REQUEST_URGENCY_LABELS: Record<string, string> = {
+  low: "Low",
+  normal: "Normal",
+  high: "High",
+  urgent: "Urgent !",
+};
+
 function mapApiMessageToMessage(
   msg: ChatMessage,
   currentUserId: number,
@@ -110,10 +133,68 @@ function mapApiMessageToMessage(
   });
   const isMine = msg.senderId === currentUserId;
 
+  if (msg.request) {
+    return {
+      id: msg.id,
+      type: "request" as const,
+      text: msg.content,
+      html: msg.content,
+      mine: isMine,
+      time,
+      date,
+      request: {
+        id: msg.request.id,
+        title: msg.request.subject,
+        subtitle: REQUEST_TYPE_LABELS[msg.request.type] || msg.request.type,
+        status: REQUEST_STATUS_LABELS[msg.request.status] || msg.request.status,
+        urgency:
+          REQUEST_URGENCY_LABELS[msg.request.urgency] || msg.request.urgency,
+      },
+    };
+  }
+
+  if (msg.task) {
+    return {
+      id: msg.id,
+      type: "task" as const,
+      text: msg.content,
+      html: msg.content,
+      mine: isMine,
+      time,
+      date,
+      task: {
+        id: msg.task.id,
+        title: msg.task.title,
+        status: msg.task.status,
+        priority: msg.task.priority,
+      },
+    };
+  }
+
+  if (msg.appointment) {
+    return {
+      id: msg.id,
+      type: "appointment" as const,
+      text: msg.content,
+      html: msg.content,
+      mine: isMine,
+      time,
+      date,
+      appointment: {
+        id: msg.appointment.id,
+        title: msg.appointment.title,
+        startTime: msg.appointment.startTime,
+        endTime: msg.appointment.endTime,
+        status: msg.appointment.status,
+        type: msg.appointment.type,
+      },
+    };
+  }
+
   if (msg.type === "file" || msg.type === "image") {
-    // content = MinIO objectName, fileUrl = presigned URL from backend
+    // content = user's message text or file name
+    // fileUrl = presigned URL from backend for the actual file
     const url = msg.fileUrl || "";
-    // Extract display name from objectName path (last segment after last /)
     const objectName = msg.content || "";
     const fileName = objectName.split("/").pop() || objectName || "Fichier";
     // Derive category: trust server type hint ("image") first, then filename extension
@@ -131,6 +212,8 @@ function mapApiMessageToMessage(
     return {
       id: msg.id,
       type: "file" as const,
+      text: msg.content,
+      html: msg.content,
       mine: isMine,
       time,
       date,

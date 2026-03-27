@@ -336,6 +336,9 @@ export class ChatService {
         type: dto.type,
         mentions: dto.mentions ? dto.mentions.map(String) : [],
         documentId: dto.documentId,
+        requestId: dto.requestId,
+        taskId: dto.taskId,
+        appointmentId: dto.appointmentId,
         readBy: [String(userId)],
       },
       include: {
@@ -346,6 +349,33 @@ export class ChatService {
             email: true,
             firstName: true,
             lastName: true,
+          },
+        },
+        request: {
+          select: {
+            id: true,
+            subject: true,
+            type: true,
+            status: true,
+            urgency: true,
+          },
+        },
+        task: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            priority: true,
+          },
+        },
+        appointment: {
+          select: {
+            id: true,
+            title: true,
+            startTime: true,
+            endTime: true,
+            status: true,
+            type: true,
           },
         },
       },
@@ -393,6 +423,33 @@ export class ChatService {
       include: {
         sender: {
           select: { id: true, username: true, email: true, firstName: true, lastName: true },
+        },
+        request: {
+          select: {
+            id: true,
+            subject: true,
+            type: true,
+            status: true,
+            urgency: true,
+          },
+        },
+        task: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            priority: true,
+          },
+        },
+        appointment: {
+          select: {
+            id: true,
+            title: true,
+            startTime: true,
+            endTime: true,
+            status: true,
+            type: true,
+          },
         },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],

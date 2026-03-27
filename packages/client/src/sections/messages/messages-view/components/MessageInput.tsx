@@ -10,20 +10,35 @@ import SendIcon from "@mui/icons-material/Send";
 import CloseIcon from "@mui/icons-material/Close";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
+import { CheckSquare, Calendar } from "lucide-react";
 import type { EmojiClickData } from "emoji-picker-react";
 import EmojiPicker, { Theme } from "emoji-picker-react";
 
 import CustomButton from "../../../../components/common/CustomButton";
 import MessageAttachmentButton from "../components/MessageAttachmentButton";
 import RequestSelectionModal from "../components/RequestSelectionModal";
-import type { MessageRequest } from "../data/types";
+import TaskSelectionModal from "../components/TaskSelectionModal";
+import AppointmentSelectionModal from "../components/AppointmentSelectionModal";
+import type {
+  MessageRequest,
+  MessageTask,
+  MessageAppointment,
+} from "../data/types";
 
 type MessageInputProps = {
   value: string;
   onChange: (value: string) => void;
-  onSend: (file?: File, request?: MessageRequest) => void;
+  onSend: (
+    text: string,
+    file?: File,
+    request?: MessageRequest,
+    task?: MessageTask,
+    appointment?: MessageAppointment,
+  ) => void;
   requests: MessageRequest[];
   disabled?: boolean;
+  recipientType?: "client" | "collaborator" | null;
+  recipientId?: number | null;
 };
 
 const FLAG_SPAN_CLASS = "finora-flag-chip";
@@ -71,6 +86,8 @@ export default function MessageInput({
   onSend,
   requests,
   disabled = false,
+  recipientType,
+  recipientId,
 }: MessageInputProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -79,8 +96,13 @@ export default function MessageInput({
   const [selectedRequest, setSelectedRequest] = useState<MessageRequest | null>(
     null,
   );
+  const [selectedTask, setSelectedTask] = useState<MessageTask | null>(null);
+  const [selectedAppointment, setSelectedAppointment] =
+    useState<MessageAppointment | null>(null);
   const [emojiAnchorEl, setEmojiAnchorEl] = useState<null | HTMLElement>(null);
   const [openRequestModal, setOpenRequestModal] = useState(false);
+  const [openTaskModal, setOpenTaskModal] = useState(false);
+  const [openAppointmentModal, setOpenAppointmentModal] = useState(false);
   const editorRef = useRef<HTMLDivElement | null>(null);
 
   const hasContent = useMemo(() => {
@@ -88,9 +110,11 @@ export default function MessageInput({
       !!getEditorPlainText(value) ||
       hasFlagNode(value) ||
       !!selectedFile ||
-      !!selectedRequest
+      !!selectedRequest ||
+      !!selectedTask ||
+      !!selectedAppointment
     );
-  }, [value, selectedFile, selectedRequest]);
+  }, [value, selectedFile, selectedRequest, selectedTask, selectedAppointment]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -238,23 +262,25 @@ export default function MessageInput({
   const handleSend = () => {
     if (disabled) return;
 
-    if (selectedRequest) {
-      onSend(undefined, selectedRequest);
-      setSelectedRequest(null);
-      resetEditor();
-      return;
-    }
+    const hasAttachments =
+      selectedFile || selectedRequest || selectedTask || selectedAppointment;
+    const plainText = getEditorPlainText(value);
+    const hasText = plainText || hasFlagNode(value);
 
-    if (selectedFile) {
-      onSend(selectedFile);
-      setSelectedFile(null);
-      resetEditor();
-      return;
-    }
+    if (!hasAttachments && !hasText) return;
 
-    if (!getEditorPlainText(value) && !hasFlagNode(value)) return;
+    onSend(
+      value,
+      selectedFile || undefined,
+      selectedRequest || undefined,
+      selectedTask || undefined,
+      selectedAppointment || undefined,
+    );
 
-    onSend();
+    setSelectedFile(null);
+    setSelectedRequest(null);
+    setSelectedTask(null);
+    setSelectedAppointment(null);
     resetEditor();
   };
 
@@ -383,6 +409,206 @@ export default function MessageInput({
         </Box>
       )}
 
+      {selectedTask && (
+        <Box
+          sx={{
+            mb: isMobile ? 1 : 1.25,
+            px: isMobile ? 1.25 : 1.5,
+            py: isMobile ? 0.875 : 1,
+            border: "1px solid",
+            borderColor: "#8B5CF6",
+            borderRadius: isMobile ? "10px" : "12px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: isMobile ? 1 : 1.25,
+            backgroundColor: "#F5F3FF",
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: isMobile ? 1 : 1.25,
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            <Box
+              sx={{
+                width: isMobile ? 34 : 40,
+                height: isMobile ? 34 : 40,
+                minWidth: isMobile ? 34 : 40,
+                borderRadius: isMobile ? "8px" : "10px",
+                backgroundColor: theme.palette.common.white,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#8B5CF6",
+              }}
+            >
+              <CheckSquare size={isMobile ? 18 : 20} />
+            </Box>
+
+            <Box sx={{ minWidth: 0 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.5,
+                  minWidth: 0,
+                }}
+              >
+                <LinkOutlinedIcon
+                  sx={{
+                    fontSize: 14,
+                    color: "#8B5CF6",
+                    flexShrink: 0,
+                  }}
+                />
+
+                <Typography
+                  noWrap
+                  sx={{
+                    fontSize: isMobile ? 12.5 : 13,
+                    fontWeight: 700,
+                    lineHeight: "18px",
+                    color: (theme.palette.grey as any)[1000],
+                  }}
+                >
+                  {selectedTask.title}
+                </Typography>
+              </Box>
+
+              <Typography
+                noWrap
+                sx={{
+                  mt: 0.25,
+                  fontSize: isMobile ? 10.5 : 11,
+                  fontWeight: 400,
+                  lineHeight: "16px",
+                  color: theme.palette.info.main,
+                }}
+              >
+                Tâche
+              </Typography>
+            </Box>
+          </Box>
+
+          <IconButton
+            size="small"
+            onClick={() => setSelectedTask(null)}
+            sx={{
+              color: theme.palette.error.main,
+              flexShrink: 0,
+              p: 0.5,
+            }}
+          >
+            <CloseIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Box>
+      )}
+
+      {selectedAppointment && (
+        <Box
+          sx={{
+            mb: isMobile ? 1 : 1.25,
+            px: isMobile ? 1.25 : 1.5,
+            py: isMobile ? 0.875 : 1,
+            border: "1px solid",
+            borderColor: "#10B981",
+            borderRadius: isMobile ? "10px" : "12px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: isMobile ? 1 : 1.25,
+            backgroundColor: "#ECFDF5",
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: isMobile ? 1 : 1.25,
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            <Box
+              sx={{
+                width: isMobile ? 34 : 40,
+                height: isMobile ? 34 : 40,
+                minWidth: isMobile ? 34 : 40,
+                borderRadius: isMobile ? "8px" : "10px",
+                backgroundColor: theme.palette.common.white,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#10B981",
+              }}
+            >
+              <Calendar size={isMobile ? 18 : 20} />
+            </Box>
+
+            <Box sx={{ minWidth: 0 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.5,
+                  minWidth: 0,
+                }}
+              >
+                <LinkOutlinedIcon
+                  sx={{
+                    fontSize: 14,
+                    color: "#10B981",
+                    flexShrink: 0,
+                  }}
+                />
+
+                <Typography
+                  noWrap
+                  sx={{
+                    fontSize: isMobile ? 12.5 : 13,
+                    fontWeight: 700,
+                    lineHeight: "18px",
+                    color: (theme.palette.grey as any)[1000],
+                  }}
+                >
+                  {selectedAppointment.title}
+                </Typography>
+              </Box>
+
+              <Typography
+                noWrap
+                sx={{
+                  mt: 0.25,
+                  fontSize: isMobile ? 10.5 : 11,
+                  fontWeight: 400,
+                  lineHeight: "16px",
+                  color: theme.palette.info.main,
+                }}
+              >
+                Rendez-vous
+              </Typography>
+            </Box>
+          </Box>
+
+          <IconButton
+            size="small"
+            onClick={() => setSelectedAppointment(null)}
+            sx={{
+              color: theme.palette.error.main,
+              flexShrink: 0,
+              p: 0.5,
+            }}
+          >
+            <CloseIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Box>
+      )}
+
       {selectedFile && (
         <Box
           sx={{
@@ -431,12 +657,18 @@ export default function MessageInput({
       >
         <MessageAttachmentButton
           disabled={disabled}
+          recipientType={recipientType}
           onFileSelect={(file) => {
             setSelectedFile(file);
-            setSelectedRequest(null);
           }}
           onRequestClick={() => {
             setOpenRequestModal(true);
+          }}
+          onTaskClick={() => {
+            setOpenTaskModal(true);
+          }}
+          onAppointmentClick={() => {
+            setOpenAppointmentModal(true);
           }}
         />
 
@@ -546,11 +778,32 @@ export default function MessageInput({
       <RequestSelectionModal
         open={openRequestModal}
         onClose={() => setOpenRequestModal(false)}
-        requests={requests}
+        clientId={recipientType === "client" ? recipientId || null : null}
         onAdd={(request) => {
           setSelectedRequest(request);
-          setSelectedFile(null);
           setOpenRequestModal(false);
+        }}
+      />
+
+      <TaskSelectionModal
+        open={openTaskModal}
+        onClose={() => setOpenTaskModal(false)}
+        collaboratorId={
+          recipientType === "collaborator" ? recipientId || null : null
+        }
+        onSelect={(task) => {
+          setSelectedTask(task);
+          setOpenTaskModal(false);
+        }}
+      />
+
+      <AppointmentSelectionModal
+        open={openAppointmentModal}
+        onClose={() => setOpenAppointmentModal(false)}
+        clientId={recipientType === "client" ? recipientId || null : null}
+        onSelect={(appointment) => {
+          setSelectedAppointment(appointment);
+          setOpenAppointmentModal(false);
         }}
       />
     </Box>

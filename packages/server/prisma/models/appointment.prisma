@@ -42,7 +42,8 @@ model Appointment {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  slot        AvailabilitySlot? @relation("AppointmentSlot")
+  slot         AvailabilitySlot? @relation("AppointmentSlot")
+  chatMessages ChatMessage[]     @relation("ChatMessageAppointment")
 
   @@index([clientId])
   @@index([accountantId])

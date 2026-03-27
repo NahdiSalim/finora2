@@ -5,7 +5,13 @@ import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 
 import { messageRequests } from "../data/mock";
-import type { Conversation, Message, MessageRequest } from "../data/types";
+import type {
+  Conversation,
+  Message,
+  MessageRequest,
+  MessageTask,
+  MessageAppointment,
+} from "../data/types";
 import ChatHeader from "../components/ChatHeader";
 import MessageInput from "../components/MessageInput";
 import MessageBubble from "../components/MessageBubble";
@@ -18,12 +24,18 @@ type ChatWindowProps = {
   isCommunicationConfirmed: boolean;
   onMessagesChange: (messages: Message[]) => void;
   onSendMessage?: (content: string) => void;
-  onSendFile?: (file: File) => void;
+  onSendFile?: (
+    text: string,
+    file?: File,
+    request?: MessageRequest,
+    task?: MessageTask,
+    appointment?: MessageAppointment,
+  ) => void;
   onOpenMedia?: () => void;
   onBack?: () => void;
-  /** True when the other participant is typing (driven by socket) */
+  recipientType?: "client" | "collaborator" | null;
+  recipientId?: number | null;
   isRemoteTyping?: boolean;
-  /** Called when the local user starts/stops typing */
   onTypingChange?: (typing: boolean) => void;
 };
 
@@ -48,6 +60,8 @@ export default function ChatWindow({
   onSendFile,
   onOpenMedia,
   onBack,
+  recipientType,
+  recipientId,
   isRemoteTyping = false,
   onTypingChange,
 }: ChatWindowProps) {
@@ -113,7 +127,13 @@ export default function ChatWindow({
     return `${(size / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const handleSendMessage = (file?: File, request?: MessageRequest) => {
+  const handleSendMessage = (
+    messageHtml: string,
+    file?: File,
+    request?: MessageRequest,
+    task?: MessageTask,
+    appointment?: MessageAppointment,
+  ) => {
     if (!isCommunicationConfirmed) return;
 
     const now = new Date();
@@ -122,6 +142,7 @@ export default function ChatWindow({
       minute: "2-digit",
     });
     const formattedDate = now.toISOString().split("T")[0];
+    const plainText = htmlToText(messageHtml);
 
     if (request) {
       const newMessage: Message = {
@@ -130,6 +151,8 @@ export default function ChatWindow({
         mine: true,
         time: formattedTime,
         date: formattedDate,
+        text: plainText,
+        html: messageHtml,
         request: {
           id: request.id,
           title: request.title,
@@ -141,6 +164,43 @@ export default function ChatWindow({
       };
 
       onMessagesChange([...messages, newMessage]);
+      onSendFile?.(messageHtml, undefined, request, undefined, undefined);
+      setInputValue("");
+      return;
+    }
+
+    if (task) {
+      const newMessage: Message = {
+        id: Date.now(),
+        type: "task",
+        mine: true,
+        time: formattedTime,
+        date: formattedDate,
+        text: plainText,
+        html: messageHtml,
+        task,
+      };
+
+      onMessagesChange([...messages, newMessage]);
+      onSendFile?.(messageHtml, undefined, undefined, task, undefined);
+      setInputValue("");
+      return;
+    }
+
+    if (appointment) {
+      const newMessage: Message = {
+        id: Date.now(),
+        type: "appointment",
+        mine: true,
+        time: formattedTime,
+        date: formattedDate,
+        text: plainText,
+        html: messageHtml,
+        appointment,
+      };
+
+      onMessagesChange([...messages, newMessage]);
+      onSendFile?.(messageHtml, undefined, undefined, undefined, appointment);
       setInputValue("");
       return;
     }
@@ -152,7 +212,7 @@ export default function ChatWindow({
         size: file.size,
         conversationId,
       });
-      onSendFile?.(file);
+      onSendFile?.(messageHtml, file);
 
       const newMessage: Message = {
         id: Date.now(),
@@ -160,6 +220,8 @@ export default function ChatWindow({
         mine: true,
         time: formattedTime,
         date: formattedDate,
+        text: plainText,
+        html: messageHtml,
         file: {
           name: file.name,
           size: formatFileSize(file.size),
@@ -173,9 +235,7 @@ export default function ChatWindow({
       return;
     }
 
-    const plainText = htmlToText(inputValue);
-
-    if (!plainText && !hasFlagNode(inputValue)) {
+    if (!plainText && !hasFlagNode(messageHtml)) {
       return;
     }
 
@@ -183,7 +243,7 @@ export default function ChatWindow({
       id: Date.now(),
       type: "text",
       text: plainText,
-      html: inputValue,
+      html: messageHtml,
       mine: true,
       time: formattedTime,
       date: formattedDate,
@@ -339,6 +399,8 @@ export default function ChatWindow({
           onSend={handleSendMessage}
           requests={messageRequests}
           disabled={!isCommunicationConfirmed}
+          recipientType={recipientType}
+          recipientId={recipientId}
         />
       </Box>
     </Box>

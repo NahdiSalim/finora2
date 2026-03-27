@@ -17,8 +17,14 @@ import { useChatSocket } from "./hooks/useChatSocket";
 import type { SocketMessage } from "./hooks/useChatSocket";
 
 import { useConversations, useRoomMessages } from "./hooks/useChatData";
+import type {
+  MessageRequest,
+  MessageTask,
+  MessageAppointment,
+ Conversation, ConversationCategory, Message } from "./data/types";
 import {
   useSendMessageMutation,
+  useGetUserRoomsQuery,
   chatApi,
   type GetRoomsParams,
 } from "src/lib/services/chatApi";
@@ -26,7 +32,6 @@ import { disconnectSocket, isSocketConnected } from "src/lib/socket";
 
 import type { RootState } from "src/lib/store";
 import type { Role } from "src/types/auth";
-import type { Conversation, ConversationCategory, Message } from "./data/types";
 
 type MessagesViewProps = {
   onOpenMedia?: () => void;
@@ -148,6 +153,11 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   // ── API data ──────────────────────────────────────────────────────────────
   const { conversations: apiConversations, isLoading: roomsLoading } =
     useConversations(roomsParams);
+  const { data: roomsResponse } = useGetUserRoomsQuery(roomsParams);
+  const rawRooms = useMemo(
+    () => roomsResponse?.data ?? [],
+    [roomsResponse?.data],
+  );
   const [triggerSendMessage] = useSendMessageMutation();
 
   // Typing indicator state: set of roomIds where the other user is typing
@@ -178,7 +188,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       }
     },
     onMessageNew: (msg: SocketMessage) => {
-      const d = new Date(msg.createdAt);
       const isMine = msg.senderId === currentUid;
       const activeRoomId = selectedConversationRef.current;
 
@@ -237,6 +246,12 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                 fileUrl: msg.fileUrl ?? null,
                 attachments: msg.attachments,
                 sender: msg.sender,
+                requestId: msg.requestId ?? undefined,
+                taskId: msg.taskId ?? undefined,
+                appointmentId: msg.appointmentId ?? undefined,
+                request: msg.request ?? undefined,
+                task: msg.task ?? undefined,
+                appointment: msg.appointment ?? undefined,
               });
               draft.total += 1;
               console.log("[MessagesView] cache updated:", {
@@ -540,11 +555,29 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
 
     // Update conversation preview optimistically
     let previewText = "";
-    if (lastMessage.type === "text") previewText = lastMessage.text ?? "";
-    else if (lastMessage.type === "file")
-      previewText = `📎 ${lastMessage.file?.name ?? "Fichier"}`;
-    else if (lastMessage.type === "request")
-      previewText = `🔗 ${lastMessage.request?.title ?? "Demande"}`;
+    if (lastMessage.type === "text") {
+      previewText = lastMessage.text ?? "";
+    } else if (lastMessage.type === "file") {
+      const text = lastMessage.text?.trim();
+      previewText = text
+        ? `${text} 📎 ${lastMessage.file?.name ?? "Fichier"}`
+        : `📎 ${lastMessage.file?.name ?? "Fichier"}`;
+    } else if (lastMessage.type === "request") {
+      const text = lastMessage.text?.trim();
+      previewText = text
+        ? `${text} 🔗 Demande`
+        : `🔗 ${lastMessage.request?.title ?? "Demande"}`;
+    } else if (lastMessage.type === "task") {
+      const text = lastMessage.text?.trim();
+      previewText = text
+        ? `${text} ✓ Tâche`
+        : `✓ ${lastMessage.task?.title ?? "Tâche"}`;
+    } else if (lastMessage.type === "appointment") {
+      const text = lastMessage.text?.trim();
+      previewText = text
+        ? `${text} 📅 Rendez-vous`
+        : `📅 ${lastMessage.appointment?.title ?? "Rendez-vous"}`;
+    }
 
     setConversationOverrides((prev) => ({
       ...prev,
@@ -573,35 +606,95 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     }
   };
 
-  const handleSendFile = async (file: File) => {
+  const handleSendFile = async (
+    messageHtml: string,
+    file?: File,
+    request?: MessageRequest,
+    task?: MessageTask,
+    appointment?: MessageAppointment,
+  ) => {
     const roomId = selectedConversationRef.current;
     if (!roomId) return;
 
-    const messageType = file.type?.startsWith("image/") ? "image" : "file";
-    console.log("[MessagesView] sending file via REST:", {
-      roomId,
-      fileName: file.name,
-      mimeType: file.type,
-      size: file.size,
-      messageType,
-    });
+    // Extract plain text from HTML for the content field
+    const div = document.createElement("div");
+    div.innerHTML = messageHtml;
+    const plainText = (div.textContent || "").replace(/\u00a0/g, " ").trim();
+    const messageContent =
+      plainText ||
+      file?.name ||
+      request?.title ||
+      task?.title ||
+      appointment?.title ||
+      "";
 
-    try {
-      const saved = await triggerSendMessage({
+    if (file) {
+      const messageType = file.type?.startsWith("image/") ? "image" : "file";
+      console.log("[MessagesView] sending file via REST:", {
         roomId,
-        content: file.name,
-        type: messageType,
-        attachments: [file],
-      }).unwrap();
-
-      console.log("[MessagesView] file saved + message:new expected:", {
-        messageId: saved.id,
-        savedType: saved.type,
-        hasFileUrl: !!saved.fileUrl,
-        fileUrlPreview: saved.fileUrl ? saved.fileUrl.slice(0, 40) : null,
+        fileName: file.name,
+        mimeType: file.type,
+        size: file.size,
+        messageType,
+        messageContent,
       });
-    } catch (err) {
-      console.error("[MessagesView] file send failed:", err);
+
+      try {
+        const saved = await triggerSendMessage({
+          roomId,
+          content: messageContent,
+          type: messageType,
+          attachments: [file],
+          requestId: request?.id,
+          taskId: task?.id,
+          appointmentId: appointment?.id,
+        }).unwrap();
+
+        console.log("[MessagesView] file saved + message:new expected:", {
+          messageId: saved.id,
+          savedType: saved.type,
+          hasFileUrl: !!saved.fileUrl,
+          fileUrlPreview: saved.fileUrl ? saved.fileUrl.slice(0, 40) : null,
+        });
+      } catch (err) {
+        console.error("[MessagesView] file send failed:", err);
+      }
+    } else if (request) {
+      try {
+        await triggerSendMessage({
+          roomId,
+          content: messageContent,
+          type: "text",
+          requestId: request.id,
+        }).unwrap();
+      } catch (err) {
+        console.error("[MessagesView] request attachment send failed:", err);
+      }
+    } else if (task) {
+      try {
+        await triggerSendMessage({
+          roomId,
+          content: messageContent,
+          type: "text",
+          taskId: task.id,
+        }).unwrap();
+      } catch (err) {
+        console.error("[MessagesView] task attachment send failed:", err);
+      }
+    } else if (appointment) {
+      try {
+        await triggerSendMessage({
+          roomId,
+          content: messageContent,
+          type: "text",
+          appointmentId: appointment.id,
+        }).unwrap();
+      } catch (err) {
+        console.error(
+          "[MessagesView] appointment attachment send failed:",
+          err,
+        );
+      }
     }
   };
 
@@ -641,6 +734,31 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     () => allConversations.find((c) => c.id === selectedConversation),
     [allConversations, selectedConversation],
   );
+
+  const currentRoom = useMemo(
+    () => rawRooms.find((r) => r.id === selectedConversation),
+    [rawRooms, selectedConversation],
+  );
+
+  const recipientInfo = useMemo(() => {
+    if (!currentRoom) return { recipientType: null, recipientId: null };
+
+    const profiles = currentRoom.participantProfiles ?? [];
+    const otherParticipant = profiles.find((p) => Number(p.id) !== currentUid);
+
+    if (!otherParticipant) return { recipientType: null, recipientId: null };
+
+    const roleCode = (otherParticipant.role?.code ?? "").toLowerCase();
+    const recipientType: "client" | "collaborator" =
+      roleCode === "client" || roleCode.startsWith("client_")
+        ? "client"
+        : "collaborator";
+
+    return {
+      recipientType,
+      recipientId: otherParticipant.id,
+    };
+  }, [currentRoom, currentUid]);
 
   const isRemoteTyping = typingRooms.has(selectedConversation);
 
@@ -833,6 +951,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                 messages={currentMessages}
                 isCommunicationConfirmed
                 isRemoteTyping={isRemoteTyping}
+                recipientType={recipientInfo.recipientType}
+                recipientId={recipientInfo.recipientId}
                 onTypingChange={(typing) =>
                   emitTyping(selectedConversation, typing)
                 }
@@ -983,6 +1103,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                   messages={currentMessages}
                   isCommunicationConfirmed
                   isRemoteTyping={isRemoteTyping}
+                  recipientType={recipientInfo.recipientType}
+                  recipientId={recipientInfo.recipientId}
                   onTypingChange={(typing) =>
                     emitTyping(selectedConversation, typing)
                   }

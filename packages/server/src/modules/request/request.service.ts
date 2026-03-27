@@ -854,6 +854,75 @@ export class RequestService {
   }
 
   /**
+   * Get chat-accessible requests for a client (for messagerie attachments)
+   */
+  async getChatAccessibleRequestsByClient(
+    clientId: number,
+    accountantId: number,
+    page: number = 1,
+    limit: number = 5
+  ) {
+    // Verify accountant has access to this client
+    const accountant = await this.prisma.user.findUnique({
+      where: { id: accountantId },
+      select: { companyId: true },
+    });
+
+    if (!accountant?.companyId) {
+      throw new ApiError(
+        'Accountant not found or not associated with a company',
+        403,
+        'ACCESS_DENIED'
+      );
+    }
+
+    // Verify client exists
+    const client = await this.prisma.user.findUnique({
+      where: { id: clientId },
+      select: { id: true },
+    });
+
+    if (!client) {
+      throw new ApiError('Client not found', 404, 'CLIENT_NOT_FOUND');
+    }
+
+    const where = {
+      clientId,
+      accountingFirmId: accountant.companyId,
+      status: { notIn: ['cancelled', 'rejected'] },
+    };
+
+    const [requests, total] = await Promise.all([
+      this.prisma.request.findMany({
+        where,
+        select: {
+          id: true,
+          subject: true,
+          type: true,
+          urgency: true,
+          status: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.request.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: requests,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
    * Delete request
    */
   async deleteRequest(requestId: number, userId: number) {

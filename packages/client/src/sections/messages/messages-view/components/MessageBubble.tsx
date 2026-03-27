@@ -1,10 +1,10 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
 import Avatar from "@mui/material/Avatar";
 import IconButton from "@mui/material/IconButton";
-import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
@@ -13,6 +13,10 @@ import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme, alpha } from "@mui/material/styles";
+import { CheckSquare, Calendar, Clock } from "lucide-react";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import { useDashboardBase } from "../../../../hooks/useDashboardBase";
 
 import type { Message, Conversation } from "../data/types";
 
@@ -75,11 +79,16 @@ export default function MessageBubble({
   conversation,
 }: MessageBubbleProps) {
   const theme = useTheme();
+  const navigate = useNavigate();
+  const dashboardBase = useDashboardBase();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [imageError, setImageError] = useState(false);
 
   const isFileMessage = message.type === "file" && !!message.file;
   const isRequestMessage = message.type === "request" && !!message.request;
+  const isTaskMessage = message.type === "task" && !!message.task;
+  const isAppointmentMessage =
+    message.type === "appointment" && !!message.appointment;
 
   const fileCategory: FileCategory = isFileMessage
     ? detectFileCategory(message.file!.name, message.file!.type)
@@ -163,90 +172,361 @@ export default function MessageBubble({
           </Avatar>
         )}
 
-        <Box sx={{ maxWidth: "100%" }}>
+        <Box
+          sx={{
+            maxWidth: "100%",
+            display: "flex",
+            flexDirection: "column",
+            gap: isMobile ? 0.75 : 1,
+          }}
+        >
           {isRequestMessage ? (
-            // ── Request bubble ──────────────────────────────────────────
-            <Box
-              sx={{
-                width: "fit-content",
-                maxWidth: isMobile ? 220 : 250,
-                borderRadius: isMobile ? "14px" : "16px",
-                backgroundColor: theme.palette.primary.lighter,
-                border: `1px solid ${theme.palette.primary.lighter}`,
-                px: isMobile ? "10px" : "12px",
-                py: isMobile ? "9px" : "10px",
-              }}
-            >
+            <>
+              {/* ── Request bubble ────────────────────────────────────────── */}
               <Box
+                onClick={() => navigate(`${dashboardBase}/requests`)}
                 sx={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: isMobile ? 0.875 : 1,
+                  width: "fit-content",
+                  maxWidth: isMobile ? "100%" : 280,
+                  borderRadius: isMobile ? "12px" : "14px",
+                  backgroundColor: "#EFF6FF",
+                  border: "1px solid #DBEAFE",
+                  px: isMobile ? 1.25 : 1.5,
+                  py: isMobile ? 1 : 1.25,
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  "&:hover": {
+                    boxShadow: theme.shadows[1],
+                    borderColor: theme.palette.primary.main,
+                    transform: "translateY(-1px)",
+                  },
                 }}
               >
                 <Box
                   sx={{
-                    width: isMobile ? 32 : 36,
-                    height: isMobile ? 32 : 36,
-                    borderRadius: isMobile ? "8px" : "10px",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: theme.palette.common.white,
-                    color: theme.palette.primary.main,
-                    flexShrink: 0,
+                    gap: isMobile ? 1 : 1.25,
                   }}
                 >
-                  <DescriptionOutlinedIcon
-                    sx={{ fontSize: isMobile ? 16 : 18 }}
-                  />
-                </Box>
-
-                <Box sx={{ minWidth: 0, flex: 1 }}>
                   <Box
                     sx={{
+                      width: isMobile ? 36 : 40,
+                      height: isMobile ? 36 : 40,
+                      borderRadius: "10px",
                       display: "flex",
                       alignItems: "center",
-                      gap: 0.5,
-                      minWidth: 0,
+                      justifyContent: "center",
+                      backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                      color: theme.palette.primary.main,
+                      flexShrink: 0,
                     }}
                   >
-                    <LinkOutlinedIcon
-                      sx={{
-                        fontSize: isMobile ? 12 : 13,
-                        color: theme.palette.primary.main,
-                        flexShrink: 0,
-                      }}
+                    <DescriptionOutlinedIcon
+                      sx={{ fontSize: isMobile ? 18 : 20 }}
                     />
+                  </Box>
 
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Typography
                       sx={{
-                        fontSize: isMobile ? "11.5px" : "12px",
-                        fontWeight: 700,
-                        lineHeight: isMobile ? "16px" : "17px",
-                        color: (theme.palette.grey as any)[1000],
+                        fontSize: isMobile ? "13px" : "14px",
+                        fontWeight: 600,
+                        lineHeight: 1.4,
+                        color: theme.palette.text.primary,
                         wordBreak: "break-word",
+                        mb: 0.25,
                       }}
                     >
                       {message.request?.title}
                     </Typography>
-                  </Box>
 
-                  <Typography
-                    sx={{
-                      mt: 0.3,
-                      fontSize: isMobile ? "10px" : "11px",
-                      lineHeight: isMobile ? "14px" : "15px",
-                      color: theme.palette.info.main,
-                      fontWeight: 400,
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    {message.request?.subtitle}
-                  </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: isMobile ? "11px" : "12px",
+                        lineHeight: 1.4,
+                        color: theme.palette.text.secondary,
+                        fontWeight: 400,
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {message.request?.subtitle}
+                    </Typography>
+                  </Box>
                 </Box>
               </Box>
-            </Box>
+              {message.text && (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    px: isMobile ? 1.25 : 1.5,
+                    py: isMobile ? 0.875 : 1,
+                    borderRadius: message.mine
+                      ? isMobile
+                        ? "16px 16px 6px 16px"
+                        : "18px 18px 6px 18px"
+                      : isMobile
+                        ? "16px 16px 16px 6px"
+                        : "18px 18px 18px 6px",
+                    backgroundColor: message.mine
+                      ? theme.palette.primary.main
+                      : theme.palette.grey[100],
+                    color: message.mine
+                      ? theme.palette.common.white
+                      : theme.palette.text.primary,
+                    wordBreak: "break-word",
+                    maxWidth: isMobile ? "100%" : 280,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: isMobile ? "13px" : "14px",
+                      lineHeight: isMobile ? "18px" : "20px",
+                      fontWeight: 400,
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: message.html || message.text,
+                    }}
+                  />
+                </Paper>
+              )}
+            </>
+          ) : isTaskMessage ? (
+            <>
+              {/* ── Task bubble ────────────────────────────────────────── */}
+              <Box
+                onClick={() => navigate(`${dashboardBase}/tasks`)}
+                sx={{
+                  width: "fit-content",
+                  maxWidth: isMobile ? "100%" : 280,
+                  borderRadius: isMobile ? "12px" : "14px",
+                  backgroundColor: "#F5F3FF",
+                  border: "1px solid #E9D5FF",
+                  px: isMobile ? 1.25 : 1.5,
+                  py: isMobile ? 1 : 1.25,
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  "&:hover": {
+                    boxShadow: theme.shadows[1],
+                    borderColor: "#8B5CF6",
+                    transform: "translateY(-1px)",
+                  },
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: isMobile ? 1 : 1.25,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: isMobile ? 36 : 40,
+                      height: isMobile ? 36 : 40,
+                      borderRadius: "10px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: alpha("#8B5CF6", 0.08),
+                      color: "#8B5CF6",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <CheckSquare size={isMobile ? 18 : 20} />
+                  </Box>
+
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography
+                      sx={{
+                        fontSize: isMobile ? "13px" : "14px",
+                        fontWeight: 600,
+                        lineHeight: 1.4,
+                        color: theme.palette.text.primary,
+                        wordBreak: "break-word",
+                        mb: 0.25,
+                      }}
+                    >
+                      {message.task?.title}
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        fontSize: isMobile ? "11px" : "12px",
+                        lineHeight: 1.4,
+                        color: theme.palette.text.secondary,
+                        fontWeight: 400,
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      Tâche
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+              {message.text && (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    px: isMobile ? 1.25 : 1.5,
+                    py: isMobile ? 0.875 : 1,
+                    borderRadius: message.mine
+                      ? isMobile
+                        ? "16px 16px 6px 16px"
+                        : "18px 18px 6px 18px"
+                      : isMobile
+                        ? "16px 16px 16px 6px"
+                        : "18px 18px 18px 6px",
+                    backgroundColor: message.mine
+                      ? theme.palette.primary.main
+                      : theme.palette.grey[100],
+                    color: message.mine
+                      ? theme.palette.common.white
+                      : theme.palette.text.primary,
+                    wordBreak: "break-word",
+                    maxWidth: isMobile ? "100%" : 280,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: isMobile ? "13px" : "14px",
+                      lineHeight: isMobile ? "18px" : "20px",
+                      fontWeight: 400,
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: message.html || message.text,
+                    }}
+                  />
+                </Paper>
+              )}
+            </>
+          ) : isAppointmentMessage ? (
+            <>
+              {/* ── Appointment bubble ────────────────────────────────────────── */}
+              <Box
+                onClick={() => navigate(`${dashboardBase}/appointments`)}
+                sx={{
+                  width: "fit-content",
+                  maxWidth: isMobile ? "100%" : 280,
+                  borderRadius: isMobile ? "12px" : "14px",
+                  backgroundColor: "#ECFDF5",
+                  border: "1px solid #D1FAE5",
+                  px: isMobile ? 1.25 : 1.5,
+                  py: isMobile ? 1 : 1.25,
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  "&:hover": {
+                    boxShadow: theme.shadows[1],
+                    borderColor: "#10B981",
+                    transform: "translateY(-1px)",
+                  },
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: isMobile ? 1 : 1.25,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: isMobile ? 36 : 40,
+                      height: isMobile ? 36 : 40,
+                      borderRadius: "10px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: alpha("#10B981", 0.08),
+                      color: "#10B981",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Calendar size={isMobile ? 18 : 20} />
+                  </Box>
+
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography
+                      sx={{
+                        fontSize: isMobile ? "13px" : "14px",
+                        fontWeight: 600,
+                        lineHeight: 1.4,
+                        color: theme.palette.text.primary,
+                        wordBreak: "break-word",
+                        mb: 0.25,
+                      }}
+                    >
+                      {message.appointment?.title}
+                    </Typography>
+
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 0.5,
+                      }}
+                    >
+                      <Clock
+                        size={isMobile ? 12 : 13}
+                        color={theme.palette.text.secondary}
+                      />
+                      <Typography
+                        sx={{
+                          fontSize: isMobile ? "11px" : "12px",
+                          lineHeight: 1.4,
+                          color: theme.palette.text.secondary,
+                          fontWeight: 400,
+                        }}
+                      >
+                        {message.appointment?.startTime &&
+                          format(
+                            new Date(message.appointment.startTime),
+                            "dd MMM yyyy • HH:mm",
+                            {
+                              locale: fr,
+                            },
+                          )}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              </Box>
+              {message.text && (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    px: isMobile ? 1.25 : 1.5,
+                    py: isMobile ? 0.875 : 1,
+                    borderRadius: message.mine
+                      ? isMobile
+                        ? "16px 16px 6px 16px"
+                        : "18px 18px 6px 18px"
+                      : isMobile
+                        ? "16px 16px 16px 6px"
+                        : "18px 18px 18px 6px",
+                    backgroundColor: message.mine
+                      ? theme.palette.primary.main
+                      : theme.palette.grey[100],
+                    color: message.mine
+                      ? theme.palette.common.white
+                      : theme.palette.text.primary,
+                    wordBreak: "break-word",
+                    maxWidth: isMobile ? "100%" : 280,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: isMobile ? "13px" : "14px",
+                      lineHeight: isMobile ? "18px" : "20px",
+                      fontWeight: 400,
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: message.html || message.text,
+                    }}
+                  />
+                </Paper>
+              )}
+            </>
           ) : isImageFile ? (
             // ── Image thumbnail bubble ──────────────────────────────────
             <Box

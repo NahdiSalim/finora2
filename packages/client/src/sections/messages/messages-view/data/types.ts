@@ -32,13 +32,31 @@ export type MessageRequest = {
   urgency?: string;
 };
 
+export type MessageTask = {
+  id: number;
+  title: string;
+  status: string;
+  priority: string;
+};
+
+export type MessageAppointment = {
+  id: number;
+  title: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  type: string;
+};
+
 export type Message = {
   id: number;
-  type: "text" | "file" | "request";
+  type: "text" | "file" | "request" | "task" | "appointment";
   text?: string;
   html?: string;
   file?: MessageFile;
   request?: MessageRequest;
+  task?: MessageTask;
+  appointment?: MessageAppointment;
   mine: boolean;
   large?: boolean;
   time?: string;

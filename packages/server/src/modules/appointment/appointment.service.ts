@@ -795,6 +795,87 @@ export class AppointmentService {
   }
 
   /**
+   * Get chat-accessible appointments for a client (for messagerie attachments)
+   */
+  async getChatAccessibleAppointmentsByClient(
+    clientId: number,
+    accountantId: number,
+    page: number = 1,
+    limit: number = 5
+  ) {
+    // Verify accountant has access
+    const accountant = await this.prisma.user.findUnique({
+      where: { id: accountantId },
+      select: { companyId: true },
+    });
+
+    if (!accountant?.companyId) {
+      throw new ApiError(
+        'Accountant not found or not associated with a company',
+        403,
+        'ACCESS_DENIED'
+      );
+    }
+
+    // Verify client exists
+    const client = await this.prisma.user.findUnique({
+      where: { id: clientId },
+      select: { id: true },
+    });
+
+    if (!client) {
+      throw new ApiError('Client not found', 404, 'CLIENT_NOT_FOUND');
+    }
+
+    // For appointments, filter by clientId and verify the accountant belongs to the same company
+    // Appointments link client to accountant, and accountant should be from the same company
+    const where: any = {
+      clientId,
+      status: { notIn: ['cancelled', 'rejected'] },
+      OR: [
+        { accountantId },
+        {
+          accountant: {
+            companyId: accountant.companyId,
+          },
+        },
+        { accountantId: null },
+      ],
+    };
+
+    const [appointments, total] = await Promise.all([
+      this.prisma.appointment.findMany({
+        where,
+        select: {
+          id: true,
+          title: true,
+          startTime: true,
+          endTime: true,
+          status: true,
+          type: true,
+          meetingType: true,
+          createdAt: true,
+        },
+        orderBy: { startTime: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.appointment.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: appointments,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
    * Delete availability slot (Accountant)
    */
   async deleteAvailability(availabilityId: number, accountantId: number) {

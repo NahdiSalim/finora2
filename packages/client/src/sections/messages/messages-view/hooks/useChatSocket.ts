@@ -18,6 +18,30 @@ export interface SocketMessage {
     firstName?: string;
     lastName?: string;
   };
+  requestId?: number | null;
+  taskId?: number | null;
+  appointmentId?: number | null;
+  request?: {
+    id: number;
+    subject: string;
+    type: string;
+    status: string;
+    urgency: string;
+  } | null;
+  task?: {
+    id: number;
+    title: string;
+    status: string;
+    priority: string;
+  } | null;
+  appointment?: {
+    id: number;
+    title: string;
+    startTime: string;
+    endTime: string;
+    status: string;
+    type: string;
+  } | null;
 }
 
 export interface TypingPayload {

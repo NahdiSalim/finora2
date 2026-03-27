@@ -251,4 +251,39 @@ export class AppointmentController {
   ) {
     return this.appointmentService.getAvailableSlots(accountantId, date);
   }
+
+  /**
+   * Get chat-accessible appointments by client ID (for messagerie attachments)
+   */
+  @Get('chat-accessible/:clientId')
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Get appointments for a client (chat attachments)' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: 'number',
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: 'number',
+    description: 'Items per page (default: 5)',
+  })
+  @ApiResponse({ status: 200, description: 'Paginated list of client appointments' })
+  async getChatAccessibleAppointments(
+    @Param('clientId', ParseIntPipe) clientId: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Req() req?: AuthRequest
+  ) {
+    const accountantId = req!.user!.id;
+    return this.appointmentService.getChatAccessibleAppointmentsByClient(
+      clientId,
+      accountantId,
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 5
+    );
+  }
 }

@@ -310,4 +310,39 @@ export class TaskController {
     const userId = req.user!.id;
     return this.taskService.getTasksByPriority(userId, priority, page || 1, limit || 10);
   }
+
+  /**
+   * Get chat-accessible tasks by collaborator ID (for messagerie attachments)
+   */
+  @Get('chat-accessible/:collaboratorId')
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Get tasks for a collaborator (chat attachments)' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: 'number',
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: 'number',
+    description: 'Items per page (default: 5)',
+  })
+  @ApiResponse({ status: 200, description: 'Paginated list of collaborator tasks' })
+  async getChatAccessibleTasks(
+    @Param('collaboratorId', ParseIntPipe) collaboratorId: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Req() req?: AuthRequest
+  ) {
+    const accountantId = req!.user!.id;
+    return this.taskService.getChatAccessibleTasksByCollaborator(
+      collaboratorId,
+      accountantId,
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 5
+    );
+  }
 }

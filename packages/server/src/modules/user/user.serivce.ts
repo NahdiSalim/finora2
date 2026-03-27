@@ -201,21 +201,63 @@ export class UserService {
   async getById(id: number) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      include: {
-        role: {
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        photo: true,
+        coverPhoto: true,
+        cin: true,
+        diploma: true,
+        position: true,
+        department: true,
+        status: true,
+        isActive: true,
+        lastLogin: true,
+        createdAt: true,
+        updatedAt: true,
+        role: { select: { id: true, code: true, nameFr: true, nameEn: true } },
+        company: {
           select: {
-            nameFr: true,
-            nameEn: true,
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            address: true,
+            city: true,
+            postalCode: true,
+            country: true,
+            siret: true,
+            vatNumber: true,
+            legalForm: true,
+            status: true,
+            createdAt: true,
           },
+        },
+        documents: {
+          where: { isFolder: false, status: 'active' },
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            category: true,
+            size: true,
+            url: true,
+            processingStatus: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
         },
       },
     });
 
-    if (!user) {
-      throw new NotFoundException(`User with id ${id} not found`);
-    }
+    if (!user) throw new ApiError(MSG.user.not_found, 404, 'NOT_FOUND');
 
-    return user;
+    return { success: true, data: user };
   }
 
   async update(

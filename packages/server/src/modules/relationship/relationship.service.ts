@@ -53,7 +53,7 @@ export class RelationshipService {
         ownerId: true,
       },
     });
-
+    console.log(targetCompany, 'targetCompany');
     if (!targetCompany) {
       throw new NotFoundException('Entreprise cible non trouvée');
     }
@@ -126,12 +126,22 @@ export class RelationshipService {
       },
     });
 
-    // Send notification to target company owner with action buttons data
-    if (targetCompany.ownerId) {
+    // Send notification — ownerId peut être null, fallback sur le premier user de la compagnie
+    let notifyRecipientId: number | null = targetCompany.ownerId;
+    if (!notifyRecipientId) {
+      const companyUser = await this.prisma.user.findFirst({
+        where: { companyId: targetCompany.id },
+        select: { id: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      notifyRecipientId = companyUser?.id ?? null;
+    }
+
+    if (notifyRecipientId) {
       const senderName =
         `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.company.name;
       await this.notificationService.notify({
-        recipientId: targetCompany.ownerId,
+        recipientId: notifyRecipientId,
         type: 'relationship',
         action: 'invitation_received',
         priority: 'high',
@@ -205,7 +215,13 @@ export class RelationshipService {
 
     const invitation = await this.prisma.clientAccountingFirmRelationship.findUnique({
       where: { id: invitationId },
-      include: {
+      select: {
+        id: true,
+        status: true,
+        invitedBy: true,
+        clientCompanyId: true,
+        accountingFirmId: true,
+        rejectionReason: true,
         clientCompany: { select: { id: true, name: true } },
         accountingFirm: { select: { id: true, name: true } },
       },
@@ -248,34 +264,55 @@ export class RelationshipService {
       data: updateData,
     });
 
-    // Notify the sender - get company owner
-    const senderCompany =
-      invitation.clientCompanyId === user.companyId
-        ? invitation.accountingFirm
-        : invitation.clientCompany;
+    // Notify the sender directly via invitedBy (the user who sent the invitation)
+    const invitedByUserId = invitation.invitedBy ?? null;
+    let senderRecipientId: number | null = invitedByUserId;
 
-    // Get owner of sender company
-    const senderCompanyData = await this.prisma.company.findUnique({
-      where: { id: senderCompany.id },
-      select: { ownerId: true },
-    });
+    // Fallback: find first user of the sender company (not the current user's company)
+    if (!senderRecipientId) {
+      const senderCompanyId =
+        invitation.clientCompanyId === user.companyId
+          ? invitation.accountingFirmId // current user is client → sender is accountant firm
+          : invitation.clientCompanyId; // current user is accountant → sender is client
 
-    if (senderCompanyData?.ownerId) {
-      const isAccepted = dto.response === InvitationResponse.ACCEPT;
-      const responderName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
-
-      await this.notificationService.notify({
-        recipientId: senderCompanyData.ownerId,
-        type: 'relationship',
-        action: isAccepted ? 'invitation_accepted' : 'invitation_rejected',
-        priority: 'normal',
-        actorName: responderName,
-        data: {
-          relationshipId: updatedInvitation.id,
-          status: isAccepted ? 'active' : 'rejected',
-          rejectionReason: dto.rejectionReason ?? null,
-        },
+      const senderUser = await this.prisma.user.findFirst({
+        where: { companyId: senderCompanyId },
+        select: { id: true },
+        orderBy: { createdAt: 'asc' },
       });
+      senderRecipientId = senderUser?.id ?? null;
+    }
+
+    console.log(
+      '[respondToInvitation] invitedBy:',
+      invitedByUserId,
+      '| senderRecipientId:',
+      senderRecipientId
+    );
+    if (senderRecipientId) {
+      const isAccepted = dto.response === InvitationResponse.ACCEPT;
+      // Determine role label for the message
+      const isAccountantResponding = invitation.accountingFirmId === user.companyId;
+      const responderLabel = isAccountantResponding ? 'Votre comptable' : 'Votre client';
+      const responderName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
+      const actorLabel = responderName ? `${responderLabel} (${responderName})` : responderLabel;
+
+      try {
+        await this.notificationService.notify({
+          recipientId: senderRecipientId,
+          type: 'relationship',
+          action: isAccepted ? 'invitation_accepted' : 'invitation_rejected',
+          priority: 'normal',
+          actorName: actorLabel,
+          data: {
+            relationshipId: updatedInvitation.id,
+            status: isAccepted ? 'active' : 'rejected',
+            rejectionReason: dto.rejectionReason ?? null,
+          },
+        });
+      } catch (err) {
+        console.error('[respondToInvitation] notification error:', err?.message);
+      }
     }
     return {
       success: true,

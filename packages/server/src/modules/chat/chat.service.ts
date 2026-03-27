@@ -372,8 +372,8 @@ export class ChatService {
           select: {
             id: true,
             title: true,
-            startTime: true,
-            endTime: true,
+            date: true,
+            hour: true,
             status: true,
             type: true,
           },
@@ -445,8 +445,8 @@ export class ChatService {
           select: {
             id: true,
             title: true,
-            startTime: true,
-            endTime: true,
+            date: true,
+            hour: true,
             status: true,
             type: true,
           },

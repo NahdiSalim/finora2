@@ -8,7 +8,9 @@ import { DocumentVersionService } from './document-version.service';
 import { PrismaModule } from '../../../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 import { NotificationModule } from '../notification/notification.module';
-import { CommonModule } from '../common/common.module';
+import { CommonModule } from 'src/common/common.module';
+import { MailService } from '../mail/mail.service';
+import { AuthService } from '../auth/auth.service';
 
 @Module({
   imports: [PrismaModule, CommonModule, forwardRef(() => NotificationModule)],

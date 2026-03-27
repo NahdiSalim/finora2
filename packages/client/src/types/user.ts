@@ -1,20 +1,20 @@
 export enum UserStatus {
-  ACTIVE = 'ACTIVE',
-  BLOCKED = 'BLOCKED',
-  PENDING = 'PENDING',
-  DELETED = 'DELETED',
+  ACTIVE = "ACTIVE",
+  BLOCKED = "BLOCKED",
+  PENDING = "PENDING",
+  DELETED = "DELETED",
 }
 
-export type UserGenderApi = 'male' | 'female';
+export type UserGenderApi = "male" | "female";
 
-export type UserGender = 'male' | 'female';
+export type UserGender = "male" | "female";
 
 export type UserFormData = {
   full_name: string;
   email: string;
   phone: string;
   roleCode: string;
-  sex: 'male' | 'female';
+  sex: "male" | "female";
   dateOfBirth: string;
   shopName: string;
   legalIdentifier: string;
@@ -30,7 +30,7 @@ export type ClientFormData = {
   email: string;
   phone: string;
   roleCode: string;
-  gender?: 'male' | 'female';
+  gender?: "male" | "female";
   birth_date: string;
   address: string;
   origin_country: string;
@@ -94,7 +94,7 @@ export interface ResidencyDocument {
   document_type: string;
   type: string;
   file_url: string;
-  verification_status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'VERIFIED';
+  verification_status: "PENDING" | "APPROVED" | "REJECTED" | "VERIFIED";
   rejection_reason: string | null;
   issued_at: string | null;
   submitted_at: string;
@@ -136,7 +136,7 @@ export interface ResidenceType {
 
 export interface ClientData {
   id: string;
-  gender: 'male' | 'female';
+  gender: "male" | "female";
   birth_date: string;
   address: string;
   email_verified: boolean;
@@ -178,6 +178,8 @@ export interface User {
 export interface UsersResponse {
   message: string;
   data: User[];
+  counts?: Record<string, number>;
+  roleCounts?: Record<string, number>;
   pagination: {
     total: number;
     page: number;
@@ -202,4 +204,22 @@ export interface CreateUserResponse {
   user: string;
   organization?: Organization;
   patenteUploaded: boolean;
+}
+
+export interface AssignableUser {
+  id: number;
+  username: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  role: {
+    code: string;
+    nameFr: string;
+    nameEn: string;
+  };
+}
+
+export interface GetUsersByRoleResponse {
+  success: boolean;
+  data: AssignableUser[];
 }

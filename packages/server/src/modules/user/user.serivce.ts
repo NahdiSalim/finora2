@@ -3,13 +3,12 @@ import { PrismaService } from 'prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ApiError } from 'src/common/errors/api-error';
 import { errors } from 'src/common/errors/errors';
+import { MSG } from 'src/common/messages';
 import { UpdateUserDto } from './update-user.dto';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { Prisma } from '@prisma/client';
-import { HashService } from 'src/common/crypto/hash.service';
 import { JwtTokenService } from 'src/common/jwt/jwt-token.service';
-import { FileUploadService, FileCategory } from 'src/common/services/file-upload.service';
 import { MinioService } from 'src/common/services/minio.service';
 import { UserStatus } from 'src/common/enums/user-status.enum';
 import * as bcrypt from 'bcrypt';
@@ -19,13 +18,17 @@ import { stringify } from 'csv-stringify/sync';
 export class UserService {
   constructor(
     private prisma: PrismaService,
-    private hashService: HashService,
     private jwtTokenService: JwtTokenService,
-    private fileUploadService: FileUploadService,
     private minioService: MinioService
   ) {}
 
-  async getAll(page: number = 1, limit: number = 10, search?: string) {
+  async getAll(
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+    role?: string,
+    status?: string
+  ) {
     const skip = (page - 1) * limit;
     const where: Prisma.UserWhereInput = {};
 
@@ -34,43 +37,114 @@ export class UserService {
         { username: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } },
         { phone: { contains: search, mode: 'insensitive' } },
-        {
-          role: {
-            OR: [
-              { nameFr: { contains: search, mode: 'insensitive' } },
-              { nameEn: { contains: search, mode: 'insensitive' } },
-            ],
-          },
-        },
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
       ];
     }
 
-    const [total, data] = await Promise.all([
-      this.prisma.user.count(),
+    if (role) {
+      where.role = { code: { equals: role.toUpperCase() } };
+    }
+
+    if (status) {
+      where.status = status;
+    }
+
+    const [total, data, roleCounts] = await Promise.all([
+      this.prisma.user.count({ where }),
       this.prisma.user.findMany({
         where,
         skip,
         take: limit,
-        include: {
-          role: {
-            select: {
-              nameFr: true,
-              nameEn: true,
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          photo: true,
+          status: true,
+          isActive: true,
+          createdAt: true,
+          role: { select: { code: true, nameFr: true, nameEn: true } },
+          company: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.user
+        .groupBy({
+          by: ['id_role'],
+          _count: { id: true },
+          where: {
+            role: {
+              code: { in: ['ACCOUNTANT', 'COLLABORATOR', 'CLIENT'] },
             },
           },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      }),
+        })
+        .then(async (groups) => {
+          const roles = await this.prisma.role.findMany({
+            where: { code: { in: ['ACCOUNTANT', 'COLLABORATOR', 'CLIENT'] } },
+            select: { id: true, code: true },
+          });
+          const map: Record<string, number> = { ACCOUNTANT: 0, COLLABORATOR: 0, CLIENT: 0 };
+          for (const g of groups) {
+            const r = roles.find((r) => r.id === g.id_role);
+            if (r) map[r.code] = g._count.id;
+          }
+          return map;
+        }),
     ]);
 
     return {
+      success: true,
       data,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      counts: roleCounts,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Get users by role codes (for assignment dropdowns)
+   */
+  async getUsersByRole(roleCodes: string[]) {
+    const users = await this.prisma.user.findMany({
+      where: {
+        role: {
+          code: {
+            in: roleCodes,
+          },
+        },
+        status: 'active',
+        isActive: true,
+      },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: {
+          select: {
+            code: true,
+            nameFr: true,
+            nameEn: true,
+          },
+        },
+      },
+      orderBy: {
+        username: 'asc',
+      },
+    });
+
+    return {
+      success: true,
+      data: users,
     };
   }
 
@@ -127,21 +201,63 @@ export class UserService {
   async getById(id: number) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      include: {
-        role: {
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        photo: true,
+        coverPhoto: true,
+        cin: true,
+        diploma: true,
+        position: true,
+        department: true,
+        status: true,
+        isActive: true,
+        lastLogin: true,
+        createdAt: true,
+        updatedAt: true,
+        role: { select: { id: true, code: true, nameFr: true, nameEn: true } },
+        company: {
           select: {
-            nameFr: true,
-            nameEn: true,
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            address: true,
+            city: true,
+            postalCode: true,
+            country: true,
+            siret: true,
+            vatNumber: true,
+            legalForm: true,
+            status: true,
+            createdAt: true,
           },
+        },
+        documents: {
+          where: { isFolder: false, status: 'active' },
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            category: true,
+            size: true,
+            url: true,
+            processingStatus: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
         },
       },
     });
 
-    if (!user) {
-      throw new NotFoundException(`User with id ${id} not found`);
-    }
+    if (!user) throw new ApiError(MSG.user.not_found, 404, 'NOT_FOUND');
 
-    return user;
+    return { success: true, data: user };
   }
 
   async update(
@@ -266,73 +382,40 @@ export class UserService {
     return user;
   }
 
-  async toggleActive(targetUserId: number) {
+  async updateUserStatus(targetUserId: number, action: 'activate' | 'suspend', reason?: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: targetUserId },
       include: { role: true },
     });
 
-    if (!user) {
-      throw new ApiError(
-        errors.NOT_FOUND.message,
-        errors.NOT_FOUND.code,
-        errors.NOT_FOUND.errorCode
-      );
-    }
+    if (!user) throw new ApiError(MSG.user.not_found, 404, 'NOT_FOUND');
+    if (user.role?.id === 1) throw new ApiError(MSG.auth.forbidden, 403, 'FORBIDDEN');
 
-    if (user.role?.id === 1) {
-      throw new ApiError(
-        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.message,
-        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.code,
-        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.errorCode
-      );
-    }
-
-    const newStatus = user.status === UserStatus.ACTIVE ? UserStatus.SUSPENDED : UserStatus.ACTIVE;
+    const newStatus = action === 'activate' ? UserStatus.ACTIVE : UserStatus.SUSPENDED;
 
     const updatedUser = await this.prisma.user.update({
       where: { id: targetUserId },
       data: { status: newStatus },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        status: true,
+      },
     });
 
-    return {
-      message:
-        updatedUser.status === UserStatus.ACTIVE
-          ? 'User has been activated!'
-          : 'User has been deactivated!',
-      user: updatedUser,
-    };
+    const message = newStatus === UserStatus.ACTIVE ? MSG.user.activated : MSG.user.suspended;
+    return { success: true, message, data: updatedUser };
+  }
+
+  async toggleActive(targetUserId: number) {
+    return this.updateUserStatus(targetUserId, 'activate');
   }
 
   async suspendUser(targetUserId: number, reason?: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: targetUserId },
-      include: { role: true },
-    });
-
-    if (!user) {
-      throw new ApiError(
-        errors.NOT_FOUND.message,
-        errors.NOT_FOUND.code,
-        errors.NOT_FOUND.errorCode
-      );
-    }
-
-    // Prevent suspending admin accounts
-    if (user.role?.id === 1) {
-      throw new ApiError('Cannot suspend administrator accounts', 403, 'FORBIDDEN_SUSPEND_ADMIN');
-    }
-
-    const updatedUser = await this.prisma.user.update({
-      where: { id: targetUserId },
-      data: { status: UserStatus.SUSPENDED },
-    });
-
-    return {
-      success: true,
-      message: 'User account suspended successfully',
-      user: updatedUser,
-    };
+    return this.updateUserStatus(targetUserId, 'suspend', reason);
   }
 
   async exportUsersCSV(lang: 'fr' | 'en' = 'fr'): Promise<Buffer> {

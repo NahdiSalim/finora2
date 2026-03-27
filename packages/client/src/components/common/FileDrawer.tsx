@@ -8,11 +8,6 @@ import {
   Link,
   Grid,
   alpha,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -29,7 +24,6 @@ import {
   RefreshCw,
   Pencil,
   Check,
-  Trash2,
   ChevronRight,
   Folder,
   List,
@@ -64,6 +58,7 @@ import {
 import type { ProcessingStatus } from "src/lib/services/invoicesApi";
 import ExtractionAnim from "src/assets/Animations/extraction.json";
 import Lottie from "lottie-react";
+import ItemsTable from "./Itemstable";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -477,6 +472,26 @@ function DocumentDetailsPanel({
       tvaPercent: tvaPercent ? String(tvaPercent).replace(",", ".") : "",
     };
   }, [extractedObject]);
+
+  const derivedCurrency = useMemo(() => {
+    const direct =
+      extractedObject?.currency ??
+      extractedObject?.invoice_currency ??
+      extractedObject?.currency_code ??
+      extractedObject?.invoice_header?.currency ??
+      extractedObject?.invoice_header?.currency_code ??
+      null;
+    if (typeof direct === "string" && direct.trim()) return direct.trim();
+
+    const metadataAmounts = (invoiceMetadata as any)?.amounts;
+    const fromMetadata =
+      metadataAmounts?.currency ?? metadataAmounts?.currencyCode ?? null;
+    if (typeof fromMetadata === "string" && fromMetadata.trim()) {
+      return fromMetadata.trim();
+    }
+
+    return "";
+  }, [extractedObject, invoiceMetadata]);
 
   const derivedLineItems = useMemo(() => {
     const lines = extractedObject?.lin_section;
@@ -1282,7 +1297,7 @@ function DocumentDetailsPanel({
                   fullWidth
                   size="small"
                   label="Devise"
-                  value="EUR"
+                  value={derivedCurrency}
                   InputProps={{ readOnly: true }}
                 />
               </Grid>
@@ -1370,195 +1385,12 @@ function DocumentDetailsPanel({
                 overflow: "hidden",
               }}
             >
-              {lineItems.length === 0 ? (
-                <Box
-                  sx={{
-                    py: 5,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 1,
-                    bgcolor: alpha(theme.palette.action.hover, 0.3),
-                  }}
-                >
-                  <Box
-                    sx={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 2,
-                      bgcolor: alpha(theme.palette.divider, 0.5),
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <List size={20} color={theme.palette.text.disabled} />
-                  </Box>
-                  <Typography
-                    variant="body2"
-                    color="text.disabled"
-                    sx={{ fontSize: "0.8rem" }}
-                  >
-                    Aucun article pour le moment
-                  </Typography>
-                </Box>
-              ) : (
-                <Box sx={{ overflowX: "auto" }}>
-                  <Table size="small" sx={{ minWidth: 980 }}>
-                    <TableHead>
-                      <TableRow
-                        sx={{
-                          bgcolor: alpha(theme.palette.action.hover, 0.5),
-                          "& th": {
-                            fontWeight: 600,
-                            fontSize: "0.72rem",
-                            letterSpacing: "0.04em",
-                            textTransform: "uppercase",
-                            color: "text.secondary",
-                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
-                            py: 1.25,
-                          },
-                        }}
-                      >
-                        <TableCell>Date</TableCell>
-                        <TableCell>Description</TableCell>
-                        <TableCell>Quantité</TableCell>
-                        <TableCell>Unité</TableCell>
-                        <TableCell>Prix unitaire</TableCell>
-                        <TableCell>Remise (%)</TableCell>
-                        <TableCell>Total</TableCell>
-                        <TableCell align="right">Action</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {lineItems.map((row, idx) => (
-                        <TableRow
-                          key={row.id}
-                          sx={{
-                            bgcolor:
-                              idx % 2 === 0
-                                ? "transparent"
-                                : alpha(theme.palette.action.hover, 0.25),
-                            "&:last-child td": { borderBottom: 0 },
-                            "& td": { py: 0.75 },
-                          }}
-                        >
-                          <TableCell sx={{ width: 140 }}>
-                            <CustomInput
-                              fullWidth
-                              size="small"
-                              value={row.date}
-                              placeholder="jj/mm/aaaa"
-                              onChange={(e) =>
-                                updateLineItem(row.id, "date", e.target.value)
-                              }
-                              disabled={isViewMode}
-                            />
-                          </TableCell>
-                          <TableCell sx={{ minWidth: 260 }}>
-                            <CustomInput
-                              fullWidth
-                              size="small"
-                              value={row.description}
-                              placeholder="Description"
-                              onChange={(e) =>
-                                updateLineItem(
-                                  row.id,
-                                  "description",
-                                  e.target.value,
-                                )
-                              }
-                              disabled={isViewMode}
-                            />
-                          </TableCell>
-                          <TableCell sx={{ width: 120 }}>
-                            <CustomInput
-                              fullWidth
-                              size="small"
-                              value={row.qty}
-                              onChange={(e) =>
-                                updateLineItem(row.id, "qty", e.target.value)
-                              }
-                              disabled={isViewMode}
-                            />
-                          </TableCell>
-                          <TableCell sx={{ width: 120 }}>
-                            <CustomInput
-                              fullWidth
-                              size="small"
-                              value={row.unit}
-                              onChange={(e) =>
-                                updateLineItem(row.id, "unit", e.target.value)
-                              }
-                              disabled={isViewMode}
-                            />
-                          </TableCell>
-                          <TableCell sx={{ width: 140 }}>
-                            <CustomInput
-                              fullWidth
-                              size="small"
-                              value={row.unitPrice}
-                              onChange={(e) =>
-                                updateLineItem(
-                                  row.id,
-                                  "unitPrice",
-                                  e.target.value,
-                                )
-                              }
-                              disabled={isViewMode}
-                            />
-                          </TableCell>
-                          <TableCell sx={{ width: 140 }}>
-                            <CustomInput
-                              fullWidth
-                              size="small"
-                              value={row.discount}
-                              onChange={(e) =>
-                                updateLineItem(
-                                  row.id,
-                                  "discount",
-                                  e.target.value,
-                                )
-                              }
-                              disabled={isViewMode}
-                            />
-                          </TableCell>
-                          <TableCell sx={{ width: 140 }}>
-                            <CustomInput
-                              fullWidth
-                              size="small"
-                              value={row.total}
-                              InputProps={{ readOnly: true }}
-                              disabled
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            <IconButton
-                              size="small"
-                              onClick={() => removeLineItem(row.id)}
-                              disabled={isViewMode}
-                              sx={{
-                                color: "text.disabled",
-                                "&:hover": {
-                                  color: "error.main",
-                                  bgcolor: alpha(
-                                    theme.palette.error.main,
-                                    0.08,
-                                  ),
-                                },
-                                transition:
-                                  "color 0.15s ease, background-color 0.15s ease",
-                              }}
-                            >
-                              <Trash2 size={15} />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </Box>
-              )}
+              <ItemsTable
+                lineItems={lineItems}
+                isViewMode={isViewMode}
+                updateLineItem={updateLineItem}
+                removeLineItem={removeLineItem}
+              />
             </Box>
           </Box>
 
@@ -1785,6 +1617,7 @@ interface EditFileModalProps {
   onClose: () => void;
   file: FileItem;
   breadcrumb: Array<{ id: number; name: string }>;
+  initialCurrency?: string;
   onSave: (values: Record<string, string>) => void;
 }
 
@@ -1793,6 +1626,7 @@ function EditFileModal({
   onClose,
   file,
   breadcrumb,
+  initialCurrency = "",
   onSave,
 }: EditFileModalProps) {
   const [fileName, setFileName] = useState(file.name);
@@ -1802,6 +1636,11 @@ function EditFileModal({
   const [category, setCategory] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
   const [currency, setCurrency] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setCurrency(initialCurrency || "");
+  }, [open, initialCurrency]);
 
   const handleSubmit = () => {
     onSave({

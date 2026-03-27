@@ -17,6 +17,7 @@ import { FileUploadService, FileCategory } from 'src/common/services/file-upload
 import { MinioService } from 'src/common/services/minio.service';
 import { RoleCode } from 'src/common/enums/role.enum';
 import { UserStatus } from 'src/common/enums/user-status.enum';
+import { MSG } from 'src/common/messages';
 
 @Injectable()
 export class AuthService {
@@ -42,9 +43,39 @@ export class AuthService {
         include: {
           role: {
             include: {
+              roleActions: {
+                include: {
+                  action: {
+                    select: {
+                      id: true,
+                      name: true,
+                      code: true,
+                      category: true,
+                      pageId: true,
+                    },
+                  },
+                },
+              },
               p_features: {
                 include: {
-                  feature: true,
+                  feature: {
+                    select: {
+                      id: true,
+                      slug: true,
+                    },
+                  },
+                },
+              },
+              p_pages: {
+                include: {
+                  page: {
+                    select: {
+                      id: true,
+                      slug: true,
+                      PageUrl: true,
+                      featureId: true,
+                    },
+                  },
                 },
               },
             },
@@ -71,6 +102,14 @@ export class AuthService {
         );
       }
 
+      if (!user.role) {
+        throw new ApiError(
+          errors.NOT_FOUND.message,
+          errors.NOT_FOUND.code,
+          errors.NOT_FOUND.errorCode
+        );
+      }
+
       const isPasswordValid = await bcrypt.compare(password, user.password);
       console.log('Password valid:', isPasswordValid);
 
@@ -93,14 +132,70 @@ export class AuthService {
 
       await this.jwtTokenService.storeRefreshToken(user.id, refreshToken);
 
+      // Build features structure with pages and actions (same as getCurrentUser)
+      const featuresMap = new Map();
+      const role = user.role;
+
+      // First, create all features
+      role.p_features.forEach((pf) => {
+        if (!featuresMap.has(pf.feature.id)) {
+          featuresMap.set(pf.feature.id, {
+            id: String(pf.feature.id),
+            name: pf.feature.slug,
+            code: pf.feature.slug,
+            pages: [],
+          });
+        }
+      });
+
+      // Then, add pages to their respective features
+      role.p_pages.forEach((pp) => {
+        const feature = featuresMap.get(pp.page.featureId);
+        if (feature) {
+          // Get actions for this page
+          const pageActions = role.roleActions
+            .filter((ra) => ra.action.pageId === pp.page.id)
+            .map((ra) => ({
+              id: String(ra.action.id),
+              name: ra.action.name,
+              code: ra.action.category?.toUpperCase() || 'READ',
+            }));
+
+          feature.pages.push({
+            id: String(pp.page.id),
+            name: pp.page.slug,
+            code: pp.page.slug,
+            route: pp.page.PageUrl,
+            actions: pageActions,
+          });
+        }
+      });
+
+      const features = Array.from(featuresMap.values());
+
       return {
         success: true,
         data: {
           user: {
-            id: user.id,
-            username: user.username,
+            id: String(user.id),
             email: user.email,
-            role: user.role?.nameEn,
+            full_name: user.username,
+            sex: null,
+            dateOfBirth: null,
+            status: user.status,
+            address: null,
+            phone: user.phone || '',
+            is_active: user.status === UserStatus.ACTIVE,
+            is_email_verified: false,
+            created_at: user.createdAt?.toISOString() || new Date().toISOString(),
+            updated_at: user.updatedAt?.toISOString() || new Date().toISOString(),
+            role: {
+              id: String(role.id),
+              name: role.nameEn,
+              code: role.code || role.nameFr.toLowerCase().replace(/\s+/g, '_'),
+              description: role.descriptionEn,
+            },
+            features,
           },
           accessToken,
           refreshToken,
@@ -121,7 +216,7 @@ export class AuthService {
       data: { isRevoked: true },
     });
 
-    return { success: true, message: 'Logged out successfully' };
+    return { success: true, message: MSG.auth.logout_success };
   }
 
   async refreshExpiredToken(expiredAccessToken: string) {
@@ -496,7 +591,7 @@ export class AuthService {
         // même si l'email n'existe pas (évite l'énumération d'emails)
         return {
           success: true,
-          message: 'Si cet email existe, un lien de réinitialisation a été envoyé.',
+          message: MSG.user.reset_link_sent,
         };
       }
 
@@ -527,16 +622,12 @@ export class AuthService {
         this.logger.log(`Password reset email sent to ${user.email}`);
       } catch (emailError) {
         this.logger.error(`Failed to send password reset email to ${user.email}:`, emailError);
-        throw new ApiError(
-          'Failed to send password reset email. Please try again later.',
-          500,
-          'EMAIL_SEND_FAILED'
-        );
+        throw new ApiError(MSG.user.reset_email_failed, 500, 'EMAIL_SEND_FAILED');
       }
 
       return {
         success: true,
-        message: 'Un email de réinitialisation a été envoyé à votre adresse.',
+        message: MSG.user.reset_email_sent,
       };
     } catch (error) {
       this.logger.error('Forgot password error:', error);
@@ -560,19 +651,15 @@ export class AuthService {
     try {
       // Valider les mots de passe
       if (!password || password.trim() === '') {
-        throw new ApiError('Le mot de passe est requis', 400, 'PASSWORD_REQUIRED');
+        throw new ApiError(MSG.user.password_required, 400, 'PASSWORD_REQUIRED');
       }
 
       if (password.length < 8) {
-        throw new ApiError(
-          'Le mot de passe doit contenir au moins 8 caractères',
-          400,
-          'PASSWORD_TOO_SHORT'
-        );
+        throw new ApiError(MSG.user.password_too_short, 400, 'PASSWORD_TOO_SHORT');
       }
 
       if (password !== confirmepassword) {
-        throw new ApiError('Les mots de passe ne correspondent pas', 400, 'PASSWORDS_DO_NOT_MATCH');
+        throw new ApiError(MSG.user.passwords_mismatch, 400, 'PASSWORDS_DO_NOT_MATCH');
       }
 
       // Hasher le token pour le comparer avec celui en base
@@ -589,11 +676,7 @@ export class AuthService {
       });
 
       if (!user) {
-        throw new ApiError(
-          'Le lien de réinitialisation est invalide ou a expiré',
-          400,
-          'INVALID_OR_EXPIRED_TOKEN'
-        );
+        throw new ApiError(MSG.user.reset_link_invalid, 400, 'INVALID_OR_EXPIRED_TOKEN');
       }
 
       // Hasher le nouveau mot de passe
@@ -613,7 +696,7 @@ export class AuthService {
 
       return {
         success: true,
-        message: 'Votre mot de passe a été réinitialisé avec succès',
+        message: MSG.user.password_reset,
       };
     } catch (error) {
       this.logger.error('Reset password error:', error);
@@ -639,7 +722,7 @@ export class AuthService {
       });
 
       if (existingUser) {
-        throw new ApiError('Email already exists', 400, 'EMAIL_EXISTS');
+        throw new ApiError(MSG.user.already_exists, 400, 'EMAIL_EXISTS');
       }
 
       // Find CLIENT role by code
@@ -648,7 +731,7 @@ export class AuthService {
       });
 
       if (!clientRole) {
-        throw new ApiError('Client role not found', 500, 'ROLE_NOT_FOUND');
+        throw new ApiError(MSG.user.role_not_found, 500, 'ROLE_NOT_FOUND');
       }
 
       // Hash password
@@ -684,7 +767,7 @@ export class AuthService {
 
       return {
         success: true,
-        message: 'Registration successful. Your account is pending approval.',
+        message: MSG.user.registered,
         data: {
           id: user.id,
           email: user.email,
@@ -713,7 +796,7 @@ export class AuthService {
       });
 
       if (existingUser) {
-        throw new ApiError('Email already exists', 400, 'EMAIL_EXISTS');
+        throw new ApiError(MSG.user.already_exists, 400, 'EMAIL_EXISTS');
       }
 
       // Find ACCOUNTANT role by code
@@ -722,7 +805,7 @@ export class AuthService {
       });
 
       if (!accountantRole) {
-        throw new ApiError('Accountant role not found', 500, 'ROLE_NOT_FOUND');
+        throw new ApiError(MSG.user.role_not_found, 500, 'ROLE_NOT_FOUND');
       }
 
       // Hash password
@@ -806,7 +889,7 @@ export class AuthService {
 
       return {
         success: true,
-        message: 'Registration successful. Your account is pending approval.',
+        message: MSG.user.registered,
         data: {
           id: user.id,
           email: user.email,

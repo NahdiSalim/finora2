@@ -8,7 +8,7 @@ import Alert from "@mui/material/Alert";
 import { useTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
 
-import { _messages, _notifications } from "src/_mock";
+import { _messages } from "src/_mock";
 
 import { NavMobile, NavDesktop } from "./nav";
 import { layoutClasses } from "../core/classes";
@@ -132,7 +132,11 @@ export function DashboardLayout({
           }}
         >
           <MessagesPopover data={_messages} />
-          <NotificationsPopover data={_notifications} />
+
+          {/** @slot Notifications popover */}
+          <NotificationsPopover />
+
+          {/** @slot Account drawer */}
           <AccountPopover data={_account} />
         </Box>
       ),

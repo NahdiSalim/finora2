@@ -13,6 +13,56 @@ export async function seedActions(prisma: PrismaClient) {
       pageSlug: 'dashboard-view',
     },
 
+    // Gestion des utilisateurs (super admin)
+    {
+      name: 'Voir la liste des utilisateurs',
+      code: 'VIEW_USERS',
+      category: 'read',
+      pageSlug: 'users-list',
+    },
+    {
+      name: 'Créer un utilisateur',
+      code: 'CREATE_USER',
+      category: 'write',
+      pageSlug: 'users-list',
+    },
+    {
+      name: "Voir le détail d'un utilisateur",
+      code: 'VIEW_USER_DETAIL',
+      category: 'read',
+      pageSlug: 'user-detail',
+    },
+    {
+      name: 'Modifier un utilisateur',
+      code: 'UPDATE_USER',
+      category: 'write',
+      pageSlug: 'user-detail',
+    },
+    {
+      name: 'Activer un utilisateur',
+      code: 'ACTIVATE_USER',
+      category: 'write',
+      pageSlug: 'user-detail',
+    },
+    {
+      name: 'Suspendre un utilisateur',
+      code: 'SUSPEND_USER',
+      category: 'write',
+      pageSlug: 'user-detail',
+    },
+    {
+      name: 'Supprimer un utilisateur',
+      code: 'DELETE_USER',
+      category: 'write',
+      pageSlug: 'user-detail',
+    },
+    {
+      name: 'Exporter les utilisateurs',
+      code: 'EXPORT_USERS',
+      category: 'read',
+      pageSlug: 'users-list',
+    },
+
     // Gestion des comptes comptables
     {
       name: 'Voir la liste des comptables',
@@ -98,33 +148,89 @@ export async function seedActions(prisma: PrismaClient) {
       pageSlug: 'document-detail',
     },
 
-    // Gestion des rendez-vous
+    // Gestion des rendez-vous (appointments)
     {
       name: 'Voir la liste des rendez-vous',
+      code: 'VIEW_APPOINTMENTS',
+      category: 'read',
+      pageSlug: 'appointments-list',
+    },
+    {
+      name: 'Créer un rendez-vous',
+      code: 'CREATE_APPOINTMENT',
+      category: 'write',
+      pageSlug: 'appointments-list',
+    },
+    {
+      name: "Voir le détail d'un rendez-vous",
+      code: 'VIEW_APPOINTMENT_DETAIL',
+      category: 'read',
+      pageSlug: 'appointment-detail',
+    },
+    {
+      name: 'Modifier un rendez-vous',
+      code: 'UPDATE_APPOINTMENT',
+      category: 'write',
+      pageSlug: 'appointment-detail',
+    },
+    {
+      name: 'Annuler un rendez-vous',
+      code: 'CANCEL_APPOINTMENT',
+      category: 'write',
+      pageSlug: 'appointment-detail',
+    },
+    {
+      name: 'Reporter un rendez-vous',
+      code: 'REPORT_APPOINTMENT',
+      category: 'write',
+      pageSlug: 'appointment-detail',
+    },
+    {
+      name: 'Voir le calendrier',
+      code: 'VIEW_APPOINTMENTS_CALENDAR',
+      category: 'read',
+      pageSlug: 'appointments-calendar',
+    },
+    {
+      name: "Voir l'historique des reports",
+      code: 'VIEW_APPOINTMENTS_HISTORY',
+      category: 'read',
+      pageSlug: 'appointments-history',
+    },
+    {
+      name: 'Voir les disponibilités',
+      code: 'VIEW_AVAILABILITY_SLOTS',
+      category: 'read',
+      pageSlug: 'appointments-list',
+    },
+
+    // Gestion des rendez-vous (legacy meetings)
+    {
+      name: 'Voir la liste des meetings',
       code: 'VIEW_MEETINGS',
       category: 'read',
       pageSlug: 'meetings-list',
     },
     {
-      name: 'Créer un rendez-vous',
+      name: 'Créer un meeting',
       code: 'CREATE_MEETING',
       category: 'write',
       pageSlug: 'meetings-list',
     },
     {
-      name: "Voir le détail d'un rendez-vous",
+      name: "Voir le détail d'un meeting",
       code: 'VIEW_MEETING_DETAIL',
       category: 'read',
       pageSlug: 'meeting-detail',
     },
     {
-      name: 'Modifier un rendez-vous',
+      name: 'Modifier un meeting',
       code: 'UPDATE_MEETING',
       category: 'write',
       pageSlug: 'meeting-detail',
     },
     {
-      name: 'Supprimer un rendez-vous',
+      name: 'Supprimer un meeting',
       code: 'DELETE_MEETING',
       category: 'write',
       pageSlug: 'meeting-detail',

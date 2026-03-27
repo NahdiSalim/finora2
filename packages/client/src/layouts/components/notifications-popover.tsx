@@ -1,6 +1,6 @@
 import type { ButtonProps } from "@mui/material/Button";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 
 import Box from "@mui/material/Box";
 import List from "@mui/material/List";
@@ -14,9 +14,17 @@ import ListSubheader from "@mui/material/ListSubheader";
 import { useTheme, alpha } from "@mui/material/styles";
 
 import { Bell } from "lucide-react";
+import { io, type Socket } from "socket.io-client";
 
 import { Iconify } from "src/components/iconify";
 import { Scrollbar } from "src/components/scrollbar";
+import {
+  useGetNotificationsQuery,
+  useMarkAllNotificationsAsReadMutation,
+  useMarkNotificationAsReadMutation,
+} from "src/lib/services/notificationsApi";
+import { useRespondToInvitationMutation } from "src/lib/services/relationshipsApi";
+import { useAlert } from "src/contexts/AlertContext";
 
 import {
   NotificationItem,
@@ -35,7 +43,90 @@ export function NotificationsPopover({
   ...other
 }: NotificationsPopoverProps) {
   const theme = useTheme();
-  const [notifications, setNotifications] = useState(data);
+  const { showAlert } = useAlert();
+  const [processingId, setProcessingId] = useState<number | null>(null);
+  const { data: notificationsData, refetch: refetchNotifications } =
+    useGetNotificationsQuery({ limit: 20, offset: 0 });
+  const [markAsRead] = useMarkNotificationAsReadMutation();
+  const [markAllAsRead] = useMarkAllNotificationsAsReadMutation();
+  const [respondToInvitation] = useRespondToInvitationMutation();
+
+  const notifications = useMemo(() => {
+    const source =
+      notificationsData?.notifications ??
+      data.map((d) => ({
+        id: Number(d.id),
+        type: d.type,
+        title: d.title,
+        message: d.description,
+        read: !d.isUnRead,
+        createdAt: d.postedAt,
+        data: null,
+      }));
+    return source.map((n: any) => {
+      const notificationType = String(n.type || "").toLowerCase();
+      const notificationData = n.data ?? {};
+      const invitationId = Number(notificationData.invitationId);
+      const isInvite =
+        notificationType.includes("relationship") ||
+        notificationType.includes("invitation");
+      const canRespond = isInvite && !n.read && Number.isFinite(invitationId);
+      return {
+        id: String(n.id),
+        type: notificationType || "notification",
+        title: n.title ?? "Notification",
+        isUnRead: !n.read,
+        description: n.message ?? "",
+        avatarUrl: null,
+        postedAt: n.createdAt ?? null,
+        canRespond,
+        isProcessing: processingId === n.id,
+        onAccept: canRespond
+          ? async () => {
+              try {
+                setProcessingId(n.id);
+                await respondToInvitation({
+                  invitationId,
+                  response: "accept",
+                }).unwrap();
+                await markAsRead(n.id).unwrap();
+                showAlert("Invitation acceptée", "success");
+                refetchNotifications();
+              } catch {
+                showAlert("Erreur lors de l'acceptation", "error");
+              } finally {
+                setProcessingId(null);
+              }
+            }
+          : undefined,
+        onReject: canRespond
+          ? async () => {
+              try {
+                setProcessingId(n.id);
+                await respondToInvitation({
+                  invitationId,
+                  response: "reject",
+                }).unwrap();
+                await markAsRead(n.id).unwrap();
+                showAlert("Invitation refusée", "success");
+                refetchNotifications();
+              } catch {
+                showAlert("Erreur lors du refus", "error");
+              } finally {
+                setProcessingId(null);
+              }
+            }
+          : undefined,
+      } as NotificationItemProps;
+    });
+  }, [
+    notificationsData,
+    processingId,
+    respondToInvitation,
+    markAsRead,
+    showAlert,
+    refetchNotifications,
+  ]);
 
   const totalUnRead = notifications.filter(
     (item) => item.isUnRead === true,
@@ -58,13 +149,40 @@ export function NotificationsPopover({
   }, []);
 
   const handleMarkAllAsRead = useCallback(() => {
-    const updatedNotifications = notifications.map((notification) => ({
-      ...notification,
-      isUnRead: false,
-    }));
+    markAllAsRead()
+      .unwrap()
+      .then(() => refetchNotifications())
+      .catch(() => showAlert("Erreur lors du marquage", "error"));
+  }, [markAllAsRead, refetchNotifications, showAlert]);
 
-    setNotifications(updatedNotifications);
-  }, [notifications]);
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const apiUrl = import.meta.env.VITE_API_URL ?? "";
+
+    let socket: Socket | null = null;
+    if (token && apiUrl) {
+      try {
+        socket = io(`${apiUrl}/notifications`, {
+          auth: { token },
+          transports: ["websocket"],
+        });
+
+        socket.on("notification", () => {
+          refetchNotifications();
+        });
+
+        socket.on("notificationUpdate", () => {
+          refetchNotifications();
+        });
+      } catch {
+        // no-op
+      }
+    }
+
+    return () => {
+      socket?.disconnect();
+    };
+  }, [refetchNotifications]);
 
   return (
     <>
@@ -211,7 +329,7 @@ export function NotificationsPopover({
               </ListSubheader>
             }
           >
-            {notifications.slice(2, 5).map((notification) => (
+            {notifications.slice(2, 20).map((notification) => (
               <NotificationItem
                 key={notification.id}
                 notification={notification}

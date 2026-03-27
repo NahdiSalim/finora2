@@ -19,6 +19,8 @@ import { RespondAppointmentDto } from './dto/respond-appointment.dto';
 import { RescheduleAppointmentDto } from './dto/reschedule-appointment.dto';
 import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
+import { CreateLeaveDto } from './dto/create-leave.dto';
+import { ReportAppointmentDto } from './dto/report-appointment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -32,16 +34,13 @@ export class AppointmentController {
   constructor(private readonly appointmentService: AppointmentService) {}
 
   /**
-   * Create a new appointment (Client)
+   * Create a new appointment (Client or Accountant)
    */
   @Post()
-  @UseGuards(RolesGuard)
-  @Roles('CLIENT')
-  @ApiOperation({ summary: '[Client] Create a new appointment request' })
+  @ApiOperation({ summary: 'Create a new appointment (client or accountant)' })
   @ApiResponse({ status: 201, description: 'Appointment created successfully' })
   async createAppointment(@Body() dto: CreateAppointmentDto, @Req() req: AuthRequest) {
-    const clientId = req.user!.id;
-    return this.appointmentService.createAppointment(dto, clientId);
+    return this.appointmentService.createAppointment(dto, req.user!.id);
   }
 
   /**
@@ -51,21 +50,31 @@ export class AppointmentController {
   @UseGuards(RolesGuard)
   @Roles('CLIENT')
   @ApiOperation({ summary: '[Client] Get my appointments' })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({
     name: 'status',
     required: false,
     enum: ['pending', 'confirmed', 'rescheduled', 'rejected', 'cancelled', 'completed'],
   })
+  @ApiQuery({ name: 'period', required: false, enum: ['today', 'upcoming', 'past'] })
+  @ApiQuery({ name: 'search', required: false, type: String })
   async getMyAppointments(
     @Req() req: AuthRequest,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-    @Query('status') status?: string
+    @Query('status') status?: string,
+    @Query('period') period?: string,
+    @Query('search') search?: string
   ) {
-    const clientId = req.user!.id;
-    return this.appointmentService.getMyAppointments(clientId, page || 1, limit || 10, status);
+    return this.appointmentService.getMyAppointments(
+      req.user!.id,
+      page || 1,
+      limit || 10,
+      status,
+      period,
+      search
+    );
   }
 
   /**
@@ -75,21 +84,68 @@ export class AppointmentController {
   @UseGuards(RolesGuard)
   @Roles('ACCOUNTANT')
   @ApiOperation({ summary: '[Accountant] Get all appointment requests' })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({
     name: 'status',
     required: false,
     enum: ['pending', 'confirmed', 'rescheduled', 'rejected', 'cancelled', 'completed'],
   })
+  @ApiQuery({ name: 'period', required: false, enum: ['today', 'upcoming', 'past'] })
+  @ApiQuery({ name: 'search', required: false, type: String })
   async getAllAppointments(
     @Req() req: AuthRequest,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-    @Query('status') status?: string
+    @Query('status') status?: string,
+    @Query('period') period?: string,
+    @Query('search') search?: string
   ) {
-    const accountantId = req.user!.id;
-    return this.appointmentService.getAllAppointments(accountantId, page || 1, limit || 10, status);
+    return this.appointmentService.getAllAppointments(
+      req.user!.id,
+      page || 1,
+      limit || 10,
+      status,
+      period,
+      search
+    );
+  }
+
+  /**
+   * Get my relations — accountant gets his clients, client gets his accountants
+   */
+  @Get('relations/mine')
+  @ApiOperation({
+    summary: 'Retourne les comptables (si client) ou les clients (si comptable) en relation active',
+  })
+  async getMyRelations(@Req() req: AuthRequest) {
+    return this.appointmentService.getMyRelations(req.user!.id);
+  }
+
+  /**
+   * Get confirmed appointments for current month
+   */
+  @Get('confirmed/this-month')
+  @ApiOperation({ summary: 'Rendez-vous confirmés du mois actuel (date, heure, titre)' })
+  async getConfirmedThisMonth(@Req() req: AuthRequest) {
+    return this.appointmentService.getConfirmedThisMonth(req.user!.id);
+  }
+
+  /**
+   * Get all slots for an accountant on a given date (available + booked)
+   */
+  @Get('slots/available')
+  @ApiOperation({
+    summary: 'Get all time slots for an accountant on a specific date (excludes booked)',
+  })
+  @ApiQuery({ name: 'accountantId', required: true, type: Number, example: 2 })
+  @ApiQuery({ name: 'date', required: true, type: String, example: '2026-04-28' })
+  @ApiResponse({ status: 200, description: 'List of available slots' })
+  async getAvailableSlots(
+    @Query('accountantId', ParseIntPipe) accountantId: number,
+    @Query('date') date: string
+  ) {
+    return this.appointmentService.getAvailableSlots(accountantId, date);
   }
 
   /**
@@ -120,20 +176,16 @@ export class AppointmentController {
   }
 
   /**
-   * Respond to appointment (Accountant)
+   * Respond to appointment (Accountant or Client)
    */
   @Post(':id/respond')
-  @UseGuards(RolesGuard)
-  @Roles('ACCOUNTANT')
-  @ApiOperation({ summary: '[Accountant] Confirm or reject appointment' })
-  @ApiResponse({ status: 200, description: 'Response sent successfully' })
+  @ApiOperation({ summary: 'Confirm or reject an appointment (accountant or client)' })
   async respondToAppointment(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: RespondAppointmentDto,
     @Req() req: AuthRequest
   ) {
-    const accountantId = req.user!.id;
-    return this.appointmentService.respondToAppointment(id, dto, accountantId);
+    return this.appointmentService.respondToAppointment(id, dto, req.user!.id);
   }
 
   /**
@@ -173,6 +225,63 @@ export class AppointmentController {
   async deleteAppointment(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
     const userId = req.user!.id;
     return this.appointmentService.deleteAppointment(id, userId);
+  }
+
+  /**
+   * Report (reporter) an appointment — both client and accountant can do it
+   */
+  @Post(':id/report')
+  @ApiOperation({ summary: 'Reporter un rendez-vous à une nouvelle date/heure' })
+  async reportAppointment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ReportAppointmentDto,
+    @Req() req: AuthRequest
+  ) {
+    return this.appointmentService.reportAppointment(id, dto, req.user!.id);
+  }
+
+  /**
+   * Get report history of an appointment
+   */
+  @Get(':id/history')
+  @ApiOperation({ summary: "Historique des reports d'un rendez-vous" })
+  async getAppointmentHistory(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
+    return this.appointmentService.getAppointmentHistory(id, req.user!.id);
+  }
+
+  // ─── CONGÉS ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Create a leave period (Accountant)
+   */
+  @Post('leaves')
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Déclarer une période de congé' })
+  async createLeave(@Body() dto: CreateLeaveDto, @Req() req: AuthRequest) {
+    return this.appointmentService.createLeave(dto, req.user!.id);
+  }
+
+  /**
+   * Get my leaves (Accountant)
+   */
+  @Get('leaves/mine')
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Voir mes congés' })
+  async getMyLeaves(@Req() req: AuthRequest) {
+    return this.appointmentService.getMyLeaves(req.user!.id);
+  }
+
+  /**
+   * Delete a leave (Accountant)
+   */
+  @Delete('leaves/:id')
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Supprimer un congé' })
+  async deleteLeave(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
+    return this.appointmentService.deleteLeave(id, req.user!.id);
   }
 
   // ─── AVAILABILITY ───────────────────────────────────────────────────────────
@@ -233,57 +342,5 @@ export class AppointmentController {
   @ApiOperation({ summary: '[Accountant] Delete an availability slot' })
   async deleteAvailability(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
     return this.appointmentService.deleteAvailability(id, req.user!.id);
-  }
-
-  /**
-   * Get available slots for an accountant on a given date (Client)
-   */
-  @Get('slots')
-  @ApiOperation({
-    summary: '[Client] Get available time slots for an accountant on a specific date',
-  })
-  @ApiQuery({ name: 'accountantId', required: true, type: Number, example: 2 })
-  @ApiQuery({ name: 'date', required: true, type: String, example: '2026-04-28' })
-  @ApiResponse({ status: 200, description: 'List of available slots' })
-  async getAvailableSlots(
-    @Query('accountantId', ParseIntPipe) accountantId: number,
-    @Query('date') date: string
-  ) {
-    return this.appointmentService.getAvailableSlots(accountantId, date);
-  }
-
-  /**
-   * Get chat-accessible appointments by client ID (for messagerie attachments)
-   */
-  @Get('chat-accessible/:clientId')
-  @UseGuards(RolesGuard)
-  @Roles('ACCOUNTANT')
-  @ApiOperation({ summary: '[Accountant] Get appointments for a client (chat attachments)' })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: 'number',
-    description: 'Page number (default: 1)',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: 'number',
-    description: 'Items per page (default: 5)',
-  })
-  @ApiResponse({ status: 200, description: 'Paginated list of client appointments' })
-  async getChatAccessibleAppointments(
-    @Param('clientId', ParseIntPipe) clientId: number,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-    @Req() req?: AuthRequest
-  ) {
-    const accountantId = req!.user!.id;
-    return this.appointmentService.getChatAccessibleAppointmentsByClient(
-      clientId,
-      accountantId,
-      page ? Number(page) : 1,
-      limit ? Number(limit) : 5
-    );
   }
 }

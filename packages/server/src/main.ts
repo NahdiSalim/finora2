@@ -31,7 +31,8 @@ async function runSeeds() {
     // Check if data already exists
     const rolesCount = await prisma.role.count();
     if (rolesCount > 0) {
-      console.log(' Database already seeded, skipping...');
+      console.log(' Database already seeded, checking requests...');
+      // Only seed requests if they don't exist
       await prisma.$disconnect();
       return;
     }

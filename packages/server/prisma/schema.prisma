@@ -7,6 +7,25 @@ datasource db {
 }
 
 
+// From accountant_leave.prisma
+model AccountantLeave {
+  id           Int      @id @default(autoincrement())
+  accountantId Int
+  startDate    DateTime @db.Date
+  endDate      DateTime @db.Date
+  reason       String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  accountant   User     @relation("AccountantLeaves", fields: [accountantId], references: [id], onDelete: Cascade)
+
+  @@index([accountantId])
+  @@index([startDate])
+  @@index([endDate])
+  @@map("accountant_leaves")
+}
+
+
 // From action.prisma
 model Action {
   id          Int       @id @default(autoincrement())
@@ -32,54 +51,83 @@ model Appointment {
   title       String
   description String?  @db.Text
   type        String   @default("meeting") // 'meeting', 'consultation', 'review', 'other'
-  
+
   // Date and time
-  startTime   DateTime
-  endTime     DateTime
-  duration    Int      // in minutes
-  
+  date        DateTime @db.Date  // date du rendez-vous ex: 2026-04-15
+  hour        String             // heure du rendez-vous ex: "09:00"
+
   // Status
   status      String   @default("pending") // 'pending', 'confirmed', 'rescheduled', 'rejected', 'cancelled', 'completed'
-  
+
   // Location
-  location    String?  // physical address or meeting link
+  location    String?
   meetingType String   @default("in_person") // 'in_person', 'online', 'phone'
-  
+
   // Relations
-  clientId    Int
-  client      User     @relation("ClientAppointments", fields: [clientId], references: [id], onDelete: Cascade)
-  
+  clientId    Int?
+  client      User?    @relation("ClientAppointments", fields: [clientId], references: [id], onDelete: Cascade)
+
   accountantId Int?
   accountant   User?   @relation("AccountantAppointments", fields: [accountantId], references: [id], onDelete: SetNull)
-  
+
   companyId   Int?
   company     Company? @relation("CompanyAppointments", fields: [companyId], references: [id], onDelete: Cascade)
-  
+
   // Rescheduling
   originalAppointmentId Int?
   originalAppointment   Appointment?  @relation("RescheduledAppointments", fields: [originalAppointmentId], references: [id], onDelete: SetNull)
   rescheduledAppointments Appointment[] @relation("RescheduledAppointments")
-  
+
   // Notes
   accountantNotes String?  @db.Text
   clientNotes     String?  @db.Text
   rejectionReason String?  @db.Text
-  
+
+  // Extras
+  color       String?   // hex color for calendar display e.g. "#1976d2"
+  guests      String[]  // array of guest emails
+
   // Timestamps
   confirmedAt DateTime?
   cancelledAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  slot         AvailabilitySlot? @relation("AppointmentSlot")
-  chatMessages ChatMessage[]     @relation("ChatMessageAppointment")
+  createdById Int?
+  createdBy   User?     @relation("AppointmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById Int?
+  updatedBy   User?     @relation("AppointmentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  slot        AvailabilitySlot? @relation("AppointmentSlot")
+  reports     AppointmentReport[] @relation("AppointmentReports")
 
   @@index([clientId])
   @@index([accountantId])
   @@index([companyId])
   @@index([status])
-  @@index([startTime])
+  @@index([date])
   @@map("appointments")
+}
+
+
+// From appointment_report.prisma
+model AppointmentReport {
+  id            Int      @id @default(autoincrement())
+  appointmentId Int
+  reportedById  Int
+  oldDate       DateTime @db.Date
+  oldHour       String
+  newDate       DateTime @db.Date
+  newHour       String
+  reason        String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  appointment   Appointment @relation("AppointmentReports", fields: [appointmentId], references: [id], onDelete: Cascade)
+  reportedBy    User        @relation("ReportedByUser", fields: [reportedById], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId])
+  @@index([reportedById])
+  @@map("appointment_reports")
 }
 
 
@@ -514,6 +562,9 @@ model Document {
   
   chatThreads       ChatThread[]
   invoiceMetadata   InvoiceMetadata?
+  versions          DocumentVersion[]
+
+  currentVersion    Int?     @default(1)
 
   @@index([ownerId])
   @@index([companyId])
@@ -523,6 +574,27 @@ model Document {
   @@index([status])
   @@index([category])
   @@index([processingStatus])
+}
+
+
+// From document_version.prisma
+model DocumentVersion {
+  id            Int      @id @default(autoincrement())
+  documentId    Int
+  versionNumber Int      // 1, 2, 3...
+  url           String   // chemin MinIO de cette version
+  name          String   // nom du fichier à ce moment
+  size          Int?
+  uploadedBy    Int
+  comment       String?  @db.Text // note optionnelle ex: "correction TVA"
+  createdAt     DateTime @default(now())
+
+  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploader      User     @relation("DocumentVersionUploader", fields: [uploadedBy], references: [id])
+
+  @@index([documentId])
+  @@index([uploadedBy])
+  @@map("document_versions")
 }
 
 
@@ -787,12 +859,18 @@ model RefreshToken {
 model Request {
   id          Int      @id @default(autoincrement())
   subject     String   // Titre de la demande
+  topic       String?  // Sujet (subcategory/specific topic)
   description String?  @db.Text
   type        String   // 'accounting', 'tax', 'consultation', 'document', 'other'
   urgency     String   @default("normal") // 'low', 'normal', 'high', 'urgent'
   status      String   @default("pending") // 'pending', 'in_progress', 'resolved', 'rejected', 'cancelled'
   response    String?  @db.Text
-  attachments String[] @default([]) // Array of file paths in MinIO
+  attachments String[] @default([]) // Array of file paths in MinIO (client attachments)
+  responseAttachments String[] @default([]) // Array of file paths for accountant response
+  
+  // Desired response date/time
+  desiredResponseDate String?
+  desiredResponseTime String?
   
   // Relations
   clientId    Int
@@ -1060,8 +1138,12 @@ model User {
   // Appointments
   clientAppointments     Appointment[] @relation("ClientAppointments")
   accountantAppointments Appointment[] @relation("AccountantAppointments")
+  createdAppointments    Appointment[] @relation("AppointmentCreatedBy")
+  updatedAppointments    Appointment[] @relation("AppointmentUpdatedBy")
   availabilities         Availability[] @relation("AccountantAvailabilities")
   availabilitySlots      AvailabilitySlot[] @relation("AccountantSlots")
+  accountantLeaves       AccountantLeave[] @relation("AccountantLeaves")
+  appointmentReports     AppointmentReport[] @relation("ReportedByUser")
   
   // Tickets
   createdTickets       Ticket[] @relation("TicketCreatedBy")
@@ -1095,6 +1177,9 @@ model User {
   
   // Contact Messages
   receivedContactMessages ContactMessage[] @relation("ContactMessageAccountant")
+
+  // Document Versions
+  uploadedVersions      DocumentVersion[] @relation("DocumentVersionUploader")
 
   @@index([email])
   @@index([companyId])

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ApiError } from '../../common/errors/api-error';
+import { MSG } from '../../common/messages';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto, TaskStatus } from './dto/update-task.dto';
 import { AddCommentDto } from './dto/add-comment.dto';
@@ -37,10 +38,10 @@ export class TaskService {
       });
 
       if (!creator?.companyId) {
-        throw new ApiError('User must belong to a company to create tasks', 400, 'NO_COMPANY');
+        throw new ApiError(MSG.task.no_company, 400, 'NO_COMPANY');
       }
 
-      // If clientId is provided, verify they belong to the same company or have a relationship
+      // If clientId is provided, verify there's a relationship between the accounting firm and client's company
       if (dto.clientId) {
         const client = await this.prisma.user.findUnique({
           where: { id: dto.clientId },
@@ -49,7 +50,7 @@ export class TaskService {
 
         // Verify client belongs to same company
         if (client?.companyId !== creator.companyId) {
-          throw new ApiError('Client must belong to the same company', 400, 'INVALID_CLIENT');
+          throw new ApiError(MSG.task.invalid_client, 400, 'INVALID_CLIENT');
         }
       }
 
@@ -75,7 +76,7 @@ export class TaskService {
 
       // Validate assigneeIds
       if (!dto.assigneeIds || dto.assigneeIds.length === 0) {
-        throw new ApiError('At least one assignee is required', 400, 'NO_ASSIGNEE');
+        throw new ApiError(MSG.task.no_assignee, 400, 'NO_ASSIGNEE');
       }
 
       // If multiple assignees, create one task per assignee
@@ -200,12 +201,43 @@ export class TaskService {
 
       return {
         success: true,
-        message: 'Task created successfully',
+        message: MSG.task.created,
         data: task,
       };
     } catch (error) {
       console.error('Create task error:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Get date range based on filter
+   */
+  private getDateRange(dateFilter?: string): { gte?: Date; lte?: Date } | undefined {
+    if (!dateFilter) return undefined;
+
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+
+    switch (dateFilter) {
+      case 'today':
+        return { gte: startOfDay, lte: endOfDay };
+
+      case 'week': {
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay()); // Start of week (Sunday)
+        startOfWeek.setHours(0, 0, 0, 0);
+        return { gte: startOfWeek, lte: endOfDay };
+      }
+
+      case 'month': {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+        return { gte: startOfMonth, lte: endOfDay };
+      }
+
+      default:
+        return undefined;
     }
   }
 
@@ -218,7 +250,9 @@ export class TaskService {
     limit: number = 10,
     status?: string,
     priority?: string,
-    sortBy: 'priority' | 'dueDate' | 'createdAt' = 'dueDate'
+    sortBy: 'priority' | 'dueDate' | 'createdAt' = 'dueDate',
+    search?: string,
+    dateFilter?: string
   ) {
     const skip = (page - 1) * limit;
     const where: any = { assigneeId: userId };
@@ -231,14 +265,29 @@ export class TaskService {
       where.priority = priority;
     }
 
-    const orderBy: any = {};
+    if (search && search.trim()) {
+      where.OR = [
+        { title: { contains: search.trim(), mode: 'insensitive' } },
+        { description: { contains: search.trim(), mode: 'insensitive' } },
+        { assignee: { firstName: { contains: search.trim(), mode: 'insensitive' } } },
+        { assignee: { lastName: { contains: search.trim(), mode: 'insensitive' } } },
+      ];
+    }
+
+    // Apply date filter
+    const dateRange = this.getDateRange(dateFilter);
+    if (dateRange) {
+      where.createdAt = dateRange;
+    }
+
+    const orderBy: any[] = [{ order: 'asc' }];
     if (sortBy === 'priority') {
       // Custom priority order: urgent > high > medium > low
-      orderBy.priority = 'desc';
+      orderBy.push({ priority: 'desc' });
     } else if (sortBy === 'dueDate') {
-      orderBy.dueDate = 'asc';
+      orderBy.push({ dueDate: 'asc' });
     } else {
-      orderBy.createdAt = 'desc';
+      orderBy.push({ createdAt: 'desc' });
     }
 
     const [total, tasks] = await Promise.all([
@@ -327,12 +376,34 @@ export class TaskService {
   /**
    * Get tasks created by me (Accountant)
    */
-  async getMyCreatedTasks(userId: number, page: number = 1, limit: number = 10, status?: string) {
+  async getMyCreatedTasks(
+    userId: number,
+    page: number = 1,
+    limit: number = 10,
+    status?: string,
+    search?: string,
+    dateFilter?: string
+  ) {
     const skip = (page - 1) * limit;
     const where: any = { createdById: userId };
 
     if (status) {
       where.status = status;
+    }
+
+    if (search && search.trim()) {
+      where.OR = [
+        { title: { contains: search.trim(), mode: 'insensitive' } },
+        { description: { contains: search.trim(), mode: 'insensitive' } },
+        { assignee: { firstName: { contains: search.trim(), mode: 'insensitive' } } },
+        { assignee: { lastName: { contains: search.trim(), mode: 'insensitive' } } },
+      ];
+    }
+
+    // Apply date filter
+    const dateRange = this.getDateRange(dateFilter);
+    if (dateRange) {
+      where.createdAt = dateRange;
     }
 
     const [total, tasks] = await Promise.all([
@@ -341,9 +412,7 @@ export class TaskService {
         where,
         skip,
         take: limit,
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
         include: {
           assignee: {
             select: {
@@ -443,12 +512,12 @@ export class TaskService {
     });
 
     if (!task) {
-      throw new ApiError('Task not found', 404, 'TASK_NOT_FOUND');
+      throw new ApiError(MSG.task.not_found, 404, 'TASK_NOT_FOUND');
     }
 
     // Check access rights
     if (task.assigneeId !== userId && task.createdById !== userId && task.clientId !== userId) {
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.task.access_denied, 403, 'ACCESS_DENIED');
     }
 
     // Parse comments from subtasks
@@ -490,25 +559,26 @@ export class TaskService {
     });
 
     if (!task) {
-      throw new ApiError('Task not found', 404, 'TASK_NOT_FOUND');
+      throw new ApiError(MSG.task.not_found, 404, 'TASK_NOT_FOUND');
     }
 
     // Check access rights
     if (task.assigneeId !== userId && task.createdById !== userId) {
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.task.access_denied, 403, 'ACCESS_DENIED');
     }
 
-    // Collaborators cannot set status to 'completed' or 'archived' — only accountants can
+    // Role-based status restrictions
     const isAccountant = userRole === 'ACCOUNTANT' || task.createdById === userId;
-    if (dto.status === TaskStatus.COMPLETED && !isAccountant) {
-      throw new ApiError(
-        'Only accountants can mark a task as completed. Use "in_review" instead.',
-        403,
-        'FORBIDDEN_STATUS'
-      );
-    }
+    const isCollaborator = task.assigneeId === userId && !isAccountant;
+
+    // Only accountants can archive tasks
     if (dto.status === TaskStatus.ARCHIVED && !isAccountant) {
       throw new ApiError('Only accountants can archive a task.', 403, 'FORBIDDEN_STATUS');
+    }
+
+    // Only accountants can move tasks to "in_review" status
+    if (dto.status === TaskStatus.IN_REVIEW && !isAccountant) {
+      throw new ApiError('Only accountants can move tasks to review.', 403, 'FORBIDDEN_STATUS');
     }
 
     // Upload new attachments to MinIO if provided
@@ -662,7 +732,7 @@ export class TaskService {
 
     return {
       success: true,
-      message: 'Task updated successfully',
+      message: MSG.task.updated,
       data: updatedTask,
     };
   }
@@ -671,23 +741,17 @@ export class TaskService {
   }
 
   /**
-   * Submit task for review (Collaborator) — replaces completeTask for collaborators
+   * Submit task for review (Accountant only - to send completed tasks back to review)
    */
   async submitForReview(taskId: number, userId: number) {
     return this.updateTask(taskId, { status: TaskStatus.IN_REVIEW, progress: 90 }, userId);
   }
 
   /**
-   * Mark task as completed (Accountant only)
+   * Mark task as completed (Collaborator and Accountant)
    */
   async completeTask(taskId: number, userId: number) {
-    return this.updateTask(
-      taskId,
-      { status: TaskStatus.COMPLETED, progress: 100 },
-      userId,
-      undefined,
-      'ACCOUNTANT'
-    );
+    return this.updateTask(taskId, { status: TaskStatus.COMPLETED, progress: 100 }, userId);
   }
 
   /**
@@ -717,7 +781,7 @@ export class TaskService {
     });
 
     if (!task) {
-      throw new ApiError('Task not found', 404, 'TASK_NOT_FOUND');
+      throw new ApiError(MSG.task.not_found, 404, 'TASK_NOT_FOUND');
     }
 
     // Get user info
@@ -779,7 +843,7 @@ export class TaskService {
 
     return {
       success: true,
-      message: 'Comment added successfully',
+      message: MSG.task.comment_added,
       data: comment,
     };
   }
@@ -793,17 +857,17 @@ export class TaskService {
     });
 
     if (!task) {
-      throw new ApiError('Task not found', 404, 'TASK_NOT_FOUND');
+      throw new ApiError(MSG.task.not_found, 404, 'TASK_NOT_FOUND');
     }
 
     // Only creator can validate
     if (task.createdById !== userId) {
-      throw new ApiError('Only task creator can validate', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.task.creator_only_validate, 403, 'ACCESS_DENIED');
     }
 
     // Task must be completed
     if (task.status !== TaskStatus.COMPLETED) {
-      throw new ApiError('Task must be completed before validation', 400, 'INVALID_STATUS');
+      throw new ApiError(MSG.task.invalid_status, 400, 'INVALID_STATUS');
     }
 
     const isApproved = dto.action === ValidationAction.APPROVE;
@@ -845,7 +909,7 @@ export class TaskService {
 
     return {
       success: true,
-      message: isApproved ? 'Task approved successfully' : 'Task rejected and reassigned',
+      message: isApproved ? MSG.task.approved : MSG.task.rejected,
       data: updatedTask,
     };
   }
@@ -954,12 +1018,12 @@ export class TaskService {
     });
 
     if (!task) {
-      throw new ApiError('Task not found', 404, 'TASK_NOT_FOUND');
+      throw new ApiError(MSG.task.not_found, 404, 'TASK_NOT_FOUND');
     }
 
     // Only creator can delete
     if (task.createdById !== userId) {
-      throw new ApiError('Only task creator can delete', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.task.creator_only_delete, 403, 'ACCESS_DENIED');
     }
 
     await this.prisma.task.delete({
@@ -968,7 +1032,7 @@ export class TaskService {
 
     return {
       success: true,
-      message: 'Task deleted successfully',
+      message: MSG.task.deleted,
     };
   }
   /**
@@ -988,79 +1052,7 @@ export class TaskService {
       )
     );
 
-    return { success: true, message: 'Tasks reordered successfully' };
-  }
-
-  /**
-   * Get chat-accessible tasks for a collaborator (for messagerie attachments)
-   */
-  async getChatAccessibleTasksByCollaborator(
-    collaboratorId: number,
-    accountantId: number,
-    page: number = 1,
-    limit: number = 5
-  ) {
-    // Verify accountant has access to this collaborator
-    const accountant = await this.prisma.user.findUnique({
-      where: { id: accountantId },
-      select: { companyId: true },
-    });
-
-    if (!accountant?.companyId) {
-      throw new ApiError(
-        'Accountant not found or not associated with a company',
-        403,
-        'ACCESS_DENIED'
-      );
-    }
-
-    // Verify collaborator exists and is in the same company
-    const collaborator = await this.prisma.user.findUnique({
-      where: { id: collaboratorId },
-      select: { id: true, companyId: true, role: { select: { code: true } } },
-    });
-
-    if (!collaborator) {
-      throw new ApiError('Collaborator not found', 404, 'COLLABORATOR_NOT_FOUND');
-    }
-
-    if (collaborator.companyId !== accountant.companyId) {
-      throw new ApiError('Access denied to this collaborator', 403, 'ACCESS_DENIED');
-    }
-
-    const where = {
-      assigneeId: collaboratorId,
-      status: { notIn: ['archived', 'cancelled'] },
-    };
-
-    const [tasks, total] = await Promise.all([
-      this.prisma.task.findMany({
-        where,
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          priority: true,
-          dueDate: true,
-          createdAt: true,
-        },
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      this.prisma.task.count({ where }),
-    ]);
-
-    return {
-      success: true,
-      data: tasks,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
+    return { success: true, message: MSG.task.reordered };
   }
 
   /**

@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/client';
 import axios from 'axios';
 import FormData from 'form-data';
 import { NotificationService } from '../notification/notification.service';
+import { MSG } from '../../common/messages';
 
 @Injectable()
 export class InvoiceExtractionService {
@@ -19,13 +20,14 @@ export class InvoiceExtractionService {
   ) {}
 
   async extractInvoiceMetadata(documentId: number, companyId: number) {
+    console.log('qqq');
     // 1. Get document directly by ID (only accountants can extract)
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },
     });
 
     if (!document || document.isFolder || document.status !== 'active') {
-      throw new ApiError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
+      throw new ApiError(MSG.document.not_found, 404, 'DOCUMENT_NOT_FOUND');
     }
 
     // 2. Check if document is already processed
@@ -39,7 +41,7 @@ export class InvoiceExtractionService {
         return {
           status: 'success',
           code: '200',
-          message: 'Invoice already extracted',
+          message: MSG.invoice.already_extracted,
           data: {
             documentId: document.id,
             metadata: existingMetadata,
@@ -98,7 +100,7 @@ export class InvoiceExtractionService {
       return {
         status: 'success',
         code: '200',
-        message: 'Invoice extracted successfully. Please verify and save the data.',
+        message: MSG.invoice.extracted,
         data: {
           documentId: document.id,
           extractedData: extractedData,
@@ -173,7 +175,7 @@ export class InvoiceExtractionService {
         );
       }
 
-      throw new ApiError('Failed to extract invoice metadata', 500, 'EXTRACTION_FAILED');
+      throw new ApiError(MSG.invoice.extraction_failed, 500, 'EXTRACTION_FAILED');
     }
   }
 
@@ -239,7 +241,6 @@ export class InvoiceExtractionService {
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
       });
-
       const extractedData = response.data;
       if (!extractedData || typeof extractedData !== 'object') {
         throw new Error('API returned empty or invalid response');
@@ -362,7 +363,7 @@ export class InvoiceExtractionService {
     });
 
     if (!document) {
-      throw new ApiError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
+      throw new ApiError(MSG.document.not_found, 404, 'DOCUMENT_NOT_FOUND');
     }
 
     const extractionStatus = document.extractionStatus || 'pending';
@@ -440,12 +441,12 @@ export class InvoiceExtractionService {
     });
 
     if (!document) {
-      throw new ApiError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
+      throw new ApiError(MSG.document.not_found, 404, 'DOCUMENT_NOT_FOUND');
     }
 
     if (document.processingStatus !== 'enregistre') {
       throw new ApiError(
-        `Document must be in "enregistre" status to synchronize. Current status: ${document.processingStatus}`,
+        MSG.invoice.invalid_sync_status(document.processingStatus),
         400,
         'INVALID_STATUS'
       );
@@ -460,7 +461,7 @@ export class InvoiceExtractionService {
       return {
         status: 'success',
         code: '200',
-        message: 'Document synchronized successfully',
+        message: MSG.invoice.synchronized,
         data: {
           documentId,
           processingStatus: 'synchronise',
@@ -468,7 +469,7 @@ export class InvoiceExtractionService {
       };
     } catch (error) {
       console.error('Failed to synchronize document:', error);
-      throw new ApiError('Failed to synchronize document', 500, 'SYNC_FAILED');
+      throw new ApiError(MSG.invoice.sync_failed, 500, 'SYNC_FAILED');
     }
   }
 
@@ -496,10 +497,10 @@ export class InvoiceExtractionService {
 
     const lines: any[] = Array.isArray(result.lin_section) ? result.lin_section : [];
 
-    // Ajouter lin_total sur chaque ligne (qty × unitPrice × (1 - remise%))
     result.lin_section = lines.map((line: any) => {
       const qty = parseFloat(line.lin_qty) || 0;
-      const unitPrice = parseFloat(line.lin_moa?.rff) || 0;
+      // Support both new format (lin_unit_price) and old format (lin_moa.rff)
+      const unitPrice = parseFloat(line.lin_unit_price ?? line.lin_moa?.rff) || 0;
       const discountPct = parseFloat(line.lin_alc?.pcd) || 0;
       const lineTotal = parseFloat((qty * unitPrice * (1 - discountPct / 100)).toFixed(3));
 
@@ -507,13 +508,11 @@ export class InvoiceExtractionService {
         ...line,
         lin_moa: {
           ...line.lin_moa,
-          lin_total: lineTotal.toFixed(3), // total ligne HT après remise (ajouté pour le front)
+          rff: unitPrice.toFixed(3),
+          lin_total: lineTotal.toFixed(3),
         },
       };
     });
-
-    // Les totaux invoice_moa et invoice_tax sont déjà corrects depuis l'API — on ne les touche pas.
-    // invoice_moa[0] = HT, [1] = TVA, [2] = TTC
 
     return result;
   }
@@ -537,7 +536,8 @@ export class InvoiceExtractionService {
       const label = line.lin_imd || `Ligne ${idx + 1}`;
 
       const rawQty = line.lin_qty;
-      const rawPrice = line.lin_moa?.rff;
+      // Support both new format (lin_unit_price) and old format (lin_moa.rff)
+      const rawPrice = line.lin_unit_price ?? line.lin_moa?.rff;
       const rawDiscount = line.lin_alc?.pcd;
 
       const qty = parseFloat(rawQty);
@@ -576,6 +576,7 @@ export class InvoiceExtractionService {
       return {
         ...line,
         lin_qty: safeQty.toString(),
+        lin_unit_price: safePrice.toFixed(3),
         lin_moa: {
           ...line.lin_moa,
           rff: safePrice.toFixed(3),
@@ -591,19 +592,24 @@ export class InvoiceExtractionService {
     let totalTVA = 0;
     if (Array.isArray(result.invoice_tax)) {
       result.invoice_tax = result.invoice_tax.map((taxEntry: any) => {
-        let tvaRate = 0;
-        if (taxEntry?.tax) {
-          const match = taxEntry.tax.match(/(\d+(?:\.\d+)?)\s*%/);
-          if (match) tvaRate = parseFloat(match[1]) / 100;
-        }
-        const tvaAmount = parseFloat((totalHT * tvaRate).toFixed(3));
+        const taxLabel: string = taxEntry?.tax ?? '';
+        const pctMatch = taxLabel.match(/(\d+(?:\.\d+)?)\s*%/);
 
-        // Warn if front sent wrong TVA amount
-        const frontTva = parseFloat(taxEntry.moa);
-        if (!isNaN(frontTva) && Math.abs(frontTva - tvaAmount) > 0.01) {
-          warnings.push(
-            `TVA (${taxEntry.tax}): montant corrigé (envoyé: ${frontTva}, calculé: ${tvaAmount})`
-          );
+        let tvaAmount: number;
+        if (pctMatch) {
+          // Percentage-based tax (e.g. "TVA 19%")
+          const tvaRate = parseFloat(pctMatch[1]) / 100;
+          tvaAmount = parseFloat((totalHT * tvaRate).toFixed(3));
+
+          const frontTva = parseFloat(taxEntry.moa);
+          if (!isNaN(frontTva) && Math.abs(frontTva - tvaAmount) > 0.01) {
+            warnings.push(
+              `TVA (${taxLabel}): montant corrigé (envoyé: ${frontTva}, calculé: ${tvaAmount})`
+            );
+          }
+        } else {
+          // Fixed amount tax (e.g. "Droit de Timbre") — keep as-is
+          tvaAmount = parseFloat(taxEntry.moa) || 0;
         }
 
         totalTVA += tvaAmount;
@@ -682,21 +688,12 @@ export class InvoiceExtractionService {
     });
 
     if (!document || document.isFolder || document.status !== 'active') {
-      throw new ApiError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
-    }
-
-    // 2. Check if document is in "traite" or "enregistre" status (allow re-save)
-    if (!['traite', 'enregistre'].includes(document.processingStatus)) {
-      throw new ApiError(
-        `Document must be in "traite" or "enregistre" status to save metadata. Current status: ${document.processingStatus}`,
-        400,
-        'INVALID_STATUS'
-      );
+      throw new ApiError(MSG.document.not_found, 404, 'DOCUMENT_NOT_FOUND');
     }
 
     try {
       if (!extractedData || typeof extractedData !== 'object') {
-        throw new ApiError('extractedData must be a valid JSON object', 400, 'INVALID_DATA');
+        throw new ApiError(MSG.invoice.invalid_data, 400, 'INVALID_DATA');
       }
 
       // 3. Recalculate totals from line items (user may have modified lines/prices/quantities)
@@ -735,7 +732,7 @@ export class InvoiceExtractionService {
       return {
         status: 'success',
         code: '200',
-        message: 'Invoice metadata saved successfully',
+        message: MSG.invoice.saved,
         data: {
           documentId: document.id,
           metadata,
@@ -745,7 +742,7 @@ export class InvoiceExtractionService {
     } catch (error) {
       console.error('Failed to save invoice metadata:', error);
       if (error instanceof ApiError) throw error;
-      throw new ApiError('Failed to save invoice metadata', 500, 'SAVE_FAILED');
+      throw new ApiError(MSG.invoice.save_failed, 500, 'SAVE_FAILED');
     }
   }
 }

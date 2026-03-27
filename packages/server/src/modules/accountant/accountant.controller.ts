@@ -21,6 +21,7 @@ import {
   ApiQuery,
   ApiConsumes,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AccountantService } from './accountant.service';
 import { CreateCollaboratorDto } from './dto/create-collaborator.dto';
@@ -89,10 +90,17 @@ export class AccountantController {
   }
 
   @Get('collaborators')
+  @Throttle({ default: { limit: 200, ttl: 60000 } })
   @Roles(RoleCode.ACCOUNTANT)
   @ApiOperation({ summary: 'Get all collaborators of accountant firm' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by name or email',
+  })
   @ApiResponse({
     status: 200,
     description: 'List of collaborators retrieved successfully',
@@ -100,13 +108,15 @@ export class AccountantController {
   async getCollaborators(
     @Req() req: AuthRequest,
     @Query('page') page?: string,
-    @Query('limit') limit?: string
+    @Query('limit') limit?: string,
+    @Query('search') search?: string
   ) {
     const accountantId = req.user!.id;
     return await this.accountantService.getCollaborators(
       accountantId,
       page ? parseInt(page) : 1,
-      limit ? parseInt(limit) : 10
+      limit ? parseInt(limit) : 10,
+      search
     );
   }
 
@@ -115,10 +125,6 @@ export class AccountantController {
   @ApiOperation({ summary: 'Get all clients of accountant firm' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
-  @ApiResponse({
-    status: 200,
-    description: 'List of clients retrieved successfully',
-  })
   async getClients(
     @Req() req: AuthRequest,
     @Query('page') page?: string,
@@ -131,6 +137,13 @@ export class AccountantController {
       page ? parseInt(page) : 1,
       limit ? parseInt(limit) : 10
     );
+  }
+
+  @Get('my-accountants')
+  @Roles(RoleCode.CLIENT)
+  @ApiOperation({ summary: '[Client] Get my accountants (active relationships)' })
+  async getMyAccountants(@Req() req: AuthRequest) {
+    return await this.accountantService.getMyAccountants(req.user!.id);
   }
 }
 

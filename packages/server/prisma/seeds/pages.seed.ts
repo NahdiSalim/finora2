@@ -23,10 +23,17 @@ export async function seedPages(prisma: PrismaClient) {
   });
   const gestionTaches = await prisma.feature.findUnique({ where: { slug: 'gestion-taches' } });
   const gestionClients = await prisma.feature.findUnique({ where: { slug: 'gestion-clients' } });
+  const gestionUtilisateurs = await prisma.feature.findUnique({
+    where: { slug: 'gestion-utilisateurs' },
+  });
 
   const pages = [
     // Dashboard
     { PageUrl: '/dashboard', slug: 'dashboard-view', featureId: dashboard!.id },
+
+    // Gestion des utilisateurs (super admin)
+    { PageUrl: '/users', slug: 'users-list', featureId: gestionUtilisateurs!.id },
+    { PageUrl: '/users/:id', slug: 'user-detail', featureId: gestionUtilisateurs!.id },
 
     // Gestion des comptes comptables (Admin)
     { PageUrl: '/admin/accountants', slug: 'accountants-list', featureId: gestionComptables!.id },
@@ -51,6 +58,18 @@ export async function seedPages(prisma: PrismaClient) {
     // Gestion des rendez-vous
     { PageUrl: '/meetings', slug: 'meetings-list', featureId: gestionRendezVous!.id },
     { PageUrl: '/meetings/:id', slug: 'meeting-detail', featureId: gestionRendezVous!.id },
+    { PageUrl: '/appointments', slug: 'appointments-list', featureId: gestionRendezVous!.id },
+    { PageUrl: '/appointments/:id', slug: 'appointment-detail', featureId: gestionRendezVous!.id },
+    {
+      PageUrl: '/appointments/calendar',
+      slug: 'appointments-calendar',
+      featureId: gestionRendezVous!.id,
+    },
+    {
+      PageUrl: '/appointments/history',
+      slug: 'appointments-history',
+      featureId: gestionRendezVous!.id,
+    },
 
     // Gestion des demandes
     { PageUrl: '/requests', slug: 'requests-list', featureId: gestionDemandes!.id },

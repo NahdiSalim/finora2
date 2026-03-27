@@ -43,6 +43,8 @@ export interface Accountant {
   verified?: boolean;
   /** Id du comptable (user id) pour lien vers le profil public */
   accountantId?: number;
+  /** Company id (used for relationship invitation) */
+  companyId?: number;
 }
 
 interface AccountantCardProps {

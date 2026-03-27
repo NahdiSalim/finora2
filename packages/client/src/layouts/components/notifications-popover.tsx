@@ -1,6 +1,6 @@
 import type { ButtonProps } from "@mui/material/Button";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 
 import Box from "@mui/material/Box";
 import List from "@mui/material/List";
@@ -14,7 +14,6 @@ import ListSubheader from "@mui/material/ListSubheader";
 import { useTheme, alpha } from "@mui/material/styles";
 
 import { Bell } from "lucide-react";
-import { io, type Socket } from "socket.io-client";
 
 import { Iconify } from "src/components/iconify";
 import { Scrollbar } from "src/components/scrollbar";
@@ -46,7 +45,13 @@ export function NotificationsPopover({
   const { showAlert } = useAlert();
   const [processingId, setProcessingId] = useState<number | null>(null);
   const { data: notificationsData, refetch: refetchNotifications } =
-    useGetNotificationsQuery({ limit: 20, offset: 0 });
+    useGetNotificationsQuery(
+      { limit: 20, offset: 0 },
+      {
+        refetchOnFocus: false,
+        refetchOnReconnect: false,
+      },
+    );
   const [markAsRead] = useMarkNotificationAsReadMutation();
   const [markAllAsRead] = useMarkAllNotificationsAsReadMutation();
   const [respondToInvitation] = useRespondToInvitationMutation();
@@ -126,6 +131,7 @@ export function NotificationsPopover({
     markAsRead,
     showAlert,
     refetchNotifications,
+    data,
   ]);
 
   const totalUnRead = notifications.filter(
@@ -154,35 +160,6 @@ export function NotificationsPopover({
       .then(() => refetchNotifications())
       .catch(() => showAlert("Erreur lors du marquage", "error"));
   }, [markAllAsRead, refetchNotifications, showAlert]);
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    const apiUrl = import.meta.env.VITE_API_URL ?? "";
-
-    let socket: Socket | null = null;
-    if (token && apiUrl) {
-      try {
-        socket = io(`${apiUrl}/notifications`, {
-          auth: { token },
-          transports: ["websocket"],
-        });
-
-        socket.on("notification", () => {
-          refetchNotifications();
-        });
-
-        socket.on("notificationUpdate", () => {
-          refetchNotifications();
-        });
-      } catch {
-        // no-op
-      }
-    }
-
-    return () => {
-      socket?.disconnect();
-    };
-  }, [refetchNotifications]);
 
   return (
     <>

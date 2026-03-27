@@ -82,7 +82,7 @@ export function EchangesContent({
             color: theme.palette.text.primary,
           }}
         >
-          Echanges
+          Commentaires
         </Typography>
       </Box>
 

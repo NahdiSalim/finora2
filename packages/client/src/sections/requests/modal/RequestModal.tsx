@@ -14,7 +14,7 @@ import type { SubmitHandler } from "react-hook-form";
 import { Controller, useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { X, ChevronRight, Folder } from "lucide-react";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 import CustomInput from "src/components/common/CustomInput";
 import CustomButton from "src/components/common/CustomButton";
@@ -127,7 +127,6 @@ export default function RequestModal({ open, onClose }: Props) {
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<number[]>([]);
-  const hasAutoExpandedRoot = useRef(false);
 
   const {
     register,
@@ -160,7 +159,7 @@ export default function RequestModal({ open, onClose }: Props) {
       limit: 500,
       status: "active",
     },
-    { skip: !open },
+    { skip: !open || activeTab !== "select" },
   );
   const rootFolders =
     rootData?.data
@@ -180,22 +179,13 @@ export default function RequestModal({ open, onClose }: Props) {
 
   useEffect(() => {
     if (!open) {
-      hasAutoExpandedRoot.current = false;
       setActiveTab("upload");
       setSelectedFolderId(null);
       setExpandedIds(new Set());
       setSelectedDocumentIds([]);
       return;
     }
-    if (!rootData?.data || hasAutoExpandedRoot.current) return;
-    hasAutoExpandedRoot.current = true;
-    const folders = rootData.data.filter((d) => d.isFolder);
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      folders.forEach((f) => next.add(f.id));
-      return next;
-    });
-  }, [open, rootData]);
+  }, [open]);
 
   const handleToggleExpand = useCallback((id: number) => {
     setExpandedIds((prev) => {

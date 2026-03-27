@@ -69,7 +69,7 @@ export default function TaskModal({
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(collaboratorSearch);
-    }, 300);
+    }, 500);
     return () => clearTimeout(timer);
   }, [collaboratorSearch]);
 
@@ -82,7 +82,7 @@ export default function TaskModal({
         search: debouncedSearch || undefined,
       },
       {
-        refetchOnMountOrArgChange: true,
+        skip: !open,
       },
     );
   const { data: clientsData } = useGetClientsQuery({ page: 1, limit: 100 });

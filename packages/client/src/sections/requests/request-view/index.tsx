@@ -297,48 +297,51 @@ export default function RequestView() {
           },
         ]
       : []),
-    {
-      id: "assignedTo",
-      label: "Assigné à",
-      render: (request: Request) => (
-        <Box>
-          {request.assignedTo ? (
-            <Typography
-              variant="body2"
-              sx={{
-                fontWeight: 500,
-                color: theme.palette.text.primary,
-              }}
-            >
-              {request.assignedTo.firstName} {request.assignedTo.lastName}
-            </Typography>
-          ) : (
-            <Typography
-              variant="body2"
-              sx={{
-                color: theme.palette.text.disabled,
-                fontStyle: "italic",
-              }}
-            >
-              Non assigné
-            </Typography>
-          )}
-          {request.convertedToTask?.assignee && (
-            <Typography
-              variant="caption"
-              sx={{
-                color: theme.palette.info.main,
-                fontSize: 11,
-                fontWeight: 500,
-              }}
-            >
-              → {request.convertedToTask.assignee.firstName}{" "}
-              {request.convertedToTask.assignee.lastName}
-            </Typography>
-          )}
-        </Box>
-      ),
-    },
+    // Conditional "Assigné à" column - only show on "Mes demandes" tab
+    ...(isAccountant && viewTab === "my_requests"
+      ? [
+          {
+            id: "assignedTo",
+            label: "Assigné à",
+            render: (request: Request) => (
+              <Box>
+                {request.convertedToTask?.assignee ? (
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 500,
+                      color: theme.palette.text.primary,
+                    }}
+                  >
+                    {request.convertedToTask.assignee.firstName}{" "}
+                    {request.convertedToTask.assignee.lastName}
+                  </Typography>
+                ) : request.assignedTo ? (
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 500,
+                      color: theme.palette.text.primary,
+                    }}
+                  >
+                    {request.assignedTo.firstName} {request.assignedTo.lastName}
+                  </Typography>
+                ) : (
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: theme.palette.text.disabled,
+                      fontStyle: "italic",
+                    }}
+                  >
+                    Non assigné
+                  </Typography>
+                )}
+              </Box>
+            ),
+          },
+        ]
+      : []),
     {
       id: "status",
       label: (

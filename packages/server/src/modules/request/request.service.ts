@@ -689,7 +689,11 @@ export class RequestService {
     }
 
     const skip = (page - 1) * limit;
-    const where: any = { accountingFirmId: accountant.companyId };
+    const where: any = {
+      accountingFirmId: accountant.companyId,
+      assignedToId: null,
+      convertedToTaskId: null,
+    };
 
     if (status) {
       where.status = status;
@@ -765,10 +769,14 @@ export class RequestService {
       }),
     ]);
 
-    // Count by status
+    // Count by status (only unassigned requests)
     const statusCounts = await this.prisma.request.groupBy({
       by: ['status'],
-      where: { accountingFirmId: accountant.companyId },
+      where: {
+        accountingFirmId: accountant.companyId,
+        assignedToId: null,
+        convertedToTaskId: null,
+      },
       _count: true,
     });
 
@@ -905,11 +913,13 @@ export class RequestService {
       select: { companyId: true },
     });
 
-    if (
-      request.clientId !== userId &&
-      request.assignedToId !== userId &&
-      request.companyId !== user?.companyId
-    ) {
+    // Allow access if user is the client, assigned accountant, or from the accounting firm
+    const hasAccess =
+      request.clientId === userId ||
+      request.assignedToId === userId ||
+      (request.accountingFirmId && request.accountingFirmId === user?.companyId);
+
+    if (!hasAccess) {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
     }
 
@@ -975,7 +985,19 @@ export class RequestService {
     }
 
     // Check access rights
-    if (request.clientId !== userId && request.assignedToId !== userId) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { companyId: true, role: { select: { code: true } } },
+    });
+
+    const isAccountingFirmMember =
+      (user?.role?.code === 'ACCOUNTANT' ||
+        user?.role?.code === 'ADMINISTRATOR' ||
+        user?.role?.code === 'COLLABORATOR') &&
+      request.accountingFirmId === user.companyId;
+
+    // Allow access if: user is the client, assigned to the request, or from the accounting firm
+    if (request.clientId !== userId && request.assignedToId !== userId && !isAccountingFirmMember) {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
     }
 

@@ -1851,13 +1851,24 @@ export default function ViewRequestDrawer({
           vertical: "bottom",
           horizontal: "center",
         }}
+        sx={{
+          zIndex: (theme2) => theme2.zIndex.modal + 20,
+        }}
+        slotProps={{
+          paper: {
+            sx: {
+              width: { xs: "90%", sm: 320 },
+              maxWidth: 400,
+              maxHeight: { xs: 300, sm: 400 },
+              mt: -1,
+              borderRadius: 2,
+              boxShadow: theme.shadows[8],
+              overflow: "auto",
+            },
+          },
+        }}
         PaperProps={{
           sx: {
-            width: { xs: "calc(100% - 48px)", sm: 320 },
-            maxHeight: 400,
-            mt: -1,
-            borderRadius: 2,
-            boxShadow: theme.shadows[8],
             "& .MuiList-root": {
               py: 1,
             },

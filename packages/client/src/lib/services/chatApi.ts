@@ -73,6 +73,15 @@ export interface GetRoomsResponse {
   totalPages: number;
 }
 
+export interface GetRoomsParams {
+  /** Role code to filter the other participant by. Not the same as the tab label. */
+  category?: string;
+  search?: string;
+  date?: string; // YYYY-MM-DD
+  page?: number;
+  pageSize?: number;
+}
+
 export interface GetRoomMessagesResponse {
   messages: ChatMessage[];
   total: number;
@@ -147,8 +156,21 @@ export const chatApi = createApi({
   tagTypes: ["ChatRooms", "ChatMessages"],
   endpoints: (builder) => ({
     // Returns paginated { data: ChatRoom[], total, page, pageSize, totalPages }
-    getUserRooms: builder.query<GetRoomsResponse, void>({
-      query: () => ({ url: "/chat/rooms", method: "GET" }),
+    getUserRooms: builder.query<GetRoomsResponse, GetRoomsParams | undefined>({
+      query: (params) => {
+        const qs = new URLSearchParams();
+        if (params?.category) qs.set("category", params.category);
+        if (params?.search) qs.set("search", params.search);
+        if (params?.date) qs.set("date", params.date);
+        if (params?.page !== undefined) qs.set("page", String(params.page));
+        if (params?.pageSize !== undefined)
+          qs.set("pageSize", String(params.pageSize));
+        const queryString = qs.toString();
+        return {
+          url: `/chat/rooms${queryString ? `?${queryString}` : ""}`,
+          method: "GET",
+        };
+      },
       providesTags: [{ type: "ChatRooms", id: "LIST" }],
       keepUnusedDataFor: 0,
     }),

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
@@ -7,6 +8,7 @@ import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
+import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 
 import CustomButton from "../../../../components/common/CustomButton";
 import type { SharedMediaFile } from "../data/types";
@@ -20,59 +22,102 @@ export default function SharedMediaCard({
   file,
   onView,
 }: SharedMediaCardProps) {
-  const isImage = file.type === "image" && !!file.previewUrl;
+  const [imgFailed, setImgFailed] = useState(false);
   const canDownload = !!file.previewUrl && file.previewUrl !== "#";
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!canDownload || !file.previewUrl) return;
-
-    const link = document.createElement("a");
-    link.href = file.previewUrl;
-    link.download = file.name;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      const response = await fetch(file.previewUrl);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.open(file.previewUrl, "_blank", "noopener,noreferrer");
+    }
   };
 
   const renderPreview = () => {
-    if (isImage) {
-      return (
-        <Box
-          component="img"
-          src={file.previewUrl}
-          alt={file.name}
-          onError={(e) => {
-            e.currentTarget.style.display = "none";
-          }}
-          sx={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            display: "block",
-          }}
-        />
-      );
+    // ── Image ──────────────────────────────────────────────────────────
+    if (file.type === "image") {
+      if (file.previewUrl && !imgFailed) {
+        return (
+          <Box
+            component="img"
+            src={file.previewUrl}
+            alt={file.name}
+            onError={() => setImgFailed(true)}
+            sx={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              display: "block",
+            }}
+          />
+        );
+      }
+      return <ImageOutlinedIcon sx={{ fontSize: 26, color: "#64748B" }} />;
     }
 
+    // ── PDF — iframe thumbnail ─────────────────────────────────────────
+    // Approach: absolutely-positioned iframe, 3× the container size, scaled
+    // back down 0.333× from the top-left so it fills the box exactly.
+    //
+    // Key detail: add #view=FitH so the PDF viewer scales the page to FILL
+    // the iframe WIDTH (not height). Without this, Chrome PDF viewer defaults
+    // to "fit page" (fits height), leaving gray space on the right.
+    //
+    // +20px on both dimensions: after scale(0.333) this adds ~7px of clip
+    // margin, hiding the PDF viewer's scrollbar edge from the visible area.
     if (file.type === "pdf") {
+      if (file.previewUrl) {
+        return (
+          <Box
+            component="iframe"
+            src={`${file.previewUrl}#toolbar=0&navpanes=0&view=FitH`}
+            title={file.name}
+            sx={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "calc(300% + 20px)",
+              height: "calc(300% + 20px)",
+              border: "none",
+              pointerEvents: "none",
+              transform: "scale(0.333)",
+              transformOrigin: "0 0",
+              backgroundColor: "#fff",
+            }}
+          />
+        );
+      }
       return (
         <PictureAsPdfOutlinedIcon sx={{ fontSize: 26, color: "#F04438" }} />
       );
     }
 
+    // ── Doc ────────────────────────────────────────────────────────────
     if (file.type === "doc") {
       return (
         <DescriptionOutlinedIcon sx={{ fontSize: 26, color: "#2563EB" }} />
       );
     }
 
+    // ── Xls ────────────────────────────────────────────────────────────
     if (file.type === "xls") {
       return <TableChartOutlinedIcon sx={{ fontSize: 26, color: "#16A34A" }} />;
     }
 
-    return <ImageOutlinedIcon sx={{ fontSize: 24, color: "#64748B" }} />;
+    // ── Generic file fallback ──────────────────────────────────────────
+    return (
+      <InsertDriveFileOutlinedIcon sx={{ fontSize: 26, color: "#64748B" }} />
+    );
   };
 
   return (
@@ -105,6 +150,7 @@ export default function SharedMediaCard({
           justifyContent: "center",
           flexShrink: 0,
           mb: 0.7,
+          position: "relative",
         }}
       >
         {renderPreview()}
@@ -139,7 +185,7 @@ export default function SharedMediaCard({
             lineHeight: 1.2,
           }}
         >
-          Added {file.uploadedAt}
+          {file.uploadedAt}
         </Typography>
       </Box>
 

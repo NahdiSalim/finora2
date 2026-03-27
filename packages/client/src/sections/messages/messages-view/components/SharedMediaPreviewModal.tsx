@@ -26,16 +26,14 @@ export default function SharedMediaPreviewModal({
   onClose,
 }: SharedMediaPreviewModalProps) {
   const [imageFailed, setImageFailed] = useState(false);
+  const validUrl =
+    !!file?.previewUrl &&
+    file.previewUrl.trim() !== "" &&
+    file.previewUrl !== "#";
 
   useEffect(() => {
     setImageFailed(false);
   }, [file]);
-
-  const hasPreview =
-    !!file?.previewUrl &&
-    file.previewUrl.trim() !== "" &&
-    file.previewUrl !== "#" &&
-    !imageFailed;
 
   const handleDownload = async () => {
     if (!file?.previewUrl || file.previewUrl === "#") {
@@ -223,18 +221,30 @@ export default function SharedMediaPreviewModal({
               overflow: "hidden",
             }}
           >
-            {hasPreview ? (
+            {file?.type === "image" && validUrl && !imageFailed ? (
               <Box
                 component="img"
-                src={file?.previewUrl}
-                alt={file?.name || "Aperçu du fichier"}
+                src={file.previewUrl}
+                alt={file.name || "Aperçu du fichier"}
                 onError={() => setImageFailed(true)}
                 sx={{
                   width: "100%",
-                  height: "100%",
                   maxHeight: 420,
                   objectFit: "contain",
                   display: "block",
+                }}
+              />
+            ) : file?.type === "pdf" && validUrl ? (
+              <Box
+                component="iframe"
+                src={file.previewUrl}
+                title={file.name}
+                sx={{
+                  width: "100%",
+                  height: 420,
+                  border: "none",
+                  display: "block",
+                  borderRadius: "8px",
                 }}
               />
             ) : (

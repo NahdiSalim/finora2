@@ -48,7 +48,7 @@ export type Message = {
 export type SharedMediaFile = {
   id: number;
   name: string;
-  type: "pdf" | "image" | "doc" | "xls";
+  type: "pdf" | "image" | "doc" | "xls" | "file";
   size: string;
   uploadedAt: string;
   previewUrl?: string;

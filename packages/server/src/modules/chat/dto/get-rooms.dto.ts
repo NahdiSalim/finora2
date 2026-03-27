@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsDateString, IsInt, Min, IsIn } from 'class-validator';
+import { IsOptional, IsString, IsDateString, IsInt, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class GetRoomsDto {
@@ -8,7 +8,7 @@ export class GetRoomsDto {
   })
   @IsOptional()
   @IsString()
-  searchTerm?: string;
+  search?: string;
 
   @ApiPropertyOptional({ description: 'Filtrer par date (YYYY-MM-DD)' })
   @IsOptional()
@@ -16,13 +16,13 @@ export class GetRoomsDto {
   date?: string;
 
   @ApiPropertyOptional({
-    description: 'Filtrer par rôle du participant',
-    enum: ['client', 'collaborateur', 'comptable'],
+    description:
+      'Role code to filter other participants by. ' +
+      'Accepts: client, collaborateur, collaborator, comptable, accountant (case-insensitive).',
   })
   @IsOptional()
   @IsString()
-  @IsIn(['client', 'collaborateur', 'comptable'])
-  role?: string;
+  category?: string;
 
   @ApiPropertyOptional({ description: 'Numéro de page', default: 1, type: 'number' })
   @IsOptional()

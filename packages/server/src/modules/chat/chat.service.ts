@@ -75,7 +75,7 @@ export class ChatService {
     return room;
   }
 
-  async getUserRoomsDebug(userId: number) {
+  async getUserRoomsDebug(userId: number, category?: string, search?: string, date?: string) {
     // Apply the filter
     const matchedRooms = await this.prisma.chatRoom.findMany({
       where: {
@@ -144,13 +144,60 @@ export class ChatService {
       lastMessage: lastMessageMap.get(room.id) ?? null,
     }));
 
+    // Map a requested category string to the set of role codes it covers.
+    // Handles spelling variants (COLLABORATOR vs COLLABORATEUR, COMPTABLE vs ACCOUNTANT)
+    // and case differences coming from different DB seeds or backends.
+    function categoryMatchesRoleCode(cat: string, roleCode: string): boolean {
+      const c = cat.toLowerCase();
+      const r = roleCode.toLowerCase();
+      if (c === 'client') return r === 'client' || r.startsWith('client_');
+      if (c === 'collaborateur') return r === 'collaborateur' || r === 'collaborator';
+      if (c === 'comptable') return r === 'comptable' || r === 'accountant';
+      // Fallback: exact match
+      return r === c;
+    }
+
+    // Apply category filter: keep only rooms where at least one other participant
+    // has a role.code that belongs to the requested category group.
+    // Runs after profile enrichment because role data lives on users, not rooms.
+    let filtered = category
+      ? enriched.filter((room) =>
+          room.participantProfiles.some(
+            (p: any) => p?.role?.code && categoryMatchesRoleCode(category, p.role.code)
+          )
+        )
+      : enriched;
+
+    // Apply search filter: keep only rooms where at least one other participant
+    // has a name, username or email that contains the search term.
+    if (search) {
+      const term = search.trim().toLowerCase();
+      filtered = filtered.filter((room) =>
+        room.participantProfiles.some((p: any) => {
+          const fullName = [p?.firstName, p?.lastName].filter(Boolean).join(' ').toLowerCase();
+          const username = (p?.username ?? '').toLowerCase();
+          const email = (p?.email ?? '').toLowerCase();
+          return fullName.includes(term) || username.includes(term) || email.includes(term);
+        })
+      );
+    }
+
+    // Apply date filter: keep only rooms whose lastActivity falls on the given date (UTC).
+    // date is expected as YYYY-MM-DD.
+    if (date) {
+      filtered = filtered.filter((room) => {
+        if (!room.lastActivity) return false;
+        return new Date(room.lastActivity).toISOString().slice(0, 10) === date;
+      });
+    }
+
     // Return paginated shape expected by frontend
     return {
-      data: enriched,
-      total: enriched.length,
+      data: filtered,
+      total: filtered.length,
       page: 1,
       pageSize: 50,
-      totalPages: Math.ceil(enriched.length / 50),
+      totalPages: Math.ceil(filtered.length / 50),
     };
   }
 
@@ -475,7 +522,7 @@ export class ChatService {
 
     const [messages, total] = await Promise.all([
       this.prisma.chatMessage.findMany({
-        where: { roomId, deleted: false, type: 'file' },
+        where: { roomId, deleted: false, type: { in: ['file', 'image'] } },
         select: {
           id: true,
           roomId: true,
@@ -489,16 +536,28 @@ export class ChatService {
         take: pageSize,
         skip,
       }),
-      this.prisma.chatMessage.count({ where: { roomId, deleted: false, type: 'file' } }),
+      this.prisma.chatMessage.count({
+        where: { roomId, deleted: false, type: { in: ['file', 'image'] } },
+      }),
     ]);
 
-    // content = MinIO objectName — generate presigned URL
+    // Generate presigned URLs — strategy differs by type:
+    // - Images: always generate URL; frontend handles broken URLs via onError fallback
+    // - Non-images (PDF, doc, etc.): check existence first to avoid displaying raw storage
+    //   error content (e.g. NoSuchKey XML) inside preview iframes/cards
     const data = await Promise.all(
       messages.map(async (msg) => {
         let fileUrl: string | null = null;
         if (msg.content) {
           try {
-            fileUrl = await this.minioService.getPresignedUrl(msg.content, 7 * 24 * 60 * 60);
+            if (msg.type === 'image') {
+              fileUrl = await this.minioService.getPresignedUrl(msg.content, 7 * 24 * 60 * 60);
+            } else {
+              const exists = await this.minioService.fileExists(msg.content);
+              if (exists) {
+                fileUrl = await this.minioService.getPresignedUrl(msg.content, 7 * 24 * 60 * 60);
+              }
+            }
           } catch {
             fileUrl = null;
           }

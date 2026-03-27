@@ -21,6 +21,7 @@ import { ChatGateway } from './chat.gateway';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { SearchMessagesDto } from './dto/search-messages.dto';
+import { GetRoomsDto } from './dto/get-rooms.dto';
 
 @ApiTags('Chat')
 @ApiBearerAuth()
@@ -45,9 +46,14 @@ export class ChatController {
   @Get('rooms')
   @ApiOperation({ summary: "Obtenir toutes les salles de l'utilisateur" })
   @ApiResponse({ status: 200, description: 'Liste des salles' })
-  async getUserRooms(@Request() req) {
+  async getUserRooms(@Request() req, @Query() query: GetRoomsDto) {
     const userId = req.user?.id ?? req.user?.sub;
-    return this.chatService.getUserRoomsDebug(Number(userId));
+    return this.chatService.getUserRoomsDebug(
+      Number(userId),
+      query.category,
+      query.search,
+      query.date
+    );
   }
 
   // ⚠️ Must be declared BEFORE @Get('rooms/:id') to avoid NestJS matching "messages" as :id

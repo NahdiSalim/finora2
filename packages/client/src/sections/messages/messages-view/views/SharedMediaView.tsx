@@ -3,6 +3,7 @@ import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
 import MenuItem from "@mui/material/MenuItem";
+import CircularProgress from "@mui/material/CircularProgress";
 import SearchIcon from "@mui/icons-material/Search";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
@@ -13,14 +14,16 @@ import CustomSelect from "../../../../components/common/CustomSelect";
 
 import { CustomPagination } from "src/layouts/components/table-pagination";
 
-import { sharedMediaFiles } from "../data/mock";
-import type { Message, SharedMediaFile } from "../data/types";
+import {
+  useGetSharedDocumentsQuery,
+  type SharedDocument,
+} from "src/lib/services/chatApi";
+import type { SharedMediaFile } from "../data/types";
 import SharedMediaCard from "../components/SharedMediaCard";
 import SharedMediaPreviewModal from "../components/SharedMediaPreviewModal";
 
 type SharedMediaViewProps = {
   conversationId: number;
-  allMessagesByConversation: Record<number, Message[]>;
   onBack?: () => void;
 };
 
@@ -28,68 +31,49 @@ type FilterType = "all" | "pdf" | "image" | "doc" | "xls";
 
 const ITEMS_PER_PAGE = 10;
 
-function getFileCategory(fileName: string): SharedMediaFile["type"] {
-  const lowerName = fileName.toLowerCase();
+function getFileCategory(
+  fileName: string,
+  docType?: string,
+): SharedMediaFile["type"] {
+  if (docType === "image") return "image";
 
-  if (
-    lowerName.endsWith(".png") ||
-    lowerName.endsWith(".jpg") ||
-    lowerName.endsWith(".jpeg") ||
-    lowerName.endsWith(".webp") ||
-    lowerName.endsWith(".gif") ||
-    lowerName.endsWith(".bmp") ||
-    lowerName.endsWith(".svg")
-  ) {
-    return "image";
-  }
+  const lower = fileName.toLowerCase();
 
-  if (lowerName.endsWith(".doc") || lowerName.endsWith(".docx")) {
-    return "doc";
-  }
+  if (/\.(png|jpe?g|webp|gif|bmp|svg)$/.test(lower)) return "image";
+  if (lower.endsWith(".pdf")) return "pdf";
+  if (/\.docx?$/.test(lower)) return "doc";
+  if (/\.(xlsx?|csv)$/.test(lower)) return "xls";
 
-  if (
-    lowerName.endsWith(".xls") ||
-    lowerName.endsWith(".xlsx") ||
-    lowerName.endsWith(".csv")
-  ) {
-    return "xls";
-  }
-
-  return "pdf";
+  return "file"; // generic fallback
 }
 
-function convertTo24Hour(time?: string) {
-  if (!time) return "";
-
-  const match = time.match(/^(\d{1,2}):(\d{2})\s?(AM|PM)$/i);
-  if (!match) return time;
-
-  let hours = Number(match[1]);
-  const minutes = match[2];
-  const period = match[3].toUpperCase();
-
-  if (period === "AM" && hours === 12) hours = 0;
-  else if (period === "PM" && hours !== 12) hours += 12;
-
-  return `${String(hours).padStart(2, "0")}:${minutes}`;
-}
-
-function formatUploadedAt(date: string, time?: string) {
-  const formattedDate = new Date(date).toLocaleDateString("en-GB", {
+function formatUploadedAt(isoDate: string) {
+  const d = new Date(isoDate);
+  const datePart = d.toLocaleDateString("fr-FR", {
     day: "2-digit",
     month: "short",
   });
+  const timePart = d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `${datePart}, ${timePart}`;
+}
 
-  const formattedTime = convertTo24Hour(time);
-
-  return formattedTime
-    ? `${formattedDate}, at ${formattedTime}`
-    : formattedDate;
+function mapDocToMediaFile(doc: SharedDocument): SharedMediaFile {
+  const fileName = doc.content.split("/").pop() || doc.content || "Fichier";
+  return {
+    id: doc.id,
+    name: fileName,
+    type: getFileCategory(fileName, doc.type),
+    size: "",
+    uploadedAt: formatUploadedAt(doc.createdAt),
+    previewUrl: doc.fileUrl ?? undefined,
+  };
 }
 
 export default function SharedMediaView({
   conversationId,
-  allMessagesByConversation,
   onBack,
 }: SharedMediaViewProps) {
   const theme = useTheme();
@@ -101,60 +85,27 @@ export default function SharedMediaView({
   );
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
-  const conversationFiles = useMemo<SharedMediaFile[]>(() => {
-    const messages = allMessagesByConversation[conversationId] || [];
+  const { isLoading, isFetching, currentData } = useGetSharedDocumentsQuery(
+    { roomId: conversationId, pageSize: 100 },
+    { skip: !conversationId },
+  );
 
-    return messages
-      .filter((message) => message.type === "file" && message.file)
-      .map((message) => {
-        const fileName = message.file?.name || "Fichier";
-
-        return {
-          id: Number(
-            `${conversationId}${message.id}${message.date.replace(/-/g, "")}`,
-          ),
-          name: fileName,
-          type: getFileCategory(fileName),
-          size: message.file?.size || "-",
-          uploadedAt: formatUploadedAt(message.date, message.time),
-          previewUrl: message.file?.url,
-        };
-      });
-  }, [allMessagesByConversation, conversationId]);
-
-  const visibleFiles = useMemo<SharedMediaFile[]>(() => {
-    const mappedFallbackFiles = sharedMediaFiles.map((file, index) => ({
-      ...file,
-      id: Number(`9${conversationId}${index + 1}`),
-      type: getFileCategory(file.name),
-    }));
-
-    const existingNames = new Set(
-      conversationFiles.map((file) => file.name.toLowerCase()),
-    );
-
-    const fallbackWithoutDuplicates = mappedFallbackFiles.filter(
-      (file) => !existingNames.has(file.name.toLowerCase()),
-    );
-
-    return [...conversationFiles, ...fallbackWithoutDuplicates];
-  }, [conversationFiles, conversationId]);
+  // Use currentData (only set when the query is for the current roomId) to avoid
+  // briefly showing documents from another room while the new query is loading.
+  const allFiles = useMemo<SharedMediaFile[]>(() => {
+    if (!currentData?.data) return [];
+    return currentData.data.map(mapDocToMediaFile);
+  }, [currentData]);
 
   const filteredFiles = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
-
-    return visibleFiles.filter((file) => {
-      const matchesType =
-        selectedType === "all" ? true : file.type === selectedType;
-
+    return allFiles.filter((file) => {
+      const matchesType = selectedType === "all" || file.type === selectedType;
       const matchesSearch =
-        normalizedSearch === ""
-          ? true
-          : file.name.toLowerCase().includes(normalizedSearch);
-
+        !normalizedSearch || file.name.toLowerCase().includes(normalizedSearch);
       return matchesType && matchesSearch;
     });
-  }, [visibleFiles, searchTerm, selectedType]);
+  }, [allFiles, searchTerm, selectedType]);
 
   useEffect(() => {
     setPage(1);
@@ -341,11 +292,11 @@ export default function SharedMediaView({
                     },
                   }}
                 >
-                  <MenuItem value="all">All Files</MenuItem>
+                  <MenuItem value="all">Tous les fichiers</MenuItem>
                   <MenuItem value="pdf">PDF</MenuItem>
                   <MenuItem value="image">Images</MenuItem>
                   <MenuItem value="doc">Documents</MenuItem>
-                  <MenuItem value="xls">Spreadsheets</MenuItem>
+                  <MenuItem value="xls">Tableurs</MenuItem>
                 </CustomSelect>
 
                 <Box
@@ -369,7 +320,18 @@ export default function SharedMediaView({
           </Box>
         </Box>
 
-        {filteredFiles.length === 0 ? (
+        {isLoading || isFetching ? (
+          <Box
+            sx={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <CircularProgress size={28} />
+          </Box>
+        ) : filteredFiles.length === 0 ? (
           <Box
             sx={{
               flex: 1,

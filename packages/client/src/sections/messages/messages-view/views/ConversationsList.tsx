@@ -23,11 +23,16 @@ import ConversationItem from "../components/ConversationItem";
 
 dayjs.locale("fr");
 
+type Tab = { label: string; value: ConversationCategory };
+
 type ConversationsListProps = {
   conversations: Conversation[];
   selectedConversation: number;
   searchTerm: string;
   selectedDateFilter: Dayjs | null;
+  tabs: Tab[];
+  activeTab: ConversationCategory;
+  onTabChange: (tab: ConversationCategory) => void;
   onSearchChange: (value: string) => void;
   onDateFilterChange: (value: Dayjs | null) => void;
   onSelect: (id: number) => void;
@@ -38,6 +43,9 @@ export default function ConversationsList({
   selectedConversation,
   searchTerm,
   selectedDateFilter,
+  tabs,
+  activeTab,
+  onTabChange,
   onSearchChange,
   onDateFilterChange,
   onSelect,
@@ -48,83 +56,74 @@ export default function ConversationsList({
   const [calendarAnchorEl, setCalendarAnchorEl] = useState<null | HTMLElement>(
     null,
   );
-  const [selectedTab, setSelectedTab] =
-    useState<ConversationCategory>("collaborateur");
 
   const isCalendarOpen = Boolean(calendarAnchorEl);
-
-  const filteredConversations = conversations.filter(
-    (conversation) => conversation.category === selectedTab,
-  );
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="fr">
       <>
-        <Box
-          sx={{
-            mb: isMobile ? 1.25 : 1.5,
-            p: isMobile ? 0.875 : 0.75,
-            borderRadius: isMobile ? "18px" : "16px",
-            backgroundColor: theme.palette.common.white,
-            border: "1px solid",
-            borderColor: theme.palette.grey[200],
-            flexShrink: 0,
-          }}
-        >
+        {tabs.length > 1 && (
           <Box
             sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: isMobile ? 1 : 0.75,
-              p: isMobile ? "4px" : "6px",
-              borderRadius: isMobile ? "14px" : "8px",
-              backgroundColor: theme.palette.grey[100],
+              mb: isMobile ? 1.25 : 1.5,
+              p: isMobile ? 0.875 : 0.75,
+              borderRadius: isMobile ? "18px" : "16px",
+              backgroundColor: theme.palette.common.white,
+              border: "1px solid",
+              borderColor: theme.palette.grey[200],
+              flexShrink: 0,
             }}
           >
-            {[
-              { label: "Clients", value: "client" },
-              { label: "Collaborateurs", value: "collaborateur" },
-            ].map((tab) => {
-              const active = selectedTab === tab.value;
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: isMobile ? 1 : 0.75,
+                p: isMobile ? "4px" : "6px",
+                borderRadius: isMobile ? "14px" : "8px",
+                backgroundColor: theme.palette.grey[100],
+              }}
+            >
+              {tabs.map((tab) => {
+                const active = activeTab === tab.value;
 
-              return (
-                <Box
-                  key={tab.value}
-                  onClick={() =>
-                    setSelectedTab(tab.value as ConversationCategory)
-                  }
-                  sx={{
-                    flex: 1,
-                    height: isMobile ? 48 : 42,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: isMobile ? "12px" : "6px",
-                    cursor: "pointer",
-                    userSelect: "none",
-                    fontSize: isMobile ? 14 : 14,
-                    fontWeight: active ? 600 : 500,
-                    transition: "all 0.2s ease",
-                    backgroundColor: active
-                      ? theme.palette.primary.main
-                      : "transparent",
-                    color: active
-                      ? theme.palette.common.white
-                      : theme.palette.info.main,
-                    boxShadow: "none",
-                    "&:hover": {
+                return (
+                  <Box
+                    key={tab.value}
+                    onClick={() => onTabChange(tab.value)}
+                    sx={{
+                      flex: 1,
+                      height: isMobile ? 48 : 42,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: isMobile ? "12px" : "6px",
+                      cursor: "pointer",
+                      userSelect: "none",
+                      fontSize: isMobile ? 14 : 14,
+                      fontWeight: active ? 600 : 500,
+                      transition: "all 0.2s ease",
                       backgroundColor: active
                         ? theme.palette.primary.main
-                        : theme.palette.grey[200],
-                    },
-                  }}
-                >
-                  {tab.label}
-                </Box>
-              );
-            })}
+                        : "transparent",
+                      color: active
+                        ? theme.palette.common.white
+                        : theme.palette.info.main,
+                      boxShadow: "none",
+                      "&:hover": {
+                        backgroundColor: active
+                          ? theme.palette.primary.main
+                          : theme.palette.grey[200],
+                      },
+                    }}
+                  >
+                    {tab.label}
+                  </Box>
+                );
+              })}
+            </Box>
           </Box>
-        </Box>
+        )}
 
         <Box
           sx={{
@@ -283,7 +282,7 @@ export default function ConversationsList({
             pb: isMobile ? 2.5 : 0,
           }}
         >
-          {filteredConversations.map((conversation) => (
+          {conversations.map((conversation) => (
             <ConversationItem
               key={conversation.id}
               conversation={conversation}

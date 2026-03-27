@@ -89,6 +89,25 @@ export function connectSocket(): void {
 }
 
 /**
+ * Update socket auth with the latest token and force a fresh connection.
+ * Call this after a successful token refresh so the socket doesn't keep
+ * retrying with the expired token.
+ */
+export function reconnectSocketWithFreshToken(): void {
+  const s = getSocket();
+  const token = readTokenFromStorage();
+  console.log("[socket.ts] reconnectSocketWithFreshToken:", {
+    tokenPresent: !!token,
+    wasConnected: s.connected,
+  });
+  s.auth = { token };
+  if (s.connected) {
+    s.disconnect();
+  }
+  s.connect();
+}
+
+/**
  * Disconnect without destroying the singleton.
  * Use this when navigating away — the socket can reconnect later.
  */

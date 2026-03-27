@@ -8,8 +8,13 @@ import {
   useMarkAsReadMutation,
   type ChatRoom,
   type ChatMessage,
+  type GetRoomsParams,
 } from "src/lib/services/chatApi";
-import type { Conversation, Message } from "../data/types";
+import type {
+  Conversation,
+  ConversationCategory,
+  Message,
+} from "../data/types";
 
 function mapRoomToConversation(
   room: ChatRoom,
@@ -19,11 +24,13 @@ function mapRoomToConversation(
   const other =
     profiles.find((p) => Number(p.id) !== currentUserId) ?? profiles[0] ?? null;
 
-  const otherRoleCode = (other?.role?.code ?? "").toUpperCase();
-  const category =
-    otherRoleCode === "CLIENT"
-      ? ("client" as const)
-      : ("collaborateur" as const);
+  // Normalise role code to one of our two ConversationCategory values.
+  // CLIENT → "client"; anything in the collaborator/accountant family → "collaborateur"
+  const otherRoleCode = (other?.role?.code ?? "").toLowerCase();
+  const category: ConversationCategory =
+    otherRoleCode === "client" || otherRoleCode.startsWith("client_")
+      ? "client"
+      : "collaborateur";
 
   let name: string;
   let role: string;
@@ -109,13 +116,25 @@ function mapApiMessageToMessage(
     // Extract display name from objectName path (last segment after last /)
     const objectName = msg.content || "";
     const fileName = objectName.split("/").pop() || objectName || "Fichier";
+    // Derive category: trust server type hint ("image") first, then filename extension
+    const lower = fileName.toLowerCase();
+    const fileCategory =
+      msg.type === "image" || /\.(png|jpe?g|webp|gif|bmp|svg)$/.test(lower)
+        ? "image"
+        : lower.endsWith(".pdf")
+          ? "pdf"
+          : /\.docx?$/.test(lower)
+            ? "doc"
+            : /\.(xlsx?|csv)$/.test(lower)
+              ? "xls"
+              : "file";
     return {
       id: msg.id,
       type: "file" as const,
       mine: isMine,
       time,
       date,
-      file: { name: fileName, size: "", type: "pdf", url },
+      file: { name: fileName, size: "", type: fileCategory, url },
     };
   }
 
@@ -129,7 +148,7 @@ function mapApiMessageToMessage(
   };
 }
 
-export function useConversations() {
+export function useConversations(params?: GetRoomsParams) {
   const currentUserId = useSelector((state: RootState) => state.auth.user?.id);
   const uid = currentUserId ? Number(currentUserId) : 0;
 
@@ -138,7 +157,7 @@ export function useConversations() {
     data: roomsResponse,
     isLoading,
     error,
-  } = useGetUserRoomsQuery(undefined, {
+  } = useGetUserRoomsQuery(params, {
     refetchOnMountOrArgChange: true,
     // No polling — real-time updates handled by WebSocket
   });

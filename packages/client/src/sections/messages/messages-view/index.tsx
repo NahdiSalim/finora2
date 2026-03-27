@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Badge from "@mui/material/Badge";
@@ -17,11 +17,16 @@ import { useChatSocket } from "./hooks/useChatSocket";
 import type { SocketMessage } from "./hooks/useChatSocket";
 
 import { useConversations, useRoomMessages } from "./hooks/useChatData";
-import { useSendMessageMutation, chatApi } from "src/lib/services/chatApi";
+import {
+  useSendMessageMutation,
+  chatApi,
+  type GetRoomsParams,
+} from "src/lib/services/chatApi";
 import { disconnectSocket, isSocketConnected } from "src/lib/socket";
 
 import type { RootState } from "src/lib/store";
-import type { Conversation, Message } from "./data/types";
+import type { Role } from "src/types/auth";
+import type { Conversation, ConversationCategory, Message } from "./data/types";
 
 type MessagesViewProps = {
   onOpenMedia?: () => void;
@@ -29,6 +34,46 @@ type MessagesViewProps = {
 
 const MOBILE_BOTTOM_NAV_HEIGHT = 72;
 const MOBILE_HEADER_HEIGHT = 88;
+
+// ── Role helpers ──────────────────────────────────────────────────────────────
+// Normalise whatever shape role arrives in to a lowercase code string.
+function getRoleCode(role: Role | string | null | undefined): string {
+  if (!role) return "";
+  return (typeof role === "string" ? role : (role.code ?? "")).toLowerCase();
+}
+
+// True if the role code belongs to the "comptable / accountant" group.
+function isComptableRole(code: string): boolean {
+  return (
+    code === "comptable" ||
+    code === "accountant" ||
+    code.includes("comptable") ||
+    code.includes("accountant")
+  );
+}
+
+// True if the role code belongs to the "client" group.
+function isClientRole(code: string): boolean {
+  return code === "client" || code.startsWith("client_");
+}
+
+/**
+ * Map the selected UI tab + the viewer's role to the actual role-code that
+ * the backend should filter participant profiles by.
+ *
+ * Tab "client"       (only Comptables can see it) → filter by CLIENT participants
+ * Tab "collaborateur" + viewer is Comptable        → filter by COLLABORATOR participants
+ * Tab "collaborateur" + viewer is Client/Collaborateur → filter by COMPTABLE participants
+ */
+function resolveApiCategory(
+  tab: ConversationCategory,
+  myRoleCode: string,
+): string {
+  if (tab === "client") return "client";
+  // "collaborateur" tab
+  if (isComptableRole(myRoleCode)) return "collaborateur";
+  return "comptable"; // Client/Collaborateur users chat with Comptables
+}
 
 export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const theme = useTheme();
@@ -38,12 +83,29 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const rawUserId = useSelector((state: RootState) => state.auth.user?.id);
   const currentUid = rawUserId ? Number(rawUserId) : 0;
 
-  // ── API data ──────────────────────────────────────────────────────────────
-  const { conversations: apiConversations, isLoading: roomsLoading } =
-    useConversations();
-  const [triggerSendMessage] = useSendMessageMutation();
+  const rawUserRole = useSelector((state: RootState) => state.auth.user?.role);
+  const myRoleCode = getRoleCode(
+    rawUserRole as Role | string | null | undefined,
+  );
+  const iAmComptable = isComptableRole(myRoleCode);
 
-  // ── Local state ───────────────────────────────────────────────────────────
+  // Only Comptables see both tabs; everyone else sees only "Collaborateurs"
+  const visibleTabs = useMemo(
+    () =>
+      iAmComptable
+        ? [
+            { label: "Clients", value: "client" as const },
+            { label: "Collaborateurs", value: "collaborateur" as const },
+          ]
+        : [{ label: "Collaborateurs", value: "collaborateur" as const }],
+    [iAmComptable],
+  );
+
+  // ── All local state declared first so roomsParams can reference them ───────
+  const [activeTab, setActiveTab] =
+    useState<ConversationCategory>("collaborateur");
+  const [roomsPage] = useState(1);
+  const ROOMS_PAGE_SIZE = 50;
   const [selectedConversation, setSelectedConversation] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedDateFilter, setSelectedDateFilter] = useState<Dayjs | null>(
@@ -54,11 +116,39 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     "list",
   );
 
-  // Ref to always have current selectedConversation in socket callbacks
+  // Ref to always have current selectedConversation in socket callbacks.
   const selectedConversationRef = useRef(selectedConversation);
+  selectedConversationRef.current = selectedConversation;
+
+  // Debounce search so the API is only called 300 ms after the user stops typing
+  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
   useEffect(() => {
-    selectedConversationRef.current = selectedConversation;
-  }, [selectedConversation]);
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // ── API query params (drives the rooms list query) ─────────────────────────
+  const roomsParams = useMemo<GetRoomsParams>(() => {
+    const p: GetRoomsParams = {
+      // Translate the UI tab + viewer role into the actual participant role code
+      // the backend should filter by (see resolveApiCategory above).
+      category: resolveApiCategory(activeTab, myRoleCode),
+      page: roomsPage,
+      pageSize: ROOMS_PAGE_SIZE,
+    };
+    if (debouncedSearch) p.search = debouncedSearch;
+    if (selectedDateFilter) p.date = selectedDateFilter.format("YYYY-MM-DD");
+    return p;
+  }, [activeTab, myRoleCode, roomsPage, debouncedSearch, selectedDateFilter]);
+
+  // Keep a ref so socket callbacks can always read the current params
+  const roomsParamsRef = useRef(roomsParams);
+  roomsParamsRef.current = roomsParams;
+
+  // ── API data ──────────────────────────────────────────────────────────────
+  const { conversations: apiConversations, isLoading: roomsLoading } =
+    useConversations(roomsParams);
+  const [triggerSendMessage] = useSendMessageMutation();
 
   // Typing indicator state: set of roomIds where the other user is typing
   const [typingRooms, setTypingRooms] = useState<Set<number>>(new Set());
@@ -71,6 +161,22 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
 
   // ── Socket ────────────────────────────────────────────────────────────────
   const { joinRoom, leaveRoom, emitTyping } = useChatSocket({
+    activeRoomId: selectedConversation,
+    onReconnect: () => {
+      // After a socket reconnect, messages may have been emitted while the
+      // socket was down. Invalidate the current room's cache so RTK Query
+      // refetches and the UI is up to date.
+      const roomId = selectedConversationRef.current;
+      if (roomId) {
+        console.log(
+          "[MessagesView] socket reconnected, refetching messages for room:",
+          roomId,
+        );
+        dispatch(
+          chatApi.util.invalidateTags([{ type: "ChatMessages", id: roomId }]),
+        );
+      }
+    },
     onMessageNew: (msg: SocketMessage) => {
       const d = new Date(msg.createdAt);
       const isMine = msg.senderId === currentUid;
@@ -157,35 +263,39 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
 
       // 2. Update rooms list preview + reorder
       dispatch(
-        chatApi.util.updateQueryData("getUserRooms", undefined, (draft) => {
-          const room = draft.data.find((r) => r.id === msg.roomId);
-          if (!room) {
-            return;
-          }
+        chatApi.util.updateQueryData(
+          "getUserRooms",
+          roomsParamsRef.current,
+          (draft) => {
+            const room = draft.data.find((r) => r.id === msg.roomId);
+            if (!room) {
+              return;
+            }
 
-          room.lastMessage = {
-            id: msg.id,
-            roomId: msg.roomId,
-            // Store raw content. The "Vous :" prefix must be derived in
-            // mapRoomToConversation() based on (lastMessage.senderId === currentUserId).
-            content: msg.content,
-            type: msg.type,
-            senderId: msg.senderId,
-            createdAt: msg.createdAt,
-          };
-          room.lastActivity = msg.createdAt;
+            room.lastMessage = {
+              id: msg.id,
+              roomId: msg.roomId,
+              // Store raw content. The "Vous :" prefix must be derived in
+              // mapRoomToConversation() based on (lastMessage.senderId === currentUserId).
+              content: msg.content,
+              type: msg.type,
+              senderId: msg.senderId,
+              createdAt: msg.createdAt,
+            };
+            room.lastActivity = msg.createdAt;
 
-          // Bubble room to top
-          const idx = draft.data.findIndex((r) => r.id === msg.roomId);
-          if (idx > 0) {
-            const [moved] = draft.data.splice(idx, 1);
-            draft.data.unshift(moved);
-          }
-          console.log(
-            "[cache getUserRooms] updated preview:",
-            room.lastMessage.content,
-          );
-        }),
+            // Bubble room to top
+            const idx = draft.data.findIndex((r) => r.id === msg.roomId);
+            if (idx > 0) {
+              const [moved] = draft.data.splice(idx, 1);
+              draft.data.unshift(moved);
+            }
+            console.log(
+              "[cache getUserRooms] updated preview:",
+              room.lastMessage.content,
+            );
+          },
+        ),
       );
 
       // Prevent stale optimistic preview overrides from overriding the
@@ -403,6 +513,17 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const handleSearchChange = (value: string) => setSearchTerm(value);
   const handleDateFilterChange = (value: Dayjs | null) =>
     setSelectedDateFilter(value);
+  const handleTabChange = useCallback(
+    (tab: ConversationCategory) => {
+      setActiveTab(tab);
+      setSearchTerm("");
+      setSelectedDateFilter(null);
+      setSelectedConversation(0);
+      if (isMobile) setMobileView("list");
+      else setDesktopView("chat");
+    },
+    [isMobile],
+  );
 
   const handleMessagesChange = async (updatedMessages: Message[]) => {
     const lastMessage = updatedMessages[updatedMessages.length - 1];
@@ -485,24 +606,9 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   };
 
   // ── Derived state ─────────────────────────────────────────────────────────
-  const filteredConversations = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-
-    return allConversations.filter((conversation) => {
-      const matchesSearch =
-        !normalizedSearch ||
-        conversation.name.toLowerCase().includes(normalizedSearch) ||
-        conversation.preview.toLowerCase().includes(normalizedSearch) ||
-        conversation.role.toLowerCase().includes(normalizedSearch);
-
-      const matchesDate = !selectedDateFilter
-        ? true
-        : conversation.fullDate.slice(0, 10) ===
-          selectedDateFilter.format("YYYY-MM-DD");
-
-      return matchesSearch && matchesDate;
-    });
-  }, [allConversations, searchTerm, selectedDateFilter]);
+  // Filtering (category, search, date) is handled server-side via roomsParams.
+  // allConversations already contains only the relevant subset from the API.
+  const filteredConversations = allConversations;
 
   useEffect(() => {
     if (filteredConversations.length === 0) return;
@@ -534,11 +640,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const currentConversation = useMemo(
     () => allConversations.find((c) => c.id === selectedConversation),
     [allConversations, selectedConversation],
-  );
-
-  const allMessagesByConversation = useMemo(
-    () => ({ [selectedConversation]: currentMessages }),
-    [selectedConversation, currentMessages],
   );
 
   const isRemoteTyping = typingRooms.has(selectedConversation);
@@ -695,6 +796,9 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                   selectedConversation={selectedConversation}
                   searchTerm={searchTerm}
                   selectedDateFilter={selectedDateFilter}
+                  tabs={visibleTabs}
+                  activeTab={activeTab}
+                  onTabChange={handleTabChange}
                   onSearchChange={handleSearchChange}
                   onDateFilterChange={handleDateFilterChange}
                   onSelect={handleSelectConversation}
@@ -762,7 +866,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
             {renderMediaPanel(
               <SharedMediaView
                 conversationId={selectedConversation}
-                allMessagesByConversation={allMessagesByConversation}
                 onBack={() => setMobileView("chat")}
               />,
             )}
@@ -808,7 +911,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
             {renderMediaPanel(
               <SharedMediaView
                 conversationId={selectedConversation}
-                allMessagesByConversation={allMessagesByConversation}
                 onBack={() => setDesktopView("chat")}
               />,
             )}
@@ -845,6 +947,9 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                 selectedConversation={selectedConversation}
                 searchTerm={searchTerm}
                 selectedDateFilter={selectedDateFilter}
+                tabs={visibleTabs}
+                activeTab={activeTab}
+                onTabChange={handleTabChange}
                 onSearchChange={handleSearchChange}
                 onDateFilterChange={handleDateFilterChange}
                 onSelect={handleSelectConversation}

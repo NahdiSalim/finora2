@@ -1,8 +1,10 @@
 import { Box, Typography, useTheme, alpha } from "@mui/material";
+import type { ReactNode } from "react";
 
 export interface SimpleTabItem {
   id: string;
   label: string;
+  icon?: ReactNode;
 }
 
 interface SimpleTabsProps {
@@ -23,7 +25,7 @@ export function SimpleTabs({ tabs, activeTab, onTabChange }: SimpleTabsProps) {
         position: "relative",
         mb: 0,
         borderBottom: `1px solid ${theme.palette.grey[200]}`,
-        borderTopLeftRadius: 1.5, // Match parent container rounded corners
+        borderTopLeftRadius: 1.5,
         borderTopRightRadius: 1.5,
         overflow: "hidden",
       }}
@@ -45,16 +47,15 @@ export function SimpleTabs({ tabs, activeTab, onTabChange }: SimpleTabsProps) {
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              flex: 1, // Full width tabs
-              // Active tab styling
+              gap: 1,
+              flex: 1,
               ...(isActive && {
-                bgcolor: alpha(theme.palette.primary.main, 0.08), // Faded blue background
+                bgcolor: alpha(theme.palette.primary.main, 0.08),
                 color: theme.palette.primary.main,
                 fontWeight: 600,
                 borderBottom: `2px solid ${theme.palette.primary.main}`,
-                mb: "-1px", // Overlap border
+                mb: "-1px",
               }),
-              // Inactive tab styling
               ...(!isActive && {
                 bgcolor: theme.palette.grey[100],
                 color: theme.palette.text.secondary,
@@ -65,11 +66,25 @@ export function SimpleTabs({ tabs, activeTab, onTabChange }: SimpleTabsProps) {
               }),
             }}
           >
+            {tab.icon && (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  "& svg": {
+                    width: 18,
+                    height: 18,
+                  },
+                }}
+              >
+                {tab.icon}
+              </Box>
+            )}
             <Typography
               variant="body2"
               sx={{
                 fontWeight: isActive ? 600 : 500,
-                fontSize: { xs: 13, sm: 14 },
+                fontSize: { xs: 14, sm: 16 },
                 whiteSpace: "nowrap",
               }}
             >

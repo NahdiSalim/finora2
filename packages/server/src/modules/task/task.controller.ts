@@ -22,6 +22,7 @@ import {
   ApiConsumes,
   ApiResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { TaskService } from './task.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -63,6 +64,7 @@ export class TaskController {
    * Get my assigned tasks (Collaborator)
    */
   @Get('my-tasks')
+  @Throttle({ default: { limit: 200, ttl: 60000 } })
   @ApiOperation({ summary: '[Collaborator] Get my assigned tasks' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
@@ -81,22 +83,46 @@ export class TaskController {
     required: false,
     enum: ['priority', 'dueDate', 'createdAt'],
   })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by title, description, or assignee name',
+  })
+  @ApiQuery({
+    name: 'dateFilter',
+    required: false,
+    enum: ['today', 'week', 'month'],
+    description: 'Filter by date range',
+  })
   async getMyTasks(
     @Req() req: AuthRequest,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('status') status?: string,
     @Query('priority') priority?: string,
-    @Query('sortBy') sortBy?: 'priority' | 'dueDate' | 'createdAt'
+    @Query('sortBy') sortBy?: 'priority' | 'dueDate' | 'createdAt',
+    @Query('search') search?: string,
+    @Query('dateFilter') dateFilter?: string
   ) {
     const userId = req.user!.id;
-    return this.taskService.getMyTasks(userId, page || 1, limit || 10, status, priority, sortBy);
+    return this.taskService.getMyTasks(
+      userId,
+      page || 1,
+      limit || 10,
+      status,
+      priority,
+      sortBy,
+      search,
+      dateFilter
+    );
   }
 
   /**
    * Get tasks created by me (Accountant)
    */
   @Get('my-created-tasks')
+  @Throttle({ default: { limit: 200, ttl: 60000 } })
   @UseGuards(RolesGuard)
   @Roles('ACCOUNTANT')
   @ApiOperation({ summary: '[Accountant] Get tasks I created' })
@@ -107,14 +133,35 @@ export class TaskController {
     required: false,
     enum: ['todo', 'in_progress', 'completed', 'cancelled'],
   })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by title, description, or assignee name',
+  })
+  @ApiQuery({
+    name: 'dateFilter',
+    required: false,
+    enum: ['today', 'week', 'month'],
+    description: 'Filter by date range',
+  })
   async getMyCreatedTasks(
     @Req() req: AuthRequest,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-    @Query('status') status?: string
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('dateFilter') dateFilter?: string
   ) {
     const userId = req.user!.id;
-    return this.taskService.getMyCreatedTasks(userId, page || 1, limit || 10, status);
+    return this.taskService.getMyCreatedTasks(
+      userId,
+      page || 1,
+      limit || 10,
+      status,
+      search,
+      dateFilter
+    );
   }
 
   /**
@@ -160,10 +207,12 @@ export class TaskController {
   }
 
   /**
-   * Submit task for review (Collaborator)
+   * Submit task for review (Accountant only - to send completed tasks back to review)
    */
   @Put(':id/review')
-  @ApiOperation({ summary: '[Collaborator] Submit task for review' })
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Send task back to review' })
   @ApiResponse({ status: 200, description: 'Task submitted for review' })
   async submitForReview(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
     const userId = req.user!.id;
@@ -171,12 +220,10 @@ export class TaskController {
   }
 
   /**
-   * Complete task (Accountant only)
+   * Complete task (Collaborator and Accountant)
    */
   @Put(':id/complete')
-  @UseGuards(RolesGuard)
-  @Roles('ACCOUNTANT')
-  @ApiOperation({ summary: '[Accountant] Mark task as completed' })
+  @ApiOperation({ summary: '[Collaborator/Accountant] Mark task as completed' })
   @ApiResponse({ status: 200, description: 'Task completed' })
   async completeTask(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
     const userId = req.user!.id;

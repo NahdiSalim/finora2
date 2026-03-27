@@ -15,24 +15,23 @@ import {
 } from "@dnd-kit/sortable";
 import { TaskCard } from "./task-card";
 import type { KanbanColumn } from "./types";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect } from "react";
 
 interface BoardColumnProps {
   column: KanbanColumn;
   onAddTask?: (columnId: KanbanColumn["id"]) => void;
   onSortByPriority?: (columnId: KanbanColumn["id"]) => void;
   onArchiveAll?: (columnId: KanbanColumn["id"]) => void;
+  onLoadMore?: (columnId: KanbanColumn["id"]) => void;
   isAccountant?: boolean;
 }
-
-const INITIAL_TASKS_DISPLAY = 3;
-const LOAD_MORE_AMOUNT = 3;
 
 export function BoardColumn({
   column,
   onAddTask,
   onSortByPriority,
   onArchiveAll,
+  onLoadMore,
   isAccountant = false,
 }: BoardColumnProps) {
   const theme = useTheme();
@@ -40,35 +39,26 @@ export function BoardColumn({
     id: column.id,
   });
 
-  const [displayCount, setDisplayCount] = useState(INITIAL_TASKS_DISPLAY);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-  const visibleTasks = column.tasks.slice(0, displayCount);
-  const hasMore = displayCount < column.tasks.length;
-  const taskIds = visibleTasks.map((task) => task.id);
-
-  useEffect(() => {
-    setDisplayCount(INITIAL_TASKS_DISPLAY);
-  }, [column.id]);
+  const taskIds = column.tasks.map((task) => task.id);
 
   const handleScroll = useCallback(() => {
-    if (!scrollContainerRef.current || !hasMore || isLoadingMore) return;
+    if (
+      !scrollContainerRef.current ||
+      !column.hasMore ||
+      column.isLoading ||
+      !onLoadMore
+    )
+      return;
 
     const { scrollTop, scrollHeight, clientHeight } =
       scrollContainerRef.current;
     const scrolledToBottom = scrollTop + clientHeight >= scrollHeight - 50;
 
     if (scrolledToBottom) {
-      setIsLoadingMore(true);
-      setTimeout(() => {
-        setDisplayCount((prev) =>
-          Math.min(prev + LOAD_MORE_AMOUNT, column.tasks.length),
-        );
-        setIsLoadingMore(false);
-      }, 300);
+      onLoadMore(column.id);
     }
-  }, [hasMore, isLoadingMore, column.tasks.length]);
+  }, [column.hasMore, column.isLoading, column.id, onLoadMore]);
 
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current;
@@ -82,7 +72,6 @@ export function BoardColumn({
   const handleSortByPriority = () => {
     if (onSortByPriority) {
       onSortByPriority(column.id);
-      setDisplayCount(INITIAL_TASKS_DISPLAY);
     }
   };
 
@@ -154,7 +143,7 @@ export function BoardColumn({
           </Typography>
           {/* Task Count Badge */}
           <Chip
-            label={column.tasks.length}
+            label={column.totalTasks || column.tasks.length}
             size="small"
             sx={{
               height: { xs: 20, sm: 24 },
@@ -196,6 +185,7 @@ export function BoardColumn({
                 size="small"
                 onClick={handleArchiveAll}
                 sx={{
+                  display: { xs: "none", sm: "flex" },
                   width: { xs: 26, sm: 28 },
                   height: { xs: 26, sm: 28 },
                   color: "#64748B",
@@ -242,7 +232,7 @@ export function BoardColumn({
             },
           }}
         >
-          {visibleTasks.map((task) => (
+          {column.tasks.map((task) => (
             <TaskCard
               key={task.id}
               task={task}
@@ -251,7 +241,7 @@ export function BoardColumn({
             />
           ))}
 
-          {isLoadingMore && (
+          {column.isLoading && (
             <Box
               sx={{
                 display: "flex",
@@ -264,7 +254,7 @@ export function BoardColumn({
             </Box>
           )}
 
-          {column.tasks.length === 0 && (
+          {column.tasks.length === 0 && !column.isLoading && (
             <Box
               sx={{
                 display: "flex",

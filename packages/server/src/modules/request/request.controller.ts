@@ -74,14 +74,43 @@ export class RequestController {
     required: false,
     enum: ['pending', 'in_progress', 'resolved', 'rejected', 'cancelled'],
   })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ['urgency', 'status', 'createdAt'],
+    example: 'createdAt',
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    enum: ['asc', 'desc'],
+    example: 'desc',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by subject, topic, description, or type',
+  })
   async getMyRequests(
     @Req() req: AuthRequest,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-    @Query('status') status?: string
+    @Query('status') status?: string,
+    @Query('sortBy') sortBy?: 'urgency' | 'status' | 'createdAt',
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+    @Query('search') search?: string
   ) {
     const clientId = req.user!.id;
-    return this.requestService.getMyRequests(clientId, page || 1, limit || 10, status);
+    return this.requestService.getMyRequests(
+      clientId,
+      page || 1,
+      limit || 10,
+      status,
+      sortBy,
+      sortOrder,
+      search
+    );
   }
 
   /**
@@ -106,7 +135,19 @@ export class RequestController {
   @ApiQuery({
     name: 'sortBy',
     required: false,
-    enum: ['urgency', 'createdAt'],
+    enum: ['urgency', 'status', 'createdAt'],
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    enum: ['asc', 'desc'],
+    example: 'desc',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by subject, topic, description, type, or client name',
   })
   async getMyAssignedRequests(
     @Req() req: AuthRequest,
@@ -114,7 +155,9 @@ export class RequestController {
     @Query('limit') limit?: number,
     @Query('status') status?: string,
     @Query('urgency') urgency?: string,
-    @Query('sortBy') sortBy?: 'urgency' | 'createdAt'
+    @Query('sortBy') sortBy?: 'urgency' | 'status' | 'createdAt',
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+    @Query('search') search?: string
   ) {
     const accountantId = req.user!.id;
     return this.requestService.getMyAssignedRequests(
@@ -123,7 +166,9 @@ export class RequestController {
       limit || 10,
       status,
       urgency,
-      sortBy
+      sortBy,
+      sortOrder,
+      search
     );
   }
 
@@ -149,7 +194,19 @@ export class RequestController {
   @ApiQuery({
     name: 'sortBy',
     required: false,
-    enum: ['urgency', 'createdAt'],
+    enum: ['urgency', 'status', 'createdAt'],
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    enum: ['asc', 'desc'],
+    example: 'desc',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by subject, topic, description, type, or client name',
   })
   async getAllRequests(
     @Req() req: AuthRequest,
@@ -157,7 +214,9 @@ export class RequestController {
     @Query('limit') limit?: number,
     @Query('status') status?: string,
     @Query('urgency') urgency?: string,
-    @Query('sortBy') sortBy?: 'urgency' | 'createdAt'
+    @Query('sortBy') sortBy?: 'urgency' | 'status' | 'createdAt',
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+    @Query('search') search?: string
   ) {
     const accountantId = req.user!.id;
     return this.requestService.getAllRequests(
@@ -166,7 +225,9 @@ export class RequestController {
       limit || 10,
       status,
       urgency,
-      sortBy
+      sortBy,
+      sortOrder,
+      search
     );
   }
 
@@ -206,15 +267,18 @@ export class RequestController {
   @Post(':id/respond')
   @UseGuards(RolesGuard)
   @Roles('ACCOUNTANT')
-  @ApiOperation({ summary: '[Accountant] Respond to a client request' })
+  @UseInterceptors(FilesInterceptor('responseAttachments', 10))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: '[Accountant] Respond to a client request with optional attachments' })
   @ApiResponse({ status: 200, description: 'Response sent successfully' })
   async respondToRequest(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: RespondRequestDto,
-    @Req() req: AuthRequest
+    @Req() req: AuthRequest,
+    @UploadedFiles() files?: Express.Multer.File[]
   ) {
     const accountantId = req.user!.id;
-    return this.requestService.respondToRequest(id, dto, accountantId);
+    return this.requestService.respondToRequest(id, dto, accountantId, files);
   }
 
   /**

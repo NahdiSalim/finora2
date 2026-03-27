@@ -119,13 +119,17 @@ export const tasksApi = createApi({
         page?: number;
         limit?: number;
         status?: string;
+        search?: string;
+        dateFilter?: string;
       }
     >({
-      query: ({ page = 1, limit = 100, status } = {}) => {
+      query: ({ page = 1, limit = 100, status, search, dateFilter } = {}) => {
         const params = new URLSearchParams();
         params.append("page", page.toString());
         params.append("limit", limit.toString());
         if (status) params.append("status", status);
+        if (search) params.append("search", search);
+        if (dateFilter) params.append("dateFilter", dateFilter);
 
         return {
           url: `/tasks/my-created-tasks?${params.toString()}`,
@@ -153,6 +157,8 @@ export const tasksApi = createApi({
         status?: string;
         priority?: string;
         sortBy?: "priority" | "dueDate" | "createdAt";
+        search?: string;
+        dateFilter?: string;
       }
     >({
       query: ({
@@ -161,6 +167,8 @@ export const tasksApi = createApi({
         status,
         priority,
         sortBy = "dueDate",
+        search,
+        dateFilter,
       } = {}) => {
         const params = new URLSearchParams();
         params.append("page", page.toString());
@@ -168,6 +176,8 @@ export const tasksApi = createApi({
         if (status) params.append("status", status);
         if (priority) params.append("priority", priority);
         params.append("sortBy", sortBy);
+        if (search) params.append("search", search);
+        if (dateFilter) params.append("dateFilter", dateFilter);
 
         return {
           url: `/tasks/my-tasks?${params.toString()}`,

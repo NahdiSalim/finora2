@@ -334,7 +334,12 @@ export class AccountantService {
   }
 
   // Get all collaborators of accountant's firm
-  async getCollaborators(accountantId: number, page: number = 1, limit: number = 10) {
+  async getCollaborators(
+    accountantId: number,
+    page: number = 1,
+    limit: number = 10,
+    search?: string
+  ) {
     const skip = (page - 1) * limit;
 
     try {
@@ -361,18 +366,25 @@ export class AccountantService {
         throw new ApiError('Collaborator role not found', 500, 'ROLE_NOT_FOUND');
       }
 
+      const where: any = {
+        companyId: accountant.companyId,
+        id_role: collaboratorRole.id,
+      };
+
+      // Add search filter
+      if (search && search.trim()) {
+        where.OR = [
+          { firstName: { contains: search.trim(), mode: 'insensitive' } },
+          { lastName: { contains: search.trim(), mode: 'insensitive' } },
+          { email: { contains: search.trim(), mode: 'insensitive' } },
+          { username: { contains: search.trim(), mode: 'insensitive' } },
+        ];
+      }
+
       const [total, data] = await Promise.all([
-        this.prisma.user.count({
-          where: {
-            companyId: accountant.companyId,
-            id_role: collaboratorRole.id,
-          },
-        }),
+        this.prisma.user.count({ where }),
         this.prisma.user.findMany({
-          where: {
-            companyId: accountant.companyId,
-            id_role: collaboratorRole.id,
-          },
+          where,
           skip,
           take: limit,
           include: {

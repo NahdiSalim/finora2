@@ -486,6 +486,9 @@ export default function RequestModal({ open, onClose }: Props) {
                         shrink: true,
                       },
                     }}
+                    inputProps={{
+                      min: new Date().toISOString().split("T")[0],
+                    }}
                   />
                 )}
               />

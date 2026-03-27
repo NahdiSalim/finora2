@@ -373,7 +373,7 @@ export default function TaskModal({
             name="assigneeIds"
             control={control}
             rules={{ required: "Au moins un collaborateur est requis" }}
-            render={({ field: { onChange } }) => (
+            render={({ field: { onChange, value } }) => (
               <Autocomplete
                 multiple
                 freeSolo={false}
@@ -381,7 +381,8 @@ export default function TaskModal({
                 value={selectedCollaborators}
                 onChange={(_, newValue) => {
                   setSelectedCollaborators(newValue);
-                  onChange(newValue.map((collab) => Number(collab.id)));
+                  const ids = newValue.map((collab) => Number(collab.id));
+                  onChange(ids);
                 }}
                 onInputChange={(_, newInputValue) => {
                   setCollaboratorSearch(newInputValue);
@@ -399,7 +400,6 @@ export default function TaskModal({
                   <TextField
                     {...params}
                     label="Assigner à"
-                    required
                     error={!!errors.assigneeIds}
                     helperText={errors.assigneeIds?.message}
                     placeholder="Rechercher un collaborateur..."
@@ -512,6 +512,9 @@ export default function TaskModal({
                 error={!!errors.dueDate}
                 helperText={errors.dueDate?.message}
                 InputLabelProps={{ shrink: true }}
+                inputProps={{
+                  min: new Date().toISOString().split("T")[0],
+                }}
               />
             </Grid>
           </Grid>

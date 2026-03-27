@@ -136,14 +136,14 @@ export default function RequestModal({ open, onClose }: Props) {
     watch,
     formState: { errors, isDirty, isValid },
   } = useForm<RequestFormData>({
-    resolver: yupResolver(requestValidationSchema),
+    resolver: yupResolver(requestValidationSchema) as any,
     mode: "onChange",
     defaultValues: {
       subject: "",
       topic: "",
-      type: "other",
+      type: "other" as const,
       description: "",
-      urgency: "normal",
+      urgency: "normal" as const,
       desiredResponseDate: undefined,
       desiredResponseTime: undefined,
       attachments: [],

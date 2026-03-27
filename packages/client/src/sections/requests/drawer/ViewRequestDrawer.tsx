@@ -144,12 +144,12 @@ export default function ViewRequestDrawer({
     watch,
     formState: { errors, isDirty, isValid },
   } = useForm<RequestFormData>({
-    resolver: yupResolver(requestValidationSchema),
+    resolver: yupResolver(requestValidationSchema) as any,
     mode: "onChange",
     defaultValues: {
       subject: "",
-      type: "accounting",
-      urgency: "normal",
+      type: "accounting" as const,
+      urgency: "normal" as const,
       topic: "",
       description: "",
       desiredResponseDate: "",
@@ -350,7 +350,9 @@ export default function ViewRequestDrawer({
       // Add new attachments if any
       if (data.attachments && data.attachments.length > 0) {
         data.attachments.forEach((file) => {
-          formData.append("attachments", file);
+          if (file) {
+            formData.append("attachments", file);
+          }
         });
       }
 

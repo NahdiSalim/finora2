@@ -242,7 +242,7 @@ export class UserController {
   @Get(':id')
   @RequirePermission('view_detail_user')
   @ApiOkResponse({ description: 'user' })
-  async findOne(@Param('id') id: number): Promise<User | null> {
+  async findOne(@Param('id') id: number) {
     return await this.userService.getById(id);
   }
 

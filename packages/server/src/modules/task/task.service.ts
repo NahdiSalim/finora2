@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ApiError } from '../../common/errors/api-error';
+import { MSG } from '../../common/messages';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto, TaskStatus } from './dto/update-task.dto';
 import { AddCommentDto } from './dto/add-comment.dto';
@@ -37,7 +38,7 @@ export class TaskService {
       });
 
       if (!creator?.companyId) {
-        throw new ApiError('User must belong to a company to create tasks', 400, 'NO_COMPANY');
+        throw new ApiError(MSG.task.no_company, 400, 'NO_COMPANY');
       }
 
       // If clientId is provided, verify there's a relationship between the accounting firm and client's company
@@ -47,20 +48,9 @@ export class TaskService {
           select: { companyId: true },
         });
 
-        if (!client?.companyId) {
-          throw new ApiError('Client must be associated with a company', 400, 'INVALID_CLIENT');
-        }
-
-        // Verify there's a relationship between the accounting firm and the client's company
-        const relationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
-          where: {
-            accountingFirmId: creator.companyId,
-            clientCompanyId: client.companyId,
-          },
-        });
-
-        if (!relationship) {
-          throw new ApiError('Client must belong to the same company', 400, 'INVALID_CLIENT');
+        // Verify client belongs to same company
+        if (client?.companyId !== creator.companyId) {
+          throw new ApiError(MSG.task.invalid_client, 400, 'INVALID_CLIENT');
         }
       }
 
@@ -86,7 +76,7 @@ export class TaskService {
 
       // Validate assigneeIds
       if (!dto.assigneeIds || dto.assigneeIds.length === 0) {
-        throw new ApiError('At least one assignee is required', 400, 'NO_ASSIGNEE');
+        throw new ApiError(MSG.task.no_assignee, 400, 'NO_ASSIGNEE');
       }
 
       // If multiple assignees, create one task per assignee
@@ -211,7 +201,7 @@ export class TaskService {
 
       return {
         success: true,
-        message: 'Task created successfully',
+        message: MSG.task.created,
         data: task,
       };
     } catch (error) {
@@ -522,12 +512,12 @@ export class TaskService {
     });
 
     if (!task) {
-      throw new ApiError('Task not found', 404, 'TASK_NOT_FOUND');
+      throw new ApiError(MSG.task.not_found, 404, 'TASK_NOT_FOUND');
     }
 
     // Check access rights
     if (task.assigneeId !== userId && task.createdById !== userId && task.clientId !== userId) {
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.task.access_denied, 403, 'ACCESS_DENIED');
     }
 
     // Parse comments from subtasks
@@ -569,12 +559,12 @@ export class TaskService {
     });
 
     if (!task) {
-      throw new ApiError('Task not found', 404, 'TASK_NOT_FOUND');
+      throw new ApiError(MSG.task.not_found, 404, 'TASK_NOT_FOUND');
     }
 
     // Check access rights
     if (task.assigneeId !== userId && task.createdById !== userId) {
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.task.access_denied, 403, 'ACCESS_DENIED');
     }
 
     // Role-based status restrictions
@@ -742,7 +732,7 @@ export class TaskService {
 
     return {
       success: true,
-      message: 'Task updated successfully',
+      message: MSG.task.updated,
       data: updatedTask,
     };
   }
@@ -791,7 +781,7 @@ export class TaskService {
     });
 
     if (!task) {
-      throw new ApiError('Task not found', 404, 'TASK_NOT_FOUND');
+      throw new ApiError(MSG.task.not_found, 404, 'TASK_NOT_FOUND');
     }
 
     // Get user info
@@ -853,7 +843,7 @@ export class TaskService {
 
     return {
       success: true,
-      message: 'Comment added successfully',
+      message: MSG.task.comment_added,
       data: comment,
     };
   }
@@ -867,17 +857,17 @@ export class TaskService {
     });
 
     if (!task) {
-      throw new ApiError('Task not found', 404, 'TASK_NOT_FOUND');
+      throw new ApiError(MSG.task.not_found, 404, 'TASK_NOT_FOUND');
     }
 
     // Only creator can validate
     if (task.createdById !== userId) {
-      throw new ApiError('Only task creator can validate', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.task.creator_only_validate, 403, 'ACCESS_DENIED');
     }
 
     // Task must be completed
     if (task.status !== TaskStatus.COMPLETED) {
-      throw new ApiError('Task must be completed before validation', 400, 'INVALID_STATUS');
+      throw new ApiError(MSG.task.invalid_status, 400, 'INVALID_STATUS');
     }
 
     const isApproved = dto.action === ValidationAction.APPROVE;
@@ -919,7 +909,7 @@ export class TaskService {
 
     return {
       success: true,
-      message: isApproved ? 'Task approved successfully' : 'Task rejected and reassigned',
+      message: isApproved ? MSG.task.approved : MSG.task.rejected,
       data: updatedTask,
     };
   }
@@ -1028,12 +1018,12 @@ export class TaskService {
     });
 
     if (!task) {
-      throw new ApiError('Task not found', 404, 'TASK_NOT_FOUND');
+      throw new ApiError(MSG.task.not_found, 404, 'TASK_NOT_FOUND');
     }
 
     // Only creator can delete
     if (task.createdById !== userId) {
-      throw new ApiError('Only task creator can delete', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.task.creator_only_delete, 403, 'ACCESS_DENIED');
     }
 
     await this.prisma.task.delete({
@@ -1042,7 +1032,7 @@ export class TaskService {
 
     return {
       success: true,
-      message: 'Task deleted successfully',
+      message: MSG.task.deleted,
     };
   }
   /**
@@ -1062,7 +1052,7 @@ export class TaskService {
       )
     );
 
-    return { success: true, message: 'Tasks reordered successfully' };
+    return { success: true, message: MSG.task.reordered };
   }
 
   /**

@@ -8,6 +8,7 @@ import { CreateCollaboratorDto } from './dto/create-collaborator.dto';
 import { CreateClientDto } from './dto/create-client.dto';
 import { RoleCode } from 'src/common/enums/role.enum';
 import { UserStatus } from 'src/common/enums/user-status.enum';
+import { MSG } from 'src/common/messages';
 
 @Injectable()
 export class AccountantService {
@@ -29,17 +30,17 @@ export class AccountantService {
       });
 
       if (!accountant) {
-        throw new ApiError('Accountant not found', 404, 'ACCOUNTANT_NOT_FOUND');
+        throw new ApiError(MSG.accountant.not_found, 404, 'ACCOUNTANT_NOT_FOUND');
       }
 
       // Verify accountant role
       if (accountant.role?.code !== RoleCode.ACCOUNTANT) {
-        throw new ApiError('Only accountants can create collaborators', 403, 'FORBIDDEN');
+        throw new ApiError(MSG.accountant.forbidden, 403, 'FORBIDDEN');
       }
 
       // Verify accountant has a company
       if (!accountant.companyId) {
-        throw new ApiError('Accountant must be associated with a company', 400, 'NO_COMPANY');
+        throw new ApiError(MSG.accountant.no_company, 400, 'NO_COMPANY');
       }
 
       // Check if email already exists
@@ -48,7 +49,7 @@ export class AccountantService {
       });
 
       if (existingUser) {
-        throw new ApiError('Email already exists', 400, 'EMAIL_EXISTS');
+        throw new ApiError(MSG.user.already_exists, 400, 'EMAIL_EXISTS');
       }
 
       // Find COLLABORATOR role
@@ -57,7 +58,7 @@ export class AccountantService {
       });
 
       if (!collaboratorRole) {
-        throw new ApiError('Collaborator role not found', 500, 'ROLE_NOT_FOUND');
+        throw new ApiError(MSG.user.role_not_found, 500, 'ROLE_NOT_FOUND');
       }
 
       // Hash password
@@ -114,7 +115,7 @@ export class AccountantService {
 
       return {
         success: true,
-        message: 'Collaborator created successfully',
+        message: MSG.user.collaborator_created,
         data: {
           id: collaborator.id,
           username: collaborator.username,
@@ -161,17 +162,17 @@ export class AccountantService {
       });
 
       if (!accountant) {
-        throw new ApiError('Accountant not found', 404, 'ACCOUNTANT_NOT_FOUND');
+        throw new ApiError(MSG.accountant.not_found, 404, 'ACCOUNTANT_NOT_FOUND');
       }
 
       // Verify accountant role
       if (accountant.role?.code !== RoleCode.ACCOUNTANT) {
-        throw new ApiError('Only accountants can create clients', 403, 'FORBIDDEN');
+        throw new ApiError(MSG.accountant.forbidden, 403, 'FORBIDDEN');
       }
 
       // Verify accountant has a company
       if (!accountant.companyId) {
-        throw new ApiError('Accountant must be associated with a company', 400, 'NO_COMPANY');
+        throw new ApiError(MSG.accountant.no_company, 400, 'NO_COMPANY');
       }
 
       // Check if email already exists
@@ -180,7 +181,7 @@ export class AccountantService {
       });
 
       if (existingUser) {
-        throw new ApiError('Email already exists', 400, 'EMAIL_EXISTS');
+        throw new ApiError(MSG.user.already_exists, 400, 'EMAIL_EXISTS');
       }
 
       // Check if SIRET already exists (if provided)
@@ -190,7 +191,7 @@ export class AccountantService {
         });
 
         if (existingCompany) {
-          throw new ApiError('SIRET already exists', 400, 'SIRET_EXISTS');
+          throw new ApiError(MSG.user.siret_exists, 400, 'SIRET_EXISTS');
         }
       }
 
@@ -200,7 +201,7 @@ export class AccountantService {
       });
 
       if (!clientRole) {
-        throw new ApiError('Client role not found', 500, 'ROLE_NOT_FOUND');
+        throw new ApiError(MSG.user.role_not_found, 500, 'ROLE_NOT_FOUND');
       }
 
       // Hash password
@@ -221,7 +222,7 @@ export class AccountantService {
           );
         } catch (error) {
           console.error('Failed to upload patent file:', error);
-          throw new ApiError('Failed to upload patent file', 500, 'UPLOAD_FAILED');
+          throw new ApiError(MSG.user.upload_failed, 500, 'UPLOAD_FAILED');
         }
       }
 
@@ -303,7 +304,7 @@ export class AccountantService {
       // Return simple response with essential information
       return {
         success: true,
-        message: 'Client créé avec succès',
+        message: MSG.user.client_created,
         data: {
           id: client.id,
           fullName: `${client.firstName} ${client.lastName}`,
@@ -350,11 +351,11 @@ export class AccountantService {
       });
 
       if (!accountant || accountant.role?.code !== RoleCode.ACCOUNTANT) {
-        throw new ApiError('Accountant not found', 404, 'ACCOUNTANT_NOT_FOUND');
+        throw new ApiError(MSG.accountant.not_found, 404, 'ACCOUNTANT_NOT_FOUND');
       }
 
       if (!accountant.companyId) {
-        throw new ApiError('Accountant must be associated with a company', 400, 'NO_COMPANY');
+        throw new ApiError(MSG.accountant.no_company, 400, 'NO_COMPANY');
       }
 
       // Find COLLABORATOR role
@@ -363,7 +364,7 @@ export class AccountantService {
       });
 
       if (!collaboratorRole) {
-        throw new ApiError('Collaborator role not found', 500, 'ROLE_NOT_FOUND');
+        throw new ApiError(MSG.user.role_not_found, 500, 'ROLE_NOT_FOUND');
       }
 
       const where: any = {
@@ -427,11 +428,11 @@ export class AccountantService {
       });
 
       if (!accountant || accountant.role?.code !== RoleCode.ACCOUNTANT) {
-        throw new ApiError('Accountant not found', 404, 'ACCOUNTANT_NOT_FOUND');
+        throw new ApiError(MSG.accountant.not_found, 404, 'ACCOUNTANT_NOT_FOUND');
       }
 
       if (!accountant.companyId) {
-        throw new ApiError('Accountant must be associated with a company', 400, 'NO_COMPANY');
+        throw new ApiError(MSG.accountant.no_company, 400, 'NO_COMPANY');
       }
 
       // Get all client companies related to this accounting firm
@@ -537,7 +538,7 @@ export class AccountantService {
     });
 
     if (!client?.companyId) {
-      throw new ApiError('Client must be associated with a company', 400, 'NO_COMPANY');
+      throw new ApiError(MSG.user.no_company, 400, 'NO_COMPANY');
     }
 
     const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
@@ -605,7 +606,7 @@ export class AccountantService {
       });
 
       if (!accountantRole) {
-        throw new ApiError('Accountant role not found', 500, 'ROLE_NOT_FOUND');
+        throw new ApiError(MSG.accountant.role_not_found, 500, 'ROLE_NOT_FOUND');
       }
 
       // Build company filter
@@ -894,7 +895,7 @@ export class AccountantService {
       });
 
       if (!accountantRole) {
-        throw new ApiError('Accountant role not found', 500, 'ROLE_NOT_FOUND');
+        throw new ApiError(MSG.accountant.role_not_found, 500, 'ROLE_NOT_FOUND');
       }
 
       const accountant = await this.prisma.user.findFirst({
@@ -946,7 +947,7 @@ export class AccountantService {
       });
 
       if (!accountant) {
-        throw new ApiError('Accountant profile not found', 404, 'PROFILE_NOT_FOUND');
+        throw new ApiError(MSG.accountant.profile_not_found, 404, 'PROFILE_NOT_FOUND');
       }
 
       // Generate presigned URLs for photo and coverPhoto if they exist
@@ -1099,7 +1100,7 @@ export class AccountantService {
       });
 
       if (!accountant || accountant.role?.code !== RoleCode.ACCOUNTANT) {
-        throw new ApiError('Only accountants can update their profile', 403, 'FORBIDDEN');
+        throw new ApiError(MSG.accountant.forbidden, 403, 'FORBIDDEN');
       }
 
       // Check email uniqueness if email is being updated
@@ -1109,7 +1110,7 @@ export class AccountantService {
         });
 
         if (emailExists) {
-          throw new ApiError('Email already exists', 400, 'EMAIL_EXISTS');
+          throw new ApiError(MSG.user.already_exists, 400, 'EMAIL_EXISTS');
         }
       }
 
@@ -1274,7 +1275,7 @@ export class AccountantService {
 
       return {
         success: true,
-        message: 'Profile updated successfully',
+        message: MSG.user.profile_updated,
         data: {
           id: updated.id,
           firstName: updated.firstName,

@@ -126,15 +126,22 @@ export class RelationshipService {
       },
     });
 
-    // Send notification to target company owner
+    // Send notification to target company owner with action buttons data
     if (targetCompany.ownerId) {
+      const senderName =
+        `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.company.name;
       await this.notificationService.notify({
         recipientId: targetCompany.ownerId,
-        type: 'relationship.invitation_received',
-        action: 'view_invitation',
-        priority: 'normal',
-        actorName: user.company.name,
-        data: { invitationId: invitation.id, companyName: user.company.name },
+        type: 'relationship',
+        action: 'invitation_received',
+        priority: 'high',
+        actorName: senderName,
+        data: {
+          invitationId: invitation.id,
+          companyName: user.company.name,
+          senderName,
+          invitationMessage: dto.invitationMessage ?? null,
+        },
       });
     }
 
@@ -254,18 +261,20 @@ export class RelationshipService {
     });
 
     if (senderCompanyData?.ownerId) {
-      const responseType =
-        dto.response === InvitationResponse.ACCEPT
-          ? 'relationship.invitation_accepted'
-          : 'relationship.invitation_rejected';
+      const isAccepted = dto.response === InvitationResponse.ACCEPT;
+      const responderName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
 
       await this.notificationService.notify({
         recipientId: senderCompanyData.ownerId,
-        type: responseType,
-        action: 'view_relationships',
+        type: 'relationship',
+        action: isAccepted ? 'invitation_accepted' : 'invitation_rejected',
         priority: 'normal',
-        actorName: `${user.firstName} ${user.lastName}`,
-        data: { relationshipId: updatedInvitation.id },
+        actorName: responderName,
+        data: {
+          relationshipId: updatedInvitation.id,
+          status: isAccepted ? 'active' : 'rejected',
+          rejectionReason: dto.rejectionReason ?? null,
+        },
       });
     }
     return {

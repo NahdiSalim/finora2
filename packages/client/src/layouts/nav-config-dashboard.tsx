@@ -40,6 +40,10 @@ export const NAV_CONFIG: Record<
     title: "Clients",
     icon: <Users />,
   },
+  "/users": {
+    title: "Users",
+    icon: <Users />,
+  },
 
   "/documents": {
     title: "Documents",

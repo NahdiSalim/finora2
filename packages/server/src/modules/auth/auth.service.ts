@@ -17,6 +17,7 @@ import { FileUploadService, FileCategory } from 'src/common/services/file-upload
 import { MinioService } from 'src/common/services/minio.service';
 import { RoleCode } from 'src/common/enums/role.enum';
 import { UserStatus } from 'src/common/enums/user-status.enum';
+import { MSG } from 'src/common/messages';
 
 @Injectable()
 export class AuthService {
@@ -215,7 +216,7 @@ export class AuthService {
       data: { isRevoked: true },
     });
 
-    return { success: true, message: 'Logged out successfully' };
+    return { success: true, message: MSG.auth.logout_success };
   }
 
   async refreshExpiredToken(expiredAccessToken: string) {
@@ -590,7 +591,7 @@ export class AuthService {
         // même si l'email n'existe pas (évite l'énumération d'emails)
         return {
           success: true,
-          message: 'Si cet email existe, un lien de réinitialisation a été envoyé.',
+          message: MSG.user.reset_link_sent,
         };
       }
 
@@ -621,16 +622,12 @@ export class AuthService {
         this.logger.log(`Password reset email sent to ${user.email}`);
       } catch (emailError) {
         this.logger.error(`Failed to send password reset email to ${user.email}:`, emailError);
-        throw new ApiError(
-          'Failed to send password reset email. Please try again later.',
-          500,
-          'EMAIL_SEND_FAILED'
-        );
+        throw new ApiError(MSG.user.reset_email_failed, 500, 'EMAIL_SEND_FAILED');
       }
 
       return {
         success: true,
-        message: 'Un email de réinitialisation a été envoyé à votre adresse.',
+        message: MSG.user.reset_email_sent,
       };
     } catch (error) {
       this.logger.error('Forgot password error:', error);
@@ -654,19 +651,15 @@ export class AuthService {
     try {
       // Valider les mots de passe
       if (!password || password.trim() === '') {
-        throw new ApiError('Le mot de passe est requis', 400, 'PASSWORD_REQUIRED');
+        throw new ApiError(MSG.user.password_required, 400, 'PASSWORD_REQUIRED');
       }
 
       if (password.length < 8) {
-        throw new ApiError(
-          'Le mot de passe doit contenir au moins 8 caractères',
-          400,
-          'PASSWORD_TOO_SHORT'
-        );
+        throw new ApiError(MSG.user.password_too_short, 400, 'PASSWORD_TOO_SHORT');
       }
 
       if (password !== confirmepassword) {
-        throw new ApiError('Les mots de passe ne correspondent pas', 400, 'PASSWORDS_DO_NOT_MATCH');
+        throw new ApiError(MSG.user.passwords_mismatch, 400, 'PASSWORDS_DO_NOT_MATCH');
       }
 
       // Hasher le token pour le comparer avec celui en base
@@ -683,11 +676,7 @@ export class AuthService {
       });
 
       if (!user) {
-        throw new ApiError(
-          'Le lien de réinitialisation est invalide ou a expiré',
-          400,
-          'INVALID_OR_EXPIRED_TOKEN'
-        );
+        throw new ApiError(MSG.user.reset_link_invalid, 400, 'INVALID_OR_EXPIRED_TOKEN');
       }
 
       // Hasher le nouveau mot de passe
@@ -707,7 +696,7 @@ export class AuthService {
 
       return {
         success: true,
-        message: 'Votre mot de passe a été réinitialisé avec succès',
+        message: MSG.user.password_reset,
       };
     } catch (error) {
       this.logger.error('Reset password error:', error);
@@ -733,7 +722,7 @@ export class AuthService {
       });
 
       if (existingUser) {
-        throw new ApiError('Email already exists', 400, 'EMAIL_EXISTS');
+        throw new ApiError(MSG.user.already_exists, 400, 'EMAIL_EXISTS');
       }
 
       // Find CLIENT role by code
@@ -742,7 +731,7 @@ export class AuthService {
       });
 
       if (!clientRole) {
-        throw new ApiError('Client role not found', 500, 'ROLE_NOT_FOUND');
+        throw new ApiError(MSG.user.role_not_found, 500, 'ROLE_NOT_FOUND');
       }
 
       // Hash password
@@ -778,7 +767,7 @@ export class AuthService {
 
       return {
         success: true,
-        message: 'Registration successful. Your account is pending approval.',
+        message: MSG.user.registered,
         data: {
           id: user.id,
           email: user.email,
@@ -807,7 +796,7 @@ export class AuthService {
       });
 
       if (existingUser) {
-        throw new ApiError('Email already exists', 400, 'EMAIL_EXISTS');
+        throw new ApiError(MSG.user.already_exists, 400, 'EMAIL_EXISTS');
       }
 
       // Find ACCOUNTANT role by code
@@ -816,7 +805,7 @@ export class AuthService {
       });
 
       if (!accountantRole) {
-        throw new ApiError('Accountant role not found', 500, 'ROLE_NOT_FOUND');
+        throw new ApiError(MSG.user.role_not_found, 500, 'ROLE_NOT_FOUND');
       }
 
       // Hash password
@@ -900,7 +889,7 @@ export class AuthService {
 
       return {
         success: true,
-        message: 'Registration successful. Your account is pending approval.',
+        message: MSG.user.registered,
         data: {
           id: user.id,
           email: user.email,

@@ -3,6 +3,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { MinioService } from '../../common/services/minio.service';
 import { ApiError } from '../../common/errors/api-error';
 import { errors } from '../../common/errors/errors';
+import { MSG } from '../../common/messages';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { InvoiceExtractionService } from './invoice-extraction.service';
@@ -87,11 +88,7 @@ export class DocumentService {
       });
 
       if (!relationship) {
-        throw new ApiError(
-          'No active relationship with this client',
-          403,
-          'NO_ACTIVE_RELATIONSHIP'
-        );
+        throw new ApiError(MSG.document.no_relationship, 403, 'NO_ACTIVE_RELATIONSHIP');
       }
     }
 
@@ -107,7 +104,7 @@ export class DocumentService {
       });
 
       if (!parent) {
-        throw new ApiError('Parent folder not found', 404, 'PARENT_NOT_FOUND');
+        throw new ApiError(MSG.document.folder_not_found, 404, 'PARENT_NOT_FOUND');
       }
     }
 
@@ -130,7 +127,7 @@ export class DocumentService {
       status: 'success',
       code: '201',
       data: folder,
-      message: 'Folder created successfully',
+      message: MSG.document.folder_created,
     };
   }
 
@@ -167,11 +164,7 @@ export class DocumentService {
       });
 
       if (!relationship) {
-        throw new ApiError(
-          'No active relationship with this client',
-          403,
-          'NO_ACTIVE_RELATIONSHIP'
-        );
+        throw new ApiError(MSG.document.no_relationship, 403, 'NO_ACTIVE_RELATIONSHIP');
       }
     }
 
@@ -188,7 +181,7 @@ export class DocumentService {
       });
 
       if (!parent) {
-        throw new ApiError('Parent folder not found', 404, 'PARENT_NOT_FOUND');
+        throw new ApiError(MSG.document.folder_not_found, 404, 'PARENT_NOT_FOUND');
       }
 
       // Build folder path
@@ -245,16 +238,12 @@ export class DocumentService {
           downloadUrl: url,
           fileExtractionStatus: category === 'facture' ? 'pending' : null,
         },
-        message: 'File uploaded successfully',
+        message: MSG.document.uploaded,
       };
     } catch (error) {
       // Handle MinIO not configured error
       if (error.message && error.message.includes('SERVICE_UNAVAILABLE')) {
-        throw new ApiError(
-          "Le service de stockage de fichiers n'est pas disponible. Veuillez contacter l'administrateur.",
-          503,
-          'SERVICE_UNAVAILABLE'
-        );
+        throw new ApiError(MSG.document.service_unavailable, 503, 'SERVICE_UNAVAILABLE');
       }
       throw error;
     }
@@ -719,11 +708,7 @@ export class DocumentService {
     });
 
     if (!document) {
-      throw new ApiError(
-        errors.NOT_FOUND.message,
-        errors.NOT_FOUND.code,
-        errors.NOT_FOUND.errorCode
-      );
+      throw new ApiError(MSG.document.not_found, 404, 'NOT_FOUND');
     }
 
     // Check if user has access to this document's company
@@ -733,7 +718,7 @@ export class DocumentService {
         (await this.validateAccountantClientRelationship(userCompanyId, document.companyId)));
 
     if (!hasAccess) {
-      throw new ApiError('You do not have access to this document', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.document.access_denied, 403, 'ACCESS_DENIED');
     }
 
     let downloadUrl: string | undefined;
@@ -761,11 +746,7 @@ export class DocumentService {
     });
 
     if (!document) {
-      throw new ApiError(
-        errors.NOT_FOUND.message,
-        errors.NOT_FOUND.code,
-        errors.NOT_FOUND.errorCode
-      );
+      throw new ApiError(MSG.document.not_found, 404, 'NOT_FOUND');
     }
 
     // Check if user has access to this document's company
@@ -775,7 +756,7 @@ export class DocumentService {
         (await this.validateAccountantClientRelationship(userCompanyId, document.companyId)));
 
     if (!hasAccess) {
-      throw new ApiError('You do not have access to this document', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.document.access_denied, 403, 'ACCESS_DENIED');
     }
 
     // Check permissions
@@ -791,11 +772,7 @@ export class DocumentService {
       createdByCompanyId === document.companyId && userCompanyId !== document.companyId;
 
     if (!isCreator && !isAccountantEditingClient) {
-      throw new ApiError(
-        'You do not have permission to edit this document',
-        403,
-        'PERMISSION_DENIED'
-      );
+      throw new ApiError(MSG.document.permission_denied, 403, 'PERMISSION_DENIED');
     }
 
     // Verify new parent folder exists if parentId is provided
@@ -810,18 +787,14 @@ export class DocumentService {
       });
 
       if (!parent) {
-        throw new ApiError('Parent folder not found', 404, 'PARENT_NOT_FOUND');
+        throw new ApiError(MSG.document.folder_not_found, 404, 'PARENT_NOT_FOUND');
       }
 
       // Prevent moving a folder into itself or its descendants
       if (document.isFolder) {
         const isDescendant = await this.isDescendant(id, dto.parentId);
         if (isDescendant || id === dto.parentId) {
-          throw new ApiError(
-            'Cannot move folder into itself or its descendants',
-            400,
-            'INVALID_MOVE'
-          );
+          throw new ApiError(MSG.document.invalid_move, 400, 'INVALID_MOVE');
         }
       }
     }
@@ -838,7 +811,7 @@ export class DocumentService {
       status: 'success',
       code: '200',
       data: updated,
-      message: 'Document updated successfully',
+      message: MSG.document.updated,
     };
   }
 
@@ -853,11 +826,7 @@ export class DocumentService {
     });
 
     if (!document) {
-      throw new ApiError(
-        errors.NOT_FOUND.message,
-        errors.NOT_FOUND.code,
-        errors.NOT_FOUND.errorCode
-      );
+      throw new ApiError(MSG.document.not_found, 404, 'NOT_FOUND');
     }
 
     // Check if user has access to this document's company
@@ -868,7 +837,7 @@ export class DocumentService {
         (await this.validateAccountantClientRelationship(userCompanyId, document.companyId)));
 
     if (!hasAccess) {
-      throw new ApiError('You do not have access to this document', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.document.access_denied, 403, 'ACCESS_DENIED');
     }
 
     // Check permissions
@@ -884,11 +853,7 @@ export class DocumentService {
       createdByCompanyId === document.companyId && userCompanyId !== document.companyId;
 
     if (!isCreator && !isAccountantEditingClient) {
-      throw new ApiError(
-        `You do not have permission to delete this document. createdByCompanyId: ${createdByCompanyId}, userCompanyId: ${userCompanyId}, documentCompanyId: ${document.companyId}`,
-        403,
-        'PERMISSION_DENIED'
-      );
+      throw new ApiError(MSG.document.permission_denied_delete, 403, 'PERMISSION_DENIED');
     }
 
     // If it's a folder, check if it's empty
@@ -901,11 +866,7 @@ export class DocumentService {
       });
 
       if (childrenCount > 0) {
-        throw new ApiError(
-          'Cannot delete folder that contains files or subfolders',
-          400,
-          'FOLDER_NOT_EMPTY'
-        );
+        throw new ApiError(MSG.document.folder_not_empty, 400, 'FOLDER_NOT_EMPTY');
       }
     } else {
       // Delete file from MinIO
@@ -925,7 +886,7 @@ export class DocumentService {
     return {
       status: 'success',
       code: '200',
-      message: 'Document deleted successfully',
+      message: MSG.document.deleted,
     };
   }
 
@@ -938,11 +899,7 @@ export class DocumentService {
     });
 
     if (!document) {
-      throw new ApiError(
-        errors.NOT_FOUND.message,
-        errors.NOT_FOUND.code,
-        errors.NOT_FOUND.errorCode
-      );
+      throw new ApiError(MSG.document.not_found, 404, 'NOT_FOUND');
     }
 
     // Check if user has access to this document's company
@@ -952,7 +909,7 @@ export class DocumentService {
         (await this.validateAccountantClientRelationship(userCompanyId, document.companyId)));
 
     if (!hasAccess) {
-      throw new ApiError('You do not have access to this document', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.document.access_denied, 403, 'ACCESS_DENIED');
     }
 
     // If it's a folder, archive all children recursively
@@ -972,9 +929,7 @@ export class DocumentService {
     return {
       status: 'success',
       code: '200',
-      message: document.isFolder
-        ? 'Folder and all its contents archived successfully'
-        : 'Document archived successfully',
+      message: document.isFolder ? MSG.document.folder_archived : MSG.document.archived,
     };
   }
 
@@ -987,7 +942,7 @@ export class DocumentService {
     });
 
     if (!document) {
-      throw new ApiError('Document not found or not archived', 404, 'NOT_FOUND');
+      throw new ApiError(MSG.document.not_found, 404, 'NOT_FOUND');
     }
 
     // Check if user has access to this document's company
@@ -997,7 +952,7 @@ export class DocumentService {
         (await this.validateAccountantClientRelationship(userCompanyId, document.companyId)));
 
     if (!hasAccess) {
-      throw new ApiError('You do not have access to this document', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.document.access_denied, 403, 'ACCESS_DENIED');
     }
 
     // If it's a folder, unarchive all children recursively
@@ -1017,9 +972,7 @@ export class DocumentService {
     return {
       status: 'success',
       code: '200',
-      message: document.isFolder
-        ? 'Folder and all its contents unarchived successfully'
-        : 'Document unarchived successfully',
+      message: document.isFolder ? MSG.document.folder_unarchived : MSG.document.unarchived,
     };
   }
 
@@ -1032,11 +985,7 @@ export class DocumentService {
     });
 
     if (!document || document.isFolder) {
-      throw new ApiError(
-        errors.NOT_FOUND.message,
-        errors.NOT_FOUND.code,
-        errors.NOT_FOUND.errorCode
-      );
+      throw new ApiError(MSG.document.not_found, 404, 'NOT_FOUND');
     }
 
     // Check if user has access to this document's company
@@ -1046,17 +995,13 @@ export class DocumentService {
         (await this.validateAccountantClientRelationship(userCompanyId, document.companyId)));
 
     if (!hasAccess) {
-      throw new ApiError('You do not have access to this document', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.document.access_denied, 403, 'ACCESS_DENIED');
     }
 
     // Check if file exists in MinIO
     const fileExists = await this.minioService.fileExists(document.url);
     if (!fileExists) {
-      throw new ApiError(
-        'File not found in storage. The file may have been deleted.',
-        404,
-        'FILE_NOT_FOUND'
-      );
+      throw new ApiError(MSG.document.not_found, 404, 'FILE_NOT_FOUND');
     }
 
     const stream = await this.minioService.getFileStream(document.url);
@@ -1079,11 +1024,7 @@ export class DocumentService {
     });
 
     if (!document) {
-      throw new ApiError(
-        errors.NOT_FOUND.message,
-        errors.NOT_FOUND.code,
-        errors.NOT_FOUND.errorCode
-      );
+      throw new ApiError(MSG.document.not_found, 404, 'NOT_FOUND');
     }
 
     // Check if user has access to this document's company
@@ -1093,7 +1034,7 @@ export class DocumentService {
         (await this.validateAccountantClientRelationship(userCompanyId, document.companyId)));
 
     if (!hasAccess) {
-      throw new ApiError('You do not have access to this document', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.document.access_denied, 403, 'ACCESS_DENIED');
     }
 
     const breadcrumb: Array<{ id: number; name: string }> = [];

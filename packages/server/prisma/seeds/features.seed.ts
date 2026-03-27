@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 
 export async function seedFeatures(prisma: PrismaClient) {
   const features = [
+    { slug: 'gestion-utilisateurs' },
     { slug: 'dashboard' },
     { slug: 'gestion-comptes-comptables' },
     { slug: 'archive' },

@@ -178,6 +178,8 @@ export interface User {
 export interface UsersResponse {
   message: string;
   data: User[];
+  counts?: Record<string, number>;
+  roleCounts?: Record<string, number>;
   pagination: {
     total: number;
     page: number;

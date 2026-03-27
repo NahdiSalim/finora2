@@ -16,6 +16,7 @@ export type CustomSelectProps = SelectProps & {
 const CustomSelect = forwardRef<HTMLDivElement, CustomSelectProps>(
   ({ label, helperText, required, error, sx, children, ...props }, ref) => {
     const theme = useTheme();
+    const menuProps = props.MenuProps ?? {};
 
     return (
       <FormControl
@@ -57,6 +58,14 @@ const CustomSelect = forwardRef<HTMLDivElement, CustomSelectProps>(
 
         <Select
           {...props}
+          MenuProps={{
+            ...menuProps,
+            sx: { zIndex: (t) => t.zIndex.modal + 20 },
+            PaperProps: {
+              ...menuProps.PaperProps,
+              sx: { zIndex: (t) => t.zIndex.modal + 21 },
+            },
+          }}
           displayEmpty
           sx={{
             fontFamily: theme.typography.body2.fontFamily,

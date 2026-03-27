@@ -51,6 +51,7 @@ export interface Request {
   response?: string | null;
   attachments: string[];
   attachmentUrls?: string[];
+  responseAttachments?: string[];
   desiredResponseDate?: string | null;
   desiredResponseTime?: string | null;
   clientId: number;
@@ -83,7 +84,8 @@ export interface GetRequestsParams {
   limit?: number;
   status?: RequestStatus | string;
   urgency?: RequestUrgency | string;
-  sortBy?: "urgency" | "createdAt";
+  sortBy?: "urgency" | "status" | "createdAt";
+  sortOrder?: "asc" | "desc";
   search?: string;
 }
 
@@ -124,7 +126,8 @@ export interface UpdateRequestDto {
 }
 
 export interface RespondRequestDto {
-  response: string;
+  response?: string;
+  responseAttachments?: File[];
 }
 
 export interface ConvertToTaskDto {

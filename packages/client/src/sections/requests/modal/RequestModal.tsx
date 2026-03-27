@@ -8,17 +8,21 @@ import {
   alpha,
   useMediaQuery,
   MenuItem,
+  Checkbox,
 } from "@mui/material";
 import type { SubmitHandler } from "react-hook-form";
 import { Controller, useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
-import { X } from "lucide-react";
+import { X, ChevronRight, Folder } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
 
 import CustomInput from "src/components/common/CustomInput";
 import CustomButton from "src/components/common/CustomButton";
 import CustomSelect from "src/components/common/CustomSelect";
 import FileUpload from "src/components/common/FileUpload";
+import { FolderTabNavigation } from "src/components/common/CustomTabs";
 import { useCreateRequestMutation } from "src/lib/services/requestApi";
+import { useGetDocumentsQuery } from "src/lib/services/documentsApi";
 import { useAlert } from "src/contexts/AlertContext";
 import {
   requestValidationSchema,
@@ -30,12 +34,99 @@ interface Props {
   onClose: () => void;
 }
 
+interface FolderTreeItemProps {
+  folderId: number;
+  folderName: string;
+  depth: number;
+  expandedIds: Set<number>;
+  onToggleExpand: (id: number) => void;
+  selectedId: number | null;
+  onSelect: (id: number) => void;
+}
+
+function FolderTreeItem({
+  folderId,
+  folderName,
+  depth,
+  expandedIds,
+  onToggleExpand,
+  selectedId,
+  onSelect,
+}: FolderTreeItemProps) {
+  const isExpanded = expandedIds.has(folderId);
+  const { data } = useGetDocumentsQuery(
+    {
+      parentId: folderId,
+      limit: 500,
+      status: "active",
+    },
+    { skip: !isExpanded },
+  );
+  const childFolders =
+    data?.data
+      ?.filter((d) => d.isFolder)
+      .map((d) => ({ id: d.id, name: d.name })) ?? [];
+
+  return (
+    <>
+      <Box
+        onClick={() => onSelect(folderId)}
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+          pl: 2 + depth * 2,
+          py: 1.25,
+          cursor: "pointer",
+          bgcolor: selectedId === folderId ? "action.selected" : "transparent",
+          "&:hover": { bgcolor: "action.hover" },
+        }}
+      >
+        <Box
+          component="span"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleExpand(folderId);
+          }}
+          sx={{
+            display: "inline-flex",
+            transform: isExpanded ? "rotate(90deg)" : "none",
+            transition: "transform 0.2s",
+          }}
+        >
+          <ChevronRight size={18} />
+        </Box>
+        <Folder size={18} />
+        <Typography variant="body2">{folderName}</Typography>
+      </Box>
+      {isExpanded &&
+        childFolders.map((child) => (
+          <FolderTreeItem
+            key={child.id}
+            folderId={child.id}
+            folderName={child.name}
+            depth={depth + 1}
+            expandedIds={expandedIds}
+            onToggleExpand={onToggleExpand}
+            selectedId={selectedId}
+            onSelect={onSelect}
+          />
+        ))}
+    </>
+  );
+}
+
 export default function RequestModal({ open, onClose }: Props) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isMedium = useMediaQuery(theme.breakpoints.down("md"));
   const { showAlert } = useAlert();
   const [createRequest, { isLoading }] = useCreateRequestMutation();
+
+  const [activeTab, setActiveTab] = useState<"upload" | "select">("upload");
+  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<number[]>([]);
 
   const {
     register,
@@ -45,14 +136,14 @@ export default function RequestModal({ open, onClose }: Props) {
     watch,
     formState: { errors, isDirty, isValid },
   } = useForm<RequestFormData>({
-    resolver: yupResolver(requestValidationSchema),
+    resolver: yupResolver(requestValidationSchema) as any,
     mode: "onChange",
     defaultValues: {
       subject: "",
       topic: "",
-      type: "other",
+      type: "other" as const,
       description: "",
-      urgency: "normal",
+      urgency: "normal" as const,
       desiredResponseDate: undefined,
       desiredResponseTime: undefined,
       attachments: [],
@@ -61,6 +152,57 @@ export default function RequestModal({ open, onClose }: Props) {
 
   const descriptionValue = watch("description") || "";
   const characterCount = descriptionValue.length;
+
+  const { data: rootData } = useGetDocumentsQuery(
+    {
+      parentId: undefined,
+      limit: 500,
+      status: "active",
+    },
+    { skip: !open || activeTab !== "select" },
+  );
+  const rootFolders =
+    rootData?.data
+      ?.filter((d) => d.isFolder)
+      .map((d) => ({ id: d.id, name: d.name })) ?? [];
+
+  const { data: currentFolderData } = useGetDocumentsQuery(
+    {
+      parentId: selectedFolderId ?? undefined,
+      limit: 500,
+      status: "active",
+    },
+    { skip: !open || activeTab !== "select" },
+  );
+  const currentFiles =
+    currentFolderData?.data?.filter((d) => !d.isFolder) ?? [];
+
+  useEffect(() => {
+    if (!open) {
+      setActiveTab("upload");
+      setSelectedFolderId(null);
+      setExpandedIds(new Set());
+      setSelectedDocumentIds([]);
+      return;
+    }
+  }, [open]);
+
+  const handleToggleExpand = useCallback((id: number) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleToggleDocument = useCallback((docId: number) => {
+    setSelectedDocumentIds((prev) =>
+      prev.includes(docId)
+        ? prev.filter((id) => id !== docId)
+        : [...prev, docId],
+    );
+  }, []);
 
   const onSubmit: SubmitHandler<RequestFormData> = async (data) => {
     try {
@@ -77,8 +219,12 @@ export default function RequestModal({ open, onClose }: Props) {
       if (data.desiredResponseTime)
         formData.append("desiredResponseTime", data.desiredResponseTime);
 
-      // Append files
-      if (data.attachments && data.attachments.length > 0) {
+      // Append new files (from "Nouveau document" tab)
+      if (
+        activeTab === "upload" &&
+        data.attachments &&
+        data.attachments.length > 0
+      ) {
         data.attachments
           .filter((file): file is File => file !== undefined)
           .forEach((file) => {
@@ -86,12 +232,20 @@ export default function RequestModal({ open, onClose }: Props) {
           });
       }
 
+      // Append existing document IDs (from "Mon espace" tab)
+      if (activeTab === "select" && selectedDocumentIds.length > 0) {
+        selectedDocumentIds.forEach((id) => {
+          formData.append("existingDocumentIds", id.toString());
+        });
+      }
+
       await createRequest(formData).unwrap();
       showAlert("Demande créée avec succès", "success");
       reset();
+      setSelectedDocumentIds([]);
+      setActiveTab("upload");
       onClose();
     } catch (error) {
-      console.error("Error creating request:", error);
       showAlert("Erreur lors de la création de la demande", "error");
     }
   };
@@ -99,6 +253,10 @@ export default function RequestModal({ open, onClose }: Props) {
   const handleClose = () => {
     if (isLoading) return;
     reset();
+    setSelectedDocumentIds([]);
+    setActiveTab("upload");
+    setSelectedFolderId(null);
+    setExpandedIds(new Set());
     onClose();
   };
 
@@ -235,9 +393,9 @@ export default function RequestModal({ open, onClose }: Props) {
                     error={!!errors.urgency}
                     helperText={errors.urgency?.message}
                   >
-                    <MenuItem value="low">Low</MenuItem>
+                    <MenuItem value="low">Faible</MenuItem>
                     <MenuItem value="normal">Normal</MenuItem>
-                    <MenuItem value="high">High</MenuItem>
+                    <MenuItem value="high">Élevé</MenuItem>
                     <MenuItem value="urgent">Urgent</MenuItem>
                   </CustomSelect>
                 )}
@@ -357,31 +515,244 @@ export default function RequestModal({ open, onClose }: Props) {
             </Box>
           </Box>
 
-          {/* Pièce jointe */}
-          <Controller
-            name="attachments"
-            control={control}
-            render={({ field }) => (
-              <FileUpload
-                label="Pièce jointe"
-                value={(field.value && field.value[0]) || null}
-                onChange={(file) => field.onChange(file ? [file] : [])}
-                error={!!errors.attachments}
-                helperText={errors.attachments?.message}
-                maxSize={5}
-                acceptedFiles={[
-                  ".pdf",
-                  ".doc",
-                  ".docx",
-                  ".xls",
-                  ".xlsx",
-                  ".jpg",
-                  ".jpeg",
-                  ".png",
-                ]}
-              />
-            )}
-          />
+          {/* Pièce jointe - With tabs */}
+          <Box>
+            <Typography
+              variant="subtitle2"
+              sx={{ mb: 1.5, fontWeight: 600, fontSize: 14 }}
+            >
+              Pièce jointe
+            </Typography>
+
+            <FolderTabNavigation
+              tabs={[
+                { id: "upload", label: "Nouveau document" },
+                { id: "select", label: "Mon espace" },
+              ]}
+              activeTab={activeTab}
+              onTabChange={(tab) => setActiveTab(tab as "upload" | "select")}
+            />
+
+            <Box sx={{ mt: 2 }}>
+              {/* Tab 1: Upload new file */}
+              {activeTab === "upload" && (
+                <Controller
+                  name="attachments"
+                  control={control}
+                  render={({ field }) => (
+                    <FileUpload
+                      label="Fichier"
+                      value={(field.value && field.value[0]) || null}
+                      onChange={(file) => field.onChange(file ? [file] : [])}
+                      error={!!errors.attachments}
+                      helperText={errors.attachments?.message}
+                      maxSize={5}
+                      acceptedFiles={[
+                        ".pdf",
+                        ".doc",
+                        ".docx",
+                        ".xls",
+                        ".xlsx",
+                        ".jpg",
+                        ".jpeg",
+                        ".png",
+                      ]}
+                    />
+                  )}
+                />
+              )}
+
+              {/* Tab 2: Select from Mon espace */}
+              {activeTab === "select" && (
+                <Box>
+                  {/* Folder Tree */}
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ mb: 1, display: "block" }}
+                  >
+                    Parcourez vos dossiers et sélectionnez des documents
+                  </Typography>
+                  <Box
+                    sx={{
+                      border: 1,
+                      borderColor: "divider",
+                      borderRadius: 2,
+                      maxHeight: 200,
+                      overflow: "auto",
+                      mb: 2,
+                    }}
+                  >
+                    <Box
+                      onClick={() => setSelectedFolderId(null)}
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        px: 2,
+                        py: 1.25,
+                        cursor: "pointer",
+                        bgcolor:
+                          selectedFolderId === null
+                            ? "action.selected"
+                            : "transparent",
+                        "&:hover": { bgcolor: "action.hover" },
+                      }}
+                    >
+                      <ChevronRight size={18} color="transparent" />
+                      <Folder size={18} />
+                      <Typography variant="body2">Racine</Typography>
+                    </Box>
+                    {rootFolders.map((folder) => (
+                      <FolderTreeItem
+                        key={folder.id}
+                        folderId={folder.id}
+                        folderName={folder.name}
+                        depth={0}
+                        expandedIds={expandedIds}
+                        onToggleExpand={handleToggleExpand}
+                        selectedId={selectedFolderId}
+                        onSelect={setSelectedFolderId}
+                      />
+                    ))}
+                  </Box>
+
+                  {/* File List */}
+                  <Box>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      fontWeight={600}
+                      sx={{ mb: 1, display: "block", fontSize: 10 }}
+                    >
+                      DOCUMENTS DISPONIBLES ({currentFiles.length})
+                    </Typography>
+                    {currentFiles.length === 0 ? (
+                      <Box
+                        sx={{
+                          p: 3,
+                          textAlign: "center",
+                          color: "text.secondary",
+                          border: 1,
+                          borderColor: "divider",
+                          borderRadius: 2,
+                        }}
+                      >
+                        <Typography variant="body2">
+                          Aucun document dans ce dossier
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Box
+                        sx={{
+                          border: 1,
+                          borderColor: "divider",
+                          borderRadius: 2,
+                          maxHeight: 250,
+                          overflow: "auto",
+                        }}
+                      >
+                        {currentFiles.map((doc) => {
+                          const isSelected = selectedDocumentIds.includes(
+                            doc.id,
+                          );
+                          const fileExtension = doc.name
+                            .split(".")
+                            .pop()
+                            ?.toLowerCase();
+
+                          return (
+                            <Box
+                              key={doc.id}
+                              onClick={() => handleToggleDocument(doc.id)}
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 1.5,
+                                px: 2,
+                                py: 1.5,
+                                cursor: "pointer",
+                                bgcolor: isSelected
+                                  ? alpha(theme.palette.primary.main, 0.08)
+                                  : "transparent",
+                                borderBottom: `1px solid ${theme.palette.divider}`,
+                                "&:last-child": { borderBottom: "none" },
+                                "&:hover": {
+                                  bgcolor: alpha(
+                                    theme.palette.primary.main,
+                                    0.04,
+                                  ),
+                                },
+                              }}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                size="small"
+                                sx={{ p: 0 }}
+                              />
+                              <Box
+                                sx={{
+                                  width: 32,
+                                  height: 32,
+                                  bgcolor: "#3B82F6",
+                                  borderRadius: 1,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <Typography
+                                  variant="caption"
+                                  fontWeight={700}
+                                  color="white"
+                                  sx={{ fontSize: 8 }}
+                                >
+                                  {fileExtension?.toUpperCase() || "FILE"}
+                                </Typography>
+                              </Box>
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography
+                                  variant="body2"
+                                  fontSize={13}
+                                  fontWeight={500}
+                                  sx={{
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {doc.name}
+                                </Typography>
+                                {doc.type && (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{ fontSize: 11 }}
+                                  >
+                                    {doc.type}
+                                  </Typography>
+                                )}
+                              </Box>
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                    )}
+                    {selectedDocumentIds.length > 0 && (
+                      <Typography
+                        variant="caption"
+                        color="primary"
+                        sx={{ mt: 1, display: "block" }}
+                      >
+                        {selectedDocumentIds.length} document(s) sélectionné(s)
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          </Box>
 
           {/* Footer actions */}
           <Box
@@ -415,7 +786,13 @@ export default function RequestModal({ open, onClose }: Props) {
             <CustomButton
               type="submit"
               variant="contained"
-              disabled={isLoading || !isDirty || !isValid}
+              disabled={
+                isLoading ||
+                !isValid ||
+                (activeTab === "select" && selectedDocumentIds.length === 0) ||
+                (activeTab === "upload" &&
+                  (!watch("attachments") || watch("attachments")?.length === 0))
+              }
               fullWidth={isMobile}
               sx={{
                 minWidth: { sm: 140 },

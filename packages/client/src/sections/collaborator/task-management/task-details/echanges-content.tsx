@@ -41,7 +41,7 @@ export function EchangesContent({
         onCommentAdded();
       }
     } catch (error) {
-      console.error("Failed to add comment:", error);
+      // Failed to add comment
     }
   };
 
@@ -82,7 +82,7 @@ export function EchangesContent({
             color: theme.palette.text.primary,
           }}
         >
-          Echanges
+          Commentaires
         </Typography>
       </Box>
 

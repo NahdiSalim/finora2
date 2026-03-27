@@ -211,6 +211,37 @@ export class TaskService {
   }
 
   /**
+   * Get date range based on filter
+   */
+  private getDateRange(dateFilter?: string): { gte?: Date; lte?: Date } | undefined {
+    if (!dateFilter) return undefined;
+
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+
+    switch (dateFilter) {
+      case 'today':
+        return { gte: startOfDay, lte: endOfDay };
+
+      case 'week': {
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay()); // Start of week (Sunday)
+        startOfWeek.setHours(0, 0, 0, 0);
+        return { gte: startOfWeek, lte: endOfDay };
+      }
+
+      case 'month': {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+        return { gte: startOfMonth, lte: endOfDay };
+      }
+
+      default:
+        return undefined;
+    }
+  }
+
+  /**
    * Get my assigned tasks (Collaborator)
    */
   async getMyTasks(
@@ -219,7 +250,9 @@ export class TaskService {
     limit: number = 10,
     status?: string,
     priority?: string,
-    sortBy: 'priority' | 'dueDate' | 'createdAt' = 'dueDate'
+    sortBy: 'priority' | 'dueDate' | 'createdAt' = 'dueDate',
+    search?: string,
+    dateFilter?: string
   ) {
     const skip = (page - 1) * limit;
     const where: any = { assigneeId: userId };
@@ -230,6 +263,21 @@ export class TaskService {
 
     if (priority) {
       where.priority = priority;
+    }
+
+    if (search && search.trim()) {
+      where.OR = [
+        { title: { contains: search.trim(), mode: 'insensitive' } },
+        { description: { contains: search.trim(), mode: 'insensitive' } },
+        { assignee: { firstName: { contains: search.trim(), mode: 'insensitive' } } },
+        { assignee: { lastName: { contains: search.trim(), mode: 'insensitive' } } },
+      ];
+    }
+
+    // Apply date filter
+    const dateRange = this.getDateRange(dateFilter);
+    if (dateRange) {
+      where.createdAt = dateRange;
     }
 
     const orderBy: any[] = [{ order: 'asc' }];
@@ -328,12 +376,34 @@ export class TaskService {
   /**
    * Get tasks created by me (Accountant)
    */
-  async getMyCreatedTasks(userId: number, page: number = 1, limit: number = 10, status?: string) {
+  async getMyCreatedTasks(
+    userId: number,
+    page: number = 1,
+    limit: number = 10,
+    status?: string,
+    search?: string,
+    dateFilter?: string
+  ) {
     const skip = (page - 1) * limit;
     const where: any = { createdById: userId };
 
     if (status) {
       where.status = status;
+    }
+
+    if (search && search.trim()) {
+      where.OR = [
+        { title: { contains: search.trim(), mode: 'insensitive' } },
+        { description: { contains: search.trim(), mode: 'insensitive' } },
+        { assignee: { firstName: { contains: search.trim(), mode: 'insensitive' } } },
+        { assignee: { lastName: { contains: search.trim(), mode: 'insensitive' } } },
+      ];
+    }
+
+    // Apply date filter
+    const dateRange = this.getDateRange(dateFilter);
+    if (dateRange) {
+      where.createdAt = dateRange;
     }
 
     const [total, tasks] = await Promise.all([
@@ -497,13 +567,18 @@ export class TaskService {
       throw new ApiError(MSG.task.access_denied, 403, 'ACCESS_DENIED');
     }
 
-    // Collaborators cannot set status to 'completed' or 'archived' — only accountants can
+    // Role-based status restrictions
     const isAccountant = userRole === 'ACCOUNTANT' || task.createdById === userId;
-    if (dto.status === TaskStatus.COMPLETED && !isAccountant) {
-      throw new ApiError(MSG.task.forbidden_complete, 403, 'FORBIDDEN_STATUS');
-    }
+    const isCollaborator = task.assigneeId === userId && !isAccountant;
+
+    // Only accountants can archive tasks
     if (dto.status === TaskStatus.ARCHIVED && !isAccountant) {
-      throw new ApiError(MSG.task.forbidden_archive, 403, 'FORBIDDEN_STATUS');
+      throw new ApiError('Only accountants can archive a task.', 403, 'FORBIDDEN_STATUS');
+    }
+
+    // Only accountants can move tasks to "in_review" status
+    if (dto.status === TaskStatus.IN_REVIEW && !isAccountant) {
+      throw new ApiError('Only accountants can move tasks to review.', 403, 'FORBIDDEN_STATUS');
     }
 
     // Upload new attachments to MinIO if provided
@@ -666,23 +741,17 @@ export class TaskService {
   }
 
   /**
-   * Submit task for review (Collaborator) — replaces completeTask for collaborators
+   * Submit task for review (Accountant only - to send completed tasks back to review)
    */
   async submitForReview(taskId: number, userId: number) {
     return this.updateTask(taskId, { status: TaskStatus.IN_REVIEW, progress: 90 }, userId);
   }
 
   /**
-   * Mark task as completed (Accountant only)
+   * Mark task as completed (Collaborator and Accountant)
    */
   async completeTask(taskId: number, userId: number) {
-    return this.updateTask(
-      taskId,
-      { status: TaskStatus.COMPLETED, progress: 100 },
-      userId,
-      undefined,
-      'ACCOUNTANT'
-    );
+    return this.updateTask(taskId, { status: TaskStatus.COMPLETED, progress: 100 }, userId);
   }
 
   /**

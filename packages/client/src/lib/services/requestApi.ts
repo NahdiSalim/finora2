@@ -5,7 +5,6 @@ import type {
   GetRequestsParams,
   GetRequestsResponse,
   CreateRequestResponse,
-  RespondRequestDto,
   ConvertToTaskDto,
 } from "src/types/request";
 import type { GetUsersByRoleResponse } from "src/types/user";
@@ -28,6 +27,9 @@ export const requestApi = createApi({
         if (params.status) searchParams.append("status", params.status);
         if (params.urgency) searchParams.append("urgency", params.urgency);
         if (params.sortBy) searchParams.append("sortBy", params.sortBy);
+        if (params.sortOrder)
+          searchParams.append("sortOrder", params.sortOrder);
+        if (params.search) searchParams.append("search", params.search);
 
         return {
           url: `/requests/assigned-to-me?${searchParams.toString()}`,
@@ -56,6 +58,9 @@ export const requestApi = createApi({
         if (params.status) searchParams.append("status", params.status);
         if (params.urgency) searchParams.append("urgency", params.urgency);
         if (params.sortBy) searchParams.append("sortBy", params.sortBy);
+        if (params.sortOrder)
+          searchParams.append("sortOrder", params.sortOrder);
+        if (params.search) searchParams.append("search", params.search);
 
         return {
           url: `/requests/all?${searchParams.toString()}`,
@@ -82,6 +87,10 @@ export const requestApi = createApi({
         if (params.page) searchParams.append("page", params.page.toString());
         if (params.limit) searchParams.append("limit", params.limit.toString());
         if (params.status) searchParams.append("status", params.status);
+        if (params.sortBy) searchParams.append("sortBy", params.sortBy);
+        if (params.sortOrder)
+          searchParams.append("sortOrder", params.sortOrder);
+        if (params.search) searchParams.append("search", params.search);
 
         return {
           url: `/requests/my-requests?${searchParams.toString()}`,
@@ -143,7 +152,7 @@ export const requestApi = createApi({
     // Respond to request (Accountant only)
     respondToRequest: builder.mutation<
       { success: boolean; message: string; data: Request },
-      { id: number; data: RespondRequestDto }
+      { id: number; data: FormData }
     >({
       query: ({ id, data }) => ({
         url: `/requests/${id}/respond`,
@@ -153,6 +162,8 @@ export const requestApi = createApi({
       invalidatesTags: (result, error, { id }) => [
         { type: "Request", id },
         { type: "Requests", id: "LIST" },
+        { type: "Requests", id: "ASSIGNED" },
+        { type: "Requests", id: "MY_LIST" },
       ],
     }),
 

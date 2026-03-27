@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Box, Card, useTheme, CircularProgress, Alert } from "@mui/material";
-import { Loader2, Check, Send, Archive } from "lucide-react";
+import { Loader2, Check, Send, Info, FileText } from "lucide-react";
 import { PageHeader } from "src/layouts/components/page-header";
 import { useDashboardBase } from "src/hooks/useDashboardBase";
 import { useAppSelector } from "src/hooks/use-redux";
@@ -10,6 +10,7 @@ import { SimpleTabs } from "./simple-tabs";
 import { TaskDetailsContent } from "./task-details-content";
 import { DocumentsContent } from "./documents-content";
 import { EchangesContent } from "./echanges-content";
+import ArchiveConfirmModal from "src/components/common/ArchiveConfirmModal";
 import {
   useGetTaskByIdQuery,
   useStartTaskMutation,
@@ -24,6 +25,7 @@ export default function TaskDetailsView() {
   const location = useLocation();
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState("details");
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
   const { user } = useAppSelector((state) => state.auth);
 
   const {
@@ -70,7 +72,7 @@ export default function TaskDetailsView() {
       await startTask(task.id).unwrap();
       refetch();
     } catch (err) {
-      console.error("Failed to start task:", err);
+      // Failed to start task
     }
   };
 
@@ -80,7 +82,7 @@ export default function TaskDetailsView() {
       await submitForReview(task.id).unwrap();
       refetch();
     } catch (err) {
-      console.error("Failed to submit task for review:", err);
+      // Failed to submit task for review
     }
   };
 
@@ -90,17 +92,22 @@ export default function TaskDetailsView() {
       await completeTask(task.id).unwrap();
       refetch();
     } catch (err) {
-      console.error("Failed to complete task:", err);
+      // Failed to complete task
     }
   };
 
-  const handleArchiveTask = async () => {
+  const handleArchiveTask = () => {
+    setShowArchiveModal(true);
+  };
+
+  const handleConfirmArchive = async () => {
     if (!task) return;
     try {
       await archiveTask(task.id).unwrap();
+      setShowArchiveModal(false);
       handleBack();
     } catch (err) {
-      console.error("Failed to archive task:", err);
+      // Failed to archive task
     }
   };
 
@@ -128,17 +135,17 @@ export default function TaskDetailsView() {
     if (task.status === "in_progress") {
       if (isCollaborator) {
         return {
-          label: "Soumettre pour révision",
-          icon: <Send size={18} />,
-          onClick: handleSubmitForReview,
+          label: "Marquer comme terminé",
+          icon: <Check size={18} />,
+          onClick: handleCompleteTask,
           variant: "contained" as const,
-          color: "primary" as const,
-          disabled: isSubmitting,
+          color: "success" as const,
+          disabled: isCompleting,
           sx: {
             borderRadius: 1.5,
-            bgcolor: "#8B5CF6",
+            bgcolor: "#10B981",
             "&:hover": {
-              bgcolor: "#7C3AED",
+              bgcolor: "#059669",
             },
           },
         };
@@ -165,18 +172,17 @@ export default function TaskDetailsView() {
 
     if (task.status === "completed" && isAccountant) {
       return {
-        label: "Archiver",
-        icon: <Archive size={18} />,
-        onClick: handleArchiveTask,
+        label: "Marquer en révision",
+        icon: <Send size={18} />,
+        onClick: handleSubmitForReview,
         variant: "contained" as const,
-        color: "secondary" as const,
-        disabled: isArchiving,
+        color: "primary" as const,
+        disabled: isSubmitting,
         sx: {
           borderRadius: 1.5,
-          bgcolor: "#64748B",
-          color: "white",
+          bgcolor: "#8B5CF6",
           "&:hover": {
-            bgcolor: "#475569",
+            bgcolor: "#7C3AED",
           },
         },
       };
@@ -265,10 +271,12 @@ export default function TaskDetailsView() {
                 {
                   id: "details",
                   label: "Détails de la tâche",
+                  icon: <Info />,
                 },
                 {
                   id: "documents",
                   label: "Documents",
+                  icon: <FileText />,
                 },
               ]}
               activeTab={activeTab}
@@ -320,6 +328,16 @@ export default function TaskDetailsView() {
           </Card>
         </Box>
       </Box>
+
+      {/* Archive Confirmation Modal */}
+      <ArchiveConfirmModal
+        open={showArchiveModal}
+        onClose={() => setShowArchiveModal(false)}
+        onConfirm={handleConfirmArchive}
+        title="Archiver cette tâche ?"
+        message="La tâche archivée sera masquée de la vue principale. Cette action peut être inversée."
+        isLoading={isArchiving}
+      />
     </PageHeader>
   );
 }

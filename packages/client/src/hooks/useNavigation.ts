@@ -53,6 +53,11 @@ export function useNavigation() {
         return;
       }
 
+      // Skip /tasks for accountants - only show for collaborators
+      if (path === "/tasks" && isAccountant) {
+        return;
+      }
+
       const config = NAV_CONFIG[path];
       if (config) {
         const segment = path.startsWith("/") ? path.slice(1) : path;
@@ -63,9 +68,9 @@ export function useNavigation() {
         let title = config.title;
         let children: typeof items | undefined = undefined;
 
-        // Change "Demandes" to "Gestion des demandes" with children for accountants
+        // Change "Demandes" with children for accountants
         if (path === "/requests" && isAccountant) {
-          title = "G. des demandes";
+          title = "Demandes";
           children = [
             {
               title: "Mes demandes",
@@ -80,9 +85,9 @@ export function useNavigation() {
           ];
         }
 
-        // Change "Collaborateurs" to "Gestion des collaborateurs" with children for accountants
+        // Change "Collaborateurs" with children for accountants
         if (path === "/collaborators" && isAccountant) {
-          title = "G. des collaborateurs";
+          title = "Collaborateurs";
           children = [
             {
               title: "Mes collaborateurs",

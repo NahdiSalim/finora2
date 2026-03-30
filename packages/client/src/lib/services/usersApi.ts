@@ -3,7 +3,6 @@ import { baseQueryWithReauth } from "./baseQueryWithReauth";
 import type {
   User,
   UsersResponse,
-  UserByIdResponse,
   CreateUserResponse,
   RoleType,
 } from "src/types/user";
@@ -79,6 +78,32 @@ type GetUsersQueryArg = {
 type PageParam = {
   page: number;
   limit: number;
+};
+
+type UserByIdApiRole =
+  | string
+  | {
+      code?: string;
+    };
+
+type UserByIdApiShape = {
+  id?: string | number;
+  full_name?: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  role?: UserByIdApiRole;
+  is_active?: boolean;
+  isActive?: boolean;
+  status?: string;
+  created_at?: string;
+  createdAt?: string;
+  updated_at?: string;
+  updatedAt?: string;
+  client?: User["client"];
+  [key: string]: unknown;
 };
 
 export const usersApi = createApi({
@@ -158,8 +183,43 @@ export const usersApi = createApi({
 
     getUserById: builder.query<User, string>({
       query: (id) => `/users/${id}`,
-      transformResponse: (response: UserByIdResponse | User) =>
-        (response as UserByIdResponse)?.user ?? (response as User),
+      transformResponse: (response: unknown) => {
+        const responseRecord =
+          response && typeof response === "object"
+            ? (response as Record<string, unknown>)
+            : {};
+        const raw =
+          (responseRecord.data as UserByIdApiShape | undefined) ??
+          (responseRecord.user as UserByIdApiShape | undefined) ??
+          (responseRecord as UserByIdApiShape);
+        return {
+          ...raw,
+          id: String(raw?.id ?? ""),
+          full_name:
+            raw?.full_name ??
+            raw?.name ??
+            [raw?.firstName, raw?.lastName].filter(Boolean).join(" ").trim(),
+          role:
+            typeof raw?.role === "string"
+              ? raw.role
+              : (raw?.role?.code ?? raw?.role ?? ""),
+          is_active:
+            typeof raw?.is_active === "boolean"
+              ? raw.is_active
+              : typeof raw?.isActive === "boolean"
+                ? raw.isActive
+                : String(raw?.status ?? "").toLowerCase() === "active",
+          status:
+            typeof raw?.status === "string"
+              ? raw.status.toLowerCase()
+              : raw?.isActive
+                ? "active"
+                : "suspended",
+          created_at: raw?.created_at ?? raw?.createdAt ?? "",
+          updated_at: raw?.updated_at ?? raw?.updatedAt ?? "",
+          client: raw?.client ?? null,
+        } as User;
+      },
       providesTags: ["Users"],
     }),
 

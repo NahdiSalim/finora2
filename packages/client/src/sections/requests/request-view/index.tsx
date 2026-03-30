@@ -9,7 +9,14 @@ import {
   alpha,
   Avatar,
   Tooltip,
+  useMediaQuery,
+  Stack,
+  Skeleton,
+  CardActions,
+  Grid,
+  CardContent,
 } from "@mui/material";
+import { motion } from "framer-motion";
 import { Plus, Eye, Trash2, Search, ChevronDown } from "lucide-react";
 import RequestStatusChip from "src/components/request/RequestStatusChip";
 import RequestPriorityChip from "src/components/request/RequestPriorityChip";
@@ -34,12 +41,24 @@ import { useAppSelector } from "src/hooks/use-redux";
 import { ROLE_CODES } from "src/constants/roles";
 import dayjs from "dayjs";
 import { useAlert } from "src/contexts/AlertContext";
+import { Scrollbar } from "src/components/scrollbar";
+
+// Animation variants pour les cartes
+const cardVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.05, duration: 0.3, ease: "easeOut" },
+  }),
+};
 
 export default function RequestView() {
   const theme = useTheme();
   const table = useTable();
   const { user } = useAppSelector((state) => state.auth);
   const { showAlert } = useAlert();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [searchParams, setSearchParams] = useSearchParams();
   const [openModal, setOpenModal] = useState(false);
   const [openViewDrawer, setOpenViewDrawer] = useState(false);
@@ -66,13 +85,12 @@ export default function RequestView() {
     }
   }, [searchParams]);
 
-  // Determine user role (convert to uppercase for comparison)
+  // Determine user role
   const userRole =
     typeof user?.role === "object" ? user?.role?.code : user?.role;
   const userRoleUpper = userRole?.toUpperCase();
   const isClient =
     userRoleUpper === ROLE_CODES.CLIENT || userRoleUpper === "CLIENT";
-  // Handle both ACCOUNTANT and comptable (backend fallback)
   const isAccountant =
     userRoleUpper === ROLE_CODES.ACCOUNTANT ||
     userRoleUpper === "COMPTABLE" ||
@@ -87,7 +105,7 @@ export default function RequestView() {
     return selectedTab as RequestStatus;
   };
 
-  // For accountants: get my assigned requests (Mes demandes)
+  // Queries
   const {
     data: myAssignedRequestsData,
     isLoading: myAssignedLoading,
@@ -107,7 +125,6 @@ export default function RequestView() {
     },
   );
 
-  // For accountants: get all unassigned client requests (Demandes des clients)
   const {
     data: unassignedRequestsData,
     isLoading: unassignedLoading,
@@ -164,7 +181,6 @@ export default function RequestView() {
     }
   }
 
-  // Get requests from backend (already paginated and filtered by search)
   const requests = data?.data || [];
   const totalCount = data?.pagination?.total || 0;
   const counts = data?.counts || {
@@ -175,7 +191,6 @@ export default function RequestView() {
     cancelled: 0,
   };
 
-  // Calculate total count for "Toutes"
   const totalRequests =
     counts.pending +
     counts.in_progress +
@@ -190,25 +205,17 @@ export default function RequestView() {
 
   const handleViewTabChange = (newTab: "my_requests" | "client_requests") => {
     setViewTab(newTab);
-    setSelectedTab("all"); // Reset status tab when changing view
+    setSelectedTab("all");
     table.onResetPage();
-    // Update URL query parameter
     setSearchParams({ tab: newTab });
   };
 
-  const handleOpenModal = () => {
-    setOpenModal(true);
-  };
-
-  const handleCloseModal = () => {
-    setOpenModal(false);
-  };
-
+  const handleOpenModal = () => setOpenModal(true);
+  const handleCloseModal = () => setOpenModal(false);
   const handleOpenViewDrawer = (request: Request) => {
     setSelectedRequest(request);
     setOpenViewDrawer(true);
   };
-
   const handleCloseViewDrawer = () => {
     setOpenViewDrawer(false);
     setSelectedRequest(null);
@@ -216,7 +223,6 @@ export default function RequestView() {
 
   const handleDeleteRequest = async () => {
     if (!requestToDelete) return;
-
     try {
       await deleteRequest(requestToDelete).unwrap();
       showAlert("Demande supprimée avec succès", "success");
@@ -232,10 +238,8 @@ export default function RequestView() {
     setShowDeleteModal(true);
   };
 
-  // Format date to DD/MM/YY
-  const formatDate = (dateString: string) => {
-    return dayjs(dateString).format("DD/MM/YY");
-  };
+  const formatDate = (dateString: string) =>
+    dayjs(dateString).format("DD/MM/YY");
 
   const handleSort = (field: "urgency" | "status" | "createdAt") => {
     if (sortBy === field) {
@@ -247,24 +251,21 @@ export default function RequestView() {
     table.onResetPage();
   };
 
+  // Colonnes (inchangées, mais réutilisées pour les cartes)
   const columns: Column<Request>[] = [
     {
       id: "subject",
       label: "Titre de la demande",
-      // Add width for better control
-      width: 280, // or use minWidth: 200, flex: 1
+      width: 280,
       render: (request: Request) => (
         <Tooltip title={request.subject} arrow placement="top-start">
           <Typography
             variant="body2"
             sx={{
               fontWeight: 500,
-              color: theme.palette.text.primary,
-              // Truncate long subjects with ellipsis
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
-              maxWidth: "100%", // Ensures truncation within cell
             }}
           >
             {request.subject}
@@ -272,7 +273,6 @@ export default function RequestView() {
         </Tooltip>
       ),
     },
-    // Conditional client column for accountants
     ...(isAccountant
       ? [
           {
@@ -289,7 +289,7 @@ export default function RequestView() {
                     sx={{
                       width: 36,
                       height: 36,
-                      backgroundColor: theme.palette.primary.main,
+                      background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
                       fontSize: 14,
                       fontWeight: 600,
                     }}
@@ -298,15 +298,7 @@ export default function RequestView() {
                     {request.client?.lastName?.charAt(0) || ""}
                   </Avatar>
                   <Tooltip title={fullName} arrow>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: theme.palette.text.primary,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                    <Typography variant="body2" noWrap>
                       {fullName}
                     </Typography>
                   </Tooltip>
@@ -327,44 +319,20 @@ export default function RequestView() {
         const taskAssigneeName = request.convertedToTask?.assignee
           ? `${request.convertedToTask.assignee.firstName} ${request.convertedToTask.assignee.lastName}`
           : null;
-
         return (
           <Box>
-            <Tooltip title={assignedName} arrow placement="top-start">
-              <Typography
-                variant="body2"
-                sx={{
-                  color: request.assignedTo
-                    ? theme.palette.text.primary
-                    : theme.palette.text.disabled,
-                  fontStyle: request.assignedTo ? "normal" : "italic",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {assignedName}
-              </Typography>
-            </Tooltip>
+            <Typography
+              variant="body2"
+              noWrap
+              color={request.assignedTo ? "text.primary" : "text.disabled"}
+              fontStyle={request.assignedTo ? "normal" : "italic"}
+            >
+              {assignedName}
+            </Typography>
             {taskAssigneeName && (
-              <Tooltip
-                title={`Converti en tâche assignée à ${taskAssigneeName}`}
-                arrow
-              >
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: theme.palette.info.main,
-                    fontSize: 11,
-                    display: "block",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  → {taskAssigneeName}
-                </Typography>
-              </Tooltip>
+              <Typography variant="caption" color="info.main" noWrap>
+                → {taskAssigneeName}
+              </Typography>
             )}
           </Box>
         );
@@ -474,10 +442,9 @@ export default function RequestView() {
       id: "actions",
       label: "Action",
       align: "center",
-      width: 80, // Fixed width for actions column
+      width: 80,
       render: (request: Request) => (
         <Box sx={{ display: "flex", gap: 1, justifyContent: "center" }}>
-          {/* View Details Button with Tooltip */}
           <Tooltip title="Voir les détails" arrow>
             <IconButton
               size="small"
@@ -485,21 +452,21 @@ export default function RequestView() {
               sx={{
                 width: 32,
                 height: 32,
-                border: `1px solid ${theme.palette.grey[300]}`,
-                borderRadius: 1.5,
+                border: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+                borderRadius: 2,
                 color: theme.palette.text.secondary,
+                transition: "all 0.2s",
                 "&:hover": {
                   borderColor: theme.palette.primary.main,
+                  backgroundColor: alpha(theme.palette.primary.main, 0.08),
                   color: theme.palette.primary.main,
-                  bgcolor: alpha(theme.palette.primary.main, 0.08),
+                  transform: "translateY(-2px)",
                 },
               }}
             >
               <Eye size={16} />
             </IconButton>
           </Tooltip>
-
-          {/* Delete Button with Tooltip - Only for clients, disabled for resolved requests */}
           {isClient && (
             <Tooltip
               title={
@@ -510,35 +477,34 @@ export default function RequestView() {
               arrow
             >
               <span>
-                {" "}
-                {/* Wrapper to allow tooltip on disabled button */}
                 <IconButton
                   size="small"
-                  onClick={() => {
-                    if (request.status !== "resolved") {
-                      openDeleteModal(request.id);
-                    }
-                  }}
+                  onClick={() =>
+                    request.status !== "resolved" && openDeleteModal(request.id)
+                  }
                   disabled={request.status === "resolved"}
                   sx={{
                     width: 32,
                     height: 32,
-                    border: `1px solid ${theme.palette.grey[300]}`,
-                    borderRadius: 1.5,
+                    border: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+                    borderRadius: 2,
                     color:
                       request.status === "resolved"
                         ? theme.palette.grey[400]
                         : theme.palette.text.secondary,
+                    transition: "all 0.2s",
                     "&:hover":
                       request.status !== "resolved"
                         ? {
                             borderColor: theme.palette.error.main,
+                            backgroundColor: alpha(
+                              theme.palette.error.main,
+                              0.08,
+                            ),
                             color: theme.palette.error.main,
-                            bgcolor: alpha(theme.palette.error.main, 0.08),
+                            transform: "translateY(-2px)",
                           }
                         : {},
-                    cursor:
-                      request.status === "resolved" ? "not-allowed" : "pointer",
                   }}
                 >
                   <Trash2 size={16} />
@@ -551,30 +517,187 @@ export default function RequestView() {
     },
   ];
 
-  // Dynamic title and caption based on view
+  // Rendu des cartes pour mobile
+  const renderMobileCards = () => (
+    <Grid container spacing={2.5}>
+      {requests.map((request: Request, idx: number) => (
+        <Grid size={{ xs: 12 }} key={request.id}>
+          <motion.div
+            custom={idx}
+            initial="hidden"
+            animate="visible"
+            variants={cardVariants}
+          >
+            <Card
+              sx={{
+                borderRadius: 4,
+                backdropFilter: "blur(10px)",
+                backgroundColor: alpha(theme.palette.background.paper, 0.9),
+                boxShadow: `0 8px 24px ${alpha(theme.palette.common.black, 0.08)}`,
+                transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                "&:hover": {
+                  transform: "translateY(-4px)",
+                  boxShadow: `0 16px 32px ${alpha(theme.palette.common.black, 0.12)}`,
+                },
+              }}
+            >
+              <CardContent sx={{ p: 2.5 }}>
+                <Stack spacing={2}>
+                  {/* En-tête : sujet et statut/priorité */}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      gap: 1,
+                    }}
+                  >
+                    <Typography
+                      variant="subtitle1"
+                      fontWeight={700}
+                      sx={{ flex: 1 }}
+                    >
+                      {request.subject}
+                    </Typography>
+                    <Stack direction="row" spacing={1}>
+                      <RequestPriorityChip
+                        urgency={request.urgency}
+                        size="small"
+                      />
+                      <RequestStatusChip status={request.status} size="small" />
+                    </Stack>
+                  </Box>
+
+                  {/* Détails sous forme de grille */}
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 2fr",
+                      gap: 1.5,
+                    }}
+                  >
+                    {isAccountant && (
+                      <>
+                        <Typography variant="caption" color="text.secondary">
+                          Client
+                        </Typography>
+                        <Typography variant="body2">
+                          {request.client
+                            ? `${request.client.firstName} ${request.client.lastName}`
+                            : "-"}
+                        </Typography>
+                      </>
+                    )}
+                    <Typography variant="caption" color="text.secondary">
+                      Assigné à
+                    </Typography>
+                    <Typography variant="body2">
+                      {request.assignedTo
+                        ? `${request.assignedTo.firstName} ${request.assignedTo.lastName}`
+                        : "Non assigné"}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Créé le
+                    </Typography>
+                    <Typography variant="body2">
+                      {formatDate(request.createdAt)}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Date souhaitée
+                    </Typography>
+                    <Typography variant="body2">
+                      {request.desiredResponseDate
+                        ? formatDate(request.desiredResponseDate)
+                        : "-"}
+                    </Typography>
+                    {request.desiredResponseTime && (
+                      <>
+                        <Typography variant="caption" color="text.secondary">
+                          Heure souhaitée
+                        </Typography>
+                        <Typography variant="body2">
+                          {request.desiredResponseTime}
+                        </Typography>
+                      </>
+                    )}
+                  </Box>
+                </Stack>
+              </CardContent>
+              <CardActions sx={{ justifyContent: "flex-end", p: 2, pt: 0 }}>
+                <Tooltip title="Voir les détails" arrow>
+                  <IconButton
+                    onClick={() => handleOpenViewDrawer(request)}
+                    sx={{ ...actionButtonStyle(theme) }}
+                  >
+                    <Eye size={16} />
+                  </IconButton>
+                </Tooltip>
+                {isClient && request.status !== "resolved" && (
+                  <Tooltip title="Supprimer" arrow>
+                    <IconButton
+                      onClick={() => openDeleteModal(request.id)}
+                      sx={{
+                        ...actionButtonStyle(theme),
+                        "&:hover": {
+                          borderColor: theme.palette.error.main,
+                          color: theme.palette.error.main,
+                          bgcolor: alpha(theme.palette.error.main, 0.08),
+                        },
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </CardActions>
+            </Card>
+          </motion.div>
+        </Grid>
+      ))}
+    </Grid>
+  );
+
+  const actionButtonStyle = (theme2: any) => ({
+    width: 34,
+    height: 34,
+    border: `1px solid ${alpha(theme2.palette.divider, 0.8)}`,
+    borderRadius: 2,
+    color: theme2.palette.text.secondary,
+    transition: "all 0.2s",
+    "&:hover": {
+      borderColor: theme2.palette.primary.main,
+      backgroundColor: alpha(theme2.palette.primary.main, 0.08),
+      color: theme2.palette.primary.main,
+      transform: "translateY(-2px)",
+    },
+  });
+
   const getPageTitle = () => {
     if (isClient) return "Mes demandes";
-    if (isAccountant) {
-      return viewTab === "my_requests"
-        ? "Mes demandes"
-        : "Demandes des clients";
-    }
-    // Default to "Mes demandes" for my_requests tab
     return viewTab === "my_requests" ? "Mes demandes" : "Demandes des clients";
   };
 
   const getPageCaption = () => {
     if (isClient) return "Suivez l'avancement de vos demandes en temps réel";
-    if (isAccountant) {
-      return viewTab === "my_requests"
-        ? "Gérez les demandes qui vous sont assignées"
-        : "Gérez et répondez aux demandes de vos clients";
-    }
-    // Default caption based on view tab
     return viewTab === "my_requests"
       ? "Gérez les demandes qui vous sont assignées"
       : "Gérez et répondez aux demandes de vos clients";
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <PageHeader title={getPageTitle()} caption={getPageCaption()}>
+        <Card sx={{ p: 3, borderRadius: 4 }}>
+          <Stack spacing={2}>
+            {[...Array(5)].map((_, i) => (
+              <Skeleton key={i} variant="rounded" height={80} />
+            ))}
+          </Stack>
+        </Card>
+      </PageHeader>
+    );
+  }
 
   return (
     <PageHeader
@@ -589,36 +712,28 @@ export default function RequestView() {
                 onClick: handleOpenModal,
                 variant: "contained",
                 color: "primary",
+                sx: {
+                  borderRadius: 3,
+                  textTransform: "none",
+                  fontWeight: 600,
+                  "&:hover": {
+                    transform: "translateY(-2px)",
+                    boxShadow: `0 8px 20px ${alpha(theme.palette.primary.main, 0.5)}`,
+                  },
+                },
               },
             ]
           : []
       }
     >
-      {/* Tabs and Table Card Container */}
       <Box>
-        {/* Status Tabs */}
+        {/* Tabs de statut avec style modernisé */}
         <FolderTabNavigation
           tabs={[
-            {
-              id: "all",
-              label: "Toutes",
-              count: totalRequests,
-            },
-            {
-              id: "pending",
-              label: "En attente",
-              count: counts.pending,
-            },
-            {
-              id: "in_progress",
-              label: "En cours",
-              count: counts.in_progress,
-            },
-            {
-              id: "resolved",
-              label: "Terminés",
-              count: counts.resolved,
-            },
+            { id: "all", label: "Toutes", count: totalRequests },
+            { id: "pending", label: "En attente", count: counts.pending },
+            { id: "in_progress", label: "En cours", count: counts.in_progress },
+            { id: "resolved", label: "Terminés", count: counts.resolved },
           ]}
           activeTab={selectedTab}
           onTabChange={(tabId) => {
@@ -627,67 +742,92 @@ export default function RequestView() {
           }}
         />
 
-        {/* Table Card - Merged with tabs */}
         <Card
           sx={{
-            bgcolor: "white",
+            bgcolor: alpha(theme.palette.background.paper, 0.9),
+            backdropFilter: "blur(12px)",
             borderTopLeftRadius: 0,
             borderTopRightRadius: 0,
-            borderBottomLeftRadius: 12,
-            borderBottomRightRadius: 12,
-            boxShadow: "none",
-            border: `1px solid ${theme.palette.grey[200]}`,
+            borderBottomLeftRadius: 4,
+            borderBottomRightRadius: 4,
+            boxShadow: `0 8px 32px ${alpha(theme.palette.common.black, 0.06)}`,
+            border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
             borderTop: "none",
-            mt: 0,
-            p: 2,
+            p: { xs: 1.5, sm: 2.5 },
           }}
         >
-          {/* Search Bar */}
-          <Box
-            sx={{
-              pb: 2,
-              borderBottom: `1px solid ${theme.palette.grey[200]}`,
+          <CustomInput
+            fullWidth
+            placeholder="Rechercher une demande..."
+            value={searchValue}
+            onChange={(e) => {
+              setSearchValue(e.target.value);
+              table.onResetPage();
             }}
-          >
-            <CustomInput
-              fullWidth
-              placeholder="Rechercher ..."
-              value={searchValue}
-              onChange={(e) => {
-                setSearchValue(e.target.value);
-                table.onResetPage();
-              }}
-              startIcon={<Search size={20} />}
-            />
-          </Box>
+            startIcon={<Search size={20} />}
+            sx={{
+              mb: 2.5,
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 3,
+                backgroundColor: alpha(theme.palette.common.white, 0.8),
+                transition: "all 0.2s",
+                "&:hover, &.Mui-focused": {
+                  backgroundColor: theme.palette.common.white,
+                  boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.1)}`,
+                },
+              },
+            }}
+          />
 
-          {/* Table Container */}
-          <Box sx={{ width: "100%", overflow: "auto" }}>
-            <DataTable
-              columns={columns}
-              data={requests}
-              isLoading={isLoading}
-              isError={isError}
-              emptyMessage="Aucune demande trouvée"
-              minWidth={800}
-              rowKey={(request) => request.id.toString()}
-            />
-          </Box>
-
-          {/* Pagination */}
-          {!isLoading && !isError && requests.length > 0 && (
-            <Box
-              sx={{
-                borderTop: `1px solid ${theme.palette.grey[200]}`,
-              }}
-            >
+          {isMobile ? (
+            <>
+              <Scrollbar sx={{ maxHeight: "calc(100vh - 280px)", px: 0.5 }}>
+                {requests.length === 0 ? (
+                  <Box sx={{ textAlign: "center", py: 8 }}>
+                    <Typography color="text.secondary">
+                      Aucune demande trouvée
+                    </Typography>
+                  </Box>
+                ) : (
+                  renderMobileCards()
+                )}
+              </Scrollbar>
               <CustomPagination
                 page={table.page}
                 count={totalCount}
                 rowsPerPage={table.rowsPerPage}
                 onPageChange={table.onChangePage}
               />
-            </Box>
+            </>
+          ) : (
+            <>
+              <Box sx={{ width: "100%", overflow: "auto" }}>
+                <DataTable
+                  columns={columns}
+                  data={requests}
+                  isLoading={isLoading}
+                  isError={isError}
+                  emptyMessage="Aucune demande trouvée"
+                  minWidth={800}
+                  rowKey={(request) => request.id.toString()}
+                />
+              </Box>
+              {!isLoading && !isError && requests.length > 0 && (
+                <Box
+                  sx={{
+                    borderTop: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
+                    mt: 2,
+                  }}
+                >
+                  <CustomPagination
+                    page={table.page}
+                    count={totalCount}
+                    rowsPerPage={table.rowsPerPage}
+                    onPageChange={table.onChangePage}
+                  />
+                </Box>
+              )}
+            </>
           )}
         </Card>
       </Box>

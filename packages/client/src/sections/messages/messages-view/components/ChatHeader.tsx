@@ -8,8 +8,6 @@ import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import CircleIcon from "@mui/icons-material/Circle";
 import ArrowBackIosNewRoundedIcon from "@mui/icons-material/ArrowBackIosNewRounded";
 
-import CustomButton from "../../../../components/common/CustomButton";
-
 import type { Conversation } from "../data/types";
 
 type ChatHeaderProps = {
@@ -25,10 +23,6 @@ export default function ChatHeader({
 }: ChatHeaderProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-
-  const handleViewProfile = () => {
-    console.log("View profile clicked", conversation);
-  };
 
   return (
     <Box
@@ -163,27 +157,6 @@ export default function ChatHeader({
             <ImageOutlinedIcon sx={{ fontSize: 18, color: "inherit" }} />
           </IconButton>
         )}
-
-        <CustomButton
-          variant="outlined"
-          color="primary"
-          onClick={handleViewProfile}
-          sx={{
-            height: isMobile ? 32 : 40,
-            minWidth: 0,
-            px: isMobile ? 1.25 : 1.75,
-            borderRadius: isMobile ? "8px" : "10px",
-            fontSize: isMobile ? 11.5 : 12.5,
-            fontWeight: 600,
-            whiteSpace: "nowrap",
-            boxShadow: "none",
-            "&:hover": {
-              boxShadow: "none",
-            },
-          }}
-        >
-          {isMobile ? "Profil" : "Voir le profil"}
-        </CustomButton>
       </Box>
     </Box>
   );

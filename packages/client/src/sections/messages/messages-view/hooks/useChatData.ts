@@ -122,7 +122,7 @@ const REQUEST_URGENCY_LABELS: Record<string, string> = {
   urgent: "Urgent !",
 };
 
-function mapApiMessageToMessage(
+export function mapApiMessageToMessage(
   msg: ChatMessage,
   currentUserId: number,
 ): Message {
@@ -256,22 +256,31 @@ export function useConversations(params?: GetRoomsParams) {
   return { conversations, isLoading, error };
 }
 
-export function useRoomMessages(roomId: number) {
+export function useRoomMessages(roomId: number, page: number, limit: number) {
   const currentUserId = useSelector((state: RootState) => state.auth.user?.id);
   const uid = currentUserId ? Number(currentUserId) : 0;
 
-  const { data, isLoading, error } = useGetRoomMessagesQuery(roomId, {
-    skip: !roomId,
-    refetchOnMountOrArgChange: true,
-    // No polling — real-time updates handled by WebSocket
-  });
+  const { data, isLoading, error } = useGetRoomMessagesQuery(
+    { roomId, page, limit },
+    {
+      skip: !roomId,
+      refetchOnMountOrArgChange: true,
+      // No polling — real-time updates handled by WebSocket
+    },
+  );
 
   const messages = useMemo(
     () => (data?.messages ?? []).map((msg) => mapApiMessageToMessage(msg, uid)),
     [data, uid],
   );
 
-  return { messages, isLoading, error };
+  return {
+    messages,
+    isLoading,
+    error,
+    totalMessages: data?.total ?? 0,
+    totalPages: data?.totalPages ?? 1,
+  };
 }
 
 export { useSendMessageMutation, useMarkAsReadMutation };

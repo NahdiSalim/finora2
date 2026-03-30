@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useParams } from "react-router-dom";
 import {
   Box,
   Card,
@@ -22,6 +22,7 @@ import {
   useGetMyAssignedRequestsQuery,
   useGetAllRequestsQuery,
   useGetMyRequestsQuery,
+  useGetRequestByIdQuery,
   useDeleteRequestMutation,
 } from "src/lib/services/requestApi";
 import RequestModal from "../modal/RequestModal";
@@ -39,6 +40,8 @@ export default function RequestView() {
   const table = useTable();
   const { user } = useAppSelector((state) => state.auth);
   const { showAlert } = useAlert();
+  const { id: routeId } = useParams<{ id: string }>();
+  const routeRequestId = routeId ? parseInt(routeId, 10) : undefined;
   const [searchParams, setSearchParams] = useSearchParams();
   const [openModal, setOpenModal] = useState(false);
   const [openViewDrawer, setOpenViewDrawer] = useState(false);
@@ -56,6 +59,17 @@ export default function RequestView() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const [deleteRequest, { isLoading: isDeleting }] = useDeleteRequestMutation();
+
+  // When navigated to /requests/:id (e.g. from chat), fetch the request and open its drawer
+  const { data: requestByIdData } = useGetRequestByIdQuery(routeRequestId!, {
+    skip: !routeRequestId,
+  });
+  useEffect(() => {
+    if (requestByIdData?.data) {
+      setSelectedRequest(requestByIdData.data);
+      setOpenViewDrawer(true);
+    }
+  }, [requestByIdData]);
 
   // Read tab from URL query parameter
   useEffect(() => {

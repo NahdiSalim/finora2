@@ -184,7 +184,10 @@ export default function MessageBubble({
             <>
               {/* ── Request bubble ────────────────────────────────────────── */}
               <Box
-                onClick={() => navigate(`${dashboardBase}/requests`)}
+                onClick={() =>
+                  message.request?.id &&
+                  navigate(`${dashboardBase}/requests/${message.request.id}`)
+                }
                 sx={{
                   width: "fit-content",
                   maxWidth: isMobile ? "100%" : 280,
@@ -295,7 +298,10 @@ export default function MessageBubble({
             <>
               {/* ── Task bubble ────────────────────────────────────────── */}
               <Box
-                onClick={() => navigate(`${dashboardBase}/tasks`)}
+                onClick={() =>
+                  message.task?.id &&
+                  navigate(`${dashboardBase}/tasks/${message.task.id}`)
+                }
                 sx={{
                   width: "fit-content",
                   maxWidth: isMobile ? "100%" : 280,
@@ -404,7 +410,12 @@ export default function MessageBubble({
             <>
               {/* ── Appointment bubble ────────────────────────────────────────── */}
               <Box
-                onClick={() => navigate(`${dashboardBase}/appointments`)}
+                onClick={() =>
+                  message.appointment?.id &&
+                  navigate(
+                    `${dashboardBase}/meetings/${message.appointment.id}`,
+                  )
+                }
                 sx={{
                   width: "fit-content",
                   maxWidth: isMobile ? "100%" : 280,

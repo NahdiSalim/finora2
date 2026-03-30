@@ -16,15 +16,23 @@ import SharedMediaView from "./views/SharedMediaView";
 import { useChatSocket } from "./hooks/useChatSocket";
 import type { SocketMessage } from "./hooks/useChatSocket";
 
-import { useConversations, useRoomMessages } from "./hooks/useChatData";
+import {
+  useConversations,
+  useRoomMessages,
+  mapApiMessageToMessage,
+} from "./hooks/useChatData";
 import type {
   MessageRequest,
   MessageTask,
   MessageAppointment,
- Conversation, ConversationCategory, Message } from "./data/types";
+  Conversation,
+  ConversationCategory,
+  Message,
+} from "./data/types";
 import {
   useSendMessageMutation,
   useGetUserRoomsQuery,
+  useLazyGetRoomMessagesQuery,
   chatApi,
   type GetRoomsParams,
 } from "src/lib/services/chatApi";
@@ -111,6 +119,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     useState<ConversationCategory>("collaborateur");
   const [roomsPage] = useState(1);
   const ROOMS_PAGE_SIZE = 50;
+  const MESSAGES_PAGE_SIZE = 20;
   const [selectedConversation, setSelectedConversation] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedDateFilter, setSelectedDateFilter] = useState<Dayjs | null>(
@@ -159,6 +168,18 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     [roomsResponse?.data],
   );
   const [triggerSendMessage] = useSendMessageMutation();
+  const [triggerGetOlderMessages] = useLazyGetRoomMessagesQuery();
+
+  // Older messages accumulation per room (scroll-based infinite loading)
+  const [olderMessagesByRoom, setOlderMessagesByRoom] = useState<
+    Record<number, Message[]>
+  >({});
+  const [nextOlderPageByRoom, setNextOlderPageByRoom] = useState<
+    Record<number, number>
+  >({});
+  const [isLoadingOlderByRoom, setIsLoadingOlderByRoom] = useState<
+    Record<number, boolean>
+  >({});
 
   // Typing indicator state: set of roomIds where the other user is typing
   const [typingRooms, setTypingRooms] = useState<Set<number>>(new Set());
@@ -222,7 +243,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
         dispatch(
           chatApi.util.updateQueryData(
             "getRoomMessages",
-            msg.roomId,
+            { roomId: msg.roomId, page: 1, limit: MESSAGES_PAGE_SIZE },
             (draft) => {
               if (draft.messages.some((m) => m.id === msg.id)) {
                 console.log(
@@ -334,7 +355,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
         dispatch(
           chatApi.util.updateQueryData(
             "getRoomMessages",
-            msg.roomId,
+            { roomId: msg.roomId, page: 1, limit: MESSAGES_PAGE_SIZE },
             (draft) => {
               const existing = draft.messages.find((m) => m.id === msg.id);
               if (existing) {
@@ -366,10 +387,14 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       if (!activeRoomId || roomId !== activeRoomId) return;
 
       dispatch(
-        chatApi.util.updateQueryData("getRoomMessages", roomId, (draft) => {
-          const idx = draft.messages.findIndex((m) => m.id === messageId);
-          if (idx !== -1) draft.messages.splice(idx, 1);
-        }),
+        chatApi.util.updateQueryData(
+          "getRoomMessages",
+          { roomId, page: 1, limit: MESSAGES_PAGE_SIZE },
+          (draft) => {
+            const idx = draft.messages.findIndex((m) => m.id === messageId);
+            if (idx !== -1) draft.messages.splice(idx, 1);
+          },
+        ),
       );
     },
 
@@ -412,23 +437,27 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
 
     pending.forEach((msg) => {
       dispatch(
-        chatApi.util.updateQueryData("getRoomMessages", roomId, (draft) => {
-          if (draft.messages.some((m) => m.id === msg.id)) return;
-          draft.messages.push({
-            id: msg.id,
-            roomId: msg.roomId,
-            senderId: msg.senderId,
-            content: msg.content,
-            type: msg.type,
-            createdAt: msg.createdAt,
-            deleted: false,
-            edited: false,
-            fileUrl: msg.fileUrl ?? null,
-            attachments: msg.attachments,
-            sender: msg.sender,
-          });
-          draft.total += 1;
-        }),
+        chatApi.util.updateQueryData(
+          "getRoomMessages",
+          { roomId, page: 1, limit: MESSAGES_PAGE_SIZE },
+          (draft) => {
+            if (draft.messages.some((m) => m.id === msg.id)) return;
+            draft.messages.push({
+              id: msg.id,
+              roomId: msg.roomId,
+              senderId: msg.senderId,
+              content: msg.content,
+              type: msg.type,
+              createdAt: msg.createdAt,
+              deleted: false,
+              edited: false,
+              fileUrl: msg.fileUrl ?? null,
+              attachments: msg.attachments,
+              sender: msg.sender,
+            });
+            draft.total += 1;
+          },
+        ),
       );
     });
   }, [selectedConversation, dispatch]);
@@ -463,8 +492,22 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     }
   }, [allConversations, selectedConversation]);
 
+  // Reset older messages accumulation when switching conversations
+  useEffect(() => {
+    setOlderMessagesByRoom((prev) => ({ ...prev, [selectedConversation]: [] }));
+    setNextOlderPageByRoom((prev) => ({ ...prev, [selectedConversation]: 2 }));
+    setIsLoadingOlderByRoom((prev) => ({
+      ...prev,
+      [selectedConversation]: false,
+    }));
+  }, [selectedConversation]);
+
   // ── Messages for selected room ────────────────────────────────────────────
-  const { messages: apiMessages } = useRoomMessages(selectedConversation);
+  const { messages: apiMessages, totalMessages } = useRoomMessages(
+    selectedConversation,
+    1,
+    MESSAGES_PAGE_SIZE,
+  );
 
   // Optimistic local messages for messages sent by the current user
   const [localMessages, setLocalMessages] = useState<Record<number, Message[]>>(
@@ -472,11 +515,17 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   );
 
   const currentMessages: Message[] = useMemo(() => {
-    const base = apiMessages;
-    const extra = localMessages[selectedConversation] ?? [];
-    const ids = new Set(base.map((m) => m.id));
-    return [...base, ...extra.filter((m) => !ids.has(m.id))];
-  }, [apiMessages, localMessages, selectedConversation]);
+    const page1 = apiMessages;
+    const older = olderMessagesByRoom[selectedConversation] ?? [];
+    const local = localMessages[selectedConversation] ?? [];
+
+    const page1Ids = new Set(page1.map((m) => m.id));
+    const olderFiltered = older.filter((m) => !page1Ids.has(m.id));
+    const localFiltered = local.filter((m) => !page1Ids.has(m.id));
+
+    // oldest (older pages) → page 1 (recent) → optimistic local
+    return [...olderFiltered, ...page1, ...localFiltered];
+  }, [apiMessages, olderMessagesByRoom, localMessages, selectedConversation]);
 
   // Clear optimistic messages once API confirms them
   useEffect(() => {
@@ -511,6 +560,49 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       document.body.removeAttribute("data-hide-bottom-nav");
     };
   }, [isMobile, mobileView]);
+
+  // ── Older messages (scroll-based loading) ────────────────────────────────
+  const olderMessages = olderMessagesByRoom[selectedConversation] ?? [];
+  const hasMoreOlderMessages =
+    selectedConversation > 0 &&
+    totalMessages > MESSAGES_PAGE_SIZE + olderMessages.length;
+  const isLoadingOlder = isLoadingOlderByRoom[selectedConversation] ?? false;
+
+  const handleLoadOlderMessages = useCallback(async () => {
+    const roomId = selectedConversation;
+    if (!roomId || isLoadingOlderByRoom[roomId]) return;
+    if (!hasMoreOlderMessages) return;
+
+    const nextPage = nextOlderPageByRoom[roomId] ?? 2;
+
+    setIsLoadingOlderByRoom((prev) => ({ ...prev, [roomId]: true }));
+    try {
+      const result = await triggerGetOlderMessages(
+        { roomId, page: nextPage, limit: MESSAGES_PAGE_SIZE },
+        true,
+      ).unwrap();
+      const mapped = result.messages.map((m) =>
+        mapApiMessageToMessage(m, currentUid),
+      );
+      setOlderMessagesByRoom((prev) => ({
+        ...prev,
+        // Prepend: new older page goes before existing older pages
+        [roomId]: [...mapped, ...(prev[roomId] ?? [])],
+      }));
+      setNextOlderPageByRoom((prev) => ({ ...prev, [roomId]: nextPage + 1 }));
+    } catch {
+      // silent — user can scroll up again to retry
+    } finally {
+      setIsLoadingOlderByRoom((prev) => ({ ...prev, [roomId]: false }));
+    }
+  }, [
+    selectedConversation,
+    isLoadingOlderByRoom,
+    hasMoreOlderMessages,
+    nextOlderPageByRoom,
+    currentUid,
+    triggerGetOlderMessages,
+  ]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleSelectConversation = (id: number) => {
@@ -958,6 +1050,9 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                 }
                 onMessagesChange={handleMessagesChange}
                 onSendFile={handleSendFile}
+                onLoadMore={handleLoadOlderMessages}
+                hasMore={hasMoreOlderMessages}
+                isLoadingMore={isLoadingOlder}
                 onOpenMedia={() => {
                   setMobileView("media");
                   onOpenMedia?.();
@@ -1110,6 +1205,9 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                   }
                   onMessagesChange={handleMessagesChange}
                   onSendFile={handleSendFile}
+                  onLoadMore={handleLoadOlderMessages}
+                  hasMore={hasMoreOlderMessages}
+                  isLoadingMore={isLoadingOlder}
                   onOpenMedia={() => {
                     setDesktopView("media");
                     onOpenMedia?.();

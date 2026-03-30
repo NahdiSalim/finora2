@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Box from "@mui/material/Box";
+import CircularProgress from "@mui/material/CircularProgress";
 import Typography from "@mui/material/Typography";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
@@ -37,6 +38,9 @@ type ChatWindowProps = {
   recipientId?: number | null;
   isRemoteTyping?: boolean;
   onTypingChange?: (typing: boolean) => void;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
 };
 
 function htmlToText(html: string) {
@@ -64,6 +68,9 @@ export default function ChatWindow({
   recipientId,
   isRemoteTyping = false,
   onTypingChange,
+  onLoadMore,
+  hasMore = false,
+  isLoadingMore = false,
 }: ChatWindowProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -75,13 +82,56 @@ export default function ChatWindow({
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const messagesBottomRef = useRef<HTMLDivElement | null>(null);
 
+  // Scroll-position preservation when older messages are prepended
+  const loadingOlderRef = useRef(false);
+  const savedScrollHeightRef = useRef(0);
+  const justRestoredScrollRef = useRef(false);
+
   useEffect(() => {
     setInputValue("");
   }, [conversationId]);
 
+  // Restore scroll position synchronously after older messages are prepended
+  useLayoutEffect(() => {
+    if (!loadingOlderRef.current) return;
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    container.scrollTop = container.scrollHeight - savedScrollHeightRef.current;
+    loadingOlderRef.current = false;
+    justRestoredScrollRef.current = true;
+  }, [messages]);
+
+  // Scroll to bottom on new messages / conversation change (skip when restoring)
   useEffect(() => {
+    if (justRestoredScrollRef.current) {
+      justRestoredScrollRef.current = false;
+      return;
+    }
     messagesBottomRef.current?.scrollIntoView({ behavior: "instant" });
   }, [messages, conversationId]);
+
+  // Scroll listener — triggers older message loading when near the top
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return undefined;
+
+    const handleScroll = () => {
+      if (
+        container.scrollTop < 80 &&
+        hasMore &&
+        onLoadMore &&
+        !isLoadingMore &&
+        !loadingOlderRef.current
+      ) {
+        savedScrollHeightRef.current = container.scrollHeight;
+        loadingOlderRef.current = true;
+        onLoadMore();
+      }
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [hasMore, onLoadMore, isLoadingMore]);
 
   // Emit typing start/stop when user types
   const handleInputChange = (val: string) => {
@@ -304,6 +354,19 @@ export default function ChatWindow({
           },
         }}
       >
+        {/* Loading indicator for older messages */}
+        {isLoadingMore && (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              py: 1.5,
+            }}
+          >
+            <CircularProgress size={18} sx={{ color: "#B0B7C3" }} />
+          </Box>
+        )}
+
         {messages.length === 0 ? (
           <Box
             sx={{
@@ -357,7 +420,7 @@ export default function ChatWindow({
               fontWeight: 500,
             }}
           >
-            {`••• ${currentConversation?.name} est en train d'écrire ...`}
+            {`••• ${currentConversation?.name} est en train d\u2019écrire ...`}
           </Typography>
         )}
 
@@ -389,7 +452,8 @@ export default function ChatWindow({
               fontWeight: 500,
             }}
           >
-            Choisissez d’abord un mode de communication pour pouvoir écrire.
+            Choisissez d&apos;abord un mode de communication pour pouvoir
+            écrire.
           </Typography>
         )}
 

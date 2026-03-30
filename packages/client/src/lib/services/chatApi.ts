@@ -230,12 +230,15 @@ export const chatApi = createApi({
       invalidatesTags: [{ type: "ChatRooms", id: "LIST" }],
     }),
 
-    getRoomMessages: builder.query<GetRoomMessagesResponse, number>({
-      query: (roomId) => ({
-        url: `/chat/rooms/${roomId}/messages`,
+    getRoomMessages: builder.query<
+      GetRoomMessagesResponse,
+      { roomId: number; page: number; limit: number }
+    >({
+      query: ({ roomId, page, limit }) => ({
+        url: `/chat/rooms/${roomId}/messages?page=${page}&limit=${limit}`,
         method: "GET",
       }),
-      providesTags: (_result, _err, roomId) => [
+      providesTags: (_result, _err, { roomId }) => [
         { type: "ChatMessages", id: roomId },
       ],
       keepUnusedDataFor: 0,
@@ -407,6 +410,7 @@ export const {
   useCreateRoomMutation,
   useFindOrCreateDirectRoomMutation,
   useGetRoomMessagesQuery,
+  useLazyGetRoomMessagesQuery,
   useSendMessageMutation,
   useSendFileMessageMutation,
   useMarkAsReadMutation,

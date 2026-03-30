@@ -13,6 +13,7 @@ import { MinioService } from 'src/common/services/minio.service';
 import { UserStatus } from 'src/common/enums/user-status.enum';
 import * as bcrypt from 'bcrypt';
 import { stringify } from 'csv-stringify/sync';
+import { RoleCode } from 'src/common/enums/role.enum';
 
 @Injectable()
 export class UserService {
@@ -159,7 +160,7 @@ export class UserService {
     }
   }
 
-  async getById(id: number) {
+  async getById(id: number, currentUserId?: number) {
     const user = await this.prisma.user.findUnique({
       where: { id },
       select: {
@@ -188,11 +189,13 @@ export class UserService {
             legalName: true,
             email: true,
             phone: true,
+            numWhatsapp: true,
             address: true,
             city: true,
             postalCode: true,
             country: true,
             countryCode: true,
+            website: true,
             siret: true,
             vatNumber: true,
             legalForm: true,
@@ -236,6 +239,169 @@ export class UserService {
 
     if (!user) throw new ApiError(MSG.user.not_found, 404, 'NOT_FOUND');
 
+    const roleCode = user.role?.code;
+    const PRESIGN_TTL = 7 * 24 * 60 * 60; // 7 days
+
+    const presign = async (path: string | null | undefined): Promise<string | null> => {
+      if (!path) return null;
+      try {
+        return await this.minioService.getPresignedUrl(path, PRESIGN_TTL);
+      } catch {
+        return path;
+      }
+    };
+
+    // ── COLLABORATOR ──────────────────────────────────────────────────────────
+    if (roleCode === RoleCode.COLLABORATOR) {
+      const photoUrl = await presign(user.photo);
+      const coverPhotoUrl = await presign(user.coverPhoto);
+
+      return {
+        success: true,
+        data: {
+          id: user.id,
+          id_role: user.role?.id ?? null,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          phone: user.phone,
+          companyId: user.company?.id ?? null,
+          position: user.position,
+          department: user.department,
+          cin: user.cin,
+          diploma: user.diploma,
+          photo: photoUrl,
+          coverPhoto: coverPhotoUrl,
+          lastLogin: user.lastLogin,
+          isActive: user.isActive,
+          status: user.status,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+          role: user.role
+            ? { nameFr: user.role.nameFr, nameEn: user.role.nameEn, code: user.role.code }
+            : null,
+        },
+      };
+    }
+
+    // ── ACCOUNTANT ────────────────────────────────────────────────────────────
+    if (roleCode === RoleCode.ACCOUNTANT) {
+      const photoUrl = await presign(user.photo);
+      const coverPhotoUrl = await presign(user.coverPhoto);
+      const logoUrl = await presign(user.company?.logo);
+      const patentFileUrl = await presign(user.company?.patentFile);
+
+      const rneFilePath =
+        user.company?.rneFile || (user.company?.rne?.includes('/') ? user.company.rne : null);
+      const rneFileUrl = await presign(rneFilePath);
+
+      return {
+        success: true,
+        data: {
+          id: user.id,
+          name: `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim(),
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          phone: user.phone,
+          photoUrl,
+          coverPhotoUrl,
+          specialty: user.position,
+          department: user.department,
+          diploma: user.diploma,
+          company: user.company
+            ? {
+                id: user.company.id,
+                name: user.company.name,
+                description: user.company.description,
+                experience: user.company.experience,
+                employeeCount: user.company.employeeCount
+                  ? String(user.company.employeeCount)
+                  : null,
+                sector: user.company.sector,
+                city: user.company.city,
+                address: user.company.address,
+                postalCode: user.company.postalCode,
+                phone: user.company.phone,
+                numWhatsapp: user.company.numWhatsapp,
+                email: user.company.email,
+                website: user.company.website,
+                siret: user.company.siret,
+                vatNumber: user.company.vatNumber,
+                legalForm: user.company.legalForm,
+                patentNumber: user.company.patentNumber,
+                patentFileUrl,
+                rne: user.company.rne?.includes('/') ? null : user.company.rne,
+                rneFileUrl,
+                logoUrl,
+                specialties: user.company.specialties || [],
+                rating: user.company.rating || 0,
+                numberOfReviews: user.company.numberOfReviews || 0,
+              }
+            : null,
+        },
+      };
+    }
+
+    // ── CLIENT ────────────────────────────────────────────────────────────────
+    if (roleCode === RoleCode.CLIENT) {
+      const patentFileUrl = await presign(user.company?.patentFile);
+
+      // Fetch relationship with the current user's company (if caller is an accountant)
+      let relationshipStatus: string | null = null;
+      let relationshipStart: Date | null = null;
+      if (currentUserId && currentUserId !== id && user.company?.id) {
+        const caller = await this.prisma.user.findUnique({
+          where: { id: currentUserId },
+          select: { companyId: true },
+        });
+        if (caller?.companyId) {
+          const rel = await this.prisma.clientAccountingFirmRelationship.findFirst({
+            where: {
+              clientCompanyId: user.company.id,
+              accountingFirmId: caller.companyId,
+            },
+            select: { status: true, relationshipStart: true },
+            orderBy: { createdAt: 'desc' },
+          });
+          if (rel) {
+            relationshipStatus = rel.status;
+            relationshipStart = rel.relationshipStart;
+          }
+        }
+      }
+
+      return {
+        success: true,
+        data: {
+          id: user.id,
+          fullName: `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim(),
+          email: user.email,
+          phone: user.phone,
+          company: user.company
+            ? {
+                name: user.company.name,
+                siret: user.company.siret,
+                vatNumber: user.company.vatNumber,
+                legalForm: user.company.legalForm,
+                address: user.company.address,
+                city: user.company.city,
+                postalCode: user.company.postalCode,
+                country: user.company.country,
+                patentFile: user.company.patentFile,
+                patentFileUrl,
+              }
+            : null,
+          status: user.status,
+          relationshipStatus,
+          relationshipStart,
+          createdAt: user.createdAt,
+        },
+      };
+    }
+
+    // ── Fallback (ADMINISTRATOR, etc.) ────────────────────────────────────────
     return { success: true, data: user };
   }
 

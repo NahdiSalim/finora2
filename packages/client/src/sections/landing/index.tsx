@@ -5,7 +5,6 @@ import {
   Grid,
   Box,
   Typography,
-  TextField,
   Paper,
   IconButton,
   Chip,
@@ -42,9 +41,10 @@ import {
   ALL_SPECIALTIES_FOR_FILTER,
   RATING_FILTER_OPTIONS,
 } from "src/lib/constants/specialties";
+import { useNavigate } from "react-router-dom";
 
 /* ─────────────────────────────────────────────────────────────────
-   KEYFRAMES (inchangés)
+   KEYFRAMES
 ───────────────────────────────────────────────────────────────── */
 const loaderReveal = keyframes`
   0%   { opacity: 1; transform: translateY(0); }
@@ -104,7 +104,7 @@ const orb2 = keyframes`
 `;
 
 /* ─────────────────────────────────────────────────────────────────
-   COMPOSANTS STYLISÉS (inchangés)
+   COMPOSANTS STYLISÉS
 ───────────────────────────────────────────────────────────────── */
 interface LoaderOverlayProps {
   hide: boolean;
@@ -344,6 +344,7 @@ function AnimatedSection({
    COMPOSANT PRINCIPAL
 ───────────────────────────────────────────────────────────────── */
 const FinoraLandingPage = () => {
+  const navigate = useNavigate(); // ✅ hook placé correctement
   const [email, setEmail] = useState("");
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [scrolled, setScrolled] = useState(false);
@@ -584,7 +585,6 @@ const FinoraLandingPage = () => {
     <Box
       sx={{
         overflowX: "hidden",
-        fontFamily: '"Plus Jakarta Sans", "Nunito", sans-serif',
       }}
     >
       {/* LOADER */}
@@ -619,7 +619,7 @@ const FinoraLandingPage = () => {
         </LoaderBarTrack>
       </LoaderOverlay>
 
-      {/* NAVBAR (inchangée) */}
+      {/* NAVBAR */}
       <GlassNav scrolled={scrolled}>
         <Container maxWidth="xl">
           <Box
@@ -666,6 +666,7 @@ const FinoraLandingPage = () => {
             <Box sx={{ display: "flex", gap: 1.5 }}>
               <CustomButton
                 variant="outlined"
+                onClick={() => navigate("/register")}
                 sx={{
                   textTransform: "none",
                   borderColor: scrolled
@@ -688,6 +689,7 @@ const FinoraLandingPage = () => {
               <CustomButton
                 variant="contained"
                 color="secondary"
+                onClick={() => navigate("/sign-in")}
                 sx={{
                   textTransform: "none",
                   boxShadow: "0 4px 16px rgba(255,125,13,0.35)",
@@ -706,7 +708,7 @@ const FinoraLandingPage = () => {
         </Container>
       </GlassNav>
 
-      {/* HERO (inchangé) */}
+      {/* HERO */}
       <HeroSection id="hero">
         <Box
           sx={{
@@ -771,7 +773,6 @@ const FinoraLandingPage = () => {
             pointerEvents: "none",
           }}
         />
-
         <Container
           maxWidth="lg"
           sx={{
@@ -863,59 +864,102 @@ const FinoraLandingPage = () => {
               component="form"
               onSubmit={(e) => {
                 e.preventDefault();
+                // Add your submit logic here
               }}
               sx={{
-                display: "flex",
-                flexDirection: { xs: "column", sm: "row" },
-                gap: 1.5,
-                justifyContent: "center",
-                maxWidth: 520,
+                position: "relative",
+                maxWidth: 560,
                 mx: "auto",
-                mb: 5,
+                mb: 6,
+                p: { xs: 1.5, sm: 2 },
+                borderRadius: 6,
+                background: "rgba(255,255,255,0.08)",
+                backdropFilter: "blur(12px)",
+                boxShadow:
+                  "0 25px 45px -12px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.1)",
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  inset: 0,
+                  borderRadius: 6,
+                  padding: "1.5px",
+                  background:
+                    "linear-gradient(135deg, rgba(255,255,255,0.3), rgba(255,125,13,0.5), rgba(255,255,255,0.1))",
+                  WebkitMask:
+                    "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
+                  WebkitMaskComposite: "xor",
+                  maskComposite: "exclude",
+                },
               }}
             >
-              <TextField
-                placeholder="Entrez votre email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                fullWidth
+              <Box
                 sx={{
-                  bgcolor: "rgba(255,255,255,0.95)",
-                  borderRadius: 100,
-                  backdropFilter: "blur(8px)",
-                  "& .MuiOutlinedInput-root": {
-                    borderRadius: 100,
-                    "& fieldset": { borderColor: "transparent" },
-                    "&:hover fieldset": { borderColor: "rgba(4,84,255,0.3)" },
-                  },
-                }}
-              />
-              <Button
-                type="submit"
-                variant="contained"
-                endIcon={<ArrowForwardIcon />}
-                sx={{
-                  bgcolor: "#ff7d0d",
-                  borderRadius: 100,
-                  px: 4,
-                  py: 1.6,
-                  textTransform: "none",
-                  fontSize: "1rem",
-                  fontWeight: 700,
-                  whiteSpace: "nowrap",
-                  boxShadow: "0 8px 28px rgba(255,125,13,0.45)",
-                  "&:hover": {
-                    bgcolor: "#e56b00",
-                    transform: "translateX(4px)",
-                    boxShadow: "0 12px 36px rgba(255,125,13,0.55)",
-                  },
-                  transition: "all 0.25s ease",
+                  display: "flex",
+                  flexDirection: { xs: "column", sm: "row" },
+                  gap: 1.5,
+                  alignItems: "center",
                 }}
               >
-                Commencer
-              </Button>
+                <CustomInput
+                  placeholder="Votre adresse email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  fullWidth
+                  sx={{
+                    flex: 1,
+                    "& .MuiOutlinedInput-root": {
+                      borderRadius: 3,
+                      backgroundColor: "rgba(255,255,255,0.1)",
+                      transition: "all 0.25s ease",
+                      "& fieldset": {
+                        borderColor: "transparent",
+                        transition: "border-color 0.2s",
+                      },
+                      "&:hover fieldset": {
+                        borderColor: "rgba(4,84,255,0.4)",
+                      },
+                      "&.Mui-focused fieldset": {
+                        borderColor: "#ff7d0d",
+                        borderWidth: 2,
+                      },
+                    },
+                    "& .MuiInputBase-input": {
+                      py: 1.6,
+                      px: 2,
+                      color: "#fff",
+                      "&::placeholder": {
+                        color: "rgba(255, 255, 255, 0.79)",
+                      },
+                    },
+                  }}
+                />
+                <CustomButton
+                  type="submit"
+                  variant="contained"
+                  size="large"
+                  endIcon={<ArrowForwardIcon />}
+                  sx={{
+                    bgcolor: "#ff7d0d",
+                    borderRadius: 3,
+                    textTransform: "none",
+                    whiteSpace: "nowrap",
+                    boxShadow: "0 8px 20px rgba(255,125,13,0.4)",
+                    transition: "all 0.3s cubic-bezier(0.2, 0.9, 0.4, 1.1)",
+                    "&:hover": {
+                      bgcolor: "#e56b00",
+                      transform: "translateX(4px) scale(1.02)",
+                      boxShadow: "0 15px 30px rgba(255,125,13,0.6)",
+                    },
+                    "&:active": {
+                      transform: "translateX(2px) scale(0.98)",
+                    },
+                  }}
+                >
+                  Commencer
+                </CustomButton>
+              </Box>
             </Box>
           </Box>
 
@@ -1003,7 +1047,7 @@ const FinoraLandingPage = () => {
         </Container>
       </HeroSection>
 
-      {/* SECTION FEATURES (inchangée) */}
+      {/* SECTION FEATURES */}
       <Box
         id="features"
         sx={{ py: { xs: 8, md: 14 }, bgcolor: "#f8fafc", position: "relative" }}
@@ -1104,7 +1148,7 @@ const FinoraLandingPage = () => {
         </Container>
       </Box>
 
-      {/* SECTION TRUSTED BY (inchangée) */}
+      {/* SECTION TRUSTED BY */}
       <Box
         sx={{
           py: 4,
@@ -1160,7 +1204,7 @@ const FinoraLandingPage = () => {
         </Container>
       </Box>
 
-      {/* SECTION TESTIMONIALS (inchangée) */}
+      {/* SECTION TESTIMONIALS */}
       <Box
         id="testimonials"
         sx={{
@@ -1310,9 +1354,7 @@ const FinoraLandingPage = () => {
         </Container>
       </Box>
 
-      {/* ────────────────────────────────────────────────────────────── */}
-      {/* NOUVELLE SECTION : EXPERTS‑COMPTABLES */}
-      {/* ────────────────────────────────────────────────────────────── */}
+      {/* SECTION EXPERTS‑COMPTABLES */}
       <Box id="accountants" sx={{ py: { xs: 8, md: 14 }, bgcolor: "#f8fafc" }}>
         <Container maxWidth="lg">
           <AnimatedSection delay={0.1} direction="up">
@@ -1359,7 +1401,6 @@ const FinoraLandingPage = () => {
             </Box>
           </AnimatedSection>
 
-          {/* Barre de recherche + filtres (inspirée du VisitorView) */}
           <AnimatedSection delay={0.15} direction="up">
             <Box
               sx={{
@@ -1490,7 +1531,6 @@ const FinoraLandingPage = () => {
             </Box>
           </AnimatedSection>
 
-          {/* Grille des fiches experts‑comptables */}
           <AnimatedSection delay={0.2} direction="up">
             {!isLoading && accountants.length > 0 ? (
               <Box
@@ -1510,7 +1550,7 @@ const FinoraLandingPage = () => {
                     key={accountant.name + accountant.location}
                     data={accountant}
                     scheduleButtonLabel="Devenir client"
-                    onScheduleClick={() => scrollToSection("hero")} // ou vers la démo
+                    onScheduleClick={() => scrollToSection("hero")}
                     onMessageClick={(id) => {
                       setContactAccountantId(id);
                       setContactModalOpen(true);
@@ -1553,7 +1593,6 @@ const FinoraLandingPage = () => {
                 </CustomButton>
               </Box>
             ) : (
-              // État de chargement (facultatif)
               <Box sx={{ textAlign: "center", py: 8 }}>
                 <Typography variant="body1" color="text.secondary">
                   Chargement des experts...
@@ -1564,7 +1603,7 @@ const FinoraLandingPage = () => {
         </Container>
       </Box>
 
-      {/* SECTION FAQ (inchangée) */}
+      {/* SECTION FAQ */}
       <Box id="faq" sx={{ py: { xs: 8, md: 14 }, bgcolor: "#f8fafc" }}>
         <Container maxWidth="lg">
           <Grid container spacing={6}>
@@ -1697,7 +1736,7 @@ const FinoraLandingPage = () => {
         </Container>
       </Box>
 
-      {/* CTA SECTION (inchangée) */}
+      {/* CTA SECTION */}
       <Box
         sx={{
           py: { xs: 8, md: 14 },
@@ -1791,17 +1830,13 @@ const FinoraLandingPage = () => {
               <br />
               et boostez votre productivité dès aujourd&apos;hui.
             </Typography>
-            <Button
+            <CustomButton
               variant="contained"
+              color="secondary"
+              size="large"
               endIcon={<ArrowForwardIcon />}
               sx={{
-                bgcolor: "#ff7d0d",
-                borderRadius: 100,
-                px: 5.5,
-                py: 2,
                 textTransform: "none",
-                fontSize: "1.1rem",
-                fontWeight: 700,
                 boxShadow: "0 16px 40px rgba(0,0,0,0.25)",
                 "&:hover": {
                   bgcolor: "#e56b00",
@@ -1812,12 +1847,12 @@ const FinoraLandingPage = () => {
               }}
             >
               Demander une démo
-            </Button>
+            </CustomButton>
           </AnimatedSection>
         </Container>
       </Box>
 
-      {/* FOOTER (inchangé) */}
+      {/* FOOTER */}
       <Box sx={{ py: 7, bgcolor: "#fafafa", borderTop: "1px solid #e8ecf2" }}>
         <Container maxWidth="lg">
           <Grid container spacing={4} sx={{ mb: 5 }}>
@@ -1969,11 +2004,16 @@ const FinoraLandingPage = () => {
                 onSubmit={(e) => {
                   e.preventDefault();
                 }}
-                sx={{ display: "flex", gap: 1 }}
+                sx={{
+                  display: "flex",
+                  gap: 1,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
-                <TextField
+                <CustomInput
                   placeholder="Votre email"
-                  type="email"
                   value={newsletterEmail}
                   onChange={(e) => setNewsletterEmail(e.target.value)}
                   size="small"
@@ -1981,15 +2021,15 @@ const FinoraLandingPage = () => {
                   sx={{
                     bgcolor: "#fff",
                     "& .MuiOutlinedInput-root": {
-                      borderRadius: 2.5,
                       "& fieldset": { borderColor: "#e2e8f0" },
                       "&:hover fieldset": { borderColor: "#0454ff" },
                     },
                   }}
                 />
-                <Button
+                <CustomButton
                   type="submit"
                   variant="contained"
+                  size="large"
                   sx={{
                     bgcolor: "#0454ff",
                     borderRadius: 2.5,
@@ -2005,7 +2045,7 @@ const FinoraLandingPage = () => {
                   }}
                 >
                   S&apos;abonner
-                </Button>
+                </CustomButton>
               </Box>
             </Grid>
           </Grid>
@@ -2046,7 +2086,7 @@ const FinoraLandingPage = () => {
         </Container>
       </Box>
 
-      {/* MODAL DE CONTACT (inchangée) */}
+      {/* MODAL DE CONTACT */}
       <ContactAccountantModal
         open={contactModalOpen}
         onClose={() => {
@@ -2056,7 +2096,7 @@ const FinoraLandingPage = () => {
         accountantId={contactAccountantId}
       />
 
-      {/* BOUTON RETOUR HAUT (inchangé) */}
+      {/* BOUTON RETOUR HAUT */}
       {showBackToTop && (
         <BackToTopButton
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}

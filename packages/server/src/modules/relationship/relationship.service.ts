@@ -296,20 +296,20 @@ export class RelationshipService {
       senderRecipientId = senderUser?.id ?? null;
     }
 
-    console.log(
-      '[respondToInvitation] invitedBy:',
-      invitedByUserId,
-      '| senderRecipientId:',
-      senderRecipientId
-    );
-    if (senderRecipientId) {
-      const isAccepted = dto.response === InvitationResponse.ACCEPT;
-      // Determine role label for the message
-      const isAccountantResponding = invitation.accountingFirmId === user.companyId;
-      const responderLabel = isAccountantResponding ? 'Votre comptable' : 'Votre client';
-      const responderName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
-      const actorLabel = responderName ? `${responderLabel} (${responderName})` : responderLabel;
+    const isAccepted = dto.response === InvitationResponse.ACCEPT;
+    const isAccountantResponding = invitation.accountingFirmId === user.companyId;
+    const responderLabel = isAccountantResponding ? 'Votre comptable' : 'Votre client';
+    const responderName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
+    const actorLabel = responderName ? `${responderLabel} (${responderName})` : responderLabel;
 
+    const notificationData = {
+      relationshipId: updatedInvitation.id,
+      status: isAccepted ? 'active' : 'rejected',
+      rejectionReason: dto.rejectionReason ?? null,
+    };
+
+    // Notify the invitation sender
+    if (senderRecipientId) {
       try {
         await this.notificationService.notify({
           recipientId: senderRecipientId,
@@ -317,14 +317,46 @@ export class RelationshipService {
           action: isAccepted ? 'invitation_accepted' : 'invitation_rejected',
           priority: 'normal',
           actorName: actorLabel,
-          data: {
-            relationshipId: updatedInvitation.id,
-            status: isAccepted ? 'active' : 'rejected',
-            rejectionReason: dto.rejectionReason ?? null,
-          },
+          data: notificationData,
         });
       } catch (err) {
-        console.error('[respondToInvitation] notification error:', err?.message);
+        console.error('[respondToInvitation] sender notification error:', err?.message);
+      }
+    }
+
+    // If accepted, also notify the responder (client) and emit WebSocket event
+    // so the accountant's client table refreshes automatically
+    if (isAccepted) {
+      // Notify the responder (current user) that the relation is now active
+      try {
+        const senderCompanyName =
+          invitation.clientCompanyId === user.companyId
+            ? invitation.accountingFirm.name
+            : invitation.clientCompany.name;
+        await this.notificationService.notify({
+          recipientId: userId,
+          type: 'relationship',
+          action: 'invitation_accepted',
+          priority: 'normal',
+          actorName: senderCompanyName,
+          data: notificationData,
+        });
+      } catch (err) {
+        console.error('[respondToInvitation] responder notification error:', err?.message);
+      }
+
+      // Emit WebSocket event to the accounting firm users so their client list refreshes
+      const accountingFirmUsers = await this.prisma.user.findMany({
+        where: { companyId: invitation.accountingFirmId },
+        select: { id: true },
+      });
+      for (const firmUser of accountingFirmUsers) {
+        this.notificationService.emitRelationshipUpdate(firmUser.id, {
+          event: 'relationship_activated',
+          relationshipId: updatedInvitation.id,
+          clientCompanyId: invitation.clientCompanyId,
+          accountingFirmId: invitation.accountingFirmId,
+        });
       }
     }
     return {

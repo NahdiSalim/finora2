@@ -1,3 +1,4 @@
+import type { MouseEvent } from "react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Box from "@mui/material/Box";
@@ -99,6 +100,27 @@ export default function MessageBubble({
   const handleOpenFile = () => {
     if (!message.file?.url) return;
     window.open(message.file.url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleDownloadFile = async (event: MouseEvent) => {
+    event.stopPropagation();
+    const url = message.file?.url;
+    const name = message.file?.name;
+    if (!url || !name) return;
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
   };
 
   // Icon component and color for non-image file cards
@@ -619,12 +641,7 @@ export default function MessageBubble({
 
                 <IconButton
                   size="small"
-                  component="a"
-                  href={message.file!.url}
-                  download={message.file!.name}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(event) => event.stopPropagation()}
+                  onClick={handleDownloadFile}
                   sx={{ color: "#FFFFFF", p: 0.25, flexShrink: 0 }}
                 >
                   <DownloadOutlinedIcon sx={{ fontSize: isMobile ? 13 : 14 }} />
@@ -739,12 +756,7 @@ export default function MessageBubble({
 
                   <IconButton
                     size="small"
-                    component="a"
-                    href={message.file?.url}
-                    download={message.file?.name}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(event) => event.stopPropagation()}
+                    onClick={handleDownloadFile}
                     sx={{
                       color: message.mine
                         ? theme.palette.common.white

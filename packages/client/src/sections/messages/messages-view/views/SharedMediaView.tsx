@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
@@ -27,7 +27,7 @@ type SharedMediaViewProps = {
   onBack?: () => void;
 };
 
-type FilterType = "all" | "pdf" | "image" | "doc" | "xls";
+type FilterType = "all" | "pdf" | "image";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -84,6 +84,8 @@ export default function SharedMediaView({
     null,
   );
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  // Track files whose image URL failed to load at runtime
+  const [erroredIds, setErroredIds] = useState<Set<number>>(new Set());
 
   const { isLoading, isFetching, currentData } = useGetSharedDocumentsQuery(
     { roomId: conversationId, pageSize: 100 },
@@ -97,19 +99,34 @@ export default function SharedMediaView({
     return currentData.data.map(mapDocToMediaFile);
   }, [currentData]);
 
+  const handleImageError = useCallback((id: number) => {
+    setErroredIds((prev) => new Set([...prev, id]));
+  }, []);
+
+  // Reset errored IDs when the conversation changes
+  useEffect(() => {
+    setErroredIds(new Set());
+  }, [conversationId]);
+
   const filteredFiles = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     return allFiles.filter((file) => {
+      // Only files with a real preview URL and a type that supports visual preview
+      if (!file.previewUrl) return false;
+      if (file.type !== "image" && file.type !== "pdf") return false;
+      // Remove files whose image URL failed to load at runtime
+      if (erroredIds.has(file.id)) return false;
+
       const matchesType = selectedType === "all" || file.type === selectedType;
       const matchesSearch =
         !normalizedSearch || file.name.toLowerCase().includes(normalizedSearch);
       return matchesType && matchesSearch;
     });
-  }, [allFiles, searchTerm, selectedType]);
+  }, [allFiles, searchTerm, selectedType, erroredIds]);
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, selectedType, conversationId]);
+  }, [searchTerm, selectedType, conversationId, erroredIds]);
 
   const paginatedFiles = useMemo(() => {
     const startIndex = (page - 1) * ITEMS_PER_PAGE;
@@ -295,8 +312,6 @@ export default function SharedMediaView({
                   <MenuItem value="all">Tous les fichiers</MenuItem>
                   <MenuItem value="pdf">PDF</MenuItem>
                   <MenuItem value="image">Images</MenuItem>
-                  <MenuItem value="doc">Documents</MenuItem>
-                  <MenuItem value="xls">Tableurs</MenuItem>
                 </CustomSelect>
 
                 <Box
@@ -391,6 +406,7 @@ export default function SharedMediaView({
                       key={file.id}
                       file={file}
                       onView={handleOpenPreview}
+                      onImageError={() => handleImageError(file.id)}
                     />
                   ))}
                 </Box>

@@ -16,14 +16,19 @@ import type { SharedMediaFile } from "../data/types";
 type SharedMediaCardProps = {
   file: SharedMediaFile;
   onView: (file: SharedMediaFile) => void;
+  onImageError?: () => void;
 };
 
 export default function SharedMediaCard({
   file,
   onView,
+  onImageError,
 }: SharedMediaCardProps) {
   const [imgFailed, setImgFailed] = useState(false);
   const canDownload = !!file.previewUrl && file.previewUrl !== "#";
+
+  // If the image URL failed to load, render nothing (parent will remove this card)
+  if (imgFailed) return null;
 
   const handleDownload = async () => {
     if (!canDownload || !file.previewUrl) return;
@@ -52,7 +57,10 @@ export default function SharedMediaCard({
             component="img"
             src={file.previewUrl}
             alt={file.name}
-            onError={() => setImgFailed(true)}
+            onError={() => {
+              setImgFailed(true);
+              onImageError?.();
+            }}
             sx={{
               width: "100%",
               height: "100%",

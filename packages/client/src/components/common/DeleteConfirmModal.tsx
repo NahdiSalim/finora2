@@ -41,6 +41,9 @@ export default function DeleteConfirmModal({
       maxWidth="xs"
       fullWidth
       fullScreen={isMobile}
+      sx={{
+        zIndex: 1400,
+      }}
       PaperProps={{
         sx: {
           borderRadius: isMobile ? 0 : 3,

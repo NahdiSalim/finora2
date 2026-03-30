@@ -3,6 +3,13 @@ import { PrismaClient } from '@prisma/client';
 export async function seedTasks(prisma: PrismaClient) {
   console.log('🔄 Seeding tasks...');
 
+  // Safety check - only seed if there are no tasks
+  const taskCount = await prisma.task.count();
+  if (taskCount > 0) {
+    console.log('⚠️  Tasks already exist, skipping tasks seed');
+    return;
+  }
+
   // Get users
   const accountant = await prisma.user.findUnique({
     where: { email: 'comptable@finora.com' },
@@ -22,7 +29,7 @@ export async function seedTasks(prisma: PrismaClient) {
     return;
   }
 
-  // Delete existing tasks
+  // Delete existing tasks (should be none due to check above)
   await prisma.task.deleteMany({});
 
   // Create sample tasks

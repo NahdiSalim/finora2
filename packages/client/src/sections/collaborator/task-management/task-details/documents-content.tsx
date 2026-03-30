@@ -6,8 +6,9 @@ import {
   CircularProgress,
   Alert,
   IconButton,
+  alpha,
 } from "@mui/material";
-import { FileText, Upload, Plus, X } from "lucide-react";
+import { FileText, Upload, Plus, X, Volume2, Download } from "lucide-react";
 import { FileCard } from "./file-card";
 import CustomButton from "src/components/common/CustomButton";
 import FileUpload from "src/components/common/FileUpload";
@@ -29,13 +30,15 @@ export function DocumentsContent({ task, onUpdate }: DocumentsContentProps) {
 
   const getFileType = (
     fileName: string,
-  ): "pdf" | "xls" | "docx" | "png" | "jpg" | "other" => {
+  ): "pdf" | "xls" | "docx" | "png" | "jpg" | "audio" | "other" => {
     const ext = fileName.split(".").pop()?.toLowerCase();
     if (ext === "pdf") return "pdf";
     if (ext === "xls" || ext === "xlsx") return "xls";
     if (ext === "doc" || ext === "docx") return "docx";
     if (ext === "png") return "png";
     if (ext === "jpg" || ext === "jpeg") return "jpg";
+    if (["mp3", "wav", "m4a", "ogg", "webm"].includes(ext || ""))
+      return "audio";
     return "other";
   };
 
@@ -142,25 +145,121 @@ export function DocumentsContent({ task, onUpdate }: DocumentsContentProps) {
         {task.attachments && task.attachments.length > 0 ? (
           <Box
             sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "repeat(1, 1fr)",
-                sm: "repeat(2, 1fr)",
-                md: "repeat(3, 1fr)",
-                lg: "repeat(4, 1fr)",
-              },
-              gap: { xs: 1.5, sm: 2 },
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
             }}
           >
             {task.attachments.map((filePath, index) => {
               const fileName = filePath.split("/").pop() || filePath;
+              const fileType = getFileType(fileName);
+              const fileExtension = fileName.split(".").pop()?.toLowerCase();
+              const attachmentUrl = task.attachmentUrls?.[index] || filePath;
+
+              // Audio files get special treatment
+              if (fileType === "audio") {
+                return (
+                  <Box
+                    key={index}
+                    sx={{
+                      p: 2,
+                      bgcolor: alpha(theme.palette.primary.main, 0.05),
+                      borderRadius: 2,
+                      border: `2px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1.5,
+                        mb: 1.5,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 36,
+                          height: 36,
+                          bgcolor: theme.palette.primary.main,
+                          borderRadius: 1,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Volume2 size={20} color="white" />
+                      </Box>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography
+                          variant="body2"
+                          fontWeight={600}
+                          sx={{ fontSize: 13 }}
+                        >
+                          Message vocal
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontSize: 11 }}
+                        >
+                          {fileName}
+                        </Typography>
+                      </Box>
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          const link = document.createElement("a");
+                          link.href = attachmentUrl;
+                          link.download = fileName;
+                          link.target = "_blank";
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                        }}
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          border: `1px solid ${theme.palette.divider}`,
+                          borderRadius: 1,
+                          color: theme.palette.text.secondary,
+                          "&:hover": {
+                            bgcolor: alpha(theme.palette.primary.main, 0.08),
+                            borderColor: theme.palette.primary.main,
+                            color: theme.palette.primary.main,
+                          },
+                        }}
+                      >
+                        <Download size={14} />
+                      </IconButton>
+                    </Box>
+                    <audio
+                      key={`task-audio-${index}`}
+                      controls
+                      style={{ width: "100%", height: 40 }}
+                      preload="metadata"
+                      src={attachmentUrl}
+                    >
+                      Votre navigateur ne supporte pas la lecture audio.
+                    </audio>
+                  </Box>
+                );
+              }
+
+              // Regular files
               return (
                 <FileCard
                   key={index}
                   file={{
                     id: String(index),
                     name: fileName,
-                    type: getFileType(fileName),
+                    type: fileType as
+                      | "pdf"
+                      | "xls"
+                      | "docx"
+                      | "png"
+                      | "jpg"
+                      | "other",
                     thumbnail: "",
                   }}
                   onDownload={() => handleDownload(filePath)}

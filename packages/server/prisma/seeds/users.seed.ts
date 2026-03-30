@@ -2,6 +2,13 @@ import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 export async function seedUsers(prisma: PrismaClient) {
+  // Safety check - only delete if there are fewer than 10 users (seed data only)
+  const userCount = await prisma.user.count();
+  if (userCount >= 10) {
+    console.log('⚠️  Skipping user seed - database has production data');
+    return;
+  }
+
   const hashedPassword = await bcrypt.hash('password123', 10);
 
   // Get roles

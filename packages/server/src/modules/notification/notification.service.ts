@@ -332,7 +332,7 @@ export class NotificationService {
       },
       'relationship.invitation_accepted': {
         title: 'Invitation acceptée ✅',
-        message: `${actorName} a accepté votre invitation. La relation est maintenant active.`,
+        message: `${actorName} a accepté votre demande de collaboration. La relation est maintenant active.`,
         actionUrl: `/relationships/active`,
         priority: 'normal',
       },

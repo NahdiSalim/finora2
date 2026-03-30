@@ -31,7 +31,9 @@ export class UserService {
     status?: string
   ) {
     const skip = (page - 1) * limit;
-    const where: Prisma.UserWhereInput = {};
+    const where: Prisma.UserWhereInput = {
+      role: { code: { not: 'ADMINISTRATOR' } },
+    };
 
     if (search) {
       where.OR = [
@@ -44,7 +46,7 @@ export class UserService {
     }
 
     if (role) {
-      where.role = { code: { equals: role.toUpperCase() } };
+      where.role = { code: { equals: role.toUpperCase(), not: 'ADMINISTRATOR' } };
     }
 
     if (status) {

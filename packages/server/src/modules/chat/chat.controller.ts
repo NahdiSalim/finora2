@@ -217,6 +217,30 @@ export class ChatController {
     return this.chatService.markAsRead(id, Number(userId));
   }
 
+  @Get('messages/recent')
+  @ApiOperation({ summary: 'Get last 3 messages across all user rooms' })
+  @ApiResponse({ status: 200, description: 'Recent messages with unread count' })
+  async getRecentMessages(@Request() req) {
+    const userId = req.user?.id ?? req.user?.sub;
+    return this.chatService.getRecentMessages(Number(userId), 3);
+  }
+
+  @Get('messages/unread-count')
+  @ApiOperation({ summary: 'Get total unread messages count' })
+  @ApiResponse({ status: 200, description: 'Total unread messages count' })
+  async getUnreadMessagesCount(@Request() req) {
+    const userId = req.user?.id ?? req.user?.sub;
+    return this.chatService.getUnreadMessagesCount(Number(userId));
+  }
+
+  @Post('rooms/mark-all-read')
+  @ApiOperation({ summary: 'Mark all rooms as read for current user' })
+  @ApiResponse({ status: 200, description: 'All messages marked as read' })
+  async markAllRoomsAsRead(@Request() req) {
+    const userId = req.user?.id ?? req.user?.sub;
+    return this.chatService.markAllRoomsAsRead(Number(userId));
+  }
+
   // ==================== THREADS ====================
 
   @Post('threads')

@@ -31,7 +31,7 @@ function parseCsv(
   const result = Papa.parse<Record<string, unknown>>(text, {
     header: true,
     skipEmptyLines: true,
-    transformHeader: (h) => h.trim(),
+    transformHeader: (h: string) => h.trim(),
   });
 
   const rawHeaders: string[] = result.meta.fields ?? [];
@@ -39,7 +39,7 @@ function parseCsv(
 
   const rows = result.data
     .slice(0, maxRows)
-    .map((row) => headers.map((h) => cellStr(row[h])));
+    .map((row: Record<string, unknown>) => headers.map((h) => cellStr(row[h])));
 
   return { headers, rows };
 }
@@ -71,9 +71,9 @@ function parseXlsx(
   const headerRow = (raw[0] as unknown[]).slice(0, maxCols).map(cellStr);
   const dataRows = raw
     .slice(1, maxRows + 1)
-    .map((r) => (r as unknown[]).slice(0, maxCols).map(cellStr))
+    .map((r: unknown) => (r as unknown[]).slice(0, maxCols).map(cellStr))
     // Pad short rows so every row has the same column count
-    .map((r) => {
+    .map((r: string[]) => {
       while (r.length < headerRow.length) r.push("");
       return r;
     });

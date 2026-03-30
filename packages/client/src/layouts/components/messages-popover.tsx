@@ -14,15 +14,25 @@ import Popover from "@mui/material/Popover";
 import Typography from "@mui/material/Typography";
 import ListItemButton from "@mui/material/ListItemButton";
 import CircularProgress from "@mui/material/CircularProgress";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
 import { useTheme, alpha } from "@mui/material/styles";
 
-import { Mail } from "lucide-react";
+import {
+  Mail,
+  FileText,
+  Calendar,
+  ClipboardList,
+  CheckCheck,
+} from "lucide-react";
 
 import { Iconify } from "src/components/iconify";
 import { Scrollbar } from "src/components/scrollbar";
-import { useConversations } from "src/sections/messages/messages-view/hooks/useChatData";
-import { useMarkRoomAsReadMutation } from "src/lib/services/chatApi";
-import type { Conversation } from "src/sections/messages/messages-view/data/types";
+import {
+  useGetRecentMessagesQuery,
+  useMarkAllRoomsAsReadMutation,
+  type RecentMessage,
+} from "src/lib/services/chatApi";
 
 // ----------------------------------------------------------------------
 
@@ -51,19 +61,78 @@ function relativeTimeFr(dateStr: string): string {
   });
 }
 
-// ── Room item ─────────────────────────────────────────────────────────────────
-function RoomItem({
-  conversation,
-  isRead,
+// ── Helper to get avatar initials ────────────────────────────────────────────
+function getAvatarInitials(sender: RecentMessage["sender"]): string {
+  if (sender.firstName && sender.lastName) {
+    return `${sender.firstName[0]}${sender.lastName[0]}`.toUpperCase();
+  }
+  if (sender.firstName) return sender.firstName[0].toUpperCase();
+  if (sender.lastName) return sender.lastName[0].toUpperCase();
+  if (sender.username) return sender.username[0].toUpperCase();
+  return "?";
+}
+
+// ── Helper to get sender display name ─────────────────────────────────────────
+function getSenderName(sender: RecentMessage["sender"]): string {
+  if (sender.firstName && sender.lastName) {
+    return `${sender.firstName} ${sender.lastName}`;
+  }
+  if (sender.firstName) return sender.firstName;
+  if (sender.lastName) return sender.lastName;
+  return sender.username ?? "Utilisateur";
+}
+
+// ── Helper to get message preview ─────────────────────────────────────────────
+function getMessagePreview(message: RecentMessage): {
+  text: string;
+  icon?: React.ReactElement;
+} {
+  const MAX_LENGTH = 60;
+
+  if (message.type === "file" || message.type === "image") {
+    return {
+      text: message.content || "Fichier joint",
+      icon: <FileText size={14} />,
+    };
+  }
+
+  if (message.type === "request" && message.request) {
+    return {
+      text: message.request.subject,
+      icon: <FileText size={14} />,
+    };
+  }
+
+  if (message.type === "task" && message.task) {
+    return {
+      text: message.task.title,
+      icon: <ClipboardList size={14} />,
+    };
+  }
+
+  if (message.type === "appointment" && message.appointment) {
+    return {
+      text: message.appointment.title,
+      icon: <Calendar size={14} />,
+    };
+  }
+
+  const text = message.content || "";
+  return {
+    text: text.length > MAX_LENGTH ? `${text.slice(0, MAX_LENGTH)}...` : text,
+  };
+}
+
+// ── Message item ──────────────────────────────────────────────────────────────
+function MessageItem({
+  message,
   onClick,
 }: {
-  conversation: Conversation;
-  isRead: boolean;
+  message: RecentMessage;
   onClick: () => void;
 }) {
   const theme = useTheme();
-  const hasUnread =
-    !isRead && !!conversation.unreadCount && conversation.unreadCount > 0;
+  const preview = getMessagePreview(message);
 
   return (
     <ListItemButton
@@ -77,7 +146,7 @@ function RoomItem({
         "&:hover": {
           bgcolor: alpha(theme.palette.primary.main, 0.04),
         },
-        ...(hasUnread && {
+        ...(message.unread && {
           bgcolor: alpha(theme.palette.primary.main, 0.05),
         }),
       }}
@@ -90,14 +159,14 @@ function RoomItem({
             height: 44,
             fontSize: 16,
             fontWeight: 700,
-            bgcolor: conversation.avatarColor ?? "#D9D9D9",
-            color: conversation.avatarTextColor ?? "#666666",
+            bgcolor: theme.palette.primary.lighter,
+            color: theme.palette.primary.darker,
           }}
         >
-          {conversation.avatar}
+          {getAvatarInitials(message.sender)}
         </Avatar>
 
-        {hasUnread && (
+        {message.unread && (
           <Box
             sx={{
               position: "absolute",
@@ -114,7 +183,7 @@ function RoomItem({
       </Box>
 
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        {/* Name + time */}
+        {/* Sender name + time */}
         <Box
           sx={{
             display: "flex",
@@ -129,64 +198,64 @@ function RoomItem({
             sx={{
               flex: 1,
               minWidth: 0,
-              fontWeight: hasUnread ? 700 : 500,
+              fontWeight: message.unread ? 700 : 500,
               fontSize: 14,
-              color: hasUnread
-                ? theme.palette.text.primary
-                : theme.palette.text.primary,
+              color: theme.palette.text.primary,
               lineHeight: 1.3,
             }}
           >
-            {conversation.name}
+            {getSenderName(message.sender)}
           </Typography>
           <Typography
             sx={{
               flexShrink: 0,
               fontSize: 11,
-              color: hasUnread ? theme.palette.primary.main : "text.disabled",
-              fontWeight: hasUnread ? 600 : 400,
+              color: message.unread
+                ? theme.palette.primary.main
+                : "text.disabled",
+              fontWeight: message.unread ? 600 : 400,
               lineHeight: 1.3,
             }}
           >
-            {relativeTimeFr(conversation.fullDate)}
+            {relativeTimeFr(message.createdAt)}
           </Typography>
         </Box>
 
-        {/* Role */}
-        <Typography
-          noWrap
-          sx={{
-            fontSize: 12,
-            color: "text.disabled",
-            lineHeight: 1.3,
-            mb: 0.3,
-          }}
-        >
-          {conversation.role}
-        </Typography>
-
-        {/* Preview + badge */}
+        {/* Message preview with icon */}
         <Box
           sx={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            gap: 1,
+            gap: 0.75,
             minWidth: 0,
           }}
         >
+          {preview.icon && (
+            <Box
+              sx={{
+                flexShrink: 0,
+                color: "text.disabled",
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              {preview.icon}
+            </Box>
+          )}
           <Typography
             noWrap
             sx={{
               flex: 1,
               minWidth: 0,
               fontSize: 12.5,
-              color: hasUnread ? theme.palette.text.primary : "text.secondary",
-              fontWeight: hasUnread ? 600 : 400,
+              color: message.unread
+                ? theme.palette.text.primary
+                : "text.secondary",
+              fontWeight: message.unread ? 600 : 400,
               lineHeight: 1.4,
             }}
           >
-            {conversation.preview || "Aucun message"}
+            {preview.text || "Message"}
           </Typography>
         </Box>
       </Box>
@@ -204,21 +273,18 @@ export function MessagesPopover({ sx, ...other }: MessagesPopoverProps) {
     null,
   );
 
-  // Rooms marked as read locally (optimistic — avoids stale badge after click)
-  const [localReadIds, setLocalReadIds] = useState<Set<number>>(new Set());
-  const [markRoomAsRead] = useMarkRoomAsReadMutation();
+  // Fetch recent messages with real-time updates
+  const {
+    data: recentMessagesData,
+    isLoading,
+    refetch,
+  } = useGetRecentMessagesQuery();
 
-  const { conversations, isLoading } = useConversations({ pageSize: 10 });
+  const [markAllAsRead, { isLoading: isMarkingAllAsRead }] =
+    useMarkAllRoomsAsReadMutation();
 
-  const unreadConversations = useMemo(
-    () =>
-      conversations.filter(
-        (c) => !localReadIds.has(c.id) && !!c.unreadCount && c.unreadCount > 0,
-      ),
-    [conversations, localReadIds],
-  );
-
-  const totalUnread = unreadConversations.length;
+  const messages = recentMessagesData?.messages ?? [];
+  const totalUnread = recentMessagesData?.unreadCount ?? 0;
   const hasUnread = totalUnread > 0;
 
   const handleOpenPopover = useCallback(
@@ -232,19 +298,24 @@ export function MessagesPopover({ sx, ...other }: MessagesPopoverProps) {
     setOpenPopover(null);
   }, []);
 
-  const handleRoomClick = useCallback(
-    (conv: Conversation) => {
-      // Optimistically mark as read locally
-      setLocalReadIds((prev) => new Set([...prev, conv.id]));
-      // Persist to backend — updates readBy[] on all unread messages in this room
-      markRoomAsRead(conv.id);
+  const handleMessageClick = useCallback(
+    (message: RecentMessage) => {
       handleClosePopover();
       navigate(
-        `${dashboardBase}/messages?roomId=${conv.id}&category=${conv.category}`,
+        `${dashboardBase}/messages?roomId=${message.roomId}&category=${message.room.category}`,
       );
     },
-    [navigate, handleClosePopover, dashboardBase, markRoomAsRead],
+    [navigate, handleClosePopover, dashboardBase],
   );
+
+  const handleMarkAllAsRead = useCallback(async () => {
+    try {
+      await markAllAsRead().unwrap();
+      refetch();
+    } catch (error) {
+      console.error("Failed to mark all as read:", error);
+    }
+  }, [markAllAsRead, refetch]);
 
   const handleViewAll = useCallback(() => {
     handleClosePopover();
@@ -254,7 +325,7 @@ export function MessagesPopover({ sx, ...other }: MessagesPopoverProps) {
   const subtitleText = useMemo(() => {
     if (isLoading) return "Chargement…";
     if (totalUnread === 0) return "Aucun message non lu";
-    return `Vous avez ${totalUnread} message${totalUnread > 1 ? "s" : ""} non lu${totalUnread > 1 ? "s" : ""}`;
+    return `${totalUnread} message${totalUnread > 1 ? "s" : ""} non lu${totalUnread > 1 ? "s" : ""}`;
   }, [isLoading, totalUnread]);
 
   return (
@@ -360,6 +431,28 @@ export function MessagesPopover({ sx, ...other }: MessagesPopoverProps) {
               {subtitleText}
             </Typography>
           </Box>
+
+          {/* Mark all as read button */}
+          {hasUnread && (
+            <Tooltip title="Marquer tout comme lu">
+              <IconButton
+                onClick={handleMarkAllAsRead}
+                disabled={isMarkingAllAsRead}
+                sx={{
+                  color: theme.palette.primary.main,
+                  "&:hover": {
+                    bgcolor: alpha(theme.palette.primary.main, 0.08),
+                  },
+                }}
+              >
+                {isMarkingAllAsRead ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  <CheckCheck size={20} />
+                )}
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
 
         <Divider sx={{ borderStyle: "dashed" }} />
@@ -380,7 +473,7 @@ export function MessagesPopover({ sx, ...other }: MessagesPopoverProps) {
             >
               <CircularProgress size={28} />
             </Box>
-          ) : conversations.length === 0 ? (
+          ) : messages.length === 0 ? (
             <Box
               sx={{
                 py: 8,
@@ -400,17 +493,16 @@ export function MessagesPopover({ sx, ...other }: MessagesPopoverProps) {
                 variant="body2"
                 sx={{ color: "text.secondary", fontSize: 13 }}
               >
-                Aucune conversation
+                Aucun message récent
               </Typography>
             </Box>
           ) : (
             <List disablePadding>
-              {conversations.map((conv) => (
-                <RoomItem
-                  key={conv.id}
-                  conversation={conv}
-                  isRead={localReadIds.has(conv.id)}
-                  onClick={() => handleRoomClick(conv)}
+              {messages.map((msg: RecentMessage) => (
+                <MessageItem
+                  key={msg.id}
+                  message={msg}
+                  onClick={() => handleMessageClick(msg)}
                 />
               ))}
             </List>

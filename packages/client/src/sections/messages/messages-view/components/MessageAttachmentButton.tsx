@@ -138,130 +138,10 @@ export default function MessageAttachmentButton({
           },
         }}
       >
-        <MenuItem
-          onClick={handleFileMenuClick}
-          sx={{
-            minHeight: 48,
-            px: 1.25,
-            py: 0.75,
-            borderRadius: "14px",
-            gap: 1.25,
-            "&:hover": {
-              backgroundColor: "#F9FAFB",
-            },
-          }}
-        >
-          <Box
-            sx={{
-              width: 22,
-              height: 22,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#2F6BFF",
-              flexShrink: 0,
-            }}
-          >
-            <Paperclip size={16} strokeWidth={2} />
-          </Box>
-
-          <Typography
-            sx={{
-              fontSize: 14,
-              fontWeight: 400,
-              lineHeight: "21px",
-              color: "#344054",
-            }}
-          >
-            Joindre un fichier
-          </Typography>
-        </MenuItem>
-
-        {recipientType === "client" && (
-          <>
-            <MenuItem
-              onClick={handleRequestClick}
-              sx={{
-                minHeight: 48,
-                px: 1.25,
-                py: 0.75,
-                borderRadius: "14px",
-                gap: 1.25,
-                "&:hover": {
-                  backgroundColor: "#F9FAFB",
-                },
-              }}
-            >
-              <Box
-                sx={{
-                  width: 22,
-                  height: 22,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#2F6BFF",
-                  flexShrink: 0,
-                }}
-              >
-                <FileText size={16} strokeWidth={2} />
-              </Box>
-
-              <Typography
-                sx={{
-                  fontSize: 14,
-                  fontWeight: 400,
-                  lineHeight: "21px",
-                  color: "#344054",
-                }}
-              >
-                Joindre une demande
-              </Typography>
-            </MenuItem>
-
-            <MenuItem
-              onClick={handleAppointmentClick}
-              sx={{
-                minHeight: 48,
-                px: 1.25,
-                py: 0.75,
-                borderRadius: "14px",
-                gap: 1.25,
-                "&:hover": {
-                  backgroundColor: "#F9FAFB",
-                },
-              }}
-            >
-              <Box
-                sx={{
-                  width: 22,
-                  height: 22,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#2F6BFF",
-                  flexShrink: 0,
-                }}
-              >
-                <Calendar size={16} strokeWidth={2} />
-              </Box>
-
-              <Typography
-                sx={{
-                  fontSize: 14,
-                  fontWeight: 400,
-                  lineHeight: "21px",
-                  color: "#344054",
-                }}
-              >
-                Joindre un rendez-vous
-              </Typography>
-            </MenuItem>
-          </>
-        )}
-
-        {recipientType === "collaborator" && (
+        {[
           <MenuItem
-            onClick={handleTaskClick}
+            key="file"
+            onClick={handleFileMenuClick}
             sx={{
               minHeight: 48,
               px: 1.25,
@@ -284,7 +164,7 @@ export default function MessageAttachmentButton({
                 flexShrink: 0,
               }}
             >
-              <CheckSquare size={16} strokeWidth={2} />
+              <Paperclip size={16} strokeWidth={2} />
             </Box>
 
             <Typography
@@ -295,10 +175,138 @@ export default function MessageAttachmentButton({
                 color: "#344054",
               }}
             >
-              Joindre une tâche
+              Joindre un fichier
             </Typography>
-          </MenuItem>
-        )}
+          </MenuItem>,
+
+          ...(recipientType === "client"
+            ? [
+                <MenuItem
+                  key="request"
+                  onClick={handleRequestClick}
+                  sx={{
+                    minHeight: 48,
+                    px: 1.25,
+                    py: 0.75,
+                    borderRadius: "14px",
+                    gap: 1.25,
+                    "&:hover": {
+                      backgroundColor: "#F9FAFB",
+                    },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 22,
+                      height: 22,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#2F6BFF",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <FileText size={16} strokeWidth={2} />
+                  </Box>
+
+                  <Typography
+                    sx={{
+                      fontSize: 14,
+                      fontWeight: 400,
+                      lineHeight: "21px",
+                      color: "#344054",
+                    }}
+                  >
+                    Joindre une demande
+                  </Typography>
+                </MenuItem>,
+
+                <MenuItem
+                  key="appointment"
+                  onClick={handleAppointmentClick}
+                  sx={{
+                    minHeight: 48,
+                    px: 1.25,
+                    py: 0.75,
+                    borderRadius: "14px",
+                    gap: 1.25,
+                    "&:hover": {
+                      backgroundColor: "#F9FAFB",
+                    },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 22,
+                      height: 22,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#2F6BFF",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Calendar size={16} strokeWidth={2} />
+                  </Box>
+
+                  <Typography
+                    sx={{
+                      fontSize: 14,
+                      fontWeight: 400,
+                      lineHeight: "21px",
+                      color: "#344054",
+                    }}
+                  >
+                    Joindre un rendez-vous
+                  </Typography>
+                </MenuItem>,
+              ]
+            : []),
+
+          ...(recipientType === "collaborator"
+            ? [
+                <MenuItem
+                  key="task"
+                  onClick={handleTaskClick}
+                  sx={{
+                    minHeight: 48,
+                    px: 1.25,
+                    py: 0.75,
+                    borderRadius: "14px",
+                    gap: 1.25,
+                    "&:hover": {
+                      backgroundColor: "#F9FAFB",
+                    },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 22,
+                      height: 22,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#2F6BFF",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <CheckSquare size={16} strokeWidth={2} />
+                  </Box>
+
+                  <Typography
+                    sx={{
+                      fontSize: 14,
+                      fontWeight: 400,
+                      lineHeight: "21px",
+                      color: "#344054",
+                    }}
+                  >
+                    Joindre une tâche
+                  </Typography>
+                </MenuItem>,
+              ]
+            : []),
+        ]}
       </Menu>
 
       <input

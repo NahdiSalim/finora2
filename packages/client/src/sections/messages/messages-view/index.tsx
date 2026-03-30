@@ -1045,13 +1045,12 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
               inset: 0,
               zIndex: 1200,
               width: "100%",
-              height: "100dvh",
+              height: `calc(100dvh - ${MOBILE_BOTTOM_NAV_HEIGHT}px)`,
               minHeight: 0,
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
               backgroundColor: theme.palette.common.white,
-              pb: "calc(env(safe-area-inset-bottom, 0px) + 4px)",
             }}
           >
             {showEmptyState ? (
@@ -1090,12 +1089,11 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
               inset: 0,
               zIndex: 1200,
               width: "100%",
-              height: "100dvh",
+              height: `calc(100dvh - ${MOBILE_BOTTOM_NAV_HEIGHT}px)`,
               minHeight: 0,
               display: "flex",
               overflow: "hidden",
               backgroundColor: theme.palette.common.white,
-              pb: "calc(env(safe-area-inset-bottom, 0px) + 4px)",
             }}
           >
             {renderMediaPanel(

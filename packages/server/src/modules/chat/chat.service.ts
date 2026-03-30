@@ -538,6 +538,220 @@ export class ChatService {
     return { message: 'Message marqué comme lu' };
   }
 
+  /**
+   * Get recent messages (last N) across all user's rooms.
+   * Returns individual messages with sender info, room context, and unread status.
+   */
+  async getRecentMessages(userId: number, limit: number = 3) {
+    // Get all rooms the user is a participant in
+    const userRooms = await this.prisma.chatRoom.findMany({
+      where: {
+        participants: { has: String(userId) },
+        status: 'active',
+      },
+      select: { id: true, type: true, participants: true },
+    });
+
+    if (userRooms.length === 0) {
+      return { messages: [], unreadCount: 0 };
+    }
+
+    const roomIds = userRooms.map((r) => r.id);
+
+    // Get the last N received messages (not sent by current user)
+    const rawMessages = await this.prisma.chatMessage.findMany({
+      where: {
+        roomId: { in: roomIds },
+        deleted: false,
+        senderId: { not: userId },
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        room: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            participants: true,
+          },
+        },
+        request: {
+          select: { id: true, subject: true },
+        },
+        task: {
+          select: { id: true, title: true },
+        },
+        appointment: {
+          select: { id: true, title: true, date: true, hour: true, status: true, type: true },
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+    });
+
+    // Get participant profiles to determine category
+    const allParticipantIds = [
+      ...new Set(
+        rawMessages
+          .map((msg) => msg.room?.participants ?? [])
+          .flat()
+          .map(Number)
+          .filter((id) => id !== userId && !isNaN(id))
+      ),
+    ];
+
+    const participantProfiles = allParticipantIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: allParticipantIds } },
+          select: {
+            id: true,
+            role: { select: { code: true } },
+          },
+        })
+      : [];
+
+    const profileMap = new Map(participantProfiles.map((p) => [p.id, p]));
+
+    // Determine room category for each message (for navigation)
+    const messagesWithCategory = await Promise.all(
+      rawMessages.map(async (msg) => {
+        // Find other participant in the room
+        const otherParticipantId = msg.room?.participants.map(Number).find((id) => id !== userId);
+
+        const otherProfile = otherParticipantId ? profileMap.get(otherParticipantId) : null;
+
+        const otherRoleCode = (otherProfile?.role?.code ?? '').toLowerCase();
+
+        const category =
+          otherRoleCode === 'client' || otherRoleCode.startsWith('client_')
+            ? 'client'
+            : 'collaborateur';
+
+        // Check if message is unread by current user
+        const isUnread = msg.senderId !== userId && !msg.readBy.includes(String(userId));
+
+        // Generate presigned URL for file messages
+        let fileUrl: string | null = null;
+        if ((msg.type === 'file' || msg.type === 'image') && msg.content) {
+          try {
+            fileUrl = await this.minioService.getPresignedUrl(msg.content, 7 * 24 * 60 * 60);
+          } catch {
+            fileUrl = null;
+          }
+        }
+
+        return {
+          id: msg.id,
+          roomId: msg.roomId,
+          senderId: msg.senderId,
+          content: msg.content,
+          type: msg.type,
+          createdAt: msg.createdAt,
+          unread: isUnread,
+          sender: msg.sender,
+          room: {
+            id: msg.room?.id,
+            name: msg.room?.name,
+            category,
+          },
+          fileUrl,
+          request: msg.request,
+          task: msg.task,
+          appointment: msg.appointment ? normalizeAppointment(msg.appointment) : null,
+        };
+      })
+    );
+
+    // Count total unread messages across all rooms
+    const unreadCount = await this.prisma.chatMessage.count({
+      where: {
+        roomId: { in: roomIds },
+        deleted: false,
+        senderId: { not: userId },
+        NOT: { readBy: { has: String(userId) } },
+      },
+    });
+
+    return {
+      messages: messagesWithCategory,
+      unreadCount,
+    };
+  }
+
+  /**
+   * Get total count of unread messages across all user's rooms.
+   */
+  async getUnreadMessagesCount(userId: number) {
+    // Get all rooms the user is a participant in
+    const userRooms = await this.prisma.chatRoom.findMany({
+      where: {
+        participants: { has: String(userId) },
+        status: 'active',
+      },
+      select: { id: true },
+    });
+
+    if (userRooms.length === 0) {
+      return { count: 0 };
+    }
+
+    const roomIds = userRooms.map((r) => r.id);
+
+    const count = await this.prisma.chatMessage.count({
+      where: {
+        roomId: { in: roomIds },
+        deleted: false,
+        senderId: { not: userId },
+        NOT: { readBy: { has: String(userId) } },
+      },
+    });
+
+    return { count };
+  }
+
+  /**
+   * Mark all unread messages across all user's rooms as read.
+   */
+  async markAllRoomsAsRead(userId: number) {
+    // Get all rooms the user is a participant in
+    const userRooms = await this.prisma.chatRoom.findMany({
+      where: {
+        participants: { has: String(userId) },
+        status: 'active',
+      },
+      select: { id: true },
+    });
+
+    if (userRooms.length === 0) {
+      return { success: true, updatedCount: 0 };
+    }
+
+    const roomIds = userRooms.map((r) => r.id);
+
+    // Bulk update: add userId to readBy for all unread messages
+    const result = await this.prisma.chatMessage.updateMany({
+      where: {
+        roomId: { in: roomIds },
+        deleted: false,
+        senderId: { not: userId },
+        NOT: { readBy: { has: String(userId) } },
+      },
+      data: {
+        readBy: { push: String(userId) },
+      },
+    });
+
+    return { success: true, updatedCount: result.count };
+  }
+
   async editMessage(messageId: number, userId: number, content: string) {
     const message = await this.prisma.chatMessage.findUnique({
       where: { id: messageId },

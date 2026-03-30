@@ -1,5 +1,6 @@
 import { createApi } from "@reduxjs/toolkit/query/react";
 import { baseQueryWithReauth } from "./baseQueryWithReauth";
+import { io } from "socket.io-client";
 
 // ==================== TYPES ====================
 
@@ -141,6 +142,36 @@ export interface SendMessageInput {
   taskId?: number;
   appointmentId?: number;
   attachments?: File[];
+}
+
+export interface RecentMessage {
+  id: number;
+  roomId: number;
+  senderId: number;
+  content: string;
+  type: string;
+  createdAt: string;
+  unread: boolean;
+  sender: {
+    id: number;
+    firstName?: string;
+    lastName?: string;
+    username?: string;
+  };
+  room: {
+    id: number;
+    name?: string;
+    category: string;
+  };
+  fileUrl?: string | null;
+  request?: { id: number; subject: string } | null;
+  task?: { id: number; title: string } | null;
+  appointment?: { id: number; title: string } | null;
+}
+
+export interface RecentMessagesResponse {
+  messages: RecentMessage[];
+  unreadCount: number;
 }
 
 export interface SharedDocument {
@@ -296,8 +327,139 @@ export const chatApi = createApi({
         url: `/chat/rooms/${roomId}/read`,
         method: "POST",
       }),
-      // Invalidate rooms list so unreadCount refreshes from backend
-      invalidatesTags: [{ type: "ChatRooms", id: "LIST" }],
+      invalidatesTags: [
+        { type: "ChatRooms", id: "LIST" },
+        { type: "ChatMessages", id: "RECENT" },
+        { type: "ChatMessages", id: "UNREAD_COUNT" },
+      ],
+    }),
+
+    getRecentMessages: builder.query<RecentMessagesResponse, void>({
+      query: () => ({
+        url: "/chat/messages/recent",
+        method: "GET",
+      }),
+      providesTags: [{ type: "ChatMessages", id: "RECENT" }],
+      keepUnusedDataFor: 0,
+      async onCacheEntryAdded(
+        _arg,
+        {
+          cacheDataLoaded,
+          cacheEntryRemoved,
+          updateCachedData,
+          dispatch,
+          getState,
+        },
+      ) {
+        await cacheDataLoaded;
+
+        const token = localStorage.getItem("token");
+        const apiUrl = import.meta.env.VITE_API_URL ?? "";
+        if (!token || !apiUrl) return;
+
+        const origin = new URL(apiUrl).origin;
+        const socket = io(origin, {
+          auth: { token },
+          transports: ["websocket", "polling"],
+          reconnection: true,
+        });
+
+        const onNewMessage = (payload: any) => {
+          if (!payload || payload.id == null) return;
+
+          // Get current user ID from auth state
+          const state = getState() as any;
+          const currentUserId = state?.auth?.user?.id;
+
+          // Skip messages sent by current user (only show received messages)
+          if (payload.senderId === currentUserId) return;
+
+          updateCachedData((draft) => {
+            // Check if message already exists
+            const exists = draft.messages.some(
+              (m) => String(m.id) === String(payload.id),
+            );
+            if (exists) return;
+
+            // Message is always unread since we only show received messages
+            const isUnread = !(payload.readBy ?? []).includes(
+              String(currentUserId),
+            );
+
+            // Prepend new message
+            const newMessage: RecentMessage = {
+              id: Number(payload.id),
+              roomId: Number(payload.roomId),
+              senderId: Number(payload.senderId),
+              content: String(payload.content ?? ""),
+              type: String(payload.type ?? "text"),
+              createdAt: String(payload.createdAt ?? new Date().toISOString()),
+              unread: isUnread,
+              sender: payload.sender ?? { id: payload.senderId },
+              room: payload.room ?? { id: payload.roomId, category: "client" },
+              fileUrl: payload.fileUrl ?? null,
+              request: payload.request ?? null,
+              task: payload.task ?? null,
+              appointment: payload.appointment ?? null,
+            };
+
+            draft.messages.unshift(newMessage);
+
+            // Keep only last 3 messages
+            if (draft.messages.length > 3) {
+              draft.messages = draft.messages.slice(0, 3);
+            }
+
+            // Increment unread count
+            if (isUnread) {
+              draft.unreadCount += 1;
+            }
+          });
+
+          // Invalidate unread count to sync
+          dispatch(
+            chatApi.util.invalidateTags([
+              { type: "ChatMessages", id: "UNREAD_COUNT" },
+            ]),
+          );
+        };
+
+        socket.on("message:new", onNewMessage);
+        socket.on("connect", () =>
+          console.log("[chatApi] Socket connected for recent messages"),
+        );
+        socket.on("disconnect", (reason) =>
+          console.log("[chatApi] Socket disconnected:", reason),
+        );
+
+        await cacheEntryRemoved;
+        socket.off("message:new", onNewMessage);
+        socket.disconnect();
+      },
+    }),
+
+    getUnreadMessagesCount: builder.query<{ count: number }, void>({
+      query: () => ({
+        url: "/chat/messages/unread-count",
+        method: "GET",
+      }),
+      providesTags: [{ type: "ChatMessages", id: "UNREAD_COUNT" }],
+      keepUnusedDataFor: 0,
+    }),
+
+    markAllRoomsAsRead: builder.mutation<
+      { success: boolean; updatedCount: number },
+      void
+    >({
+      query: () => ({
+        url: "/chat/rooms/mark-all-read",
+        method: "POST",
+      }),
+      invalidatesTags: [
+        { type: "ChatRooms", id: "LIST" },
+        { type: "ChatMessages", id: "RECENT" },
+        { type: "ChatMessages", id: "UNREAD_COUNT" },
+      ],
     }),
 
     editMessage: builder.mutation<
@@ -425,6 +587,9 @@ export const {
   useSendFileMessageMutation,
   useMarkAsReadMutation,
   useMarkRoomAsReadMutation,
+  useGetRecentMessagesQuery,
+  useGetUnreadMessagesCountQuery,
+  useMarkAllRoomsAsReadMutation,
   useEditMessageMutation,
   useDeleteMessageMutation,
   useGetSharedDocumentsQuery,

@@ -433,13 +433,12 @@ export default function ChatWindow({
           px: { xs: 1, md: 2 },
           pt: { xs: 0.75, md: 1 },
           pb: {
-            xs: "calc(env(safe-area-inset-bottom, 0px) + 8px)",
+            xs: 1.5,
             md: 0.75,
           },
           borderTop: "1px solid #F2F4F7",
           backgroundColor: isCommunicationConfirmed ? "#FFFFFF" : "#FCFCFD",
-          position: { xs: "sticky", md: "relative" },
-          bottom: 0,
+          position: "relative",
           zIndex: 5,
         }}
       >

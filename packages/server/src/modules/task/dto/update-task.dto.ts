@@ -104,4 +104,36 @@ export class UpdateTaskDto {
   })
   @IsOptional()
   attachments?: any;
+
+  @ApiProperty({
+    example: '[2, 5, 8]',
+    description:
+      'Update client user IDs (replaces existing clients) - can be JSON array or comma-separated string',
+    required: false,
+    type: String,
+  })
+  @Transform(({ value }) => {
+    if (Array.isArray(value)) {
+      return value.map(Number);
+    }
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed.map(Number) : [];
+      } catch {
+        return value
+          .split(',')
+          .map((v) => Number(v.trim()))
+          .filter((n) => !isNaN(n));
+      }
+    }
+    if (typeof value === 'number') {
+      return [value];
+    }
+    return undefined;
+  })
+  @IsArray()
+  @IsInt({ each: true })
+  @IsOptional()
+  clientIds?: number[];
 }

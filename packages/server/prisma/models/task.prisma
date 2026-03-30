@@ -10,7 +10,6 @@ model Task {
   createdById   Int
   requestId     Int?      @unique
   ticketId      Int?
-  clientId      Int?
   companyId     Int?
   subtasks      String[]  // JSON array of subtask objects
   attachments   String[]  // JSON array of attachment URLs
@@ -28,11 +27,12 @@ model Task {
   validator     User?     @relation("TaskValidator", fields: [validatedBy], references: [id])
   request       Request?  @relation("TaskFromRequest", fields: [requestId], references: [id])
   ticket        Ticket?   @relation(fields: [ticketId], references: [id])
-  client        User?     @relation("TaskClient", fields: [clientId], references: [id])
   company       Company?  @relation("TaskCompany", fields: [companyId], references: [id])
+  taskClients   TaskClient[]
   p_tasks       p_tasks[]
   comments      TaskComment[]
   requestConversions Request[] @relation("RequestToTask")
+  chatMessages  ChatMessage[] @relation("ChatMessageTask")
 
   @@index([assigneeId])
   @@index([createdById])

@@ -5,6 +5,31 @@ import { SendMessageDto } from './dto/send-message.dto';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { SearchMessagesDto } from './dto/search-messages.dto';
 
+/** Convert Prisma appointment (date + hour) to the startTime/endTime shape the client expects. */
+function normalizeAppointment(
+  apt:
+    | { id: number; title: string; date: Date; hour: string; status: string; type: string }
+    | null
+    | undefined
+) {
+  if (!apt) return null;
+  const dateStr = (apt.date instanceof Date ? apt.date : new Date(apt.date))
+    .toISOString()
+    .slice(0, 10);
+  const parts = (apt.hour ?? '00:00').split(':').map(Number);
+  const h = parts[0] ?? 0;
+  const m = parts[1] ?? 0;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return {
+    id: apt.id,
+    title: apt.title,
+    startTime: `${dateStr}T${pad(h)}:${pad(m)}:00.000Z`,
+    endTime: `${dateStr}T${pad((h + 1) % 24)}:${pad(m)}:00.000Z`,
+    status: apt.status,
+    type: apt.type,
+  };
+}
+
 @Injectable()
 export class ChatService {
   constructor(
@@ -73,6 +98,149 @@ export class ChatService {
     }
 
     return room;
+  }
+
+  async getUserRoomsDebug(userId: number, category?: string, search?: string, date?: string) {
+    // Apply the filter
+    const matchedRooms = await this.prisma.chatRoom.findMany({
+      where: {
+        participants: { has: String(userId) },
+        status: 'active',
+      },
+      include: {
+        createdBy: {
+          select: { id: true, username: true, email: true, firstName: true, lastName: true },
+        },
+      },
+      orderBy: { lastActivity: 'desc' },
+    });
+
+    // Enrich with participant profiles
+    const allParticipantIds = [
+      ...new Set(
+        matchedRooms.flatMap((r) => r.participants.map(Number).filter((id) => id !== userId))
+      ),
+    ];
+
+    const profiles = allParticipantIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: allParticipantIds } },
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            company: { select: { id: true, name: true } },
+            role: { select: { nameFr: true, code: true } },
+          },
+        })
+      : [];
+
+    const profileMap = new Map(profiles.map((p) => [p.id, p]));
+
+    const lastMessageIds = matchedRooms
+      .map((r) => r.lastMessageId)
+      .filter((id): id is number => typeof id === 'number' && id > 0);
+
+    const lastMessages = lastMessageIds.length
+      ? await this.prisma.chatMessage.findMany({
+          where: { id: { in: lastMessageIds } },
+          select: {
+            id: true,
+            roomId: true,
+            content: true,
+            type: true,
+            senderId: true,
+            createdAt: true,
+          },
+        })
+      : [];
+
+    const lastMessageMap = new Map(lastMessages.map((m) => [m.roomId, m]));
+
+    // Count unread messages per room: sent by someone else AND not yet in readBy for this user
+    const unreadCounts = matchedRooms.length
+      ? await this.prisma.chatMessage.groupBy({
+          by: ['roomId'],
+          where: {
+            roomId: { in: matchedRooms.map((r) => r.id) },
+            deleted: false,
+            senderId: { not: userId },
+            NOT: { readBy: { has: String(userId) } },
+          },
+          _count: { id: true },
+        })
+      : [];
+
+    const unreadMap = new Map(unreadCounts.map((u) => [u.roomId, u._count.id]));
+
+    const enriched = matchedRooms.map((room) => ({
+      ...room,
+      participantProfiles: room.participants
+        .map(Number)
+        .filter((id) => id !== userId)
+        .map((id) => profileMap.get(id) ?? null)
+        .filter(Boolean),
+      lastMessage: lastMessageMap.get(room.id) ?? null,
+      unreadCount: unreadMap.get(room.id) ?? 0,
+    }));
+
+    // Map a requested category string to the set of role codes it covers.
+    // Handles spelling variants (COLLABORATOR vs COLLABORATEUR, COMPTABLE vs ACCOUNTANT)
+    // and case differences coming from different DB seeds or backends.
+    function categoryMatchesRoleCode(cat: string, roleCode: string): boolean {
+      const c = cat.toLowerCase();
+      const r = roleCode.toLowerCase();
+      if (c === 'client') return r === 'client' || r.startsWith('client_');
+      if (c === 'collaborateur') return r === 'collaborateur' || r === 'collaborator';
+      if (c === 'comptable') return r === 'comptable' || r === 'accountant';
+      // Fallback: exact match
+      return r === c;
+    }
+
+    // Apply category filter: keep only rooms where at least one other participant
+    // has a role.code that belongs to the requested category group.
+    // Runs after profile enrichment because role data lives on users, not rooms.
+    let filtered = category
+      ? enriched.filter((room) =>
+          room.participantProfiles.some(
+            (p: any) => p?.role?.code && categoryMatchesRoleCode(category, p.role.code)
+          )
+        )
+      : enriched;
+
+    // Apply search filter: keep only rooms where at least one other participant
+    // has a name, username or email that contains the search term.
+    if (search) {
+      const term = search.trim().toLowerCase();
+      filtered = filtered.filter((room) =>
+        room.participantProfiles.some((p: any) => {
+          const fullName = [p?.firstName, p?.lastName].filter(Boolean).join(' ').toLowerCase();
+          const username = (p?.username ?? '').toLowerCase();
+          const email = (p?.email ?? '').toLowerCase();
+          return fullName.includes(term) || username.includes(term) || email.includes(term);
+        })
+      );
+    }
+
+    // Apply date filter: keep only rooms whose lastActivity falls on the given date (UTC).
+    // date is expected as YYYY-MM-DD.
+    if (date) {
+      filtered = filtered.filter((room) => {
+        if (!room.lastActivity) return false;
+        return new Date(room.lastActivity).toISOString().slice(0, 10) === date;
+      });
+    }
+
+    // Return paginated shape expected by frontend
+    return {
+      data: filtered,
+      total: filtered.length,
+      page: 1,
+      pageSize: 50,
+      totalPages: Math.ceil(filtered.length / 50),
+    };
   }
 
   async getUserRooms(userId: number) {
@@ -156,6 +324,16 @@ export class ChatService {
 
     // Upload des fichiers si présents
     if (files && files.length > 0) {
+      console.log('[ChatService] sendMessage file upload:', {
+        roomId: dto.roomId,
+        dtoType: dto.type,
+        filesCount: files.length,
+        firstFile: {
+          originalname: files[0].originalname,
+          mimetype: files[0].mimetype,
+          size: files[0].size,
+        },
+      });
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         select: { companyId: true },
@@ -182,28 +360,54 @@ export class ChatService {
     }
 
     // Créer le message
+    // For file messages: store objectName in content field (no attachments[] column in schema)
+    const messageContent = attachmentUrls.length > 0 ? attachmentUrls[0] : dto.content;
+    console.log('[ChatService] messageContent computed:', {
+      hasAttachments: attachmentUrls.length > 0,
+      messageContent: attachmentUrls.length > 0 ? messageContent : '(dto.content)',
+      dtoContent: dto.content,
+      dtoType: dto.type,
+    });
+
     const message = await this.prisma.chatMessage.create({
       data: {
         roomId: dto.roomId,
         threadId: dto.threadId,
         senderId: userId,
-        content: dto.content,
+        content: messageContent,
         type: dto.type,
         mentions: dto.mentions ? dto.mentions.map(String) : [],
         documentId: dto.documentId,
+        requestId: dto.requestId ?? null,
+        taskId: dto.taskId ?? null,
+        appointmentId: dto.appointmentId ?? null,
         readBy: [String(userId)],
       },
       include: {
         sender: {
+          select: { id: true, username: true, email: true, firstName: true, lastName: true },
+        },
+        request: { select: { id: true, subject: true, type: true, status: true, urgency: true } },
+        task: { select: { id: true, title: true, status: true, priority: true } },
+        appointment: {
           select: {
             id: true,
-            username: true,
-            email: true,
-            firstName: true,
-            lastName: true,
+            title: true,
+            date: true,
+            hour: true,
+            status: true,
+            type: true,
           },
         },
       },
+    });
+    console.log('[ChatService] chatMessage created:', {
+      id: message.id,
+      roomId: message.roomId,
+      senderId: message.senderId,
+      type: message.type,
+      contentPrefix:
+        typeof message.content === 'string' ? message.content.slice(0, 30) : message.content,
     });
 
     // Mettre à jour lastActivity de la salle
@@ -215,47 +419,68 @@ export class ChatService {
       },
     });
 
+    let fileUrl: string | null = null;
+    if ((dto.type === 'file' || dto.type === 'image') && messageContent) {
+      try {
+        fileUrl = await this.minioService.getPresignedUrl(messageContent, 7 * 24 * 60 * 60);
+      } catch {
+        fileUrl = null;
+      }
+    }
+
     return {
       ...message,
+      appointment: normalizeAppointment(message.appointment),
       attachments: attachmentUrls,
+      fileUrl,
     };
   }
 
   async getRoomMessages(roomId: number, userId: number, limit: number = 50, page: number = 1) {
-    // Vérifier que l'utilisateur est participant
     await this.getRoomById(roomId, userId);
-
     const skip = (page - 1) * limit;
 
-    const messages = await this.prisma.chatMessage.findMany({
-      where: {
-        roomId,
-        deleted: false,
-      },
+    const rawMessages = await this.prisma.chatMessage.findMany({
+      where: { roomId, deleted: false },
       include: {
         sender: {
+          select: { id: true, username: true, email: true, firstName: true, lastName: true },
+        },
+        request: { select: { id: true, subject: true, type: true, status: true, urgency: true } },
+        task: { select: { id: true, title: true, status: true, priority: true } },
+        appointment: {
           select: {
             id: true,
-            username: true,
-            email: true,
-            firstName: true,
-            lastName: true,
+            title: true,
+            date: true,
+            hour: true,
+            status: true,
+            type: true,
           },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit,
       skip,
     });
 
-    const total = await this.prisma.chatMessage.count({
-      where: {
-        roomId,
-        deleted: false,
-      },
-    });
+    const total = await this.prisma.chatMessage.count({ where: { roomId, deleted: false } });
+
+    // Generate presigned URLs for file messages (content = MinIO objectName)
+    const messages = await Promise.all(
+      rawMessages.map(async (msg) => {
+        const appointment = normalizeAppointment(msg.appointment);
+        if ((msg.type === 'file' || msg.type === 'image') && msg.content) {
+          try {
+            const fileUrl = await this.minioService.getPresignedUrl(msg.content, 7 * 24 * 60 * 60);
+            return { ...msg, appointment, fileUrl };
+          } catch {
+            return { ...msg, appointment, fileUrl: null };
+          }
+        }
+        return { ...msg, appointment, fileUrl: null };
+      })
+    );
 
     return {
       messages: messages.reverse(),
@@ -264,6 +489,29 @@ export class ChatService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  /**
+   * Mark all unread messages in a room as read for the given user.
+   * Updates readBy[] on every message not yet read by this user.
+   */
+  async markRoomAsRead(roomId: number, userId: number) {
+    await this.getRoomById(roomId, userId);
+
+    // Bulk-update: add userId to readBy for all unread messages in this room
+    await this.prisma.chatMessage.updateMany({
+      where: {
+        roomId,
+        deleted: false,
+        senderId: { not: userId },
+        NOT: { readBy: { has: String(userId) } },
+      },
+      data: {
+        readBy: { push: String(userId) },
+      },
+    });
+
+    return { success: true };
   }
 
   async markAsRead(messageId: number, userId: number) {
@@ -288,6 +536,220 @@ export class ChatService {
     }
 
     return { message: 'Message marqué comme lu' };
+  }
+
+  /**
+   * Get recent messages (last N) across all user's rooms.
+   * Returns individual messages with sender info, room context, and unread status.
+   */
+  async getRecentMessages(userId: number, limit: number = 3) {
+    // Get all rooms the user is a participant in
+    const userRooms = await this.prisma.chatRoom.findMany({
+      where: {
+        participants: { has: String(userId) },
+        status: 'active',
+      },
+      select: { id: true, type: true, participants: true },
+    });
+
+    if (userRooms.length === 0) {
+      return { messages: [], unreadCount: 0 };
+    }
+
+    const roomIds = userRooms.map((r) => r.id);
+
+    // Get the last N received messages (not sent by current user)
+    const rawMessages = await this.prisma.chatMessage.findMany({
+      where: {
+        roomId: { in: roomIds },
+        deleted: false,
+        senderId: { not: userId },
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        room: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            participants: true,
+          },
+        },
+        request: {
+          select: { id: true, subject: true },
+        },
+        task: {
+          select: { id: true, title: true },
+        },
+        appointment: {
+          select: { id: true, title: true, date: true, hour: true, status: true, type: true },
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+    });
+
+    // Get participant profiles to determine category
+    const allParticipantIds = [
+      ...new Set(
+        rawMessages
+          .map((msg) => msg.room?.participants ?? [])
+          .flat()
+          .map(Number)
+          .filter((id) => id !== userId && !isNaN(id))
+      ),
+    ];
+
+    const participantProfiles = allParticipantIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: allParticipantIds } },
+          select: {
+            id: true,
+            role: { select: { code: true } },
+          },
+        })
+      : [];
+
+    const profileMap = new Map(participantProfiles.map((p) => [p.id, p]));
+
+    // Determine room category for each message (for navigation)
+    const messagesWithCategory = await Promise.all(
+      rawMessages.map(async (msg) => {
+        // Find other participant in the room
+        const otherParticipantId = msg.room?.participants.map(Number).find((id) => id !== userId);
+
+        const otherProfile = otherParticipantId ? profileMap.get(otherParticipantId) : null;
+
+        const otherRoleCode = (otherProfile?.role?.code ?? '').toLowerCase();
+
+        const category =
+          otherRoleCode === 'client' || otherRoleCode.startsWith('client_')
+            ? 'client'
+            : 'collaborateur';
+
+        // Check if message is unread by current user
+        const isUnread = msg.senderId !== userId && !msg.readBy.includes(String(userId));
+
+        // Generate presigned URL for file messages
+        let fileUrl: string | null = null;
+        if ((msg.type === 'file' || msg.type === 'image') && msg.content) {
+          try {
+            fileUrl = await this.minioService.getPresignedUrl(msg.content, 7 * 24 * 60 * 60);
+          } catch {
+            fileUrl = null;
+          }
+        }
+
+        return {
+          id: msg.id,
+          roomId: msg.roomId,
+          senderId: msg.senderId,
+          content: msg.content,
+          type: msg.type,
+          createdAt: msg.createdAt,
+          unread: isUnread,
+          sender: msg.sender,
+          room: {
+            id: msg.room?.id,
+            name: msg.room?.name,
+            category,
+          },
+          fileUrl,
+          request: msg.request,
+          task: msg.task,
+          appointment: msg.appointment ? normalizeAppointment(msg.appointment) : null,
+        };
+      })
+    );
+
+    // Count total unread messages across all rooms
+    const unreadCount = await this.prisma.chatMessage.count({
+      where: {
+        roomId: { in: roomIds },
+        deleted: false,
+        senderId: { not: userId },
+        NOT: { readBy: { has: String(userId) } },
+      },
+    });
+
+    return {
+      messages: messagesWithCategory,
+      unreadCount,
+    };
+  }
+
+  /**
+   * Get total count of unread messages across all user's rooms.
+   */
+  async getUnreadMessagesCount(userId: number) {
+    // Get all rooms the user is a participant in
+    const userRooms = await this.prisma.chatRoom.findMany({
+      where: {
+        participants: { has: String(userId) },
+        status: 'active',
+      },
+      select: { id: true },
+    });
+
+    if (userRooms.length === 0) {
+      return { count: 0 };
+    }
+
+    const roomIds = userRooms.map((r) => r.id);
+
+    const count = await this.prisma.chatMessage.count({
+      where: {
+        roomId: { in: roomIds },
+        deleted: false,
+        senderId: { not: userId },
+        NOT: { readBy: { has: String(userId) } },
+      },
+    });
+
+    return { count };
+  }
+
+  /**
+   * Mark all unread messages across all user's rooms as read.
+   */
+  async markAllRoomsAsRead(userId: number) {
+    // Get all rooms the user is a participant in
+    const userRooms = await this.prisma.chatRoom.findMany({
+      where: {
+        participants: { has: String(userId) },
+        status: 'active',
+      },
+      select: { id: true },
+    });
+
+    if (userRooms.length === 0) {
+      return { success: true, updatedCount: 0 };
+    }
+
+    const roomIds = userRooms.map((r) => r.id);
+
+    // Bulk update: add userId to readBy for all unread messages
+    const result = await this.prisma.chatMessage.updateMany({
+      where: {
+        roomId: { in: roomIds },
+        deleted: false,
+        senderId: { not: userId },
+        NOT: { readBy: { has: String(userId) } },
+      },
+      data: {
+        readBy: { push: String(userId) },
+      },
+    });
+
+    return { success: true, updatedCount: result.count };
   }
 
   async editMessage(messageId: number, userId: number, content: string) {
@@ -347,7 +809,66 @@ export class ChatService {
       },
     });
 
-    return { message: 'Message supprimé avec succès' };
+    return {
+      message: 'Message supprimé avec succès',
+      messageId,
+      roomId: message.roomId,
+    };
+  }
+
+  // ==================== SHARED DOCUMENTS ====================
+
+  async getSharedDocuments(roomId: number, userId: number, page = 1, pageSize = 20) {
+    await this.getRoomById(roomId, userId);
+    const skip = (page - 1) * pageSize;
+
+    const [messages, total] = await Promise.all([
+      this.prisma.chatMessage.findMany({
+        where: { roomId, deleted: false, type: { in: ['file', 'image'] } },
+        select: {
+          id: true,
+          roomId: true,
+          senderId: true,
+          content: true,
+          type: true,
+          createdAt: true,
+          documentId: true,
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: pageSize,
+        skip,
+      }),
+      this.prisma.chatMessage.count({
+        where: { roomId, deleted: false, type: { in: ['file', 'image'] } },
+      }),
+    ]);
+
+    // Generate presigned URLs — strategy differs by type:
+    // - Images: always generate URL; frontend handles broken URLs via onError fallback
+    // - Non-images (PDF, doc, etc.): check existence first to avoid displaying raw storage
+    //   error content (e.g. NoSuchKey XML) inside preview iframes/cards
+    const data = await Promise.all(
+      messages.map(async (msg) => {
+        let fileUrl: string | null = null;
+        if (msg.content) {
+          try {
+            if (msg.type === 'image') {
+              fileUrl = await this.minioService.getPresignedUrl(msg.content, 7 * 24 * 60 * 60);
+            } else {
+              const exists = await this.minioService.fileExists(msg.content);
+              if (exists) {
+                fileUrl = await this.minioService.getPresignedUrl(msg.content, 7 * 24 * 60 * 60);
+              }
+            }
+          } catch {
+            fileUrl = null;
+          }
+        }
+        return { ...msg, fileUrl };
+      })
+    );
+
+    return { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
   }
 
   // ==================== SEARCH ====================

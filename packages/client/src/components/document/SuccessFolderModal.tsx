@@ -8,7 +8,8 @@ import {
 } from "@mui/material";
 import { X } from "lucide-react";
 import { useTheme } from "@mui/material/styles";
-import myGif from "../../../public/assets/folder.gif";
+import AddFolder from "src/assets/Animations/SavedFolder.json";
+import Lottie from "lottie-react";
 
 export interface SuccessFolderModalProps {
   open: boolean;
@@ -46,19 +47,21 @@ export function SuccessFolderModal({ open, onClose }: SuccessFolderModalProps) {
         </IconButton>
         <Box
           sx={{
+            px: 3,
+            py: 2,
             display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
             justifyContent: "center",
-            mb: 2,
+            textAlign: "center",
+            gap: 1,
           }}
         >
-          <Box
-            sx={{
-              width: 80,
-              height: 80,
-            }}
-          >
-            <img src={myGif} alt="success folder" />
-          </Box>
+          <Lottie
+            animationData={AddFolder}
+            loop
+            style={{ width: 130, height: 130 }}
+          />
         </Box>
         <Typography variant="h6" fontWeight={600} sx={{ mb: 1 }}>
           Dossier créé avec succès !

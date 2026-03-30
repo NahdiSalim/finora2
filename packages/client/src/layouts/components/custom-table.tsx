@@ -11,7 +11,7 @@ import {
 
 export interface Column<T> {
   id: string;
-  label: string;
+  label: string | React.ReactNode;
   align?: "left" | "right" | "center";
   width?: number | string;
   render?: (row: T, index: number) => React.ReactNode;
@@ -41,10 +41,7 @@ export function DataTable<T>({
   return (
     <TableContainer
       sx={{
-        overflow: "scroll",
-        border: 1,
-        borderColor: theme.palette.grey[200],
-        borderRadius: 2,
+        overflow: "auto",
       }}
     >
       <Table sx={{ minWidth }}>
@@ -60,9 +57,16 @@ export function DataTable<T>({
                   fontWeight: 600,
                   width: col.width,
                   backgroundColor: "#f5f5f5",
+                  fontSize: 14,
                 }}
               >
-                <Typography fontSize={14}>{col.label}</Typography>
+                {typeof col.label === "string" ? (
+                  <Typography fontSize={14} component="span">
+                    {col.label}
+                  </Typography>
+                ) : (
+                  col.label
+                )}
               </TableCell>
             ))}
           </TableRow>

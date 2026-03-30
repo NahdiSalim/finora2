@@ -11,7 +11,8 @@ import {
 } from "@mui/material";
 import { X } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
-import trash from "../../../public/assets/trash.gif";
+import trash from "src/assets/Animations/DeleteBin.json";
+import Lottie from "lottie-react";
 
 export interface ConfirmDeleteModalProps {
   open: boolean;
@@ -86,8 +87,23 @@ export function ConfirmDeleteModal({
         </Box>
       </DialogTitle>
 
-      <DialogContent sx={{ px: 3, py: 2, textAlign: "center" }}>
-        <img src={trash} alt="Loading animation" />
+      <DialogContent
+        sx={{
+          px: 3,
+          py: 2,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+          gap: 1,
+        }}
+      >
+        <Lottie
+          animationData={trash}
+          loop
+          style={{ width: 130, height: 130 }}
+        />
         <Typography variant="h6" fontWeight={600}>
           {title}
         </Typography>

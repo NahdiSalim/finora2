@@ -95,7 +95,7 @@ const InfoItem = ({
   );
 };
 
-export default function ContactInfos({
+function ContactInfos({
   data,
   isLoading,
   isEditing = false,
@@ -298,3 +298,6 @@ export default function ContactInfos({
     </Paper>
   );
 }
+
+export { ContactInfos };
+export default ContactInfos;

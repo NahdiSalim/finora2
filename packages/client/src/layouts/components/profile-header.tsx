@@ -12,8 +12,9 @@ import {
   Camera,
   CameraIcon,
   Pencil,
-  Calendar,
   MessageCircle,
+  Handshake,
+  Calendar,
 } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
 
@@ -31,6 +32,8 @@ export interface ProfileHeaderProps {
   /** Mode visiteur : boutons Schedule et Contacter */
   onSchedule?: () => void;
   onContact?: () => void;
+  /** État de connexion de l'utilisateur */
+  isAuthenticated?: boolean;
 }
 
 const ProfileHeader: React.FC<ProfileHeaderProps> = ({
@@ -44,6 +47,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   onContact,
   onSchedule,
   isEditing = false,
+  isAuthenticated = false, // Valeur par défaut à false
 }) => {
   const theme = useTheme();
   const isVisitorMode = onSchedule != null || onContact != null;
@@ -194,8 +198,14 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
               {onSchedule && (
                 <CustomButton
                   size="large"
-                  variant="outlined"
-                  startIcon={<Calendar size={18} />}
+                  variant="contained"
+                  startIcon={
+                    isAuthenticated ? (
+                      <Calendar size={18} />
+                    ) : (
+                      <Handshake size={18} />
+                    )
+                  }
                   onClick={onSchedule}
                   sx={{
                     borderRadius: 2,
@@ -203,20 +213,16 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                     fontWeight: 600,
                   }}
                 >
-                  Planifier{" "}
+                  {isAuthenticated ? "Planifier" : "Devenir un client"}
                 </CustomButton>
               )}
               {onContact && (
                 <CustomButton
                   size="large"
-                  variant="contained"
+                  variant="outlined"
+                  color="info"
                   startIcon={<MessageCircle size={18} />}
                   onClick={onContact}
-                  sx={{
-                    borderRadius: 2,
-                    textTransform: "none",
-                    fontWeight: 600,
-                  }}
                 >
                   Contacter
                 </CustomButton>

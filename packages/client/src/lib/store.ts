@@ -11,8 +11,14 @@ import { postsApi } from "./services/postsApi";
 import { reviewsApi } from "./services/reviewsApi";
 import { contactApi } from "./services/contactApi";
 import { relationshipsApi } from "./services/relationshipsApi";
-
 import { documentsApi } from "./services/documentsApi";
+import { requestApi } from "./services/requestApi";
+import { tasksApi } from "./services/tasksApi";
+import { invoicesApi } from "./services/invoicesApi";
+import { appointmentsApi } from "./services/appointmentsApi";
+import { locationApi } from "./services/locationApi";
+import { chatApi } from "./services/chatApi";
+import { notificationsApi } from "./services/notificationsApi";
 
 const apiMiddlewares = [
   authApi.middleware,
@@ -27,6 +33,13 @@ const apiMiddlewares = [
   contactApi.middleware,
   relationshipsApi.middleware,
   documentsApi.middleware,
+  requestApi.middleware,
+  tasksApi.middleware,
+  invoicesApi.middleware,
+  appointmentsApi.middleware,
+  locationApi.middleware,
+  chatApi.middleware,
+  notificationsApi.middleware,
 ];
 
 const apiResetters = [
@@ -41,6 +54,13 @@ const apiResetters = [
   contactApi.util.resetApiState,
   relationshipsApi.util.resetApiState,
   documentsApi.util.resetApiState,
+  requestApi.util.resetApiState,
+  tasksApi.util.resetApiState,
+  invoicesApi.util.resetApiState,
+  appointmentsApi.util.resetApiState,
+  locationApi.util.resetApiState,
+  chatApi.util.resetApiState,
+  notificationsApi.util.resetApiState,
 ];
 
 const appReducer = combineReducers({
@@ -57,6 +77,13 @@ const appReducer = combineReducers({
   [contactApi.reducerPath]: contactApi.reducer,
   [relationshipsApi.reducerPath]: relationshipsApi.reducer,
   [documentsApi.reducerPath]: documentsApi.reducer,
+  [requestApi.reducerPath]: requestApi.reducer,
+  [tasksApi.reducerPath]: tasksApi.reducer,
+  [invoicesApi.reducerPath]: invoicesApi.reducer,
+  [appointmentsApi.reducerPath]: appointmentsApi.reducer,
+  [locationApi.reducerPath]: locationApi.reducer,
+  [chatApi.reducerPath]: chatApi.reducer,
+  [notificationsApi.reducerPath]: notificationsApi.reducer,
 });
 
 const baseStore = configureStore({

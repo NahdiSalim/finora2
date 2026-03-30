@@ -80,6 +80,24 @@ export class UserController {
     );
   }
 
+  @Get('by-role')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ACCOUNTANT', 'ADMINISTRATOR')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get users filtered by role codes (for assignment dropdowns)' })
+  @ApiQuery({
+    name: 'roles',
+    required: true,
+    type: String,
+    example: 'ACCOUNTANT,COLLABORATOR',
+    description: 'Comma-separated list of role codes',
+  })
+  @ApiOkResponse({ description: 'List of users with specified roles' })
+  async getUsersByRole(@Query('roles') roles: string) {
+    const roleCodes = roles.split(',').map((r) => r.trim().toUpperCase());
+    return await this.userService.getUsersByRole(roleCodes);
+  }
+
   @Post()
   @RequirePermission('add_user')
   @ApiOperation({ summary: 'Register a new user' })

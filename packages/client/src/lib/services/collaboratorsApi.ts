@@ -42,12 +42,13 @@ export const collaboratorsApi = createApi({
     // 🔹 GET collaborators
     getCollaborators: builder.query<
       CollaboratorsResponse,
-      { page?: number; limit?: number }
+      { page?: number; limit?: number; search?: string }
     >({
-      query: ({ page = 1, limit = 10 } = {}) => {
+      query: ({ page = 1, limit = 10, search } = {}) => {
         const params = new URLSearchParams();
         params.append("page", page.toString());
         params.append("limit", limit.toString());
+        if (search) params.append("search", search);
 
         return {
           url: `/accountant/collaborators?${params.toString()}`,

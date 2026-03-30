@@ -26,12 +26,14 @@ import {
   Archive,
   Move,
   Eye,
+  List,
 } from "lucide-react";
 import PdfIcon from "./pdfIcon";
 import ImageIcon from "./imageIcon";
 import XlsIcon from "./xlsIcon";
+import { useFileDrawerStore } from "src/stores/fileDrawerStore";
 
-// ----------------------------------------------------------------------
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export type FileType = "pdf" | "docx" | "xls" | "jpg" | "png" | "other";
 
@@ -41,16 +43,15 @@ export interface FileItem {
   type: FileType;
   size?: string;
   modified?: string;
+  created?: string;
   thumbnail?: string;
   starred?: boolean;
   shared?: boolean;
-  /** MIME type from API, used for image preview (e.g. image/jpeg, image/gif) */
   mimeType?: string | null;
 }
 
 export interface FileCardProps {
   file: FileItem;
-  /** URL (e.g. blob) to show real document preview in the card (PDF = iframe, image = background) */
   previewContentUrl?: string | null;
   onClick?: () => void;
   onMenuAction?: (action: string, file: FileItem) => void;
@@ -58,13 +59,12 @@ export interface FileCardProps {
   selectable?: boolean;
   selected?: boolean;
   onSelect?: (selected: boolean) => void;
-  sx?: any;
+  sx?: object;
 }
 
-// ----------------------------------------------------------------------
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-// File type icons mapping
-const fileTypeIcons: Record<FileType, React.ReactNode> = {
+export const FILE_TYPE_ICONS: Record<FileType, React.ReactNode> = {
   pdf: <PdfIcon />,
   docx: <FileText size={24} color="#2B5797" />,
   xls: <XlsIcon />,
@@ -73,8 +73,7 @@ const fileTypeIcons: Record<FileType, React.ReactNode> = {
   other: <ImageIcon />,
 };
 
-// File type background colors
-const fileTypeColors: Record<FileType, string> = {
+export const FILE_TYPE_COLORS: Record<FileType, string> = {
   pdf: "#FEE9E7",
   docx: "#E9ECF0",
   xls: "#E3F2E9",
@@ -83,106 +82,93 @@ const fileTypeColors: Record<FileType, string> = {
   other: "#F3F4F6",
 };
 
-// ----------------------------------------------------------------------
+const DEFAULT_MENU_OPTIONS = [
+  { label: "Preview", icon: <Eye size={16} />, action: "preview" },
+  { label: "Details", icon: <List size={16} />, action: "details" },
+  { label: "Download", icon: <Download size={16} />, action: "download" },
+  { label: "Share", icon: <Share2 size={16} />, action: "share" },
+  { label: "Rename", icon: <Edit size={16} />, action: "rename" },
+  { label: "Make a copy", icon: <Copy size={16} />, action: "copy" },
+  { label: "Move to", icon: <Move size={16} />, action: "move" },
+  { label: "Add star", icon: <Star size={16} />, action: "star" },
+  { label: "Archive", icon: <Archive size={16} />, action: "archive" },
+  { label: "Delete", icon: <Trash2 size={16} />, action: "delete" },
+];
+
+// ─── File Card ────────────────────────────────────────────────────────────────
 
 export function FileCard({
   file,
   previewContentUrl,
   onClick,
   onMenuAction,
-  menuOptions = [
-    { label: "Preview", icon: <Eye size={16} />, action: "preview" },
-    { label: "Download", icon: <Download size={16} />, action: "download" },
-    { label: "Share", icon: <Share2 size={16} />, action: "share" },
-    { label: "Rename", icon: <Edit size={16} />, action: "rename" },
-    { label: "Make a copy", icon: <Copy size={16} />, action: "copy" },
-    { label: "Move to", icon: <Move size={16} />, action: "move" },
-    { label: "Add star", icon: <Star size={16} />, action: "star" },
-    { label: "Archive", icon: <Archive size={16} />, action: "archive" },
-    { label: "Delete", icon: <Trash2 size={16} />, action: "delete" },
-  ],
+  menuOptions = DEFAULT_MENU_OPTIONS,
   selectable = false,
   selected = false,
   onSelect,
   sx,
 }: FileCardProps) {
+  const theme = useTheme();
+  const { openDrawer } = useFileDrawerStore();
+
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isStarred, setIsStarred] = useState(file.starred ?? false);
+
   const isPdf = file.type === "pdf";
   const isImage =
     file.type === "jpg" ||
     file.type === "png" ||
-    (file.mimeType && file.mimeType.toLowerCase().startsWith("image/"));
+    !!file.mimeType?.toLowerCase().startsWith("image/");
   const hasContentPreview = Boolean(previewContentUrl && (isPdf || isImage));
+
   const previewBg =
     hasContentPreview && isImage
       ? `url(${previewContentUrl})`
       : file.thumbnail
         ? `url(${file.thumbnail})`
         : "none";
+
   const previewBgColor =
-    hasContentPreview && isImage
+    (hasContentPreview && isImage) || file.thumbnail
       ? "transparent"
-      : file.thumbnail
-        ? "transparent"
-        : fileTypeColors[file.type];
-  const theme = useTheme();
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [isHovered, setIsHovered] = useState(false);
-  const [isStarred, setIsStarred] = useState(file.starred || false);
-  const open = Boolean(anchorEl);
+      : FILE_TYPE_COLORS[file.type];
 
-  const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
-    event.stopPropagation();
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = (event: React.MouseEvent) => {
-    event.stopPropagation();
-    setAnchorEl(null);
-  };
-
-  const handleMenuItemClick = (action: string, event: React.MouseEvent) => {
-    event.stopPropagation();
-    setAnchorEl(null);
-
-    // Special handling for star action
-    if (action === "star") {
-      setIsStarred(!isStarred);
-    }
-
-    if (onMenuAction) {
-      onMenuAction(action, file);
-    }
-  };
+  // ── Handlers ──
 
   const handleCardClick = (e: React.MouseEvent) => {
-    // Don't trigger if clicking on menu or checkbox
-    if (
-      (e.target as HTMLElement).closest(".menu-button") ||
-      (e.target as HTMLElement).closest(".checkbox")
-    ) {
+    const target = e.target as HTMLElement;
+    if (target.closest(".file-menu-btn") || target.closest(".file-checkbox"))
       return;
-    }
-
-    if (selectable && onSelect) {
-      onSelect(!selected);
-    } else if (onClick) {
-      onClick();
-    }
+    openDrawer(file, previewContentUrl);
+    onClick?.();
   };
 
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     e.stopPropagation();
-    if (onSelect) {
-      onSelect(e.target.checked);
-    }
+    onSelect?.(e.target.checked);
   };
 
-  const handleStarClick = (e: React.MouseEvent) => {
+  const handleMenuOpen = (e: React.MouseEvent<HTMLElement>) => {
     e.stopPropagation();
-    setIsStarred(!isStarred);
-    if (onMenuAction) {
-      onMenuAction("star", file);
-    }
+    setAnchorEl(e.currentTarget);
+  };
+
+  const handleMenuClose = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAnchorEl(null);
+  };
+
+  const handleMenuItemClick = (action: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAnchorEl(null);
+    if (action === "star") setIsStarred((prev) => !prev);
+    onMenuAction?.(action, file);
+  };
+
+  const handleQuickAction = (action: string) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onMenuAction?.(action, file);
   };
 
   return (
@@ -200,16 +186,18 @@ export function FileCard({
         transition: "box-shadow 0.2s ease, transform 0.2s ease",
         transform: isHovered ? "translateY(-2px)" : "none",
         cursor: "pointer",
-        border: selected ? `2px solid ${theme.palette.primary.main}` : "none",
+        border: selected
+          ? `2px solid ${theme.palette.primary.main}`
+          : "1px solid transparent",
         p: 1,
-        backgroundColor: theme.palette.grey[50],
+        bgcolor: theme.palette.grey[50],
         ...sx,
       }}
     >
-      {/* Selection Checkbox */}
+      {/* Checkbox */}
       {selectable && (
         <Box
-          className="checkbox"
+          className="file-checkbox"
           sx={{
             position: "absolute",
             top: 8,
@@ -224,15 +212,12 @@ export function FileCard({
             checked={selected}
             onChange={handleCheckboxChange}
             size="small"
-            sx={{
-              p: 0.5,
-              color: theme.palette.primary.main,
-            }}
+            sx={{ p: 0.5 }}
           />
         </Box>
       )}
 
-      {/* Star Icon */}
+      {/* Star badge */}
       {isStarred && (
         <Box
           sx={{
@@ -247,7 +232,7 @@ export function FileCard({
         </Box>
       )}
 
-      {/* Preview Area - real document content (Figma) or fallback icon */}
+      {/* Preview area */}
       <Box
         sx={{
           height: 160,
@@ -264,25 +249,15 @@ export function FileCard({
           borderRadius: 2,
         }}
       >
-        {/* PDF: use embed for reliable blob PDF preview in card */}
+        {/* PDF embed */}
         {hasContentPreview && isPdf && previewContentUrl && (
-          <Box
-            sx={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              overflow: "hidden",
-            }}
-          >
+          <Box sx={{ position: "absolute", inset: 0, overflow: "hidden" }}>
             <embed
               src={previewContentUrl}
               type="application/pdf"
               style={{
                 position: "absolute",
-                top: 0,
-                left: 0,
+                inset: 0,
                 width: "100%",
                 height: "100%",
                 border: "none",
@@ -291,20 +266,20 @@ export function FileCard({
             />
           </Box>
         )}
-        {/* Show file type icon only when no content preview */}
+
+        {/* Fallback icon */}
         {!hasContentPreview && !file.thumbnail && (
-          <Box sx={{ transform: "scale(1.5)" }}>{fileTypeIcons[file.type]}</Box>
+          <Box sx={{ transform: "scale(1.5)" }}>
+            {FILE_TYPE_ICONS[file.type]}
+          </Box>
         )}
 
-        {/* Hover overlay with quick actions */}
+        {/* Hover overlay */}
         {isHovered && (
           <Box
             sx={{
               position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
+              inset: 0,
               bgcolor: alpha(theme.palette.common.black, 0.4),
               display: "flex",
               alignItems: "center",
@@ -312,96 +287,42 @@ export function FileCard({
               gap: 1,
             }}
           >
-            <Tooltip title="Preview">
-              <IconButton
-                size="small"
-                sx={{
-                  bgcolor: "background.paper",
-                  "&:hover": { bgcolor: "background.paper" },
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (onMenuAction) onMenuAction("preview", file);
-                }}
+            {(["preview", "download", "share"] as const).map((action) => (
+              <Tooltip
+                key={action}
+                title={action.charAt(0).toUpperCase() + action.slice(1)}
               >
-                <Eye size={18} />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Download">
-              <IconButton
-                size="small"
-                sx={{
-                  bgcolor: "background.paper",
-                  "&:hover": { bgcolor: "background.paper" },
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (onMenuAction) onMenuAction("download", file);
-                }}
-              >
-                <Download size={18} />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Share">
-              <IconButton
-                size="small"
-                sx={{
-                  bgcolor: "background.paper",
-                  "&:hover": { bgcolor: "background.paper" },
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (onMenuAction) onMenuAction("share", file);
-                }}
-              >
-                <Share2 size={18} />
-              </IconButton>
-            </Tooltip>
+                <IconButton
+                  size="small"
+                  sx={{
+                    bgcolor: "background.paper",
+                    "&:hover": { bgcolor: "background.paper" },
+                  }}
+                  onClick={handleQuickAction(action)}
+                >
+                  {action === "preview" && <Eye size={18} />}
+                  {action === "download" && <Download size={18} />}
+                  {action === "share" && <Share2 size={18} />}
+                </IconButton>
+              </Tooltip>
+            ))}
           </Box>
         )}
       </Box>
 
       {/* Footer */}
-      <Box
-        sx={{
-          pt: 1.5,
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-        }}
-      >
-        {/* File Type Icon */}
-        <Box sx={{ flexShrink: 0 }}>{fileTypeIcons[file.type]}</Box>
+      <Box sx={{ pt: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
+        <Box sx={{ flexShrink: 0 }}>{FILE_TYPE_ICONS[file.type]}</Box>
 
-        {/* File Name and Metadata */}
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography
-            variant="body2"
-            fontWeight={500}
-            noWrap
-            sx={{
-              mb: 0.25,
-              color: "text.primary",
-            }}
-          >
+          <Typography variant="body2" fontWeight={500} noWrap sx={{ mb: 0.25 }}>
             {file.name}
           </Typography>
-
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            {/* {file.size && (
-              <Typography variant="caption" color="text.secondary">
-                {file.size}
-              </Typography>
-            )} */}
             {file.modified && (
-              <>
-                <Typography variant="caption" color="text.secondary">
-                  •
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {file.modified}
-                </Typography>
-              </>
+              <Typography variant="caption" color="text.secondary">
+                {file.modified}
+              </Typography>
             )}
             {file.shared && (
               <Chip
@@ -418,12 +339,12 @@ export function FileCard({
           </Box>
         </Box>
 
-        {/* 3-dots Menu */}
+        {/* 3-dot menu */}
         <Tooltip title="More options" arrow>
           <IconButton
-            className="menu-button"
+            className="file-menu-btn"
             size="small"
-            onClick={handleMenuClick}
+            onClick={handleMenuOpen}
             sx={{
               flexShrink: 0,
               color: isHovered ? "text.primary" : "text.secondary",
@@ -433,20 +354,21 @@ export function FileCard({
           </IconButton>
         </Tooltip>
 
-        {/* Menu Dropdown */}
         <Menu
           anchorEl={anchorEl}
-          open={open}
+          open={Boolean(anchorEl)}
           onClose={handleMenuClose}
           onClick={(e) => e.stopPropagation()}
           transformOrigin={{ horizontal: "right", vertical: "top" }}
           anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
-          PaperProps={{
-            sx: {
-              mt: 0.5,
-              minWidth: 180,
-              borderRadius: 2,
-              boxShadow: theme.shadows[8],
+          slotProps={{
+            paper: {
+              sx: {
+                mt: 0.5,
+                minWidth: 180,
+                borderRadius: 2,
+                boxShadow: theme.shadows[8],
+              },
             },
           }}
         >

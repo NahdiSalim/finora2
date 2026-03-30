@@ -2,6 +2,13 @@ import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 export async function seedUsers(prisma: PrismaClient) {
+  // Safety check - only delete if there are fewer than 10 users (seed data only)
+  const userCount = await prisma.user.count();
+  if (userCount >= 10) {
+    console.log('⚠️  Skipping user seed - database has production data');
+    return;
+  }
+
   const hashedPassword = await bcrypt.hash('password123', 10);
 
   // Get roles
@@ -10,7 +17,9 @@ export async function seedUsers(prisma: PrismaClient) {
   const collaboratorRole = await prisma.role.findUnique({ where: { code: 'COLLABORATOR' } });
   const clientRole = await prisma.role.findUnique({ where: { code: 'CLIENT' } });
 
-  // Delete existing users and companies to avoid unique constraint errors
+  // Delete existing data in correct order to respect foreign key constraints
+  await prisma.clientAccountingFirmRelationship.deleteMany({});
+  await prisma.request.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.company.deleteMany({});
 
@@ -157,13 +166,6 @@ export async function seedUsers(prisma: PrismaClient) {
   const clientUser = await prisma.user.findUnique({ where: { email: 'client@finora.com' } });
 
   if (clientUser && clientUser.companyId) {
-    // Delete existing relationships first
-    await prisma.clientAccountingFirmRelationship.deleteMany({
-      where: {
-        OR: [{ clientCompanyId: clientUser.companyId }, { accountingFirmId: accountingFirm.id }],
-      },
-    });
-
     await prisma.clientAccountingFirmRelationship.create({
       data: {
         clientCompanyId: clientUser.companyId,

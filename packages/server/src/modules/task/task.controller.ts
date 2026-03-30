@@ -22,6 +22,7 @@ import {
   ApiConsumes,
   ApiResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { TaskService } from './task.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -63,6 +64,7 @@ export class TaskController {
    * Get my assigned tasks (Collaborator)
    */
   @Get('my-tasks')
+  @Throttle({ default: { limit: 200, ttl: 60000 } })
   @ApiOperation({ summary: '[Collaborator] Get my assigned tasks' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
@@ -81,22 +83,73 @@ export class TaskController {
     required: false,
     enum: ['priority', 'dueDate', 'createdAt'],
   })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by title, description, or assignee name',
+  })
+  @ApiQuery({
+    name: 'dateFilter',
+    required: false,
+    enum: ['today', 'week', 'month'],
+    description: 'Filter by date range',
+  })
   async getMyTasks(
     @Req() req: AuthRequest,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('status') status?: string,
     @Query('priority') priority?: string,
-    @Query('sortBy') sortBy?: 'priority' | 'dueDate' | 'createdAt'
+    @Query('sortBy') sortBy?: 'priority' | 'dueDate' | 'createdAt',
+    @Query('search') search?: string,
+    @Query('dateFilter') dateFilter?: string
   ) {
     const userId = req.user!.id;
-    return this.taskService.getMyTasks(userId, page || 1, limit || 10, status, priority, sortBy);
+    return this.taskService.getMyTasks(
+      userId,
+      page || 1,
+      limit || 10,
+      status,
+      priority,
+      sortBy,
+      search,
+      dateFilter
+    );
+  }
+
+  /**
+   * Get my clients (Accountant) - from active relationships
+   */
+  @Get('my-clients')
+  @Throttle({ default: { limit: 200, ttl: 60000 } })
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Get my clients from active relationships' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by client company name',
+  })
+  @ApiResponse({ status: 200, description: 'List of clients with company info' })
+  async getMyClients(
+    @Req() req: AuthRequest,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string
+  ) {
+    const userId = req.user!.id;
+    return this.taskService.getMyClients(userId, page || 1, limit || 20, search);
   }
 
   /**
    * Get tasks created by me (Accountant)
    */
   @Get('my-created-tasks')
+  @Throttle({ default: { limit: 200, ttl: 60000 } })
   @UseGuards(RolesGuard)
   @Roles('ACCOUNTANT')
   @ApiOperation({ summary: '[Accountant] Get tasks I created' })
@@ -107,14 +160,35 @@ export class TaskController {
     required: false,
     enum: ['todo', 'in_progress', 'completed', 'cancelled'],
   })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by title, description, or assignee name',
+  })
+  @ApiQuery({
+    name: 'dateFilter',
+    required: false,
+    enum: ['today', 'week', 'month'],
+    description: 'Filter by date range',
+  })
   async getMyCreatedTasks(
     @Req() req: AuthRequest,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-    @Query('status') status?: string
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('dateFilter') dateFilter?: string
   ) {
     const userId = req.user!.id;
-    return this.taskService.getMyCreatedTasks(userId, page || 1, limit || 10, status);
+    return this.taskService.getMyCreatedTasks(
+      userId,
+      page || 1,
+      limit || 10,
+      status,
+      search,
+      dateFilter
+    );
   }
 
   /**
@@ -160,10 +234,12 @@ export class TaskController {
   }
 
   /**
-   * Submit task for review (Collaborator)
+   * Submit task for review (Accountant only - to send completed tasks back to review)
    */
   @Put(':id/review')
-  @ApiOperation({ summary: '[Collaborator] Submit task for review' })
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Send task back to review' })
   @ApiResponse({ status: 200, description: 'Task submitted for review' })
   async submitForReview(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
     const userId = req.user!.id;
@@ -171,12 +247,10 @@ export class TaskController {
   }
 
   /**
-   * Complete task (Accountant only)
+   * Complete task (Collaborator and Accountant)
    */
   @Put(':id/complete')
-  @UseGuards(RolesGuard)
-  @Roles('ACCOUNTANT')
-  @ApiOperation({ summary: '[Accountant] Mark task as completed' })
+  @ApiOperation({ summary: '[Collaborator/Accountant] Mark task as completed' })
   @ApiResponse({ status: 200, description: 'Task completed' })
   async completeTask(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
     const userId = req.user!.id;
@@ -309,5 +383,40 @@ export class TaskController {
   ) {
     const userId = req.user!.id;
     return this.taskService.getTasksByPriority(userId, priority, page || 1, limit || 10);
+  }
+
+  /**
+   * Get chat-accessible tasks by collaborator ID (for messagerie attachments)
+   */
+  @Get('chat-accessible/:collaboratorId')
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Get tasks for a collaborator (chat attachments)' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: 'number',
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: 'number',
+    description: 'Items per page (default: 5)',
+  })
+  @ApiResponse({ status: 200, description: 'Paginated list of collaborator tasks' })
+  async getChatAccessibleTasks(
+    @Param('collaboratorId', ParseIntPipe) collaboratorId: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Req() req?: AuthRequest
+  ) {
+    const accountantId = req!.user!.id;
+    return this.taskService.getChatAccessibleTasksByCollaborator(
+      collaboratorId,
+      accountantId,
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 5
+    );
   }
 }

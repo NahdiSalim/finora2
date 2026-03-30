@@ -26,15 +26,17 @@ async function runSeeds() {
   });
 
   try {
-    console.log(' Running database seeds...');
-
-    // Check if data already exists
+    // Check if data already exists - skip seeding if database has data
     const rolesCount = await prisma.role.count();
-    if (rolesCount > 0) {
+    const usersCount = await prisma.user.count();
+
+    if (rolesCount > 0 || usersCount > 0) {
       console.log(' Database already seeded, skipping...');
       await prisma.$disconnect();
       return;
     }
+
+    console.log(' Running database seeds...');
 
     await seedRoles(prisma);
     await seedFeatures(prisma);

@@ -146,6 +146,7 @@
 ### 4.1 Créer un rendez-vous
 
 - **POST /appointments**
+
   ```json
   {
     "title": "Consultation fiscale",
@@ -188,6 +189,7 @@
 ### 4.5 Reporter un RDV
 
 - **POST /appointments/:id/report**
+
   ```json
   { "newDate": "2026-05-15", "newHour": "14:00", "reason": "Indisponibilité" }
   ```
@@ -222,6 +224,7 @@
 ### 5.1 Créer disponibilité (ACCOUNTANT)
 
 - **POST /appointments/availability**
+
   ```json
   {
     "isRecurring": true,
@@ -252,6 +255,7 @@
 ### 6.1 Déclarer un congé (ACCOUNTANT)
 
 - **POST /appointments/leaves**
+
   ```json
   { "startDate": "2026-08-01", "endDate": "2026-08-15", "reason": "Vacances" }
   ```
@@ -373,6 +377,7 @@
 ### 10.1 Créer une tâche (ACCOUNTANT)
 
 - **POST /tasks** (multipart)
+
   ```json
   {
     "title": "Préparer bilan Q1",
@@ -408,6 +413,7 @@
 ### 11.1 Créer une demande (CLIENT)
 
 - **POST /requests** (multipart)
+
   ```json
   { "subject": "Demande de bilan", "description": "...", "urgency": "high" }
   ```
@@ -436,6 +442,7 @@
 ### 12.1 Envoyer une invitation
 
 - **POST /relationships/invitations**
+
   ```json
   { "targetCompanyId": 5, "message": "Bonjour, je souhaite collaborer avec vous." }
   ```
@@ -467,6 +474,7 @@
 ### 13.1 Créer un collaborateur
 
 - **POST /accountant/collaborators**
+
   ```json
   { "email": "collab@firm.com", "firstName": "Jean", "lastName": "Dupont" }
   ```
@@ -500,6 +508,7 @@
 ### 14.1 Laisser un avis (CLIENT)
 
 - **POST /reviews/accountant/:accountantId**
+
   ```json
   { "rating": 5, "comment": "Excellent service" }
   ```
@@ -524,6 +533,7 @@
 ### 15.2 Envoyer un message
 
 - **POST /chat/messages** (multipart)
+
   ```json
   { "roomId": 1, "content": "Bonjour !" }
   ```

@@ -1,5 +1,6 @@
 import { createApi } from "@reduxjs/toolkit/query/react";
 import { baseQueryWithReauth } from "./baseQueryWithReauth";
+import { relationshipsApi } from "./relationshipsApi";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -14,6 +15,30 @@ export interface DocumentItem {
   createdAt: string;
   updatedAt: string;
   owner?: { id: number; username?: string; email?: string };
+}
+
+export interface DocumentDetailItem extends DocumentItem {
+  processingStatus?: string;
+  parentId?: number | null;
+  parent?: { id: number; name: string } | null;
+  downloadUrl?: string;
+}
+
+export interface GetDocumentResponse {
+  status: string;
+  code: string;
+  data: DocumentDetailItem;
+}
+
+export interface BreadcrumbItem {
+  id: number;
+  name: string;
+}
+
+export interface GetBreadcrumbResponse {
+  status: string;
+  code: string;
+  data: BreadcrumbItem[];
 }
 
 export interface GetDocumentsResponse {
@@ -113,6 +138,73 @@ export const documentsApi = createApi({
             ],
     }),
 
+    getArchivedDocuments: builder.query<
+      GetDocumentsResponse,
+      {
+        clientId?: number | null;
+        parentId?: number | null;
+        page?: number;
+        limit?: number;
+        search?: string;
+        category?: string;
+        startDate?: string;
+        endDate?: string;
+      }
+    >({
+      query: ({
+        clientId,
+        parentId,
+        page = 1,
+        limit = 50,
+        search,
+        category,
+        startDate,
+        endDate,
+      } = {}) => {
+        const params = new URLSearchParams();
+        if (clientId != null) params.append("clientId", String(clientId));
+        if (parentId != null) params.append("parentId", String(parentId));
+        params.append("page", String(page));
+        params.append("limit", String(limit));
+        if (search?.trim()) params.append("search", search.trim());
+        if (category?.trim()) params.append("category", category.trim());
+        if (startDate) params.append("startDate", startDate);
+        if (endDate) params.append("endDate", endDate);
+        return {
+          url: `/documents/archived/all?${params.toString()}`,
+          method: "GET",
+        };
+      },
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.data.map((d) => ({
+                type: "Documents" as const,
+                id: `archived-${d.id}`,
+              })),
+              { type: "Documents", id: "ARCHIVED_LIST" },
+            ]
+          : [{ type: "Documents", id: "ARCHIVED_LIST" }],
+    }),
+
+    getDocument: builder.query<GetDocumentResponse, number>({
+      query: (id) => ({
+        url: `/documents/${id}`,
+        method: "GET",
+      }),
+      providesTags: (_result, _err, id) => [{ type: "Documents", id }],
+    }),
+
+    getBreadcrumb: builder.query<GetBreadcrumbResponse, number>({
+      query: (id) => ({
+        url: `/documents/${id}/breadcrumb`,
+        method: "GET",
+      }),
+      providesTags: (_result, _err, id) => [
+        { type: "Documents", id: `breadcrumb-${id}` },
+      ],
+    }),
+
     createFolder: builder.mutation<CreateFolderResponse, CreateFolderInput>({
       query: (body) => ({
         url: "/documents/folders",
@@ -154,7 +246,10 @@ export const documentsApi = createApi({
         url: `/documents/${id}`,
         method: "DELETE",
       }),
-      invalidatesTags: () => [{ type: "Documents" }],
+      invalidatesTags: () => [
+        { type: "Documents" },
+        { type: "Documents", id: "ARCHIVED_LIST" },
+      ],
     }),
 
     uploadDocument: builder.mutation<
@@ -181,6 +276,19 @@ export const documentsApi = createApi({
         };
       },
       invalidatesTags: () => [{ type: "Documents" }],
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          // Invalide les stats clients utilisées sur /documents
+          dispatch(
+            relationshipsApi.util.invalidateTags([
+              { type: "ClientsInvoiceStats", id: "LIST" },
+            ]),
+          );
+        } catch {
+          // Ignore les erreurs ici, elles sont déjà gérées par la mutation
+        }
+      },
     }),
 
     downloadDocument: builder.mutation<
@@ -210,15 +318,57 @@ export const documentsApi = createApi({
         return { data: { blob, filename } };
       },
     }),
+
+    archiveDocument: builder.mutation<
+      { status: string; message?: string; data?: { status: string } },
+      number
+    >({
+      query: (id) => ({
+        url: `/documents/${id}/archive`,
+        method: "POST",
+      }),
+      invalidatesTags: () => [{ type: "Documents" }],
+    }),
+
+    unarchiveDocument: builder.mutation<
+      { status: string; message?: string; data?: { status: string } },
+      number
+    >({
+      query: (id) => ({
+        url: `/documents/${id}/unarchive`,
+        method: "POST",
+      }),
+      invalidatesTags: () => [
+        { type: "Documents" },
+        { type: "Documents", id: "ARCHIVED_LIST" },
+      ],
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          dispatch(
+            relationshipsApi.util.invalidateTags([
+              { type: "ClientsInvoiceStats", id: "LIST" },
+            ]),
+          );
+        } catch {
+          // Ignore
+        }
+      },
+    }),
   }),
 });
 
 export const {
   useGetDocumentsQuery,
   useLazyGetDocumentsQuery,
+  useGetArchivedDocumentsQuery,
+  useGetDocumentQuery,
+  useGetBreadcrumbQuery,
   useCreateFolderMutation,
   useUpdateDocumentMutation,
   useDeleteDocumentMutation,
   useUploadDocumentMutation,
   useDownloadDocumentMutation,
+  useArchiveDocumentMutation,
+  useUnarchiveDocumentMutation,
 } = documentsApi;

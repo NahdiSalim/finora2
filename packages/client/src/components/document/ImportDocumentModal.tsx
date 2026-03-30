@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -15,16 +15,10 @@ import CustomSelect from "src/components/common/CustomSelect";
 import MenuItem from "@mui/material/MenuItem";
 import FileUpload from "src/components/common/FileUpload";
 import { useGetDocumentsQuery } from "src/lib/services/documentsApi";
+import { DOCUMENT_CATEGORIES } from "src/lib/constants/documentCategories";
 
 const MAX_SIZE_MB = 50;
 const ACCEPTED_FILES = [".jpg", ".jpeg", ".png", ".pdf", ".mp4"];
-
-const DOCUMENT_CATEGORIES = [
-  { value: "facture", label: "Facture" },
-  { value: "contrat", label: "Contrat" },
-  { value: "rapport", label: "Rapport" },
-  { value: "autre", label: "Autre" },
-];
 
 // ─── Folder tree item (loads children when expanded) ────────────────────────
 
@@ -54,7 +48,7 @@ function FolderTreeItem({
     {
       clientId: clientCompanyId,
       parentId: folderId,
-      limit: 100,
+      limit: 500,
       status: "active",
     },
     { skip: !isExpanded },
@@ -147,6 +141,7 @@ export function ImportDocumentModal({
   );
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const hasAutoExpandedRoot = useRef(false);
 
   useEffect(() => {
     if (open) setParentId(defaultParentId ?? null);
@@ -156,7 +151,7 @@ export function ImportDocumentModal({
     {
       clientId: clientCompanyId,
       parentId: undefined,
-      limit: 100,
+      limit: 500,
       status: "active",
     },
     { skip: !open },
@@ -165,6 +160,20 @@ export function ImportDocumentModal({
     data?.data
       ?.filter((d) => d.isFolder)
       .map((d) => ({ id: d.id, name: d.name })) ?? [];
+
+  useEffect(() => {
+    if (!open) {
+      hasAutoExpandedRoot.current = false;
+      return;
+    }
+    if (rootFolders.length === 0 || hasAutoExpandedRoot.current) return;
+    hasAutoExpandedRoot.current = true;
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      rootFolders.forEach((f) => next.add(f.id));
+      return next;
+    });
+  }, [open, rootFolders]);
 
   const resetForm = useCallback(() => {
     setFile(null);
@@ -344,6 +353,7 @@ export function ImportDocumentModal({
                   onToggleExpand={handleToggleExpand}
                   selectedId={parentId}
                   onSelect={setParentId}
+                  clientCompanyId={clientCompanyId}
                 />
               ))}
             </Box>

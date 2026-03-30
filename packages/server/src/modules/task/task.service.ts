@@ -41,16 +41,33 @@ export class TaskService {
         throw new ApiError(MSG.task.no_company, 400, 'NO_COMPANY');
       }
 
-      // If clientId is provided, verify they belong to the same company or have a relationship
-      if (dto.clientId) {
-        const client = await this.prisma.user.findUnique({
-          where: { id: dto.clientId },
-          select: { companyId: true },
+      // If clientIds are provided, verify there's a relationship between the accounting firm and each client's company
+      if (dto.clientIds && dto.clientIds.length > 0) {
+        // Get all client companies related to this accounting firm
+        const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
+          where: {
+            accountingFirmId: creator.companyId,
+            status: 'active',
+          },
+          select: { clientCompanyId: true },
         });
 
-        // Verify client belongs to same company
-        if (client?.companyId !== creator.companyId) {
-          throw new ApiError(MSG.task.invalid_client, 400, 'INVALID_CLIENT');
+        const validClientCompanyIds = relationships.map((r) => r.clientCompanyId);
+
+        // Verify all selected clients belong to valid client companies
+        const clients = await this.prisma.user.findMany({
+          where: { id: { in: dto.clientIds } },
+          select: { id: true, companyId: true },
+        });
+
+        const invalidClients = clients.filter((c) => !validClientCompanyIds.includes(c.companyId!));
+
+        if (invalidClients.length > 0) {
+          throw new ApiError(
+            'Un ou plusieurs clients ne sont pas associés à votre cabinet comptable',
+            400,
+            'INVALID_CLIENTS'
+          );
         }
       }
 
@@ -82,8 +99,8 @@ export class TaskService {
       // If multiple assignees, create one task per assignee
       if (dto.assigneeIds.length > 1) {
         const tasks = await Promise.all(
-          dto.assigneeIds.map((assigneeId) =>
-            this.prisma.task.create({
+          dto.assigneeIds.map(async (assigneeId) => {
+            const task = await this.prisma.task.create({
               data: {
                 title: dto.title,
                 description: dto.description,
@@ -92,7 +109,6 @@ export class TaskService {
                 dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
                 assigneeId,
                 createdById,
-                clientId: dto.clientId,
                 companyId: taskCompanyId,
                 attachments: attachmentUrls,
               },
@@ -109,8 +125,21 @@ export class TaskService {
                 createdBy: { select: { id: true, username: true, email: true } },
                 company: { select: { id: true, name: true } },
               },
-            })
-          )
+            });
+
+            // Create TaskClient entries for each client
+            if (dto.clientIds && dto.clientIds.length > 0) {
+              await this.prisma.taskClient.createMany({
+                data: dto.clientIds.map((clientId) => ({
+                  taskId: task.id,
+                  clientId,
+                })),
+                skipDuplicates: true,
+              });
+            }
+
+            return task;
+          })
         );
 
         // Notify each assignee
@@ -152,7 +181,6 @@ export class TaskService {
           dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
           assigneeId: dto.assigneeIds[0],
           createdById,
-          clientId: dto.clientId,
           companyId: taskCompanyId,
           attachments: attachmentUrls,
         },
@@ -181,6 +209,17 @@ export class TaskService {
           },
         },
       });
+
+      // Create TaskClient entries for each client
+      if (dto.clientIds && dto.clientIds.length > 0) {
+        await this.prisma.taskClient.createMany({
+          data: dto.clientIds.map((clientId) => ({
+            taskId: task.id,
+            clientId,
+          })),
+          skipDuplicates: true,
+        });
+      }
 
       // Notify single assignee
       const creatorUser = await this.prisma.user.findUnique({
@@ -211,6 +250,37 @@ export class TaskService {
   }
 
   /**
+   * Get date range based on filter
+   */
+  private getDateRange(dateFilter?: string): { gte?: Date; lte?: Date } | undefined {
+    if (!dateFilter) return undefined;
+
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+
+    switch (dateFilter) {
+      case 'today':
+        return { gte: startOfDay, lte: endOfDay };
+
+      case 'week': {
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay()); // Start of week (Sunday)
+        startOfWeek.setHours(0, 0, 0, 0);
+        return { gte: startOfWeek, lte: endOfDay };
+      }
+
+      case 'month': {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+        return { gte: startOfMonth, lte: endOfDay };
+      }
+
+      default:
+        return undefined;
+    }
+  }
+
+  /**
    * Get my assigned tasks (Collaborator)
    */
   async getMyTasks(
@@ -219,7 +289,9 @@ export class TaskService {
     limit: number = 10,
     status?: string,
     priority?: string,
-    sortBy: 'priority' | 'dueDate' | 'createdAt' = 'dueDate'
+    sortBy: 'priority' | 'dueDate' | 'createdAt' = 'dueDate',
+    search?: string,
+    dateFilter?: string
   ) {
     const skip = (page - 1) * limit;
     const where: any = { assigneeId: userId };
@@ -232,14 +304,29 @@ export class TaskService {
       where.priority = priority;
     }
 
-    const orderBy: any = {};
+    if (search && search.trim()) {
+      where.OR = [
+        { title: { contains: search.trim(), mode: 'insensitive' } },
+        { description: { contains: search.trim(), mode: 'insensitive' } },
+        { assignee: { firstName: { contains: search.trim(), mode: 'insensitive' } } },
+        { assignee: { lastName: { contains: search.trim(), mode: 'insensitive' } } },
+      ];
+    }
+
+    // Apply date filter
+    const dateRange = this.getDateRange(dateFilter);
+    if (dateRange) {
+      where.createdAt = dateRange;
+    }
+
+    const orderBy: any[] = [{ order: 'asc' }];
     if (sortBy === 'priority') {
       // Custom priority order: urgent > high > medium > low
-      orderBy.priority = 'desc';
+      orderBy.push({ priority: 'desc' });
     } else if (sortBy === 'dueDate') {
-      orderBy.dueDate = 'asc';
+      orderBy.push({ dueDate: 'asc' });
     } else {
-      orderBy.createdAt = 'desc';
+      orderBy.push({ createdAt: 'desc' });
     }
 
     const [total, tasks] = await Promise.all([
@@ -259,11 +346,22 @@ export class TaskService {
               lastName: true,
             },
           },
-          client: {
+          taskClients: {
             select: {
-              id: true,
-              username: true,
-              email: true,
+              client: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  company: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
+                  },
+                },
+              },
             },
           },
           company: {
@@ -276,23 +374,43 @@ export class TaskService {
       }),
     ]);
 
-    // Parse comments for each task
-    const tasksWithComments = tasks.map((task) => {
-      let comments: TaskComment[] = [];
-      if (task.subtasks && task.subtasks.length > 0) {
-        try {
-          comments = JSON.parse(task.subtasks[0] || '[]');
-        } catch {
-          comments = [];
+    // Parse comments and generate presigned URLs for each task
+    const tasksWithComments = await Promise.all(
+      tasks.map(async (task) => {
+        let comments: TaskComment[] = [];
+        if (task.subtasks && task.subtasks.length > 0) {
+          try {
+            comments = JSON.parse(task.subtasks[0] || '[]');
+          } catch {
+            comments = [];
+          }
         }
-      }
-      const taskData = { ...task };
-      delete (taskData as any).subtasks;
-      return {
-        ...taskData,
-        comments,
-      };
-    });
+
+        // Generate presigned URLs for attachments
+        const attachmentPresignedUrls: string[] = [];
+        if (task.attachments && Array.isArray(task.attachments)) {
+          for (const attachmentPath of task.attachments) {
+            try {
+              const url = await this.minioService.getPresignedUrl(
+                attachmentPath,
+                7 * 24 * 60 * 60 // 7 days
+              );
+              attachmentPresignedUrls.push(url);
+            } catch (error) {
+              attachmentPresignedUrls.push(attachmentPath); // Fallback to path
+            }
+          }
+        }
+
+        const taskData = { ...task };
+        delete (taskData as any).subtasks;
+        return {
+          ...taskData,
+          comments,
+          attachmentUrls: attachmentPresignedUrls,
+        };
+      })
+    );
 
     // Count by status
     const statusCounts = await this.prisma.task.groupBy({
@@ -328,12 +446,34 @@ export class TaskService {
   /**
    * Get tasks created by me (Accountant)
    */
-  async getMyCreatedTasks(userId: number, page: number = 1, limit: number = 10, status?: string) {
+  async getMyCreatedTasks(
+    userId: number,
+    page: number = 1,
+    limit: number = 10,
+    status?: string,
+    search?: string,
+    dateFilter?: string
+  ) {
     const skip = (page - 1) * limit;
     const where: any = { createdById: userId };
 
     if (status) {
       where.status = status;
+    }
+
+    if (search && search.trim()) {
+      where.OR = [
+        { title: { contains: search.trim(), mode: 'insensitive' } },
+        { description: { contains: search.trim(), mode: 'insensitive' } },
+        { assignee: { firstName: { contains: search.trim(), mode: 'insensitive' } } },
+        { assignee: { lastName: { contains: search.trim(), mode: 'insensitive' } } },
+      ];
+    }
+
+    // Apply date filter
+    const dateRange = this.getDateRange(dateFilter);
+    if (dateRange) {
+      where.createdAt = dateRange;
     }
 
     const [total, tasks] = await Promise.all([
@@ -342,9 +482,7 @@ export class TaskService {
         where,
         skip,
         take: limit,
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
         include: {
           assignee: {
             select: {
@@ -355,11 +493,22 @@ export class TaskService {
               lastName: true,
             },
           },
-          client: {
+          taskClients: {
             select: {
-              id: true,
-              username: true,
-              email: true,
+              client: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  company: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
+                  },
+                },
+              },
             },
           },
           company: {
@@ -372,23 +521,43 @@ export class TaskService {
       }),
     ]);
 
-    // Parse comments for each task
-    const tasksWithComments = tasks.map((task) => {
-      let comments: TaskComment[] = [];
-      if (task.subtasks && task.subtasks.length > 0) {
-        try {
-          comments = JSON.parse(task.subtasks[0] || '[]');
-        } catch {
-          comments = [];
+    // Parse comments and generate presigned URLs for each task
+    const tasksWithComments = await Promise.all(
+      tasks.map(async (task) => {
+        let comments: TaskComment[] = [];
+        if (task.subtasks && task.subtasks.length > 0) {
+          try {
+            comments = JSON.parse(task.subtasks[0] || '[]');
+          } catch {
+            comments = [];
+          }
         }
-      }
-      const taskData = { ...task };
-      delete (taskData as any).subtasks;
-      return {
-        ...taskData,
-        comments,
-      };
-    });
+
+        // Generate presigned URLs for attachments
+        const attachmentPresignedUrls: string[] = [];
+        if (task.attachments && Array.isArray(task.attachments)) {
+          for (const attachmentPath of task.attachments) {
+            try {
+              const url = await this.minioService.getPresignedUrl(
+                attachmentPath,
+                7 * 24 * 60 * 60 // 7 days
+              );
+              attachmentPresignedUrls.push(url);
+            } catch (error) {
+              attachmentPresignedUrls.push(attachmentPath); // Fallback to path
+            }
+          }
+        }
+
+        const taskData = { ...task };
+        delete (taskData as any).subtasks;
+        return {
+          ...taskData,
+          comments,
+          attachmentUrls: attachmentPresignedUrls,
+        };
+      })
+    );
 
     return {
       success: true,
@@ -427,17 +596,28 @@ export class TaskService {
             lastName: true,
           },
         },
-        client: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
-          },
-        },
         company: {
           select: {
             id: true,
             name: true,
+          },
+        },
+        taskClients: {
+          select: {
+            client: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                company: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -447,8 +627,9 @@ export class TaskService {
       throw new ApiError(MSG.task.not_found, 404, 'TASK_NOT_FOUND');
     }
 
-    // Check access rights
-    if (task.assigneeId !== userId && task.createdById !== userId && task.clientId !== userId) {
+    // Check access rights - also check if user is a client of this task
+    const isClient = task.taskClients.some((tc) => tc.client.id === userId);
+    if (task.assigneeId !== userId && task.createdById !== userId && !isClient) {
       throw new ApiError(MSG.task.access_denied, 403, 'ACCESS_DENIED');
     }
 
@@ -467,11 +648,29 @@ export class TaskService {
     const taskData = { ...task };
     delete (taskData as any).subtasks;
 
+    // Generate presigned URLs for attachments
+    const attachmentPresignedUrls: string[] = [];
+    if (task.attachments && Array.isArray(task.attachments)) {
+      for (const attachmentPath of task.attachments) {
+        try {
+          const url = await this.minioService.getPresignedUrl(
+            attachmentPath,
+            7 * 24 * 60 * 60 // 7 days
+          );
+          attachmentPresignedUrls.push(url);
+        } catch (error) {
+          console.error('Error generating presigned URL for task attachment:', error);
+          attachmentPresignedUrls.push(attachmentPath); // Fallback to path
+        }
+      }
+    }
+
     return {
       success: true,
       data: {
         ...taskData,
         comments,
+        attachmentUrls: attachmentPresignedUrls,
       },
     };
   }
@@ -499,13 +698,18 @@ export class TaskService {
       throw new ApiError(MSG.task.access_denied, 403, 'ACCESS_DENIED');
     }
 
-    // Collaborators cannot set status to 'completed' or 'archived' — only accountants can
+    // Role-based status restrictions
     const isAccountant = userRole === 'ACCOUNTANT' || task.createdById === userId;
-    if (dto.status === TaskStatus.COMPLETED && !isAccountant) {
-      throw new ApiError(MSG.task.forbidden_complete, 403, 'FORBIDDEN_STATUS');
-    }
+    const isCollaborator = task.assigneeId === userId && !isAccountant;
+
+    // Only accountants can archive tasks
     if (dto.status === TaskStatus.ARCHIVED && !isAccountant) {
-      throw new ApiError(MSG.task.forbidden_archive, 403, 'FORBIDDEN_STATUS');
+      throw new ApiError('Only accountants can archive a task.', 403, 'FORBIDDEN_STATUS');
+    }
+
+    // Only accountants can move tasks to "in_review" status
+    if (dto.status === TaskStatus.IN_REVIEW && !isAccountant) {
+      throw new ApiError('Only accountants can move tasks to review.', 403, 'FORBIDDEN_STATUS');
     }
 
     // Upload new attachments to MinIO if provided
@@ -530,9 +734,16 @@ export class TaskService {
 
     // Handle adding collaborators (creates duplicate tasks)
     if (dto.addCollaborators && dto.addCollaborators.length > 0) {
+      // Get existing clients for this task
+      const existingClients = await this.prisma.taskClient.findMany({
+        where: { taskId: task.id },
+        select: { clientId: true },
+      });
+      const clientIds = existingClients.map((tc) => tc.clientId);
+
       const newTasks = await Promise.all(
-        dto.addCollaborators.map((assigneeId) =>
-          this.prisma.task.create({
+        dto.addCollaborators.map(async (assigneeId) => {
+          const newTask = await this.prisma.task.create({
             data: {
               title: dto.title || task.title,
               description: dto.description || task.description,
@@ -542,7 +753,6 @@ export class TaskService {
               dueDate: dto.dueDate ? new Date(dto.dueDate) : task.dueDate,
               assigneeId,
               createdById: task.createdById,
-              clientId: task.clientId,
               companyId: task.companyId,
               attachments: allAttachments,
             },
@@ -557,8 +767,21 @@ export class TaskService {
                 },
               },
             },
-          })
-        )
+          });
+
+          // Copy clients to new task
+          if (clientIds.length > 0) {
+            await this.prisma.taskClient.createMany({
+              data: clientIds.map((clientId) => ({
+                taskId: newTask.id,
+                clientId,
+              })),
+              skipDuplicates: true,
+            });
+          }
+
+          return newTask;
+        })
       );
 
       // Update the original task
@@ -639,6 +862,25 @@ export class TaskService {
       },
     });
 
+    // Update clientIds if provided
+    if (dto.clientIds !== undefined) {
+      // Delete existing clients
+      await this.prisma.taskClient.deleteMany({
+        where: { taskId: task.id },
+      });
+
+      // Add new clients
+      if (dto.clientIds.length > 0) {
+        await this.prisma.taskClient.createMany({
+          data: dto.clientIds.map((clientId) => ({
+            taskId: task.id,
+            clientId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
+
     // Notify the other party about task update
     const notifyId = userId === task.assigneeId ? task.createdById : task.assigneeId;
     if (notifyId && notifyId !== userId) {
@@ -668,23 +910,17 @@ export class TaskService {
   }
 
   /**
-   * Submit task for review (Collaborator) — replaces completeTask for collaborators
+   * Submit task for review (Accountant only - to send completed tasks back to review)
    */
   async submitForReview(taskId: number, userId: number) {
     return this.updateTask(taskId, { status: TaskStatus.IN_REVIEW, progress: 90 }, userId);
   }
 
   /**
-   * Mark task as completed (Accountant only)
+   * Mark task as completed (Collaborator and Accountant)
    */
   async completeTask(taskId: number, userId: number) {
-    return this.updateTask(
-      taskId,
-      { status: TaskStatus.COMPLETED, progress: 100 },
-      userId,
-      undefined,
-      'ACCOUNTANT'
-    );
+    return this.updateTask(taskId, { status: TaskStatus.COMPLETED, progress: 100 }, userId);
   }
 
   /**
@@ -1023,6 +1259,163 @@ export class TaskService {
       success: true,
       data: tasks,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  /**
+   * Get chat-accessible tasks for a collaborator (for messagerie attachments)
+   */
+  async getChatAccessibleTasksByCollaborator(
+    collaboratorId: number,
+    accountantId: number,
+    page: number = 1,
+    limit: number = 5
+  ) {
+    const accountant = await this.prisma.user.findUnique({
+      where: { id: accountantId },
+      select: { companyId: true },
+    });
+
+    if (!accountant?.companyId) {
+      throw new ApiError(
+        'Accountant not found or not associated with a company',
+        403,
+        'ACCESS_DENIED'
+      );
+    }
+
+    const collaborator = await this.prisma.user.findUnique({
+      where: { id: collaboratorId },
+      select: { id: true, companyId: true, role: { select: { code: true } } },
+    });
+
+    if (!collaborator) {
+      throw new ApiError('Collaborator not found', 404, 'COLLABORATOR_NOT_FOUND');
+    }
+
+    if (collaborator.companyId !== accountant.companyId) {
+      throw new ApiError('Access denied to this collaborator', 403, 'ACCESS_DENIED');
+    }
+
+    const where = {
+      assigneeId: collaboratorId,
+      status: { notIn: ['archived', 'cancelled'] },
+    };
+
+    const [tasks, total] = await Promise.all([
+      this.prisma.task.findMany({
+        where,
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          priority: true,
+          dueDate: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.task.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: tasks,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Get accountant's clients (from active relationships)
+   */
+  async getMyClients(userId: number, page: number = 1, limit: number = 20, search?: string) {
+    // Get accountant's company
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { companyId: true },
+    });
+
+    if (!user?.companyId) {
+      throw new ApiError('Vous devez être associé à une entreprise', 400, 'NO_COMPANY');
+    }
+
+    const skip = (page - 1) * limit;
+
+    // Build where clause for relationships
+    const relationshipWhere: any = {
+      accountingFirmId: user.companyId,
+      status: 'active',
+    };
+
+    // Add search filter by company name if provided
+    if (search?.trim()) {
+      relationshipWhere.clientCompany = {
+        name: {
+          contains: search.trim(),
+          mode: 'insensitive',
+        },
+      };
+    }
+
+    // Get active relationships
+    const [totalRelationships, relationships] = await Promise.all([
+      this.prisma.clientAccountingFirmRelationship.count({ where: relationshipWhere }),
+      this.prisma.clientAccountingFirmRelationship.findMany({
+        where: relationshipWhere,
+        skip,
+        take: limit,
+        include: {
+          clientCompany: {
+            select: {
+              id: true,
+              name: true,
+              logo: true,
+              owner: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { relationshipStart: 'desc' },
+      }),
+    ]);
+
+    // Extract clients (company owners) from relationships
+    const clients = relationships
+      .filter((r) => r.clientCompany.owner)
+      .map((r) => ({
+        id: r.clientCompany.owner!.id,
+        firstName: r.clientCompany.owner!.firstName,
+        lastName: r.clientCompany.owner!.lastName,
+        email: r.clientCompany.owner!.email,
+        company: {
+          id: r.clientCompany.id,
+          name: r.clientCompany.name,
+          logo: r.clientCompany.logo,
+        },
+      }));
+
+    return {
+      success: true,
+      data: clients,
+      pagination: {
+        total: totalRelationships,
+        page,
+        limit,
+        totalPages: Math.ceil(totalRelationships / limit),
+      },
     };
   }
 }

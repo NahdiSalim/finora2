@@ -22,6 +22,7 @@ import {
 import FolderEmptySVG from "./FolderEmptySVG";
 import FolderHasFilesSVG from "./FolderHasFilesSVG";
 import FolderArchivedSVG from "./FolderArchiveSVG";
+import FolderHoverSVG from "./FolderHover";
 
 // ----------------------------------------------------------------------
 
@@ -32,11 +33,11 @@ export interface FolderProps {
   description?: string;
   state?: FolderState;
   fileCount?: number;
-  /** Dernière date de modification (ISO string ou date formatée) */
   updatedAt?: string | null;
   onClick?: () => void;
   onMenuAction?: (action: string) => void;
   menuOptions?: { label: string; icon: React.ReactNode; action: string }[];
+  allowClickWhenArchived?: boolean;
   sx?: any;
 }
 
@@ -76,6 +77,7 @@ export function Folder({
   updatedAt,
   onClick,
   onMenuAction,
+  allowClickWhenArchived = false,
   menuOptions = [
     { label: "Edit", icon: <Edit size={16} />, action: "edit" },
     { label: "Download", icon: <Download size={16} />, action: "download" },
@@ -90,6 +92,17 @@ export function Folder({
   const [isHovered, setIsHovered] = useState(false);
   const open = Boolean(anchorEl);
 
+  // Hover SVG applies only to "empty" and "hasFiles"
+  const isHoverableState = state === "empty" || state === "hasFiles";
+  const showHoverSVG = isHovered && isHoverableState;
+
+  // Text/icon color flips to white on hover so it stays readable on the blue SVG
+  const contentColor = showHoverSVG
+    ? theme.palette.common.white
+    : state === "archived"
+      ? theme.palette.grey[500]
+      : theme.palette.common.black;
+
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
     setAnchorEl(event.currentTarget);
@@ -103,18 +116,15 @@ export function Folder({
   const handleMenuItemClick = (action: string, event: React.MouseEvent) => {
     event.stopPropagation();
     setAnchorEl(null);
-    if (onMenuAction) {
-      onMenuAction(action);
-    }
+    onMenuAction?.(action);
   };
 
   const handleFolderClick = () => {
-    if (onClick && state !== "archived") {
+    if (onClick && (state !== "archived" || allowClickWhenArchived)) {
       onClick();
     }
   };
 
-  // Get the appropriate SVG based on state
   const getFolderSVG = () => {
     switch (state) {
       case "hasFiles":
@@ -124,19 +134,6 @@ export function Folder({
       case "empty":
       default:
         return <FolderEmptySVG />;
-    }
-  };
-
-  // Get state color
-  const getStateColor = () => {
-    switch (state) {
-      case "hasFiles":
-        return theme.palette.common.black;
-      case "archived":
-        return theme.palette.grey[500];
-      case "empty":
-      default:
-        return theme.palette.common.black;
     }
   };
 
@@ -150,18 +147,39 @@ export function Folder({
         width: 195,
         backgroundColor: "transparent",
         borderRadius: 5,
-        opacity: state === "archived" ? 0.7 : 1,
-        cursor: state === "archived" ? "default" : "pointer",
+        opacity: state === "archived" ? 0.9 : 1,
+        cursor:
+          state === "archived" && !allowClickWhenArchived
+            ? "default"
+            : "pointer",
         overflow: "hidden",
         ...sx,
       }}
     >
-      {/* SVG Container - Background */}
+      {/* SVG Background — base state always rendered */}
       <Box sx={{ position: "relative", width: "100%", height: "auto" }}>
         {getFolderSVG()}
       </Box>
 
-      {/* Content Container - Positioned absolutely over the SVG */}
+      {/* Hover SVG — fades in on top, only for hoverable states */}
+      {isHoverableState && (
+        <Box
+          sx={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            opacity: isHovered ? 1 : 0,
+            transition: "opacity 0.2s ease",
+            pointerEvents: "none",
+          }}
+        >
+          <FolderHoverSVG />
+        </Box>
+      )}
+
+      {/* Content overlay */}
       <Box
         sx={{
           position: "absolute",
@@ -175,22 +193,19 @@ export function Folder({
           p: 1.5,
         }}
       >
-        {/* Top Row with Menu Button */}
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "flex-end",
-          }}
-        >
-          {/* 3-dots Menu */}
+        {/* Top row — 3-dots menu */}
+        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
           <Tooltip title="More options" arrow>
             <IconButton
               size="small"
               onClick={handleMenuClick}
               sx={{
-                color: getStateColor(),
+                color: contentColor,
                 bgcolor: alpha(theme.palette.common.white, 0.2),
                 backdropFilter: "blur(4px)",
+                opacity: isHovered || open ? 1 : 0,
+                pointerEvents: isHovered || open ? "auto" : "none",
+                transition: "opacity 0.2s ease",
                 "&:hover": {
                   bgcolor: alpha(theme.palette.common.white, 0.3),
                 },
@@ -201,35 +216,36 @@ export function Folder({
           </Tooltip>
         </Box>
 
-        {/* Bottom Row with Text */}
+        {/* Bottom row — name, count, date, description */}
         <Box>
-          {/* Name and File Count */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <Typography
               variant="caption"
               fontWeight={600}
               noWrap
               sx={{
-                color: getStateColor(),
+                color: contentColor,
                 maxWidth: 100,
+                transition: "color 0.2s ease",
               }}
             >
               {name}
             </Typography>
+
             {fileCount !== undefined && (
               <Typography
                 variant="caption"
                 sx={{
-                  color: getStateColor(),
+                  color: contentColor,
                   bgcolor: alpha(theme.palette.common.white, 0.3),
                   backdropFilter: "blur(4px)",
                   px: 0.5,
                   borderRadius: 0.5,
                   fontSize: "0.6rem",
+                  transition: "color 0.2s ease",
                 }}
               >
                 {fileCount} {fileCount === 1 ? "Doc" : "Docs"}
-                {description}
               </Typography>
             )}
           </Box>
@@ -238,27 +254,28 @@ export function Folder({
             <Typography
               variant="caption"
               sx={{
-                color: getStateColor(),
+                color: contentColor,
                 opacity: 0.85,
                 fontWeight: 400,
+                transition: "color 0.2s ease",
               }}
             >
               Modifié : {formatUpdatedAt(updatedAt)}
             </Typography>
           )}
 
-          {/* Description */}
           {description && (
             <Typography
               variant="caption"
               noWrap
               sx={{
                 maxWidth: 150,
-                color: getStateColor(),
+                color: contentColor,
                 opacity: 0.9,
                 textShadow: "0 1px 1px rgba(0,0,0,0.1)",
                 display: "block",
                 mt: 0.25,
+                transition: "color 0.2s ease",
               }}
             >
               {description}
@@ -267,7 +284,7 @@ export function Folder({
         </Box>
       </Box>
 
-      {/* Menu Dropdown */}
+      {/* Dropdown menu */}
       <Menu
         anchorEl={anchorEl}
         open={open}

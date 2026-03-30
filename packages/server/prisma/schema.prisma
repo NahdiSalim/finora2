@@ -100,6 +100,7 @@ model Appointment {
 
   slot        AvailabilitySlot? @relation("AppointmentSlot")
   reports     AppointmentReport[] @relation("AppointmentReports")
+  chatMessages ChatMessage[] @relation("ChatMessageAppointment")
 
   @@index([clientId])
   @@index([accountantId])
@@ -246,14 +247,25 @@ model ChatMessage {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  room            ChatRoom?   @relation(fields: [roomId], references: [id])
-  thread          ChatThread? @relation(fields: [threadId], references: [id])
-  sender          User        @relation("ChatMessageSender", fields: [senderId], references: [id])
+  // Attachments to entities
+  requestId       Int?
+  taskId          Int?
+  appointmentId   Int?
+
+  room            ChatRoom?      @relation(fields: [roomId], references: [id])
+  thread          ChatThread?    @relation(fields: [threadId], references: [id])
+  sender          User           @relation("ChatMessageSender", fields: [senderId], references: [id])
+  request         Request?       @relation("ChatMessageRequest", fields: [requestId], references: [id], onDelete: SetNull)
+  task            Task?          @relation("ChatMessageTask", fields: [taskId], references: [id], onDelete: SetNull)
+  appointment     Appointment?   @relation("ChatMessageAppointment", fields: [appointmentId], references: [id], onDelete: SetNull)
 
   @@index([roomId])
   @@index([threadId])
   @@index([senderId])
   @@index([createdAt])
+  @@index([requestId])
+  @@index([taskId])
+  @@index([appointmentId])
 }
 
 
@@ -848,12 +860,18 @@ model RefreshToken {
 model Request {
   id          Int      @id @default(autoincrement())
   subject     String   // Titre de la demande
+  topic       String?  // Sujet (subcategory/specific topic)
   description String?  @db.Text
   type        String   // 'accounting', 'tax', 'consultation', 'document', 'other'
   urgency     String   @default("normal") // 'low', 'normal', 'high', 'urgent'
   status      String   @default("pending") // 'pending', 'in_progress', 'resolved', 'rejected', 'cancelled'
   response    String?  @db.Text
-  attachments String[] @default([]) // Array of file paths in MinIO
+  attachments String[] @default([]) // Array of file paths in MinIO (client attachments)
+  responseAttachments String[] @default([]) // Array of file paths for accountant response
+  
+  // Desired response date/time
+  desiredResponseDate String?
+  desiredResponseTime String?
   
   // Relations
   clientId    Int
@@ -876,6 +894,9 @@ model Request {
   
   // Ticket relation
   tickets     Ticket[]
+  
+  // Chat messages relation
+  chatMessages ChatMessage[] @relation("ChatMessageRequest")
   
   // Timestamps
   respondedAt DateTime?
@@ -965,6 +986,23 @@ model RoleAction {
 }
 
 
+// From task-client.prisma
+model TaskClient {
+  id        Int      @id @default(autoincrement())
+  taskId    Int
+  clientId  Int
+  createdAt DateTime @default(now())
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  client    User     @relation("TaskClientRelation", fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, clientId])
+  @@index([taskId])
+  @@index([clientId])
+  @@map("task_clients")
+}
+
+
 // From task-comment.prisma
 model TaskComment {
   id          Int      @id @default(autoincrement())
@@ -996,7 +1034,6 @@ model Task {
   createdById   Int
   requestId     Int?      @unique
   ticketId      Int?
-  clientId      Int?
   companyId     Int?
   subtasks      String[]  // JSON array of subtask objects
   attachments   String[]  // JSON array of attachment URLs
@@ -1014,11 +1051,12 @@ model Task {
   validator     User?     @relation("TaskValidator", fields: [validatedBy], references: [id])
   request       Request?  @relation("TaskFromRequest", fields: [requestId], references: [id])
   ticket        Ticket?   @relation(fields: [ticketId], references: [id])
-  client        User?     @relation("TaskClient", fields: [clientId], references: [id])
   company       Company?  @relation("TaskCompany", fields: [companyId], references: [id])
+  taskClients   TaskClient[]
   p_tasks       p_tasks[]
   comments      TaskComment[]
   requestConversions Request[] @relation("RequestToTask")
+  chatMessages  ChatMessage[] @relation("ChatMessageTask")
 
   @@index([assigneeId])
   @@index([createdById])
@@ -1107,7 +1145,7 @@ model User {
   assignedTasks        Task[] @relation("TaskAssignee")
   createdTasks         Task[] @relation("TaskCreatedBy")
   validatedTasks       Task[] @relation("TaskValidator")
-  clientTasks          Task[] @relation("TaskClient")
+  taskClientRelations  TaskClient[] @relation("TaskClientRelation")
   taskComments         TaskComment[]
   
   // Requests

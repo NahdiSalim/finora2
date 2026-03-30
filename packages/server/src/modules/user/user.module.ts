@@ -1,15 +1,14 @@
 import { Module } from '@nestjs/common';
 import { UserController } from './user.controller';
 import { UserService } from './user.serivce';
-import { PrismaService } from 'prisma/prisma.service';
-import { CommonModule } from 'src/common/common.module';
-import { HashModule } from 'src/common/crypto/hash.module';
+import { PrismaModule } from 'prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [CommonModule, HashModule, AuthModule],
+  imports: [PrismaModule, AuthModule],
+  // CommonModule is @Global() — no need to import here
   controllers: [UserController],
-  providers: [UserService, PrismaService],
-  exports: [PrismaService],
+  providers: [UserService],
+  exports: [UserService],
 })
 export class UserModule {}

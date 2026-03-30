@@ -43,6 +43,8 @@ export interface Accountant {
   verified?: boolean;
   /** Id du comptable (user id) pour lien vers le profil public */
   accountantId?: number;
+  /** Company id (used for relationship invitation) */
+  companyId?: number;
 }
 
 interface AccountantCardProps {
@@ -468,7 +470,8 @@ export function AccountantCard({
               <CustomButton
                 variant="outlined"
                 color="info"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (accountantId == null) return;
                   if (onMessageClick) onMessageClick(accountantId);
                   else if (profilePath) navigate(profilePath);

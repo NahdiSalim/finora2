@@ -149,6 +149,43 @@ export class AppointmentController {
   }
 
   /**
+   * Get chat-accessible appointments by client ID (for messagerie attachments)
+   */
+  @Get('chat-accessible/:clientId')
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT', 'COLLABORATEUR', 'COLLABORATOR')
+  @ApiOperation({ summary: '[Accountant] Get appointments for a client (chat attachments)' })
+  @ApiQuery({ name: 'page', required: false, type: 'number' })
+  @ApiQuery({ name: 'limit', required: false, type: 'number' })
+  @ApiResponse({ status: 200, description: 'Paginated list of client appointments' })
+  async getChatAccessibleAppointments(
+    @Param('clientId', ParseIntPipe) clientId: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Req() req?: AuthRequest
+  ) {
+    const accountantId = req!.user!.id;
+    const raw = await this.appointmentService.getChatAccessibleAppointmentsByClient(
+      clientId,
+      accountantId,
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 5
+    );
+    // Map date + hour → startTime / endTime (ISO strings) expected by the frontend
+    return {
+      ...raw,
+      data: raw.data.map((a: any) => {
+        const dateStr = new Date(a.date).toISOString().slice(0, 10);
+        const [h, m] = (a.hour as string).split(':').map(Number);
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const startTime = `${dateStr}T${pad(h)}:${pad(m)}:00.000Z`;
+        const endTime = `${dateStr}T${pad((h + 1) % 24)}:${pad(m)}:00.000Z`;
+        return { id: a.id, title: a.title, startTime, endTime, status: a.status, type: a.type };
+      }),
+    };
+  }
+
+  /**
    * Get appointment by ID
    */
   @Get(':id')

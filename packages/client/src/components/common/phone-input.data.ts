@@ -91,4 +91,5 @@ export const customCountries: Country[] = Object.entries(nameMap)
     };
   })
   .filter((c) => c.name && c.dialCode !== "+")
+  .filter((c) => c.countryCode !== "IL") // Exclude Israel from phone country list
   .sort((a, b) => a.name.localeCompare(b.name));

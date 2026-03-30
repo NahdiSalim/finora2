@@ -1,4 +1,5 @@
 import React from "react";
+import { Box } from "@mui/material";
 import Avatar from "@mui/material/Avatar";
 import Typography from "@mui/material/Typography";
 import ListItemAvatar from "@mui/material/ListItemAvatar";
@@ -6,6 +7,7 @@ import ListItemButton from "@mui/material/ListItemButton";
 import ListItemText from "@mui/material/ListItemText";
 import { Bell } from "lucide-react";
 import { fToNow } from "src/utils/format-time";
+import CustomButton from "src/components/common/CustomButton";
 
 export type NotificationItemProps = {
   id: string;
@@ -15,6 +17,10 @@ export type NotificationItemProps = {
   description: string;
   avatarUrl: string | null;
   postedAt: string | number | null;
+  canRespond?: boolean;
+  onAccept?: () => void;
+  onReject?: () => void;
+  isProcessing?: boolean;
 };
 
 function renderContent(notification: NotificationItemProps) {
@@ -122,6 +128,34 @@ export function NotificationItem({
           </Typography>
         }
       />
+      {notification.canRespond && (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, ml: 1 }}>
+          <CustomButton
+            size="small"
+            variant="contained"
+            color="success"
+            onClick={(e) => {
+              e.stopPropagation();
+              notification.onAccept?.();
+            }}
+            loading={notification.isProcessing}
+          >
+            Accepter
+          </CustomButton>
+          <CustomButton
+            size="small"
+            variant="outlined"
+            color="error"
+            onClick={(e) => {
+              e.stopPropagation();
+              notification.onReject?.();
+            }}
+            disabled={notification.isProcessing}
+          >
+            Refuser
+          </CustomButton>
+        </Box>
+      )}
     </ListItemButton>
   );
 }

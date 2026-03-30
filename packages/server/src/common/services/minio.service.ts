@@ -9,8 +9,20 @@ export class MinioService implements OnModuleInit {
   private minioClient: Minio.Client;
   private bucketName: string;
 
+  // Static flag: bucket check runs only once across all instances
+  private static bucketInitialized = false;
+  private static sharedClient: Minio.Client | null = null;
+  private static sharedBucketName: string | null = null;
+
   constructor(private configService: ConfigService) {
     const endpoint = this.configService.get<string>('MINIO_ENDPOINT')!;
+
+    // Reuse shared client if already created
+    if (MinioService.sharedClient) {
+      this.minioClient = MinioService.sharedClient;
+      this.bucketName = MinioService.sharedBucketName!;
+      return;
+    }
 
     // Skip initialization if MinIO is disabled
     if (!endpoint || endpoint === 'disabled' || endpoint === 'your-minio-endpoint') {
@@ -31,13 +43,17 @@ export class MinioService implements OnModuleInit {
       accessKey,
       secretKey,
     });
+
+    MinioService.sharedClient = this.minioClient;
+    MinioService.sharedBucketName = this.bucketName;
   }
 
   async onModuleInit() {
-    // Skip if MinIO client was not initialized
-    if (!this.minioClient) {
+    // Skip if already initialized or client not available
+    if (MinioService.bucketInitialized || !this.minioClient) {
       return;
     }
+    MinioService.bucketInitialized = true;
 
     try {
       const exists = await this.minioClient.bucketExists(this.bucketName);
@@ -209,14 +225,34 @@ export class MinioService implements OnModuleInit {
   }
 
   /**
-   * Generate presigned URL for file download (valid for 1 hour by default)
+   * Generate presigned URL for file download (valid for 1 hour by default).
+   *
+   * If MINIO_PUBLIC_URL is set, the internal MinIO endpoint in the generated URL
+   * is replaced with that public URL so browsers can reach the files directly.
+   * Example: MINIO_PUBLIC_URL=http://localhost:9000
    */
   async getPresignedUrl(objectName: string, expirySeconds: number = 3600): Promise<string> {
     if (!this.minioClient) {
       throw new Error('SERVICE_UNAVAILABLE: MinIO storage is not configured.');
     }
 
-    return await this.minioClient.presignedGetObject(this.bucketName, objectName, expirySeconds);
+    const url = await this.minioClient.presignedGetObject(
+      this.bucketName,
+      objectName,
+      expirySeconds
+    );
+
+    const publicUrl = this.configService.get<string>('MINIO_PUBLIC_URL');
+    if (publicUrl) {
+      const protocol =
+        this.configService.get<string>('MINIO_USE_SSL') === 'true' ? 'https' : 'http';
+      const endpoint = this.configService.get<string>('MINIO_ENDPOINT')!;
+      const port = this.configService.get<string>('MINIO_PORT') || '9000';
+      const internalOrigin = `${protocol}://${endpoint}:${port}`;
+      return url.replace(internalOrigin, publicUrl.replace(/\/$/, ''));
+    }
+
+    return url;
   }
 
   /**

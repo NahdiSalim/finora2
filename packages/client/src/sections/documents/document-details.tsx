@@ -36,6 +36,7 @@ import {
   Edit,
   Trash2,
   Move,
+  Archive,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -72,6 +73,7 @@ import {
   useDeleteDocumentMutation,
   useUploadDocumentMutation,
   useDownloadDocumentMutation,
+  useArchiveDocumentMutation,
 } from "src/lib/services/documentsApi";
 import type { DocumentItem } from "src/lib/services/documentsApi";
 import {
@@ -80,8 +82,15 @@ import {
   docToFolderState,
   docToFileType,
 } from "../../types/document-details-types";
+import { useGetClientsInvoiceStatsQuery } from "src/lib/services/relationshipsApi";
 
 // ─── Main View ────────────────────────────────────────────────────────────────
+
+const DEFAULT_INVOICE_STATS = {
+  traite: 0,
+  pending: 0,
+  total: 0,
+};
 
 export default function DocumentDetailsView() {
   const { clientId } = useParams<{ clientId?: string }>();
@@ -92,13 +101,21 @@ export default function DocumentDetailsView() {
     invoiceStats?: { traite: number; pending: number; total: number };
   } | null;
   const clientName = state?.clientName;
-  const invoiceStats = state?.invoiceStats ?? {
-    traite: 0,
-    pending: 0,
-    total: 0,
-  };
   /** Mode "mon espace" : pas de clientId (client voit ses docs directement). */
   const isMySpace = clientId == null || clientId === "";
+
+  const numericClientId = !isMySpace && clientId ? Number(clientId) : undefined;
+  const { data: clientsStatsData } = useGetClientsInvoiceStatsQuery(
+    { limit: 500 },
+    { skip: numericClientId == null },
+  );
+  const currentClientStats = numericClientId
+    ? clientsStatsData?.data?.find((c) => c.clientId === numericClientId)
+    : undefined;
+  const invoiceStats =
+    currentClientStats?.invoiceStats ??
+    state?.invoiceStats ??
+    DEFAULT_INVOICE_STATS;
   const [searchValue, setSearchValue] = useState("");
   const [category, setCategory] = useState("");
   const [startDate, setStartDate] = useState<Dayjs | null>(null);
@@ -187,6 +204,7 @@ export default function DocumentDetailsView() {
     useUploadDocumentMutation();
   const [downloadDocument, { isLoading: isDownloading }] =
     useDownloadDocumentMutation();
+  const [archiveDocument] = useArchiveDocumentMutation();
 
   const rawItems: DocumentItem[] = data?.data ?? [];
   const foldersFromApi: FolderItem[] = rawItems
@@ -220,6 +238,7 @@ export default function DocumentDetailsView() {
     { label: "Aperçu", icon: <Eye size={16} />, action: "preview" },
     { label: "Télécharger", icon: <Download size={16} />, action: "download" },
     { label: "Renommer", icon: <Edit size={16} />, action: "rename" },
+    { label: "Archiver", icon: <Archive size={16} />, action: "archive" },
     { label: "Supprimer", icon: <Trash2 size={16} />, action: "delete" },
   ];
   const fileCardMenuOptions = hasSearchOrFilter
@@ -1022,6 +1041,8 @@ export default function DocumentDetailsView() {
                               name: fileItem.name,
                               type: "file",
                             });
+                          } else if (action === "archive") {
+                            archiveDocument(Number(fileItem.id));
                           }
                         }}
                       />

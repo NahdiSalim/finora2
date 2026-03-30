@@ -7,8 +7,17 @@ export class MailService {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter;
 
+  // Static flag: initialization runs only once across all instances
+  private static initialized = false;
+  private static sharedTransporter: nodemailer.Transporter | null = null;
+
   constructor(private configService: ConfigService) {
-    this.initializeTransporter();
+    if (!MailService.initialized) {
+      MailService.initialized = true;
+      this.initializeTransporter();
+    } else {
+      this.transporter = MailService.sharedTransporter!;
+    }
   }
 
   private initializeTransporter() {
@@ -26,6 +35,8 @@ export class MailService {
       service: 'gmail',
       auth: { user, pass },
     });
+
+    MailService.sharedTransporter = this.transporter;
 
     this.transporter.verify((error) => {
       if (error) {

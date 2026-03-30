@@ -88,10 +88,13 @@ export class UserService {
             where: { code: { in: ['ACCOUNTANT', 'COLLABORATOR', 'CLIENT'] } },
             select: { id: true, code: true },
           });
-          const map: Record<string, number> = { ACCOUNTANT: 0, COLLABORATOR: 0, CLIENT: 0 };
+          const map: Record<string, number> = { ALL: 0, ACCOUNTANT: 0, COLLABORATOR: 0, CLIENT: 0 };
           for (const g of groups) {
             const r = roles.find((r) => r.id === g.id_role);
-            if (r) map[r.code] = g._count.id;
+            if (r) {
+              map[r.code] = g._count.id;
+              map['ALL'] += g._count.id;
+            }
           }
           return map;
         }),

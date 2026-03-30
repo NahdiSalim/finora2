@@ -36,14 +36,25 @@ export interface Task {
   assignee: TaskUser;
   createdById: number;
   createdBy: TaskUser;
-  clientId: number | null;
-  client: TaskUser | null;
   companyId: number | null;
   company: {
     id: number;
     name: string;
   } | null;
+  taskClients?: Array<{
+    client: {
+      id: number;
+      firstName: string | null;
+      lastName: string | null;
+      email: string;
+      company: {
+        id: number;
+        name: string;
+      } | null;
+    };
+  }>;
   attachments: string[];
+  attachmentUrls?: string[];
   comments: TaskComment[];
   createdAt: string;
   updatedAt: string;

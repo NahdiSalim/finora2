@@ -41,16 +41,33 @@ export class TaskService {
         throw new ApiError(MSG.task.no_company, 400, 'NO_COMPANY');
       }
 
-      // If clientId is provided, verify there's a relationship between the accounting firm and client's company
-      if (dto.clientId) {
-        const client = await this.prisma.user.findUnique({
-          where: { id: dto.clientId },
-          select: { companyId: true },
+      // If clientIds are provided, verify there's a relationship between the accounting firm and each client's company
+      if (dto.clientIds && dto.clientIds.length > 0) {
+        // Get all client companies related to this accounting firm
+        const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
+          where: {
+            accountingFirmId: creator.companyId,
+            status: 'active',
+          },
+          select: { clientCompanyId: true },
         });
 
-        // Verify client belongs to same company
-        if (client?.companyId !== creator.companyId) {
-          throw new ApiError(MSG.task.invalid_client, 400, 'INVALID_CLIENT');
+        const validClientCompanyIds = relationships.map((r) => r.clientCompanyId);
+
+        // Verify all selected clients belong to valid client companies
+        const clients = await this.prisma.user.findMany({
+          where: { id: { in: dto.clientIds } },
+          select: { id: true, companyId: true },
+        });
+
+        const invalidClients = clients.filter((c) => !validClientCompanyIds.includes(c.companyId!));
+
+        if (invalidClients.length > 0) {
+          throw new ApiError(
+            'Un ou plusieurs clients ne sont pas associés à votre cabinet comptable',
+            400,
+            'INVALID_CLIENTS'
+          );
         }
       }
 
@@ -82,8 +99,8 @@ export class TaskService {
       // If multiple assignees, create one task per assignee
       if (dto.assigneeIds.length > 1) {
         const tasks = await Promise.all(
-          dto.assigneeIds.map((assigneeId) =>
-            this.prisma.task.create({
+          dto.assigneeIds.map(async (assigneeId) => {
+            const task = await this.prisma.task.create({
               data: {
                 title: dto.title,
                 description: dto.description,
@@ -92,7 +109,6 @@ export class TaskService {
                 dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
                 assigneeId,
                 createdById,
-                clientId: dto.clientId,
                 companyId: taskCompanyId,
                 attachments: attachmentUrls,
               },
@@ -109,8 +125,21 @@ export class TaskService {
                 createdBy: { select: { id: true, username: true, email: true } },
                 company: { select: { id: true, name: true } },
               },
-            })
-          )
+            });
+
+            // Create TaskClient entries for each client
+            if (dto.clientIds && dto.clientIds.length > 0) {
+              await this.prisma.taskClient.createMany({
+                data: dto.clientIds.map((clientId) => ({
+                  taskId: task.id,
+                  clientId,
+                })),
+                skipDuplicates: true,
+              });
+            }
+
+            return task;
+          })
         );
 
         // Notify each assignee
@@ -152,7 +181,6 @@ export class TaskService {
           dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
           assigneeId: dto.assigneeIds[0],
           createdById,
-          clientId: dto.clientId,
           companyId: taskCompanyId,
           attachments: attachmentUrls,
         },
@@ -181,6 +209,17 @@ export class TaskService {
           },
         },
       });
+
+      // Create TaskClient entries for each client
+      if (dto.clientIds && dto.clientIds.length > 0) {
+        await this.prisma.taskClient.createMany({
+          data: dto.clientIds.map((clientId) => ({
+            taskId: task.id,
+            clientId,
+          })),
+          skipDuplicates: true,
+        });
+      }
 
       // Notify single assignee
       const creatorUser = await this.prisma.user.findUnique({
@@ -307,11 +346,22 @@ export class TaskService {
               lastName: true,
             },
           },
-          client: {
+          taskClients: {
             select: {
-              id: true,
-              username: true,
-              email: true,
+              client: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  company: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
+                  },
+                },
+              },
             },
           },
           company: {
@@ -324,23 +374,43 @@ export class TaskService {
       }),
     ]);
 
-    // Parse comments for each task
-    const tasksWithComments = tasks.map((task) => {
-      let comments: TaskComment[] = [];
-      if (task.subtasks && task.subtasks.length > 0) {
-        try {
-          comments = JSON.parse(task.subtasks[0] || '[]');
-        } catch {
-          comments = [];
+    // Parse comments and generate presigned URLs for each task
+    const tasksWithComments = await Promise.all(
+      tasks.map(async (task) => {
+        let comments: TaskComment[] = [];
+        if (task.subtasks && task.subtasks.length > 0) {
+          try {
+            comments = JSON.parse(task.subtasks[0] || '[]');
+          } catch {
+            comments = [];
+          }
         }
-      }
-      const taskData = { ...task };
-      delete (taskData as any).subtasks;
-      return {
-        ...taskData,
-        comments,
-      };
-    });
+
+        // Generate presigned URLs for attachments
+        const attachmentPresignedUrls: string[] = [];
+        if (task.attachments && Array.isArray(task.attachments)) {
+          for (const attachmentPath of task.attachments) {
+            try {
+              const url = await this.minioService.getPresignedUrl(
+                attachmentPath,
+                7 * 24 * 60 * 60 // 7 days
+              );
+              attachmentPresignedUrls.push(url);
+            } catch (error) {
+              attachmentPresignedUrls.push(attachmentPath); // Fallback to path
+            }
+          }
+        }
+
+        const taskData = { ...task };
+        delete (taskData as any).subtasks;
+        return {
+          ...taskData,
+          comments,
+          attachmentUrls: attachmentPresignedUrls,
+        };
+      })
+    );
 
     // Count by status
     const statusCounts = await this.prisma.task.groupBy({
@@ -423,11 +493,22 @@ export class TaskService {
               lastName: true,
             },
           },
-          client: {
+          taskClients: {
             select: {
-              id: true,
-              username: true,
-              email: true,
+              client: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  company: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
+                  },
+                },
+              },
             },
           },
           company: {
@@ -440,23 +521,43 @@ export class TaskService {
       }),
     ]);
 
-    // Parse comments for each task
-    const tasksWithComments = tasks.map((task) => {
-      let comments: TaskComment[] = [];
-      if (task.subtasks && task.subtasks.length > 0) {
-        try {
-          comments = JSON.parse(task.subtasks[0] || '[]');
-        } catch {
-          comments = [];
+    // Parse comments and generate presigned URLs for each task
+    const tasksWithComments = await Promise.all(
+      tasks.map(async (task) => {
+        let comments: TaskComment[] = [];
+        if (task.subtasks && task.subtasks.length > 0) {
+          try {
+            comments = JSON.parse(task.subtasks[0] || '[]');
+          } catch {
+            comments = [];
+          }
         }
-      }
-      const taskData = { ...task };
-      delete (taskData as any).subtasks;
-      return {
-        ...taskData,
-        comments,
-      };
-    });
+
+        // Generate presigned URLs for attachments
+        const attachmentPresignedUrls: string[] = [];
+        if (task.attachments && Array.isArray(task.attachments)) {
+          for (const attachmentPath of task.attachments) {
+            try {
+              const url = await this.minioService.getPresignedUrl(
+                attachmentPath,
+                7 * 24 * 60 * 60 // 7 days
+              );
+              attachmentPresignedUrls.push(url);
+            } catch (error) {
+              attachmentPresignedUrls.push(attachmentPath); // Fallback to path
+            }
+          }
+        }
+
+        const taskData = { ...task };
+        delete (taskData as any).subtasks;
+        return {
+          ...taskData,
+          comments,
+          attachmentUrls: attachmentPresignedUrls,
+        };
+      })
+    );
 
     return {
       success: true,
@@ -495,17 +596,28 @@ export class TaskService {
             lastName: true,
           },
         },
-        client: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
-          },
-        },
         company: {
           select: {
             id: true,
             name: true,
+          },
+        },
+        taskClients: {
+          select: {
+            client: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                company: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -515,8 +627,9 @@ export class TaskService {
       throw new ApiError(MSG.task.not_found, 404, 'TASK_NOT_FOUND');
     }
 
-    // Check access rights
-    if (task.assigneeId !== userId && task.createdById !== userId && task.clientId !== userId) {
+    // Check access rights - also check if user is a client of this task
+    const isClient = task.taskClients.some((tc) => tc.client.id === userId);
+    if (task.assigneeId !== userId && task.createdById !== userId && !isClient) {
       throw new ApiError(MSG.task.access_denied, 403, 'ACCESS_DENIED');
     }
 
@@ -535,11 +648,29 @@ export class TaskService {
     const taskData = { ...task };
     delete (taskData as any).subtasks;
 
+    // Generate presigned URLs for attachments
+    const attachmentPresignedUrls: string[] = [];
+    if (task.attachments && Array.isArray(task.attachments)) {
+      for (const attachmentPath of task.attachments) {
+        try {
+          const url = await this.minioService.getPresignedUrl(
+            attachmentPath,
+            7 * 24 * 60 * 60 // 7 days
+          );
+          attachmentPresignedUrls.push(url);
+        } catch (error) {
+          console.error('Error generating presigned URL for task attachment:', error);
+          attachmentPresignedUrls.push(attachmentPath); // Fallback to path
+        }
+      }
+    }
+
     return {
       success: true,
       data: {
         ...taskData,
         comments,
+        attachmentUrls: attachmentPresignedUrls,
       },
     };
   }
@@ -603,9 +734,16 @@ export class TaskService {
 
     // Handle adding collaborators (creates duplicate tasks)
     if (dto.addCollaborators && dto.addCollaborators.length > 0) {
+      // Get existing clients for this task
+      const existingClients = await this.prisma.taskClient.findMany({
+        where: { taskId: task.id },
+        select: { clientId: true },
+      });
+      const clientIds = existingClients.map((tc) => tc.clientId);
+
       const newTasks = await Promise.all(
-        dto.addCollaborators.map((assigneeId) =>
-          this.prisma.task.create({
+        dto.addCollaborators.map(async (assigneeId) => {
+          const newTask = await this.prisma.task.create({
             data: {
               title: dto.title || task.title,
               description: dto.description || task.description,
@@ -615,7 +753,6 @@ export class TaskService {
               dueDate: dto.dueDate ? new Date(dto.dueDate) : task.dueDate,
               assigneeId,
               createdById: task.createdById,
-              clientId: task.clientId,
               companyId: task.companyId,
               attachments: allAttachments,
             },
@@ -630,8 +767,21 @@ export class TaskService {
                 },
               },
             },
-          })
-        )
+          });
+
+          // Copy clients to new task
+          if (clientIds.length > 0) {
+            await this.prisma.taskClient.createMany({
+              data: clientIds.map((clientId) => ({
+                taskId: newTask.id,
+                clientId,
+              })),
+              skipDuplicates: true,
+            });
+          }
+
+          return newTask;
+        })
       );
 
       // Update the original task
@@ -711,6 +861,25 @@ export class TaskService {
         },
       },
     });
+
+    // Update clientIds if provided
+    if (dto.clientIds !== undefined) {
+      // Delete existing clients
+      await this.prisma.taskClient.deleteMany({
+        where: { taskId: task.id },
+      });
+
+      // Add new clients
+      if (dto.clientIds.length > 0) {
+        await this.prisma.taskClient.createMany({
+          data: dto.clientIds.map((clientId) => ({
+            taskId: task.id,
+            clientId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
 
     // Notify the other party about task update
     const notifyId = userId === task.assigneeId ? task.createdById : task.assigneeId;
@@ -1090,6 +1259,93 @@ export class TaskService {
       success: true,
       data: tasks,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  /**
+   * Get accountant's clients (from active relationships)
+   */
+  async getMyClients(userId: number, page: number = 1, limit: number = 20, search?: string) {
+    // Get accountant's company
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { companyId: true },
+    });
+
+    if (!user?.companyId) {
+      throw new ApiError('Vous devez être associé à une entreprise', 400, 'NO_COMPANY');
+    }
+
+    const skip = (page - 1) * limit;
+
+    // Build where clause for relationships
+    const relationshipWhere: any = {
+      accountingFirmId: user.companyId,
+      status: 'active',
+    };
+
+    // Add search filter by company name if provided
+    if (search?.trim()) {
+      relationshipWhere.clientCompany = {
+        name: {
+          contains: search.trim(),
+          mode: 'insensitive',
+        },
+      };
+    }
+
+    // Get active relationships
+    const [totalRelationships, relationships] = await Promise.all([
+      this.prisma.clientAccountingFirmRelationship.count({ where: relationshipWhere }),
+      this.prisma.clientAccountingFirmRelationship.findMany({
+        where: relationshipWhere,
+        skip,
+        take: limit,
+        include: {
+          clientCompany: {
+            select: {
+              id: true,
+              name: true,
+              logo: true,
+              owner: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { relationshipStart: 'desc' },
+      }),
+    ]);
+
+    // Extract clients (company owners) from relationships
+    const clients = relationships
+      .filter((r) => r.clientCompany.owner)
+      .map((r) => ({
+        id: r.clientCompany.owner!.id,
+        firstName: r.clientCompany.owner!.firstName,
+        lastName: r.clientCompany.owner!.lastName,
+        email: r.clientCompany.owner!.email,
+        company: {
+          id: r.clientCompany.id,
+          name: r.clientCompany.name,
+          logo: r.clientCompany.logo,
+        },
+      }));
+
+    return {
+      success: true,
+      data: clients,
+      pagination: {
+        total: totalRelationships,
+        page,
+        limit,
+        totalPages: Math.ceil(totalRelationships / limit),
+      },
     };
   }
 }

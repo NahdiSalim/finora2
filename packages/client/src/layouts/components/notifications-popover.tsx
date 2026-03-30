@@ -1,6 +1,6 @@
 import type { ButtonProps } from "@mui/material/Button";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 
 import Box from "@mui/material/Box";
 import List from "@mui/material/List";
@@ -55,6 +55,56 @@ export function NotificationsPopover({
   const [markAsRead] = useMarkNotificationAsReadMutation();
   const [markAllAsRead] = useMarkAllNotificationsAsReadMutation();
   const [respondToInvitation] = useRespondToInvitationMutation();
+  const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
+  const seenNotificationIdsRef = useRef<Set<number>>(new Set());
+  const suppressNextBeepRef = useRef(false);
+
+  const playNotificationBeep = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const audio = notificationAudioRef.current;
+    if (!audio) return;
+    audio.currentTime = 0;
+    void audio.play().catch(() => {
+      // Browsers can block autoplay until first user interaction.
+    });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return () => {};
+    }
+    const audio = new Audio("/assets/sounds/notification.mp3");
+    audio.preload = "auto";
+    audio.volume = 1;
+    notificationAudioRef.current = audio;
+    return () => {
+      notificationAudioRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const list = notificationsData?.notifications ?? [];
+    const currentIds = list
+      .map((n) => Number(n.id))
+      .filter((id) => Number.isFinite(id));
+
+    // First hydration: mark existing ids as seen without playing sound.
+    if (seenNotificationIdsRef.current.size === 0) {
+      seenNotificationIdsRef.current = new Set(currentIds);
+      return;
+    }
+
+    const hasNewNotification = currentIds.some(
+      (id) => !seenNotificationIdsRef.current.has(id),
+    );
+    if (suppressNextBeepRef.current) {
+      suppressNextBeepRef.current = false;
+    } else if (hasNewNotification) {
+      playNotificationBeep();
+    }
+
+    seenNotificationIdsRef.current = new Set(currentIds);
+  }, [notificationsData, playNotificationBeep]);
 
   const notifications = useMemo(() => {
     const source =
@@ -94,6 +144,7 @@ export function NotificationsPopover({
                   invitationId,
                   response: "accept",
                 }).unwrap();
+                suppressNextBeepRef.current = true;
                 await markAsRead(n.id).unwrap();
                 showAlert("Invitation acceptée", "success");
                 refetchNotifications();
@@ -112,6 +163,7 @@ export function NotificationsPopover({
                   invitationId,
                   response: "reject",
                 }).unwrap();
+                suppressNextBeepRef.current = true;
                 await markAsRead(n.id).unwrap();
                 showAlert("Invitation refusée", "success");
                 refetchNotifications();
@@ -155,6 +207,7 @@ export function NotificationsPopover({
   }, []);
 
   const handleMarkAllAsRead = useCallback(() => {
+    suppressNextBeepRef.current = true;
     markAllAsRead()
       .unwrap()
       .then(() => refetchNotifications())

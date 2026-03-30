@@ -119,6 +119,33 @@ export class TaskController {
   }
 
   /**
+   * Get my clients (Accountant) - from active relationships
+   */
+  @Get('my-clients')
+  @Throttle({ default: { limit: 200, ttl: 60000 } })
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Get my clients from active relationships' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by client company name',
+  })
+  @ApiResponse({ status: 200, description: 'List of clients with company info' })
+  async getMyClients(
+    @Req() req: AuthRequest,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string
+  ) {
+    const userId = req.user!.id;
+    return this.taskService.getMyClients(userId, page || 1, limit || 20, search);
+  }
+
+  /**
    * Get tasks created by me (Accountant)
    */
   @Get('my-created-tasks')

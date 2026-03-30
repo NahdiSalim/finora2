@@ -20,6 +20,34 @@ export class RequestService {
   /**
    * Create a new request (Client)
    */
+  /**
+   * Check if client has an accounting firm relationship
+   */
+  async checkClientHasAccountant(clientId: number) {
+    const client = await this.prisma.user.findUnique({
+      where: { id: clientId },
+      select: { companyId: true },
+    });
+
+    if (!client?.companyId) {
+      return {
+        success: true,
+        hasAccountant: false,
+      };
+    }
+
+    const relationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
+      where: {
+        clientCompanyId: client.companyId,
+      },
+    });
+
+    return {
+      success: true,
+      hasAccountant: !!relationship,
+    };
+  }
+
   async createRequest(dto: CreateRequestDto, clientId: number, files?: Express.Multer.File[]) {
     try {
       console.log('CreateRequestDto received:', dto);
@@ -54,10 +82,26 @@ export class RequestService {
       } else {
         // Auto-detect from active relationship
         const relationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
-          where: { clientCompanyId: client.companyId, status: 'active' },
+          where: {
+            clientCompanyId: client.companyId,
+            status: { in: ['active', 'accepted'] }, // Include both active and accepted
+          },
           select: { accountingFirmId: true },
+          orderBy: { createdAt: 'desc' }, // Get the most recent one
         });
         accountingFirmId = relationship?.accountingFirmId ?? null;
+
+        // If still null, try to find any relationship regardless of status
+        if (!accountingFirmId) {
+          const anyRelationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
+            where: { clientCompanyId: client.companyId },
+            select: { accountingFirmId: true, status: true },
+            orderBy: { createdAt: 'desc' },
+          });
+          if (anyRelationship) {
+            accountingFirmId = anyRelationship.accountingFirmId;
+          }
+        }
       }
 
       // Create request first to get the ID
@@ -270,11 +314,22 @@ export class RequestService {
           .map((id) => (typeof id === 'string' ? parseInt(id, 10) : id))
           .filter((id) => !isNaN(id));
 
+        // Detect if this is a vocal request
+        const hasAudioAttachment = attachmentUrls.some((url: string) => {
+          const ext = url.split('.').pop()?.toLowerCase();
+          return ['mp3', 'wav', 'm4a', 'ogg', 'webm'].includes(ext || '');
+        });
+
+        const taskDescription =
+          hasAudioAttachment && !updatedRequest.description
+            ? '📢 Cette tâche contient un message vocal du client. Veuillez écouter le message audio pour plus de détails.'
+            : updatedRequest.description || null;
+
         for (const collaboratorId of collaboratorIds) {
-          await this.prisma.task.create({
+          const task = await this.prisma.task.create({
             data: {
               title: `Demande: ${updatedRequest.subject}`,
-              description: updatedRequest.description || null,
+              description: taskDescription,
               type: 'other',
               priority:
                 updatedRequest.urgency === 'urgent'
@@ -285,7 +340,15 @@ export class RequestService {
               assigneeId: collaboratorId,
               createdById: clientId,
               companyId: client.companyId,
-              attachments: [],
+              attachments: attachmentUrls,
+            },
+          });
+
+          // Create TaskClient entry for the request's client
+          await this.prisma.taskClient.create({
+            data: {
+              taskId: task.id,
+              clientId: clientId,
             },
           });
         }
@@ -736,11 +799,32 @@ export class RequestService {
       throw new ApiError(MSG.accountant.no_company, 400, 'NO_COMPANY');
     }
 
+    // Get all client company IDs that have a relationship with this accounting firm
+    const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
+      where: {
+        accountingFirmId: accountant.companyId,
+      },
+      select: { clientCompanyId: true },
+    });
+
+    const clientCompanyIds = relationships.map((r) => r.clientCompanyId);
+
     const skip = (page - 1) * limit;
     const where: any = {
-      accountingFirmId: accountant.companyId,
-      assignedToId: null,
-      convertedToTaskId: null,
+      OR: [
+        // Requests with accountingFirmId set
+        {
+          accountingFirmId: accountant.companyId,
+          assignedToId: null,
+          convertedToTaskId: null,
+        },
+        // Requests from client companies connected to this firm (even if accountingFirmId is null)
+        {
+          companyId: { in: clientCompanyIds },
+          assignedToId: null,
+          convertedToTaskId: null,
+        },
+      ],
     };
 
     if (status) {
@@ -821,9 +905,18 @@ export class RequestService {
     const statusCounts = await this.prisma.request.groupBy({
       by: ['status'],
       where: {
-        accountingFirmId: accountant.companyId,
-        assignedToId: null,
-        convertedToTaskId: null,
+        OR: [
+          {
+            accountingFirmId: accountant.companyId,
+            assignedToId: null,
+            convertedToTaskId: null,
+          },
+          {
+            companyId: { in: clientCompanyIds },
+            assignedToId: null,
+            convertedToTaskId: null,
+          },
+        ],
       },
       _count: true,
     });
@@ -958,14 +1051,35 @@ export class RequestService {
     // Check access rights
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { companyId: true },
+      select: { companyId: true, role: { select: { code: true } } },
     });
 
-    // Allow access if user is the client, assigned accountant, or from the accounting firm
-    const hasAccess =
+    // Allow access if:
+    // 1. User is the client
+    // 2. User is assigned to the request
+    // 3. Request's accountingFirmId matches user's company
+    // 4. User's accounting firm has a relationship with the client's company
+    let hasAccess =
       request.clientId === userId ||
       request.assignedToId === userId ||
       (request.accountingFirmId && request.accountingFirmId === user?.companyId);
+
+    // For accountants/collaborators, also check for company relationships
+    if (!hasAccess && user?.companyId && request.companyId) {
+      const isAccountantOrCollab = ['ACCOUNTANT', 'COLLABORATOR', 'ADMINISTRATOR'].includes(
+        user.role?.code || ''
+      );
+
+      if (isAccountantOrCollab) {
+        const relationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
+          where: {
+            clientCompanyId: request.companyId,
+            accountingFirmId: user.companyId,
+          },
+        });
+        hasAccess = !!relationship;
+      }
+    }
 
     if (!hasAccess) {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
@@ -1050,7 +1164,7 @@ export class RequestService {
     }
 
     // Handle file uploads if provided
-    const attachmentUrls: string[] = [...request.attachments]; // Keep existing attachments
+    let attachmentUrls: string[] = [...request.attachments]; // Start with existing attachments
 
     if (files && files.length > 0) {
       const client = await this.prisma.user.findUnique({
@@ -1062,13 +1176,39 @@ export class RequestService {
         throw new ApiError('Company not found', 404, 'COMPANY_NOT_FOUND');
       }
 
-      for (const file of files) {
-        const fileName = `request-${Date.now()}-${file.originalname}`;
-        const filePath = `requests/${fileName}`;
+      // Check if the new files are audio files (voice request update)
+      const audioMimeTypes = [
+        'audio/mpeg',
+        'audio/mp3',
+        'audio/wav',
+        'audio/wave',
+        'audio/x-wav',
+        'audio/ogg',
+        'audio/webm',
+        'audio/mp4',
+        'audio/x-m4a',
+      ];
+      const isAudioUpdate = files.some((f) => audioMimeTypes.includes(f.mimetype));
 
+      // If updating with audio files, REPLACE all existing audio attachments
+      if (isAudioUpdate) {
+        // Remove all existing audio files from attachmentUrls
+        attachmentUrls = attachmentUrls.filter((url) => {
+          const ext = url.split('.').pop()?.toLowerCase();
+          return !['mp3', 'wav', 'm4a', 'ogg', 'webm'].includes(ext || '');
+        });
+      }
+
+      // Upload new files to the request-specific folder
+      const requestFolderName = `demande-${requestId}`;
+      for (const file of files) {
         try {
-          await this.minioService.uploadFile(client.companyId, filePath, file);
-          attachmentUrls.push(filePath);
+          const uploadedPath = await this.minioService.uploadFile(
+            client.companyId,
+            `requests/${requestFolderName}`,
+            file
+          );
+          attachmentUrls.push(uploadedPath);
         } catch (error) {
           console.error('MinIO upload error:', error);
           // Continue without the file if upload fails
@@ -1169,11 +1309,24 @@ export class RequestService {
               })
               .catch(() => {});
           } else {
+            // Detect if this is a vocal request (has audio attachments)
+            const hasAudioAttachment = request.attachments?.some((att: string) => {
+              const ext = att.split('.').pop()?.toLowerCase();
+              return ['mp3', 'wav', 'm4a', 'ogg', 'webm'].includes(ext || '');
+            });
+
+            // For vocal requests, enhance the description
+            let taskDescription = dto.description || request.description || '';
+            if (hasAudioAttachment && !taskDescription) {
+              taskDescription =
+                '📢 Cette tâche contient un message vocal du client. Veuillez écouter le message audio pour plus de détails.';
+            }
+
             // Create new task for the collaborator
             const task = await this.prisma.task.create({
               data: {
                 title: dto.subject || request.subject,
-                description: dto.description || request.description || '',
+                description: taskDescription,
                 type: dto.type || request.type,
                 priority: priorityMap[dto.urgency || request.urgency] || 'medium',
                 dueDate: dto.desiredResponseDate
@@ -1183,12 +1336,21 @@ export class RequestService {
                     : null,
                 assigneeId: dto.assignedToId,
                 createdById: userId,
-                clientId: request.clientId,
                 companyId: request.companyId,
                 requestId: request.id,
                 attachments: attachmentUrls,
               },
             });
+
+            // Create TaskClient entry for the request's client
+            if (request.clientId) {
+              await this.prisma.taskClient.create({
+                data: {
+                  taskId: task.id,
+                  clientId: request.clientId,
+                },
+              });
+            }
 
             // Mark request as converted
             updateData.convertedToTaskId = task.id;
@@ -1272,10 +1434,30 @@ export class RequestService {
         .catch(() => {});
     }
 
+    // Generate presigned URLs for attachments
+    const attachmentPresignedUrls: string[] = [];
+    if (updatedRequest.attachments && Array.isArray(updatedRequest.attachments)) {
+      for (const attachmentPath of updatedRequest.attachments) {
+        try {
+          const url = await this.minioService.getPresignedUrl(
+            attachmentPath,
+            7 * 24 * 60 * 60 // 7 days
+          );
+          attachmentPresignedUrls.push(url);
+        } catch (error) {
+          console.error('Error generating presigned URL for attachment:', error);
+          attachmentPresignedUrls.push(attachmentPath); // Fallback to path
+        }
+      }
+    }
+
     return {
       success: true,
       message: MSG.request.updated,
-      data: updatedRequest,
+      data: {
+        ...updatedRequest,
+        attachmentUrls: attachmentPresignedUrls,
+      },
     };
   }
   async respondToRequest(
@@ -1329,7 +1511,6 @@ export class RequestService {
         response: dto.response,
         responseAttachments: responseAttachmentUrls,
         status: 'in_progress',
-        assignedToId: accountantId,
         respondedAt: new Date(),
       },
       include: {
@@ -1394,19 +1575,30 @@ export class RequestService {
       urgent: 'urgent',
     };
 
+    // Detect if this is a vocal request
+    const hasAudioAttachment = request.attachments?.some((att: string) => {
+      const ext = att.split('.').pop()?.toLowerCase();
+      return ['mp3', 'wav', 'm4a', 'ogg', 'webm'].includes(ext || '');
+    });
+
+    const taskDescription =
+      hasAudioAttachment && !request.description
+        ? '📢 Cette tâche contient un message vocal du client. Veuillez écouter le message audio pour plus de détails.'
+        : request.description || '';
+
     // Create task
     const task = await this.prisma.task.create({
       data: {
         title: request.subject,
-        description: request.description || '',
+        description: taskDescription,
         type: request.type,
         priority: dto.priority || priorityMap[request.urgency] || 'medium',
         dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
         assigneeId: dto.assigneeId,
         createdById: accountantId,
-        clientId: request.clientId,
         companyId: request.companyId,
         requestId: request.id,
+        attachments: request.attachments || [],
       },
       include: {
         assignee: {
@@ -1420,6 +1612,16 @@ export class RequestService {
         },
       },
     });
+
+    // Create TaskClient entry for the request's client
+    if (request.clientId) {
+      await this.prisma.taskClient.create({
+        data: {
+          taskId: task.id,
+          clientId: request.clientId,
+        },
+      });
+    }
 
     // Update request with task reference
     await this.prisma.request.update({

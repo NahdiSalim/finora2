@@ -24,6 +24,7 @@ import {
   useGetMyRequestsQuery,
   useGetRequestByIdQuery,
   useDeleteRequestMutation,
+  useCheckHasAccountantQuery,
 } from "src/lib/services/requestApi";
 import RequestModal from "../modal/RequestModal";
 import ViewRequestDrawer from "../drawer/ViewRequestDrawer";
@@ -85,6 +86,11 @@ export default function RequestView() {
   const userRoleUpper = userRole?.toUpperCase();
   const isClient =
     userRoleUpper === ROLE_CODES.CLIENT || userRoleUpper === "CLIENT";
+
+  // Check if client has accountant relationship (only for clients)
+  const { data: hasAccountantData } = useCheckHasAccountantQuery(undefined, {
+    skip: !isClient,
+  });
   // Handle both ACCOUNTANT and comptable (backend fallback)
   const isAccountant =
     userRoleUpper === ROLE_CODES.ACCOUNTANT ||
@@ -210,6 +216,14 @@ export default function RequestView() {
   };
 
   const handleOpenModal = () => {
+    // Check if client has an accountant relationship before opening modal
+    if (isClient && hasAccountantData && !hasAccountantData.hasAccountant) {
+      showAlert(
+        "Vous devez être en relation avec un cabinet comptable pour créer une demande. Veuillez contacter votre administrateur.",
+        "warning",
+      );
+      return;
+    }
     setOpenModal(true);
   };
 

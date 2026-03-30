@@ -6,7 +6,10 @@ import {
   Chip,
   Avatar,
   Grid,
+  Card,
+  Divider,
 } from "@mui/material";
+import { Calendar, User, Users, FileText, Building2 } from "lucide-react";
 import { format } from "date-fns";
 import type { Task } from "../types";
 import { PRIORITY_CONFIG } from "../types";
@@ -47,275 +50,404 @@ export function TaskDetailsContent({
       sx={{
         display: "flex",
         flexDirection: "column",
-        gap: { xs: 2, sm: 3 },
+        gap: { xs: 2.5, sm: 3 },
       }}
     >
-      {/* Title Area with Badges */}
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: { xs: 1.5, sm: 2 },
-          flexWrap: "wrap",
-        }}
-      >
-        <Typography
-          variant="h5"
-          sx={{
-            fontWeight: 700,
-            fontSize: { xs: 18, sm: 20 },
-            color: theme.palette.text.primary,
-          }}
-        >
-          {task.title}
-        </Typography>
+      {/* Header Section - Title & Status */}
+      <Box>
         <Box
           sx={{
             display: "flex",
-            alignItems: "center",
-            gap: { xs: 1, sm: 1.5 },
-          }}
-        >
-          <Chip
-            label={statusLabels[task.status]}
-            size="medium"
-            sx={{
-              height: { xs: 28, sm: 32 },
-              fontSize: { xs: 12, sm: 14 },
-              fontWeight: 600,
-              bgcolor: alpha(statusColors[task.status], 0.1),
-              color: statusColors[task.status],
-              "& .MuiChip-label": {
-                px: { xs: 1.5, sm: 2 },
-              },
-            }}
-          />
-          <Chip
-            label={priorityConfig.label}
-            size="medium"
-            sx={{
-              height: { xs: 28, sm: 32 },
-              fontSize: { xs: 12, sm: 14 },
-              fontWeight: 600,
-              bgcolor: alpha(priorityConfig.color, 0.1),
-              color: priorityConfig.color,
-              "& .MuiChip-label": {
-                px: { xs: 1.5, sm: 2 },
-              },
-            }}
-          />
-        </Box>
-      </Box>
-
-      {/* Description */}
-      <Box>
-        <Typography
-          variant="body2"
-          sx={{
-            mb: 1,
-            fontSize: { xs: 13, sm: 14 },
-            fontWeight: 500,
-            color: theme.palette.text.secondary,
-          }}
-        >
-          Description
-        </Typography>
-        <Box
-          sx={{
-            p: { xs: 1.5, sm: 2 },
-            bgcolor: theme.palette.grey[50],
-            borderRadius: 2,
-            border: `1px solid ${theme.palette.grey[300]}`,
-            minHeight: { xs: 80, sm: 100 },
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 2,
+            mb: 1.5,
           }}
         >
           <Typography
-            variant="body2"
+            variant="h5"
             sx={{
-              fontSize: { xs: 13, sm: 14 },
+              fontWeight: 700,
+              fontSize: { xs: 20, sm: 24 },
               color: theme.palette.text.primary,
-              lineHeight: 1.6,
+              lineHeight: 1.3,
             }}
           >
-            {task.description || ""}
+            {task.title}
           </Typography>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              flexShrink: 0,
+            }}
+          >
+            <Chip
+              label={statusLabels[task.status]}
+              size="medium"
+              sx={{
+                height: 32,
+                fontSize: 13,
+                fontWeight: 600,
+                bgcolor: alpha(statusColors[task.status], 0.12),
+                color: statusColors[task.status],
+                border: `1px solid ${alpha(statusColors[task.status], 0.3)}`,
+                "& .MuiChip-label": { px: 2 },
+              }}
+            />
+            <Chip
+              label={priorityConfig.label}
+              size="medium"
+              sx={{
+                height: 32,
+                fontSize: 13,
+                fontWeight: 600,
+                bgcolor: alpha(priorityConfig.color, 0.12),
+                color: priorityConfig.color,
+                border: `1px solid ${alpha(priorityConfig.color, 0.3)}`,
+                "& .MuiChip-label": { px: 2 },
+              }}
+            />
+          </Box>
         </Box>
       </Box>
 
-      {/* Grid Layout - 2 Columns */}
-      <Grid container spacing={{ xs: 1.5, sm: 2 }}>
-        {/* Client */}
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <Box>
-            <Typography
-              variant="body2"
-              sx={{
-                mb: 1,
-                fontSize: { xs: 13, sm: 14 },
-                fontWeight: 500,
-                color: theme.palette.text.secondary,
-              }}
-            >
-              Client
-            </Typography>
-            <Box
-              sx={{
-                p: { xs: 1.25, sm: 1.5 },
-                bgcolor: theme.palette.grey[50],
-                borderRadius: 2,
-                border: `1px solid ${theme.palette.grey[300]}`,
-              }}
-            >
-              <Typography
-                variant="body2"
-                sx={{
-                  fontSize: { xs: 13, sm: 14 },
-                  color: theme.palette.text.primary,
-                }}
-              >
-                {task.client
-                  ? `${task.client.firstName || ""} ${task.client.lastName || ""}`.trim() ||
-                    task.client.username ||
-                    task.client.email
-                  : "Aucun client"}
-              </Typography>
-            </Box>
-          </Box>
-        </Grid>
+      <Divider sx={{ borderColor: theme.palette.grey[200] }} />
 
-        {/* Date d'échéance */}
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <Box>
+      {/* Description Section */}
+      <Card
+        elevation={0}
+        sx={{
+          bgcolor: alpha(theme.palette.primary.main, 0.02),
+          border: `1px solid ${theme.palette.grey[200]}`,
+          borderRadius: 2.5,
+        }}
+      >
+        <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              mb: 1.5,
+            }}
+          >
+            <FileText size={18} color={theme.palette.text.secondary} />
             <Typography
-              variant="body2"
+              variant="subtitle2"
               sx={{
-                mb: 1,
-                fontSize: { xs: 13, sm: 14 },
-                fontWeight: 500,
-                color: theme.palette.text.secondary,
+                fontWeight: 600,
+                fontSize: 15,
+                color: theme.palette.text.primary,
               }}
             >
-              Date d&apos;échéance
+              Description
             </Typography>
-            <Box
-              sx={{
-                p: { xs: 1.25, sm: 1.5 },
-                bgcolor: theme.palette.grey[50],
-                borderRadius: 2,
-                border: `1px solid ${theme.palette.grey[300]}`,
-              }}
-            >
-              <Typography
-                variant="body2"
-                sx={{
-                  fontSize: { xs: 13, sm: 14 },
-                  color: theme.palette.text.primary,
-                }}
-              >
-                {task.dueDate
-                  ? format(new Date(task.dueDate), "dd/MM/yyyy 'à' HH:mm")
-                  : "Non définie"}
-              </Typography>
-            </Box>
           </Box>
-        </Grid>
+          <Typography
+            variant="body2"
+            sx={{
+              fontSize: 14,
+              color: theme.palette.text.primary,
+              lineHeight: 1.7,
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {task.description || "Aucune description fournie"}
+          </Typography>
+        </Box>
+      </Card>
 
-        {/* Assigné à */}
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <Box>
-            <Typography
-              variant="body2"
+      {/* Details Grid */}
+      <Box>
+        <Typography
+          variant="subtitle2"
+          sx={{
+            fontWeight: 600,
+            fontSize: 15,
+            color: theme.palette.text.primary,
+            mb: 2,
+          }}
+        >
+          Détails de la tâche
+        </Typography>
+        <Grid container spacing={2}>
+          {/* Client(s) */}
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Card
+              elevation={0}
               sx={{
-                mb: 1,
-                fontSize: { xs: 13, sm: 14 },
-                fontWeight: 500,
-                color: theme.palette.text.secondary,
+                height: "100%",
+                bgcolor: "white",
+                border: `1px solid ${theme.palette.grey[200]}`,
+                borderRadius: 2,
+                transition: "all 0.2s",
+                "&:hover": {
+                  borderColor: theme.palette.primary.main,
+                  boxShadow: `0 0 0 1px ${alpha(theme.palette.primary.main, 0.1)}`,
+                },
               }}
             >
-              Assigné à
-            </Typography>
-            <Box
+              <Box sx={{ p: 2 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    mb: 1.5,
+                  }}
+                >
+                  <Building2 size={16} color={theme.palette.primary.main} />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: theme.palette.text.secondary,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    Client(s)
+                  </Typography>
+                </Box>
+                {task.taskClients && task.taskClients.length > 0 ? (
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                    {task.taskClients.map((tc, index) => (
+                      <Chip
+                        key={index}
+                        label={
+                          tc.client.company?.name ||
+                          `${tc.client.firstName || ""} ${tc.client.lastName || ""}`.trim() ||
+                          tc.client.email
+                        }
+                        size="small"
+                        sx={{
+                          height: 28,
+                          fontSize: 13,
+                          fontWeight: 500,
+                          bgcolor: alpha(theme.palette.primary.main, 0.08),
+                          color: theme.palette.primary.main,
+                          border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                          "& .MuiChip-label": { px: 1.5 },
+                        }}
+                      />
+                    ))}
+                  </Box>
+                ) : (
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontSize: 14,
+                      color: theme.palette.text.disabled,
+                      fontStyle: "italic",
+                    }}
+                  >
+                    Aucun client assigné
+                  </Typography>
+                )}
+              </Box>
+            </Card>
+          </Grid>
+
+          {/* Date d'échéance */}
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Card
+              elevation={0}
               sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: { xs: 0.75, sm: 1 },
+                height: "100%",
+                bgcolor: "white",
+                border: `1px solid ${theme.palette.grey[200]}`,
+                borderRadius: 2,
+                transition: "all 0.2s",
+                "&:hover": {
+                  borderColor: theme.palette.primary.main,
+                  boxShadow: `0 0 0 1px ${alpha(theme.palette.primary.main, 0.1)}`,
+                },
               }}
             >
-              <Avatar
-                alt={task.assignee.username}
-                sx={{
-                  width: { xs: 36, sm: 40 },
-                  height: { xs: 36, sm: 40 },
-                  bgcolor: theme.palette.primary.main,
-                  color: theme.palette.common.white,
-                  fontSize: { xs: 13, sm: 14 },
-                  fontWeight: 600,
-                }}
-              >
-                {task.assignee.firstName
-                  ? `${task.assignee.firstName.charAt(0)}${task.assignee.lastName?.charAt(0) || ""}`
-                  : task.assignee.username.charAt(0).toUpperCase()}
-              </Avatar>
-              <Box>
-                <Typography
-                  variant="body2"
-                  fontWeight={600}
-                  sx={{ fontSize: { xs: 13, sm: 14 } }}
+              <Box sx={{ p: 2 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    mb: 1.5,
+                  }}
                 >
-                  {task.assignee.firstName && task.assignee.lastName
-                    ? `${task.assignee.firstName} ${task.assignee.lastName}`
-                    : task.assignee.username}
-                </Typography>
+                  <Calendar size={16} color={theme.palette.primary.main} />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: theme.palette.text.secondary,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    Date d&apos;échéance
+                  </Typography>
+                </Box>
                 <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontSize: { xs: 11, sm: 12 } }}
+                  variant="body1"
+                  sx={{
+                    fontSize: 15,
+                    fontWeight: 600,
+                    color: task.dueDate
+                      ? theme.palette.text.primary
+                      : theme.palette.text.disabled,
+                  }}
                 >
-                  {task.assignee.email}
+                  {task.dueDate
+                    ? format(new Date(task.dueDate), "dd/MM/yyyy 'à' HH:mm")
+                    : "Non définie"}
                 </Typography>
               </Box>
-            </Box>
-          </Box>
-        </Grid>
+            </Card>
+          </Grid>
 
-        {/* Créé par */}
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <Box>
-            <Typography
-              variant="body2"
+          {/* Assigné à */}
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Card
+              elevation={0}
               sx={{
-                mb: 1,
-                fontSize: 14,
-                fontWeight: 500,
-                color: theme.palette.text.secondary,
-              }}
-            >
-              Créé par
-            </Typography>
-            <Box
-              sx={{
-                p: 1.5,
-                bgcolor: theme.palette.grey[50],
+                height: "100%",
+                bgcolor: "white",
+                border: `1px solid ${theme.palette.grey[200]}`,
                 borderRadius: 2,
-                border: `1px solid ${theme.palette.grey[300]}`,
+                transition: "all 0.2s",
+                "&:hover": {
+                  borderColor: theme.palette.primary.main,
+                  boxShadow: `0 0 0 1px ${alpha(theme.palette.primary.main, 0.1)}`,
+                },
               }}
             >
-              <Typography
-                variant="body2"
-                sx={{
-                  fontSize: 14,
-                  color: theme.palette.text.primary,
-                }}
-              >
-                {task.createdBy.firstName && task.createdBy.lastName
-                  ? `${task.createdBy.firstName} ${task.createdBy.lastName}`
-                  : task.createdBy.username}
-              </Typography>
-            </Box>
-          </Box>
+              <Box sx={{ p: 2 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    mb: 1.5,
+                  }}
+                >
+                  <User size={16} color={theme.palette.primary.main} />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: theme.palette.text.secondary,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    Assigné à
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1.5,
+                  }}
+                >
+                  <Avatar
+                    alt={task.assignee.username}
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      bgcolor: theme.palette.primary.main,
+                      color: theme.palette.common.white,
+                      fontSize: 16,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {task.assignee.firstName
+                      ? `${task.assignee.firstName.charAt(0)}${task.assignee.lastName?.charAt(0) || ""}`
+                      : task.assignee.username.charAt(0).toUpperCase()}
+                  </Avatar>
+                  <Box>
+                    <Typography
+                      variant="body2"
+                      fontWeight={600}
+                      sx={{ fontSize: 14, lineHeight: 1.4 }}
+                    >
+                      {task.assignee.firstName && task.assignee.lastName
+                        ? `${task.assignee.firstName} ${task.assignee.lastName}`
+                        : task.assignee.username}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontSize: 12 }}
+                    >
+                      {task.assignee.email}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Card>
+          </Grid>
+
+          {/* Créé par */}
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Card
+              elevation={0}
+              sx={{
+                height: "100%",
+                bgcolor: "white",
+                border: `1px solid ${theme.palette.grey[200]}`,
+                borderRadius: 2,
+                transition: "all 0.2s",
+                "&:hover": {
+                  borderColor: theme.palette.primary.main,
+                  boxShadow: `0 0 0 1px ${alpha(theme.palette.primary.main, 0.1)}`,
+                },
+              }}
+            >
+              <Box sx={{ p: 2 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    mb: 1.5,
+                  }}
+                >
+                  <Users size={16} color={theme.palette.primary.main} />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: theme.palette.text.secondary,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    Créé par
+                  </Typography>
+                </Box>
+                <Typography
+                  variant="body1"
+                  sx={{
+                    fontSize: 15,
+                    fontWeight: 600,
+                    color: theme.palette.text.primary,
+                  }}
+                >
+                  {task.createdBy.firstName && task.createdBy.lastName
+                    ? `${task.createdBy.firstName} ${task.createdBy.lastName}`
+                    : task.createdBy.username}
+                </Typography>
+              </Box>
+            </Card>
+          </Grid>
         </Grid>
-      </Grid>
+      </Box>
     </Box>
   );
 }

@@ -29,18 +29,39 @@ export class RelationshipService {
         companyId: true,
         firstName: true,
         lastName: true,
+        email: true,
+        username: true,
         company: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-          },
+          select: { id: true, name: true, type: true },
         },
       },
     });
 
     if (!user || !user.companyId || !user.company) {
-      throw new BadRequestException('Vous devez être associé à une entreprise');
+      // Auto-create company if missing (clients registered before this fix)
+      if (user && !user.companyId) {
+        const autoCompany = await this.prisma.company.create({
+          data: {
+            name: user.username || user.email.split('@')[0],
+            email: user.email,
+            type: 'client',
+            status: 'active',
+            ownerId: user.id,
+          },
+        });
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { companyId: autoCompany.id },
+        });
+        (user as any).companyId = autoCompany.id;
+        (user as any).company = {
+          id: autoCompany.id,
+          name: autoCompany.name,
+          type: autoCompany.type,
+        };
+      } else {
+        throw new BadRequestException('Vous devez être associé à une entreprise');
+      }
     }
 
     // Get target company
@@ -59,16 +80,8 @@ export class RelationshipService {
     }
 
     // Determine invitation type - be more permissive
-    const userType = user.company.type?.toLowerCase() || '';
+    const userType = user.company?.type?.toLowerCase() || '';
     const targetType = targetCompany.type?.toLowerCase() || '';
-
-    console.log('User company:', { id: user.companyId, name: user.company.name, type: userType });
-    console.log('Target company:', {
-      id: targetCompany.id,
-      name: targetCompany.name,
-      type: targetType,
-    });
-
     // Allow relationships in these cases:
     // 1. User is client and target is accounting_firm
     // 2. User is accounting_firm and target is client
@@ -95,8 +108,8 @@ export class RelationshipService {
     }
 
     const invitationType = isClientToAccountant ? 'client_to_accountant' : 'accountant_to_client';
-    const clientCompanyId = isClientToAccountant ? user.companyId : dto.targetCompanyId;
-    const accountingFirmId = isClientToAccountant ? dto.targetCompanyId : user.companyId;
+    const clientCompanyId = isClientToAccountant ? user.companyId! : dto.targetCompanyId;
+    const accountingFirmId = isClientToAccountant ? dto.targetCompanyId : user.companyId!;
 
     // Check if relationship already exists
     const existingRelationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
@@ -138,8 +151,8 @@ export class RelationshipService {
     }
 
     if (notifyRecipientId) {
-      const senderName =
-        `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.company.name;
+      const companyName = (user as any).company?.name ?? user.email.split('@')[0];
+      const senderName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || companyName;
       await this.notificationService.notify({
         recipientId: notifyRecipientId,
         type: 'relationship',
@@ -148,7 +161,7 @@ export class RelationshipService {
         actorName: senderName,
         data: {
           invitationId: invitation.id,
-          companyName: user.company.name,
+          companyName,
           senderName,
           invitationMessage: dto.invitationMessage ?? null,
         },

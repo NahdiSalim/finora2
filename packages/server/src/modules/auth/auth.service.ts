@@ -658,6 +658,24 @@ export class AuthService {
         },
       });
 
+      // Auto-create a company for the client (required for relationships, documents, etc.)
+      const clientCompany = await this.prisma.company.create({
+        data: {
+          name: dto.companyName || username,
+          email,
+          phone,
+          type: 'client',
+          status: UserStatus.ACTIVE,
+          ownerId: user.id,
+        },
+      });
+
+      // Link user to company
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { companyId: clientCompany.id },
+      });
+
       // Send welcome email with password
       try {
         await this.mailService.sendAccountCreatedWithPasswordEmail(

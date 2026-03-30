@@ -66,10 +66,10 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
         client.disconnect();
         return;
       }
+      const rawUserId = payload.sub || payload.user?.id || payload.id;
+      const userId = typeof rawUserId === 'string' ? parseInt(rawUserId, 10) : Number(rawUserId);
 
-      const userId = payload.sub || payload.userId || payload.id;
-
-      if (!userId) {
+      if (!userId || isNaN(userId)) {
         this.logger.warn('Client connection rejected: No userId in token');
         client.emit('error', { message: 'No userId in token' });
         client.disconnect();

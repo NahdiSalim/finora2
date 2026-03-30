@@ -32,6 +32,7 @@ model Task {
   p_tasks       p_tasks[]
   comments      TaskComment[]
   requestConversions Request[] @relation("RequestToTask")
+  chatMessages  ChatMessage[] @relation("ChatMessageTask")
 
   @@index([assigneeId])
   @@index([createdById])

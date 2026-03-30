@@ -1239,4 +1239,68 @@ export class AppointmentService {
       },
     ];
   }
+
+  async getChatAccessibleAppointmentsByClient(
+    clientId: number,
+    accountantId: number,
+    page: number = 1,
+    limit: number = 5
+  ) {
+    const accountant = await this.prisma.user.findUnique({
+      where: { id: accountantId },
+      select: { companyId: true },
+    });
+
+    if (!accountant?.companyId) {
+      throw new ApiError(
+        'Accountant not found or not associated with a company',
+        403,
+        'ACCESS_DENIED'
+      );
+    }
+
+    const client = await this.prisma.user.findUnique({
+      where: { id: clientId },
+      select: { id: true, companyId: true },
+    });
+
+    if (!client) {
+      throw new ApiError('Client not found', 404, 'CLIENT_NOT_FOUND');
+    }
+
+    const where = {
+      clientId: clientId,
+      status: { notIn: ['cancelled', 'rejected'] },
+    };
+
+    const [appointments, total] = await Promise.all([
+      this.prisma.appointment.findMany({
+        where,
+        select: {
+          id: true,
+          title: true,
+          date: true,
+          hour: true,
+          status: true,
+          type: true,
+          createdAt: true,
+        },
+        orderBy: { date: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.appointment.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: appointments,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
 }

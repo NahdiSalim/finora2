@@ -43,7 +43,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // Vérifier le token
       const payload = this.jwtService.verify(token);
-      const userId = payload.sub;
+      const userId = payload.id ?? payload.sub; // JWT puts id in payload.id, not payload.sub
 
       // Stocker la connexion
       client.data.userId = userId;
@@ -56,6 +56,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // Rejoindre automatiquement les salles de l'utilisateur
       const rooms = await this.chatService.getUserRooms(userId);
+      console.log(
+        `User ${userId} auto-joining ${rooms.length} rooms:`,
+        rooms.map((r) => r.id)
+      );
       rooms.forEach((room) => {
         client.join(`room:${room.id}`);
       });
@@ -192,6 +196,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (message.roomId) {
         this.server.to(`room:${message.roomId}`).emit('message:deleted', {
           messageId: data.messageId,
+          roomId: message.roomId,
         });
       }
 

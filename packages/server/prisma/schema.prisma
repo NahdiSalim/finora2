@@ -100,6 +100,7 @@ model Appointment {
 
   slot        AvailabilitySlot? @relation("AppointmentSlot")
   reports     AppointmentReport[] @relation("AppointmentReports")
+  chatMessages ChatMessage[] @relation("ChatMessageAppointment")
 
   @@index([clientId])
   @@index([accountantId])
@@ -246,14 +247,25 @@ model ChatMessage {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  room            ChatRoom?   @relation(fields: [roomId], references: [id])
-  thread          ChatThread? @relation(fields: [threadId], references: [id])
-  sender          User        @relation("ChatMessageSender", fields: [senderId], references: [id])
+  // Attachments to entities
+  requestId       Int?
+  taskId          Int?
+  appointmentId   Int?
+
+  room            ChatRoom?      @relation(fields: [roomId], references: [id])
+  thread          ChatThread?    @relation(fields: [threadId], references: [id])
+  sender          User           @relation("ChatMessageSender", fields: [senderId], references: [id])
+  request         Request?       @relation("ChatMessageRequest", fields: [requestId], references: [id], onDelete: SetNull)
+  task            Task?          @relation("ChatMessageTask", fields: [taskId], references: [id], onDelete: SetNull)
+  appointment     Appointment?   @relation("ChatMessageAppointment", fields: [appointmentId], references: [id], onDelete: SetNull)
 
   @@index([roomId])
   @@index([threadId])
   @@index([senderId])
   @@index([createdAt])
+  @@index([requestId])
+  @@index([taskId])
+  @@index([appointmentId])
 }
 
 
@@ -883,6 +895,9 @@ model Request {
   // Ticket relation
   tickets     Ticket[]
   
+  // Chat messages relation
+  chatMessages ChatMessage[] @relation("ChatMessageRequest")
+  
   // Timestamps
   respondedAt DateTime?
   resolvedAt  DateTime?
@@ -1041,6 +1056,7 @@ model Task {
   p_tasks       p_tasks[]
   comments      TaskComment[]
   requestConversions Request[] @relation("RequestToTask")
+  chatMessages  ChatMessage[] @relation("ChatMessageTask")
 
   @@index([assigneeId])
   @@index([createdById])

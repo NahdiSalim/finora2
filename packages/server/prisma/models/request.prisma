@@ -36,6 +36,9 @@ model Request {
   // Ticket relation
   tickets     Ticket[]
   
+  // Chat messages relation
+  chatMessages ChatMessage[] @relation("ChatMessageRequest")
+  
   // Timestamps
   respondedAt DateTime?
   resolvedAt  DateTime?

@@ -46,6 +46,24 @@ export class SendMessageDto {
   @IsNumber()
   documentId?: number;
 
+  @ApiPropertyOptional({ description: 'ID de la demande liée', type: 'number' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  requestId?: number;
+
+  @ApiPropertyOptional({ description: 'ID de la tâche liée', type: 'number' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  taskId?: number;
+
+  @ApiPropertyOptional({ description: 'ID du rendez-vous lié', type: 'number' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  appointmentId?: number;
+
   @ApiPropertyOptional({
     description: 'Fichiers attachés (max 10)',
     type: 'array',

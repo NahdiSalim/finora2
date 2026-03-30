@@ -1263,6 +1263,76 @@ export class TaskService {
   }
 
   /**
+   * Get chat-accessible tasks for a collaborator (for messagerie attachments)
+   */
+  async getChatAccessibleTasksByCollaborator(
+    collaboratorId: number,
+    accountantId: number,
+    page: number = 1,
+    limit: number = 5
+  ) {
+    const accountant = await this.prisma.user.findUnique({
+      where: { id: accountantId },
+      select: { companyId: true },
+    });
+
+    if (!accountant?.companyId) {
+      throw new ApiError(
+        'Accountant not found or not associated with a company',
+        403,
+        'ACCESS_DENIED'
+      );
+    }
+
+    const collaborator = await this.prisma.user.findUnique({
+      where: { id: collaboratorId },
+      select: { id: true, companyId: true, role: { select: { code: true } } },
+    });
+
+    if (!collaborator) {
+      throw new ApiError('Collaborator not found', 404, 'COLLABORATOR_NOT_FOUND');
+    }
+
+    if (collaborator.companyId !== accountant.companyId) {
+      throw new ApiError('Access denied to this collaborator', 403, 'ACCESS_DENIED');
+    }
+
+    const where = {
+      assigneeId: collaboratorId,
+      status: { notIn: ['archived', 'cancelled'] },
+    };
+
+    const [tasks, total] = await Promise.all([
+      this.prisma.task.findMany({
+        where,
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          priority: true,
+          dueDate: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.task.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: tasks,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
    * Get accountant's clients (from active relationships)
    */
   async getMyClients(userId: number, page: number = 1, limit: number = 20, search?: string) {

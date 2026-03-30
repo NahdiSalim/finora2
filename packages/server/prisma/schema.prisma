@@ -971,6 +971,23 @@ model RoleAction {
 }
 
 
+// From task-client.prisma
+model TaskClient {
+  id        Int      @id @default(autoincrement())
+  taskId    Int
+  clientId  Int
+  createdAt DateTime @default(now())
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  client    User     @relation("TaskClientRelation", fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, clientId])
+  @@index([taskId])
+  @@index([clientId])
+  @@map("task_clients")
+}
+
+
 // From task-comment.prisma
 model TaskComment {
   id          Int      @id @default(autoincrement())
@@ -986,23 +1003,6 @@ model TaskComment {
 
   @@index([taskId])
   @@index([userId])
-}
-
-
-// From task-client.prisma (junction table for many-to-many)
-model TaskClient {
-  id        Int      @id @default(autoincrement())
-  taskId    Int
-  clientId  Int
-  createdAt DateTime @default(now())
-
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  client    User     @relation("TaskClientRelation", fields: [clientId], references: [id], onDelete: Cascade)
-
-  @@unique([taskId, clientId])
-  @@index([taskId])
-  @@index([clientId])
-  @@map("task_clients")
 }
 
 
@@ -1037,9 +1037,9 @@ model Task {
   request       Request?  @relation("TaskFromRequest", fields: [requestId], references: [id])
   ticket        Ticket?   @relation(fields: [ticketId], references: [id])
   company       Company?  @relation("TaskCompany", fields: [companyId], references: [id])
+  taskClients   TaskClient[]
   p_tasks       p_tasks[]
   comments      TaskComment[]
-  taskClients   TaskClient[]
   requestConversions Request[] @relation("RequestToTask")
 
   @@index([assigneeId])
@@ -1129,8 +1129,8 @@ model User {
   assignedTasks        Task[] @relation("TaskAssignee")
   createdTasks         Task[] @relation("TaskCreatedBy")
   validatedTasks       Task[] @relation("TaskValidator")
-  taskComments         TaskComment[]
   taskClientRelations  TaskClient[] @relation("TaskClientRelation")
+  taskComments         TaskComment[]
   
   // Requests
   clientRequests       Request[] @relation("ClientRequests")

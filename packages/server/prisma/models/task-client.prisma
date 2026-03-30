@@ -1,0 +1,14 @@
+model TaskClient {
+  id        Int      @id @default(autoincrement())
+  taskId    Int
+  clientId  Int
+  createdAt DateTime @default(now())
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  client    User     @relation("TaskClientRelation", fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, clientId])
+  @@index([taskId])
+  @@index([clientId])
+  @@map("task_clients")
+}

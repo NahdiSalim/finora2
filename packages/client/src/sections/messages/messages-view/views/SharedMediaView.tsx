@@ -27,7 +27,7 @@ type SharedMediaViewProps = {
   onBack?: () => void;
 };
 
-type FilterType = "all" | "pdf" | "image";
+type FilterType = "all" | "pdf" | "image" | "doc" | "xls";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -111,9 +111,8 @@ export default function SharedMediaView({
   const filteredFiles = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     return allFiles.filter((file) => {
-      // Only files with a real preview URL and a type that supports visual preview
+      // Exclude old/broken files that have no usable file URL
       if (!file.previewUrl) return false;
-      if (file.type !== "image" && file.type !== "pdf") return false;
       // Remove files whose image URL failed to load at runtime
       if (erroredIds.has(file.id)) return false;
 
@@ -161,7 +160,7 @@ export default function SharedMediaView({
       >
         <Box
           sx={{
-            px: 2,
+            px: { xs: 1.5, md: 2 },
             py: 1,
             borderBottom: "1px solid",
             borderColor: theme.palette.grey[200],
@@ -171,9 +170,10 @@ export default function SharedMediaView({
           <Box
             sx={{
               display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 2,
+              flexDirection: { xs: "column", md: "row" },
+              alignItems: { xs: "flex-start", md: "center" },
+              justifyContent: { xs: "flex-start", md: "space-between" },
+              gap: { xs: 0.75, md: 2 },
             }}
           >
             <Box
@@ -212,12 +212,18 @@ export default function SharedMediaView({
             <Box
               sx={{
                 display: "flex",
-                alignItems: "flex-end",
+                alignItems: "center",
                 gap: 0.75,
                 flexShrink: 0,
+                width: { xs: "100%", md: "auto" },
               }}
             >
-              <Box sx={{ width: 180 }}>
+              <Box
+                sx={{
+                  width: { xs: "auto", md: 180 },
+                  flex: { xs: 1, md: "none" },
+                }}
+              >
                 <CustomInput
                   placeholder="Rechercher ..."
                   value={searchTerm}
@@ -250,7 +256,7 @@ export default function SharedMediaView({
               <Box
                 sx={{
                   position: "relative",
-                  width: 132,
+                  width: { xs: 154, md: 132 },
                   flexShrink: 0,
                 }}
               >
@@ -312,6 +318,8 @@ export default function SharedMediaView({
                   <MenuItem value="all">Tous les fichiers</MenuItem>
                   <MenuItem value="pdf">PDF</MenuItem>
                   <MenuItem value="image">Images</MenuItem>
+                  <MenuItem value="doc">Documents</MenuItem>
+                  <MenuItem value="xls">Tableurs</MenuItem>
                 </CustomSelect>
 
                 <Box
@@ -366,9 +374,9 @@ export default function SharedMediaView({
               sx={{
                 flex: 1,
                 minHeight: 0,
-                px: 2.25,
-                pt: 1.5,
-                pb: 1.1,
+                px: { xs: 1.5, md: 2.25 },
+                pt: { xs: 1.25, md: 1.5 },
+                pb: { xs: 1, md: 1.1 },
                 overflow: "hidden",
               }}
             >
@@ -394,9 +402,12 @@ export default function SharedMediaView({
                 <Box
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                    gridAutoRows: "176px",
-                    gap: 1.5,
+                    gridTemplateColumns: {
+                      xs: "repeat(2, minmax(0, 1fr))",
+                      md: "repeat(4, minmax(0, 1fr))",
+                    },
+                    gridAutoRows: { xs: "auto", md: "176px" },
+                    gap: { xs: 1.25, md: 1.5 },
                     alignItems: "stretch",
                     pb: 0.5,
                   }}
@@ -416,19 +427,19 @@ export default function SharedMediaView({
             <Box
               sx={{
                 flexShrink: 0,
-                px: 2.25,
+                px: { xs: 1.5, md: 2.25 },
                 py: 0,
                 borderTop: "1px solid",
                 borderColor: theme.palette.grey[200],
                 backgroundColor: theme.palette.common.white,
                 "& > .MuiBox-root": {
                   py: 0.75,
-                  gap: 0.75,
-                  minHeight: 52,
+                  gap: { xs: 0.5, md: 0.75 },
+                  minHeight: { xs: 46, md: 52 },
                 },
                 "& .MuiTypography-caption": {
-                  ml: 1.25,
-                  fontSize: 12,
+                  ml: { xs: 0.75, md: 1.25 },
+                  fontSize: { xs: 11, md: 12 },
                   lineHeight: 1.2,
                 },
               }}

@@ -137,26 +137,26 @@ export default function ChatHeader({
           flexShrink: 0,
         }}
       >
-        {!isMobile && (
-          <IconButton
-            onClick={onOpenMedia}
-            sx={{
-              width: 40,
-              height: 40,
-              border: "1px solid",
+        <IconButton
+          onClick={onOpenMedia}
+          sx={{
+            width: isMobile ? 34 : 40,
+            height: isMobile ? 34 : 40,
+            border: "1px solid",
+            borderColor: theme.palette.primary.main,
+            borderRadius: "10px",
+            color: theme.palette.primary.main,
+            backgroundColor: theme.palette.common.white,
+            "&:hover": {
+              backgroundColor: theme.palette.primary.lighter,
               borderColor: theme.palette.primary.main,
-              borderRadius: "10px",
-              color: theme.palette.primary.main,
-              backgroundColor: theme.palette.common.white,
-              "&:hover": {
-                backgroundColor: theme.palette.primary.lighter,
-                borderColor: theme.palette.primary.main,
-              },
-            }}
-          >
-            <ImageOutlinedIcon sx={{ fontSize: 18, color: "inherit" }} />
-          </IconButton>
-        )}
+            },
+          }}
+        >
+          <ImageOutlinedIcon
+            sx={{ fontSize: isMobile ? 16 : 18, color: "inherit" }}
+          />
+        </IconButton>
       </Box>
     </Box>
   );

@@ -2,6 +2,9 @@ import { useState } from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
+import CircularProgress from "@mui/material/CircularProgress";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
@@ -11,7 +14,86 @@ import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 
 import CustomButton from "../../../../components/common/CustomButton";
+import SpreadsheetTable from "./SpreadsheetTable";
+import { useSpreadsheetPreview } from "../hooks/useSpreadsheetPreview";
+import { useDocxPreview } from "../hooks/useDocxPreview";
 import type { SharedMediaFile } from "../data/types";
+
+// ── CSV mini-table (PapaParse) ────────────────────────────────────────────────
+function CsvTablePreview({ url }: { url: string }) {
+  const state = useSpreadsheetPreview(url, true, 3, 4, true); // max 3 rows for card
+
+  if (state.status === "loading" || state.status === "idle") {
+    return <CircularProgress size={14} sx={{ color: "#16A34A" }} />;
+  }
+  if (state.status === "error") {
+    return <TableChartOutlinedIcon sx={{ fontSize: 26, color: "#16A34A" }} />;
+  }
+  return (
+    <SpreadsheetTable
+      headers={state.headers}
+      rows={state.rows}
+      variant="compact"
+    />
+  );
+}
+
+// ── DOCX card thumbnail — first ~200 chars of converted HTML ─────────────────
+function DocxCardPreview({ url }: { url: string }) {
+  const state = useDocxPreview(url, true);
+
+  if (state.status === "loading" || state.status === "idle") {
+    return <CircularProgress size={14} sx={{ color: "#2563EB" }} />;
+  }
+  if (state.status === "error" || !state.html) {
+    return <DescriptionOutlinedIcon sx={{ fontSize: 26, color: "#2563EB" }} />;
+  }
+
+  return (
+    <Box
+      sx={{
+        position: "absolute",
+        inset: 0,
+        overflow: "hidden",
+        p: "4px",
+        backgroundColor: "#EFF6FF",
+      }}
+    >
+      <Box
+        sx={{
+          fontSize: 5.5,
+          lineHeight: 1.4,
+          color: "#1E3A5F",
+          overflow: "hidden",
+          height: "100%",
+          "& p, & h1, & h2, & h3, & li": { margin: 0, padding: 0 },
+        }}
+        dangerouslySetInnerHTML={{ __html: state.html }}
+      />
+    </Box>
+  );
+}
+
+// ── XLS/XLSX card thumbnail ───────────────────────────────────────────────────
+function XlsxCardPreview({ url }: { url: string }) {
+  const state = useSpreadsheetPreview(url, true, 6, 4, false);
+
+  if (state.status === "loading" || state.status === "idle") {
+    return <CircularProgress size={14} sx={{ color: "#16A34A" }} />;
+  }
+  if (state.status === "error") {
+    return <TableChartOutlinedIcon sx={{ fontSize: 26, color: "#16A34A" }} />;
+  }
+  return (
+    <SpreadsheetTable
+      headers={state.headers}
+      rows={state.rows}
+      variant="compact"
+    />
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 type SharedMediaCardProps = {
   file: SharedMediaFile;
@@ -24,17 +106,24 @@ export default function SharedMediaCard({
   onView,
   onImageError,
 }: SharedMediaCardProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [imgFailed, setImgFailed] = useState(false);
   const canDownload = !!file.previewUrl && file.previewUrl !== "#";
 
-  // If the image URL failed to load, render nothing (parent will remove this card)
   if (imgFailed) return null;
+
+  const isXlsx = file.type === "xls" && /\.(xls|xlsx)$/i.test(file.name);
+  const isCsv = file.type === "xls" && /\.csv$/i.test(file.name);
+  const isDocx = file.type === "doc" && /\.docx$/i.test(file.name);
+  const isLegacyDoc =
+    file.type === "doc" && /\.doc$/i.test(file.name) && !isDocx;
 
   const handleDownload = async () => {
     if (!canDownload || !file.previewUrl) return;
     try {
-      const response = await fetch(file.previewUrl);
-      const blob = await response.blob();
+      const res = await fetch(file.previewUrl);
+      const blob = await res.blob();
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = blobUrl;
@@ -49,7 +138,7 @@ export default function SharedMediaCard({
   };
 
   const renderPreview = () => {
-    // ── Image ──────────────────────────────────────────────────────────
+    // Image
     if (file.type === "image") {
       if (file.previewUrl && !imgFailed) {
         return (
@@ -73,16 +162,7 @@ export default function SharedMediaCard({
       return <ImageOutlinedIcon sx={{ fontSize: 26, color: "#64748B" }} />;
     }
 
-    // ── PDF — iframe thumbnail ─────────────────────────────────────────
-    // Approach: absolutely-positioned iframe, 3× the container size, scaled
-    // back down 0.333× from the top-left so it fills the box exactly.
-    //
-    // Key detail: add #view=FitH so the PDF viewer scales the page to FILL
-    // the iframe WIDTH (not height). Without this, Chrome PDF viewer defaults
-    // to "fit page" (fits height), leaving gray space on the right.
-    //
-    // +20px on both dimensions: after scale(0.333) this adds ~7px of clip
-    // margin, hiding the PDF viewer's scrollbar edge from the visible area.
+    // PDF — iframe thumbnail
     if (file.type === "pdf") {
       if (file.previewUrl) {
         return (
@@ -110,19 +190,40 @@ export default function SharedMediaCard({
       );
     }
 
-    // ── Doc ────────────────────────────────────────────────────────────
+    // DOCX — real mammoth preview
+    if (isDocx && file.previewUrl) {
+      return <DocxCardPreview url={file.previewUrl} />;
+    }
+
+    // Legacy .doc — honest icon (mammoth cannot parse binary .doc)
+    if (isLegacyDoc) {
+      return (
+        <DescriptionOutlinedIcon sx={{ fontSize: 26, color: "#2563EB" }} />
+      );
+    }
+
+    // Generic doc fallback
     if (file.type === "doc") {
       return (
         <DescriptionOutlinedIcon sx={{ fontSize: 26, color: "#2563EB" }} />
       );
     }
 
-    // ── Xls ────────────────────────────────────────────────────────────
+    // XLS/XLSX — real SheetJS preview
+    if (isXlsx && file.previewUrl) {
+      return <XlsxCardPreview url={file.previewUrl} />;
+    }
+
+    // CSV — plain text parse
+    if (isCsv && file.previewUrl) {
+      return <CsvTablePreview url={file.previewUrl} />;
+    }
+
+    // Generic xls fallback
     if (file.type === "xls") {
       return <TableChartOutlinedIcon sx={{ fontSize: 26, color: "#16A34A" }} />;
     }
 
-    // ── Generic file fallback ──────────────────────────────────────────
     return (
       <InsertDriveFileOutlinedIcon sx={{ fontSize: 26, color: "#64748B" }} />
     );
@@ -134,8 +235,8 @@ export default function SharedMediaCard({
       sx={{
         width: "100%",
         minWidth: 0,
-        height: 182,
-        p: 0.75,
+        height: isMobile ? "auto" : 182,
+        p: isMobile ? 1 : 0.75,
         borderRadius: "14px",
         border: "1px solid #ECECEC",
         backgroundColor: "#FFFFFF",
@@ -148,7 +249,7 @@ export default function SharedMediaCard({
       <Box
         sx={{
           width: "100%",
-          height: 96,
+          height: isMobile ? 110 : 96,
           borderRadius: "10px",
           overflow: "hidden",
           backgroundColor: "#F8F9FB",
@@ -157,40 +258,33 @@ export default function SharedMediaCard({
           alignItems: "center",
           justifyContent: "center",
           flexShrink: 0,
-          mb: 0.7,
+          mb: isMobile ? 1 : 0.7,
           position: "relative",
         }}
       >
         {renderPreview()}
       </Box>
 
-      <Box
-        sx={{
-          minWidth: 0,
-          flexShrink: 0,
-          mb: 0.7,
-        }}
-      >
+      <Box sx={{ minWidth: 0, flexShrink: 0, mb: isMobile ? 1 : 0.7 }}>
         <Typography
           noWrap
           title={file.name}
           sx={{
-            fontSize: 11.5,
+            fontSize: isMobile ? 12 : 11.5,
             fontWeight: 500,
             color: "#1F2937",
-            lineHeight: 1.2,
+            lineHeight: 1.3,
           }}
         >
           {file.name}
         </Typography>
-
         <Typography
           noWrap
           sx={{
-            mt: 0.2,
-            fontSize: 10,
+            mt: 0.25,
+            fontSize: isMobile ? 10.5 : 10,
             color: "#98A2B3",
-            lineHeight: 1.2,
+            lineHeight: 1.3,
           }}
         >
           {file.uploadedAt}
@@ -201,8 +295,9 @@ export default function SharedMediaCard({
         sx={{
           mt: "auto",
           display: "flex",
-          alignItems: "center",
-          gap: 0.55,
+          flexDirection: isMobile ? "column" : "row",
+          alignItems: "stretch",
+          gap: isMobile ? 0.5 : 0.55,
           flexShrink: 0,
         }}
       >
@@ -211,15 +306,17 @@ export default function SharedMediaCard({
           variant="outlined"
           color="secondary"
           onClick={handleDownload}
-          startIcon={<DownloadOutlinedIcon sx={{ fontSize: 11 }} />}
+          startIcon={
+            <DownloadOutlinedIcon sx={{ fontSize: isMobile ? 12 : 11 }} />
+          }
           sx={{
             flex: 1,
-            height: 24,
-            minHeight: 24,
+            height: isMobile ? 30 : 24,
+            minHeight: isMobile ? 30 : 24,
             minWidth: 0,
-            px: 0.75,
+            px: isMobile ? 1 : 0.75,
             borderRadius: "8px",
-            fontSize: 9,
+            fontSize: isMobile ? 10 : 9,
             fontWeight: 500,
             borderColor: "#E4E7EC",
             color: "#344054",
@@ -229,21 +326,22 @@ export default function SharedMediaCard({
         >
           Télécharger
         </CustomButton>
-
         <CustomButton
           fullWidth
           variant="contained"
           color="primary"
-          startIcon={<VisibilityOutlinedIcon sx={{ fontSize: 11 }} />}
+          startIcon={
+            <VisibilityOutlinedIcon sx={{ fontSize: isMobile ? 12 : 11 }} />
+          }
           onClick={() => onView(file)}
           sx={{
             flex: 1,
-            height: 24,
-            minHeight: 24,
+            height: isMobile ? 30 : 24,
+            minHeight: isMobile ? 30 : 24,
             minWidth: 0,
-            px: 0.75,
+            px: isMobile ? 1 : 0.75,
             borderRadius: "8px",
-            fontSize: 9,
+            fontSize: isMobile ? 10 : 9,
             fontWeight: 500,
             boxShadow: "none",
           }}

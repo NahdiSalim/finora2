@@ -277,30 +277,7 @@ export class RelationshipService {
       data: updateData,
     });
 
-    // Notify the sender directly via invitedBy (the user who sent the invitation)
-    const invitedByUserId = invitation.invitedBy ?? null;
-    let senderRecipientId: number | null = invitedByUserId;
-
-    // Fallback: find first user of the sender company (not the current user's company)
-    if (!senderRecipientId) {
-      const senderCompanyId =
-        invitation.clientCompanyId === user.companyId
-          ? invitation.accountingFirmId // current user is client → sender is accountant firm
-          : invitation.clientCompanyId; // current user is accountant → sender is client
-
-      const senderUser = await this.prisma.user.findFirst({
-        where: { companyId: senderCompanyId },
-        select: { id: true },
-        orderBy: { createdAt: 'asc' },
-      });
-      senderRecipientId = senderUser?.id ?? null;
-    }
-
     const isAccepted = dto.response === InvitationResponse.ACCEPT;
-    const isAccountantResponding = invitation.accountingFirmId === user.companyId;
-    const responderLabel = isAccountantResponding ? 'Votre comptable' : 'Votre client';
-    const responderName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
-    const actorLabel = responderName ? `${responderLabel} (${responderName})` : responderLabel;
 
     const notificationData = {
       relationshipId: updatedInvitation.id,
@@ -308,44 +285,31 @@ export class RelationshipService {
       rejectionReason: dto.rejectionReason ?? null,
     };
 
-    // Notify the invitation sender
-    if (senderRecipientId) {
-      try {
-        await this.notificationService.notify({
-          recipientId: senderRecipientId,
-          type: 'relationship',
-          action: isAccepted ? 'invitation_accepted' : 'invitation_rejected',
-          priority: 'normal',
-          actorName: actorLabel,
-          data: notificationData,
-        });
-      } catch (err) {
-        console.error('[respondToInvitation] sender notification error:', err?.message);
-      }
-    }
-
-    // If accepted, also notify the responder (client) and emit WebSocket event
-    // so the accountant's client table refreshes automatically
     if (isAccepted) {
-      // Notify the responder (current user) that the relation is now active
-      try {
-        const senderCompanyName =
-          invitation.clientCompanyId === user.companyId
-            ? invitation.accountingFirm.name
-            : invitation.clientCompany.name;
-        await this.notificationService.notify({
-          recipientId: userId,
-          type: 'relationship',
-          action: 'invitation_accepted',
-          priority: 'normal',
-          actorName: senderCompanyName,
-          data: notificationData,
-        });
-      } catch (err) {
-        console.error('[respondToInvitation] responder notification error:', err?.message);
+      // Trouver le user côté client (celui qui a envoyé l'invitation)
+      const clientCompanyId = invitation.clientCompanyId;
+      const clientUser = await this.prisma.user.findFirst({
+        where: { companyId: clientCompanyId },
+        select: { id: true },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      if (clientUser) {
+        try {
+          await this.notificationService.notify({
+            recipientId: clientUser.id,
+            type: 'relationship',
+            action: 'invitation_accepted',
+            priority: 'normal',
+            actorName: invitation.accountingFirm.name,
+            data: notificationData,
+          });
+        } catch (err) {
+          console.error('[respondToInvitation] client notification error:', err?.message);
+        }
       }
 
-      // Emit WebSocket event to the accounting firm users so their client list refreshes
+      // Émettre un événement WebSocket au cabinet comptable pour rafraîchir le tableau clients
       const accountingFirmUsers = await this.prisma.user.findMany({
         where: { companyId: invitation.accountingFirmId },
         select: { id: true },

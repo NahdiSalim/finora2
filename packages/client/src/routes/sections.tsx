@@ -14,6 +14,7 @@ import DashboardRoleRedirect from "src/components/dashboard-role-redirect";
 import RoleView from "src/sections/roles";
 import RoleFormRouter from "src/sections/roles/RoleFormRouter";
 import AuthLayout from "src/sections/auth/sign-in-view/Auth-Layout";
+import LandingPage from "src/pages/landing";
 
 // ----------------------------------------------------------------------
 
@@ -112,6 +113,7 @@ export const routesSection: RouteObject[] = [
       </Suspense>
     ),
   },
+
   {
     path: "dashboard",
     element: <Outlet />,
@@ -371,6 +373,12 @@ export const routesSection: RouteObject[] = [
     path: "visitor",
     element: <VisitorPage />,
   },
+
+  {
+    path: "landing",
+    element: <LandingPage />,
+  },
+
   {
     path: "accountant/:id",
     element: (

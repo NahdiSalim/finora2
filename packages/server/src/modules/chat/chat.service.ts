@@ -5,6 +5,31 @@ import { SendMessageDto } from './dto/send-message.dto';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { SearchMessagesDto } from './dto/search-messages.dto';
 
+/** Convert Prisma appointment (date + hour) to the startTime/endTime shape the client expects. */
+function normalizeAppointment(
+  apt:
+    | { id: number; title: string; date: Date; hour: string; status: string; type: string }
+    | null
+    | undefined
+) {
+  if (!apt) return null;
+  const dateStr = (apt.date instanceof Date ? apt.date : new Date(apt.date))
+    .toISOString()
+    .slice(0, 10);
+  const parts = (apt.hour ?? '00:00').split(':').map(Number);
+  const h = parts[0] ?? 0;
+  const m = parts[1] ?? 0;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return {
+    id: apt.id,
+    title: apt.title,
+    startTime: `${dateStr}T${pad(h)}:${pad(m)}:00.000Z`,
+    endTime: `${dateStr}T${pad((h + 1) % 24)}:${pad(m)}:00.000Z`,
+    status: apt.status,
+    type: apt.type,
+  };
+}
+
 @Injectable()
 export class ChatService {
   constructor(
@@ -134,6 +159,22 @@ export class ChatService {
 
     const lastMessageMap = new Map(lastMessages.map((m) => [m.roomId, m]));
 
+    // Count unread messages per room: sent by someone else AND not yet in readBy for this user
+    const unreadCounts = matchedRooms.length
+      ? await this.prisma.chatMessage.groupBy({
+          by: ['roomId'],
+          where: {
+            roomId: { in: matchedRooms.map((r) => r.id) },
+            deleted: false,
+            senderId: { not: userId },
+            NOT: { readBy: { has: String(userId) } },
+          },
+          _count: { id: true },
+        })
+      : [];
+
+    const unreadMap = new Map(unreadCounts.map((u) => [u.roomId, u._count.id]));
+
     const enriched = matchedRooms.map((room) => ({
       ...room,
       participantProfiles: room.participants
@@ -142,6 +183,7 @@ export class ChatService {
         .map((id) => profileMap.get(id) ?? null)
         .filter(Boolean),
       lastMessage: lastMessageMap.get(room.id) ?? null,
+      unreadCount: unreadMap.get(room.id) ?? 0,
     }));
 
     // Map a requested category string to the set of role codes it covers.
@@ -351,8 +393,8 @@ export class ChatService {
           select: {
             id: true,
             title: true,
-            startTime: true,
-            endTime: true,
+            date: true,
+            hour: true,
             status: true,
             type: true,
           },
@@ -388,6 +430,7 @@ export class ChatService {
 
     return {
       ...message,
+      appointment: normalizeAppointment(message.appointment),
       attachments: attachmentUrls,
       fileUrl,
     };
@@ -409,8 +452,8 @@ export class ChatService {
           select: {
             id: true,
             title: true,
-            startTime: true,
-            endTime: true,
+            date: true,
+            hour: true,
             status: true,
             type: true,
           },
@@ -426,15 +469,16 @@ export class ChatService {
     // Generate presigned URLs for file messages (content = MinIO objectName)
     const messages = await Promise.all(
       rawMessages.map(async (msg) => {
+        const appointment = normalizeAppointment(msg.appointment);
         if ((msg.type === 'file' || msg.type === 'image') && msg.content) {
           try {
             const fileUrl = await this.minioService.getPresignedUrl(msg.content, 7 * 24 * 60 * 60);
-            return { ...msg, fileUrl };
+            return { ...msg, appointment, fileUrl };
           } catch {
-            return { ...msg, fileUrl: null };
+            return { ...msg, appointment, fileUrl: null };
           }
         }
-        return { ...msg, fileUrl: null };
+        return { ...msg, appointment, fileUrl: null };
       })
     );
 
@@ -445,6 +489,29 @@ export class ChatService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  /**
+   * Mark all unread messages in a room as read for the given user.
+   * Updates readBy[] on every message not yet read by this user.
+   */
+  async markRoomAsRead(roomId: number, userId: number) {
+    await this.getRoomById(roomId, userId);
+
+    // Bulk-update: add userId to readBy for all unread messages in this room
+    await this.prisma.chatMessage.updateMany({
+      where: {
+        roomId,
+        deleted: false,
+        senderId: { not: userId },
+        NOT: { readBy: { has: String(userId) } },
+      },
+      data: {
+        readBy: { push: String(userId) },
+      },
+    });
+
+    return { success: true };
   }
 
   async markAsRead(messageId: number, userId: number) {

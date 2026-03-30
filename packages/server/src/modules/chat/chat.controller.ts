@@ -93,6 +93,14 @@ export class ChatController {
     );
   }
 
+  @Post('rooms/:id/read')
+  @ApiOperation({ summary: "Marquer tous les messages d'une room comme lus" })
+  @ApiResponse({ status: 200, description: 'Room marquée comme lue' })
+  async markRoomAsRead(@Request() req, @Param('id', ParseIntPipe) id: number) {
+    const userId = req.user?.id ?? req.user?.sub;
+    return this.chatService.markRoomAsRead(id, Number(userId));
+  }
+
   @Get('rooms/:id')
   @ApiOperation({ summary: 'Obtenir une salle par ID' })
   @ApiResponse({ status: 200, description: 'Détails de la salle' })

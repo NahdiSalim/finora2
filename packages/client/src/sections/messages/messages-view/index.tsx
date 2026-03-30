@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
-import Badge from "@mui/material/Badge";
 import CircularProgress from "@mui/material/CircularProgress";
 import { useTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -33,6 +33,7 @@ import {
   useSendMessageMutation,
   useGetUserRoomsQuery,
   useLazyGetRoomMessagesQuery,
+  useMarkRoomAsReadMutation,
   chatApi,
   type GetRoomsParams,
 } from "src/lib/services/chatApi";
@@ -92,6 +93,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const dispatch = useAppDispatch();
+  const [searchParams] = useSearchParams();
 
   const rawUserId = useSelector((state: RootState) => state.auth.user?.id);
   const currentUid = rawUserId ? Number(rawUserId) : 0;
@@ -115,12 +117,19 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   );
 
   // ── All local state declared first so roomsParams can reference them ───────
-  const [activeTab, setActiveTab] =
-    useState<ConversationCategory>("collaborateur");
+  const [activeTab, setActiveTab] = useState<ConversationCategory>(() => {
+    const cat = searchParams.get("category");
+    return cat === "client" ? "client" : "collaborateur";
+  });
   const [roomsPage] = useState(1);
   const ROOMS_PAGE_SIZE = 50;
   const MESSAGES_PAGE_SIZE = 20;
-  const [selectedConversation, setSelectedConversation] = useState<number>(0);
+  const [selectedConversation, setSelectedConversation] = useState<number>(
+    () => {
+      const rid = Number(searchParams.get("roomId"));
+      return Number.isFinite(rid) && rid > 0 ? rid : 0;
+    },
+  );
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedDateFilter, setSelectedDateFilter] = useState<Dayjs | null>(
     null,
@@ -169,6 +178,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   );
   const [triggerSendMessage] = useSendMessageMutation();
   const [triggerGetOlderMessages] = useLazyGetRoomMessagesQuery();
+  const [triggerMarkRoomAsRead] = useMarkRoomAsReadMutation();
 
   // Older messages accumulation per room (scroll-based infinite loading)
   const [olderMessagesByRoom, setOlderMessagesByRoom] = useState<
@@ -485,12 +495,45 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     [apiConversations, conversationOverrides],
   );
 
-  // Auto-select first conversation when rooms load
+  // Auto-select first conversation when rooms load (only if no room was pre-selected via URL)
   useEffect(() => {
     if (allConversations.length > 0 && selectedConversation === 0) {
       setSelectedConversation(allConversations[0].id);
     }
   }, [allConversations, selectedConversation]);
+
+  // On mobile, navigate straight to chat if a roomId was passed via URL param
+  useEffect(() => {
+    const rid = Number(searchParams.get("roomId"));
+    if (rid > 0 && isMobile) {
+      setMobileView("chat");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally runs once on mount
+
+  // Sync room selection whenever URL params change (handles navigation from the
+  // messages popover while this page is already mounted — useState initializers
+  // only run on first mount so they miss subsequent URL changes).
+  useEffect(() => {
+    const rid = Number(searchParams.get("roomId"));
+    const cat = searchParams.get("category") as ConversationCategory | null;
+    if (rid > 0) {
+      if (cat === "client" || cat === "collaborateur") {
+        setActiveTab(cat);
+      }
+      setSelectedConversation(rid);
+      // Clear the unread badge for this room in the left panel — mirrors what
+      // handleSelectConversation does when the user clicks directly in the list.
+      setConversationOverrides((prev) => ({
+        ...prev,
+        [rid]: { ...(prev[rid] ?? {}), unreadCount: 0 },
+      }));
+      // Persist read state to backend
+      triggerMarkRoomAsRead(rid);
+      if (isMobile) setMobileView("chat");
+      else setDesktopView("chat");
+    }
+  }, [searchParams, isMobile]);
 
   // Reset older messages accumulation when switching conversations
   useEffect(() => {
@@ -615,6 +658,9 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       ...prev,
       [id]: { ...(prev[id] ?? {}), unreadCount: 0 },
     }));
+
+    // Persist read state to backend so it survives page reload
+    triggerMarkRoomAsRead(id);
   };
 
   const handleSearchChange = (value: string) => setSearchTerm(value);
@@ -797,6 +843,9 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
 
   useEffect(() => {
     if (filteredConversations.length === 0) return;
+    // While rooms are being fetched (e.g. after a tab/category change triggered
+    // by URL navigation), the new room hasn't arrived yet — don't override.
+    if (roomsLoading) return;
 
     const selectedStillExists = filteredConversations.some(
       (c) => c.id === selectedConversation,
@@ -807,16 +856,10 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       if (isMobile) setMobileView("list");
       else setDesktopView("chat");
     }
-  }, [filteredConversations, selectedConversation, isMobile]);
+  }, [filteredConversations, selectedConversation, isMobile, roomsLoading]);
 
   const hasSelectedConversation = filteredConversations.some(
     (c) => c.id === selectedConversation,
-  );
-
-  const totalUnreadMessages = useMemo(
-    () =>
-      allConversations.reduce((total, c) => total + (c.unreadCount || 0), 0),
-    [allConversations],
   );
 
   const showEmptyState =
@@ -886,29 +929,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
         >
           Messagerie
         </Box>
-
-        {totalUnreadMessages > 0 && (
-          <Badge
-            badgeContent={totalUnreadMessages}
-            sx={{
-              display: "flex",
-              flexShrink: 0,
-              "& .MuiBadge-badge": {
-                position: "static",
-                transform: "none",
-                backgroundColor: "#F79009",
-                color: "#FFFFFF",
-                minWidth: 20,
-                height: 20,
-                px: 0.75,
-                borderRadius: "999px",
-                fontSize: 11,
-                fontWeight: 700,
-                lineHeight: 1,
-              },
-            }}
-          />
-        )}
       </Box>
 
       <Box

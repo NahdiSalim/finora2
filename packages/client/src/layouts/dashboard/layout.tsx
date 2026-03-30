@@ -8,8 +8,6 @@ import Alert from "@mui/material/Alert";
 import { useTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
 
-import { _messages } from "src/_mock";
-
 import { NavMobile, NavDesktop } from "./nav";
 import { layoutClasses } from "../core/classes";
 import { _account } from "../nav-config-account";
@@ -131,7 +129,7 @@ export function DashboardLayout({
             gap: { xs: 0.3, sm: 0.75 },
           }}
         >
-          <MessagesPopover data={_messages} />
+          <MessagesPopover />
 
           {/** @slot Notifications popover */}
           <NotificationsPopover />

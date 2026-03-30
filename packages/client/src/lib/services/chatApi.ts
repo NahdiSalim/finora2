@@ -44,6 +44,7 @@ export interface ChatRoom {
   createdAt?: string;
   updatedAt?: string;
   createdBy?: ChatParticipant;
+  unreadCount?: number;
 }
 
 export interface ChatMessageRequest {
@@ -290,6 +291,15 @@ export const chatApi = createApi({
       }),
     }),
 
+    markRoomAsRead: builder.mutation<{ success: boolean }, number>({
+      query: (roomId) => ({
+        url: `/chat/rooms/${roomId}/read`,
+        method: "POST",
+      }),
+      // Invalidate rooms list so unreadCount refreshes from backend
+      invalidatesTags: [{ type: "ChatRooms", id: "LIST" }],
+    }),
+
     editMessage: builder.mutation<
       ChatMessage,
       { messageId: number; content: string; roomId: number }
@@ -414,6 +424,7 @@ export const {
   useSendMessageMutation,
   useSendFileMessageMutation,
   useMarkAsReadMutation,
+  useMarkRoomAsReadMutation,
   useEditMessageMutation,
   useDeleteMessageMutation,
   useGetSharedDocumentsQuery,

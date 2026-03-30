@@ -93,7 +93,7 @@ function mapRoomToConversation(
     avatarColor: "#D9D9D9",
     avatarTextColor: "#666666",
     online: false,
-    unreadCount: 0,
+    unreadCount: room.unreadCount ?? 0,
     phone: "",
     category,
   };

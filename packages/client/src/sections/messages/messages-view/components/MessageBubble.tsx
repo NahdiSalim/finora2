@@ -515,9 +515,7 @@ export default function MessageBubble({
                           format(
                             new Date(message.appointment.startTime),
                             "dd MMM yyyy • HH:mm",
-                            {
-                              locale: fr,
-                            },
+                            { locale: fr },
                           )}
                       </Typography>
                     </Box>

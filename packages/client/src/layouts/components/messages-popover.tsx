@@ -1,47 +1,225 @@
 import type { ButtonProps } from "@mui/material/Button";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+
+import { useDashboardBase } from "src/hooks/useDashboardBase";
 
 import Box from "@mui/material/Box";
 import List from "@mui/material/List";
 import Button from "@mui/material/Button";
+import Avatar from "@mui/material/Avatar";
 import Divider from "@mui/material/Divider";
-import Tooltip from "@mui/material/Tooltip";
 import Popover from "@mui/material/Popover";
 import Typography from "@mui/material/Typography";
-import IconButton from "@mui/material/IconButton";
+import ListItemButton from "@mui/material/ListItemButton";
+import CircularProgress from "@mui/material/CircularProgress";
 import { useTheme, alpha } from "@mui/material/styles";
 
 import { Mail } from "lucide-react";
 
 import { Iconify } from "src/components/iconify";
 import { Scrollbar } from "src/components/scrollbar";
-
-import {
-  MessageItem,
-  type MessageItemProps,
-} from "./messages-popover/MessageItem";
+import { useConversations } from "src/sections/messages/messages-view/hooks/useChatData";
+import { useMarkRoomAsReadMutation } from "src/lib/services/chatApi";
+import type { Conversation } from "src/sections/messages/messages-view/data/types";
 
 // ----------------------------------------------------------------------
 
-export type MessagesPopoverProps = ButtonProps & {
-  data?: MessageItemProps[];
-};
+export type MessagesPopoverProps = ButtonProps;
 
-export function MessagesPopover({
-  data = [],
-  sx,
-  ...other
-}: MessagesPopoverProps) {
+// ── Relative time in French ───────────────────────────────────────────────────
+function relativeTimeFr(dateStr: string): string {
+  if (!dateStr) return "";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  if (isNaN(diff)) return "";
+
+  const s = Math.floor(diff / 1000);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  const d = Math.floor(h / 24);
+
+  if (s < 60) return "à l'instant";
+  if (m < 60) return `il y a ${m} min`;
+  if (h < 24) return `il y a ${h} h`;
+  if (d === 1) return "hier";
+  if (d < 7) return `il y a ${d} jours`;
+
+  return new Date(dateStr).toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+  });
+}
+
+// ── Room item ─────────────────────────────────────────────────────────────────
+function RoomItem({
+  conversation,
+  isRead,
+  onClick,
+}: {
+  conversation: Conversation;
+  isRead: boolean;
+  onClick: () => void;
+}) {
   const theme = useTheme();
-  const [messages, setMessages] = useState(data);
+  const hasUnread =
+    !isRead && !!conversation.unreadCount && conversation.unreadCount > 0;
 
-  const totalUnRead = messages.filter((item) => item.isUnRead === true).length;
-  const hasUnread = totalUnRead > 0;
+  return (
+    <ListItemButton
+      onClick={onClick}
+      sx={{
+        py: 1.5,
+        px: 2.5,
+        gap: 1.5,
+        alignItems: "flex-start",
+        transition: "background 0.15s",
+        "&:hover": {
+          bgcolor: alpha(theme.palette.primary.main, 0.04),
+        },
+        ...(hasUnread && {
+          bgcolor: alpha(theme.palette.primary.main, 0.05),
+        }),
+      }}
+    >
+      {/* Avatar with unread dot */}
+      <Box sx={{ position: "relative", flexShrink: 0 }}>
+        <Avatar
+          sx={{
+            width: 44,
+            height: 44,
+            fontSize: 16,
+            fontWeight: 700,
+            bgcolor: conversation.avatarColor ?? "#D9D9D9",
+            color: conversation.avatarTextColor ?? "#666666",
+          }}
+        >
+          {conversation.avatar}
+        </Avatar>
+
+        {hasUnread && (
+          <Box
+            sx={{
+              position: "absolute",
+              bottom: 1,
+              right: 1,
+              width: 11,
+              height: 11,
+              borderRadius: "50%",
+              bgcolor: "#22C55E",
+              border: `2px solid ${theme.palette.background.paper}`,
+            }}
+          />
+        )}
+      </Box>
+
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        {/* Name + time */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 1,
+            mb: 0.15,
+          }}
+        >
+          <Typography
+            noWrap
+            sx={{
+              flex: 1,
+              minWidth: 0,
+              fontWeight: hasUnread ? 700 : 500,
+              fontSize: 14,
+              color: hasUnread
+                ? theme.palette.text.primary
+                : theme.palette.text.primary,
+              lineHeight: 1.3,
+            }}
+          >
+            {conversation.name}
+          </Typography>
+          <Typography
+            sx={{
+              flexShrink: 0,
+              fontSize: 11,
+              color: hasUnread ? theme.palette.primary.main : "text.disabled",
+              fontWeight: hasUnread ? 600 : 400,
+              lineHeight: 1.3,
+            }}
+          >
+            {relativeTimeFr(conversation.fullDate)}
+          </Typography>
+        </Box>
+
+        {/* Role */}
+        <Typography
+          noWrap
+          sx={{
+            fontSize: 12,
+            color: "text.disabled",
+            lineHeight: 1.3,
+            mb: 0.3,
+          }}
+        >
+          {conversation.role}
+        </Typography>
+
+        {/* Preview + badge */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 1,
+            minWidth: 0,
+          }}
+        >
+          <Typography
+            noWrap
+            sx={{
+              flex: 1,
+              minWidth: 0,
+              fontSize: 12.5,
+              color: hasUnread ? theme.palette.text.primary : "text.secondary",
+              fontWeight: hasUnread ? 600 : 400,
+              lineHeight: 1.4,
+            }}
+          >
+            {conversation.preview || "Aucun message"}
+          </Typography>
+        </Box>
+      </Box>
+    </ListItemButton>
+  );
+}
+
+// ── Main popover ──────────────────────────────────────────────────────────────
+export function MessagesPopover({ sx, ...other }: MessagesPopoverProps) {
+  const theme = useTheme();
+  const navigate = useNavigate();
+  const dashboardBase = useDashboardBase();
 
   const [openPopover, setOpenPopover] = useState<HTMLButtonElement | null>(
     null,
   );
+
+  // Rooms marked as read locally (optimistic — avoids stale badge after click)
+  const [localReadIds, setLocalReadIds] = useState<Set<number>>(new Set());
+  const [markRoomAsRead] = useMarkRoomAsReadMutation();
+
+  const { conversations, isLoading } = useConversations({ pageSize: 10 });
+
+  const unreadConversations = useMemo(
+    () =>
+      conversations.filter(
+        (c) => !localReadIds.has(c.id) && !!c.unreadCount && c.unreadCount > 0,
+      ),
+    [conversations, localReadIds],
+  );
+
+  const totalUnread = unreadConversations.length;
+  const hasUnread = totalUnread > 0;
 
   const handleOpenPopover = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -54,14 +232,30 @@ export function MessagesPopover({
     setOpenPopover(null);
   }, []);
 
-  const handleMarkAllAsRead = useCallback(() => {
-    const updatedMessages = messages.map((message) => ({
-      ...message,
-      isUnRead: false,
-    }));
+  const handleRoomClick = useCallback(
+    (conv: Conversation) => {
+      // Optimistically mark as read locally
+      setLocalReadIds((prev) => new Set([...prev, conv.id]));
+      // Persist to backend — updates readBy[] on all unread messages in this room
+      markRoomAsRead(conv.id);
+      handleClosePopover();
+      navigate(
+        `${dashboardBase}/messages?roomId=${conv.id}&category=${conv.category}`,
+      );
+    },
+    [navigate, handleClosePopover, dashboardBase, markRoomAsRead],
+  );
 
-    setMessages(updatedMessages);
-  }, [messages]);
+  const handleViewAll = useCallback(() => {
+    handleClosePopover();
+    navigate(`${dashboardBase}/messages`);
+  }, [navigate, handleClosePopover, dashboardBase]);
+
+  const subtitleText = useMemo(() => {
+    if (isLoading) return "Chargement…";
+    if (totalUnread === 0) return "Aucun message non lu";
+    return `Vous avez ${totalUnread} message${totalUnread > 1 ? "s" : ""} non lu${totalUnread > 1 ? "s" : ""}`;
+  }, [isLoading, totalUnread]);
 
   return (
     <>
@@ -104,10 +298,10 @@ export function MessagesPopover({
           <Box
             sx={{
               position: "absolute",
-              top: 8,
-              right: 8,
-              width: 8,
-              height: 8,
+              top: 7,
+              right: 7,
+              width: 9,
+              height: 9,
               borderRadius: "50%",
               backgroundColor: theme.palette.error.main,
               border: `2px solid ${theme.palette.background.paper}`,
@@ -130,55 +324,63 @@ export function MessagesPopover({
               display: "flex",
               flexDirection: "column",
               mt: 1,
+              borderRadius: "16px",
               boxShadow: theme.shadows[8],
             },
           },
         }}
       >
+        {/* Header */}
         <Box
           sx={{
             py: 2,
             pl: 2.5,
-            pr: 1.5,
+            pr: 2,
             display: "flex",
             alignItems: "center",
+            gap: 1,
           }}
         >
-          <Box sx={{ flexGrow: 1 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Typography
+              sx={{ fontWeight: 700, fontSize: 15, color: "text.primary" }}
+            >
               Messages
             </Typography>
-            <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              You have {totalUnRead} unread message
-              {totalUnRead !== 1 ? "s" : ""}
+            <Typography
+              sx={{
+                fontSize: 12.5,
+                color: hasUnread
+                  ? theme.palette.warning.dark
+                  : "text.secondary",
+                fontWeight: hasUnread ? 600 : 400,
+                mt: 0.25,
+              }}
+            >
+              {subtitleText}
             </Typography>
           </Box>
-
-          {hasUnread && (
-            <Tooltip title="Mark all as read">
-              <IconButton
-                color="primary"
-                onClick={handleMarkAllAsRead}
-                size="small"
-                sx={{
-                  "&:hover": {
-                    backgroundColor: alpha(theme.palette.primary.main, 0.08),
-                  },
-                }}
-              >
-                <Iconify icon="eva:done-all-fill" />
-              </IconButton>
-            </Tooltip>
-          )}
         </Box>
 
         <Divider sx={{ borderStyle: "dashed" }} />
 
+        {/* List */}
         <Scrollbar
           fillContent
-          sx={{ minHeight: 240, maxHeight: { xs: 360, sm: 400 } }}
+          sx={{ minHeight: 240, maxHeight: { xs: 360, sm: 420 } }}
         >
-          {messages.length === 0 ? (
+          {isLoading ? (
+            <Box
+              sx={{
+                py: 8,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <CircularProgress size={28} />
+            </Box>
+          ) : conversations.length === 0 ? (
             <Box
               sx={{
                 py: 8,
@@ -186,21 +388,30 @@ export function MessagesPopover({
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
+                gap: 1,
               }}
             >
               <Iconify
                 icon="solar:chat-round-dots-bold"
-                width={64}
-                sx={{ color: "text.disabled", mb: 2 }}
+                width={56}
+                sx={{ color: "text.disabled" }}
               />
-              <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                No messages yet
+              <Typography
+                variant="body2"
+                sx={{ color: "text.secondary", fontSize: 13 }}
+              >
+                Aucune conversation
               </Typography>
             </Box>
           ) : (
             <List disablePadding>
-              {messages.map((message) => (
-                <MessageItem key={message.id} message={message} />
+              {conversations.map((conv) => (
+                <RoomItem
+                  key={conv.id}
+                  conversation={conv}
+                  isRead={localReadIds.has(conv.id)}
+                  onClick={() => handleRoomClick(conv)}
+                />
               ))}
             </List>
           )}
@@ -208,18 +419,24 @@ export function MessagesPopover({
 
         <Divider sx={{ borderStyle: "dashed" }} />
 
+        {/* Footer */}
         <Box sx={{ p: 1 }}>
           <Button
             fullWidth
             disableRipple
             color="inherit"
+            onClick={handleViewAll}
             sx={{
+              fontSize: 13,
+              fontWeight: 500,
+              borderRadius: "10px",
               "&:hover": {
-                backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                backgroundColor: alpha(theme.palette.primary.main, 0.06),
+                color: theme.palette.primary.main,
               },
             }}
           >
-            View all messages
+            Voir tous les messages
           </Button>
         </Box>
       </Popover>

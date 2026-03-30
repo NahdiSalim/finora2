@@ -214,33 +214,6 @@ export default function ConversationItem({
           >
             {conversation.preview}
           </Typography>
-
-          {!!conversation.unreadCount && conversation.unreadCount > 0 && (
-            <Box
-              sx={{
-                minWidth: isMobile ? 22 : 22,
-                height: isMobile ? 22 : 22,
-                px: isMobile ? 0.75 : 0.75,
-                borderRadius: "999px",
-                backgroundColor: "#F79009",
-                color: "#FFFFFF",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <Typography
-                sx={{
-                  fontSize: isMobile ? 10.5 : 10,
-                  fontWeight: 700,
-                  lineHeight: 1,
-                }}
-              >
-                {conversation.unreadCount}
-              </Typography>
-            </Box>
-          )}
         </Box>
       </Box>
     </Box>

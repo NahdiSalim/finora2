@@ -56,12 +56,17 @@ const resolveRoleTabCountsFromApi = (
   apiData: unknown,
 ): Partial<Record<RoleTab, number>> => {
   const root = (apiData ?? {}) as Record<string, unknown>;
+  const nestedData =
+    root.data && typeof root.data === "object"
+      ? (root.data as Record<string, unknown>)
+      : {};
   const pagination =
     root.pagination && typeof root.pagination === "object"
       ? (root.pagination as Record<string, unknown>)
       : {};
   const countsSource =
     (root.counts as Record<string, unknown> | undefined) ??
+    (nestedData.counts as Record<string, unknown> | undefined) ??
     (root.roleCounts as Record<string, unknown> | undefined) ??
     {};
 
@@ -75,7 +80,7 @@ const resolveRoleTabCountsFromApi = (
 
   return {
     all:
-      read("all", "total", "users", "allUsers") ??
+      read("all", "ALL", "total", "TOTAL", "users", "USERS", "allUsers") ??
       toSafeNumber(pagination.total) ??
       undefined,
     client: read("client", "clients", "CLIENT") ?? undefined,

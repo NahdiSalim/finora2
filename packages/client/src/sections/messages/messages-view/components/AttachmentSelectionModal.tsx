@@ -80,7 +80,11 @@ export default function AttachmentSelectionModal<T extends { id: number }>({
       sx={{
         "& .MuiDialog-paper": {
           borderRadius: isMobile ? 0 : 3,
-          maxHeight: isMobile ? "100%" : "80vh",
+          // Fixed height so the list scrolls inside, not the whole modal
+          maxHeight: isMobile ? "100dvh" : "80vh",
+          height: isMobile ? "100dvh" : "auto",
+          display: "flex",
+          flexDirection: "column",
         },
       }}
     >
@@ -92,6 +96,7 @@ export default function AttachmentSelectionModal<T extends { id: number }>({
           px: { xs: 2, sm: 3 },
           py: 2,
           borderBottom: `1px solid ${theme.palette.divider}`,
+          flexShrink: 0, // header never shrinks
         }}
       >
         <Typography
@@ -122,9 +127,10 @@ export default function AttachmentSelectionModal<T extends { id: number }>({
         ref={scrollContainerRef}
         sx={{
           p: 0,
-          overflow: "auto",
-          maxHeight: { xs: 300, sm: 400, md: 500 },
-          minHeight: { xs: 200, sm: 300 },
+          flex: 1, // takes all remaining height
+          overflowY: "auto", // scroll only here
+          overflowX: "hidden",
+          minHeight: 0, // required for flex children to scroll correctly
         }}
       >
         {isLoading && items.length === 0 ? (

@@ -23,12 +23,16 @@ type CreateGroupModalProps = {
   open: boolean;
   onClose: () => void;
   onCreate: (groupName: string, members: number[]) => void;
+  clients?: GroupMember[];
+  collaborators?: GroupMember[];
 };
 
 export default function CreateGroupModal({
   open,
   onClose,
   onCreate,
+  clients,
+  collaborators,
 }: CreateGroupModalProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -66,11 +70,14 @@ export default function CreateGroupModal({
     handleClose();
   };
 
-  const filteredClients = availableClients.filter((c) =>
+  const contactClients = clients ?? availableClients;
+  const contactCollaborators = collaborators ?? availableCollaborators;
+
+  const filteredClients = contactClients.filter((c) =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  const filteredCollaborators = availableCollaborators.filter((c) =>
+  const filteredCollaborators = contactCollaborators.filter((c) =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 

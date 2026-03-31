@@ -262,6 +262,33 @@ export const chatApi = createApi({
       invalidatesTags: [{ type: "ChatRooms", id: "LIST" }],
     }),
 
+    addParticipant: builder.mutation<
+      { message: string },
+      { roomId: number; participantId: number }
+    >({
+      query: ({ roomId, participantId }) => ({
+        url: `/chat/rooms/${roomId}/participants`,
+        method: "POST",
+        body: { participantId },
+      }),
+      invalidatesTags: (_result, _err, { roomId }) => [
+        { type: "ChatRooms", id: roomId },
+      ],
+    }),
+
+    removeParticipant: builder.mutation<
+      { message: string },
+      { roomId: number; participantId: number }
+    >({
+      query: ({ roomId, participantId }) => ({
+        url: `/chat/rooms/${roomId}/participants/${participantId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (_result, _err, { roomId }) => [
+        { type: "ChatRooms", id: roomId },
+      ],
+    }),
+
     getRoomMessages: builder.query<
       GetRoomMessagesResponse,
       { roomId: number; page: number; limit: number }
@@ -647,6 +674,8 @@ export const {
   useMarkAllRoomsAsReadMutation,
   useEditMessageMutation,
   useDeleteMessageMutation,
+  useAddParticipantMutation,
+  useRemoveParticipantMutation,
   useGetSharedDocumentsQuery,
   useGetUserRequestsQuery,
   useGetChatAccessibleRequestsQuery,

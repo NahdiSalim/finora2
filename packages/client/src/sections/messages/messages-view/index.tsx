@@ -34,8 +34,6 @@ import type {
 } from "./data/types";
 import {
   groupConversations,
-  availableClients,
-  availableCollaborators,
   messagesByConversation as mockMessages,
 } from "./data/mock";
 import {
@@ -44,6 +42,9 @@ import {
   useLazyGetRoomMessagesQuery,
   useMarkRoomAsReadMutation,
   useFindOrCreateDirectRoomMutation,
+  useCreateRoomMutation,
+  useAddParticipantMutation,
+  useRemoveParticipantMutation,
   chatApi,
   type GetRoomsParams,
 } from "src/lib/services/chatApi";
@@ -195,10 +196,68 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     () => roomsResponse?.data ?? [],
     [roomsResponse?.data],
   );
+
+  // Fetch ALL contacts (no category filter) for the group creation modal
+  const { data: allContactsResponse } = useGetUserRoomsQuery(
+    { page: 1, pageSize: 100 },
+    { refetchOnMountOrArgChange: false },
+  );
+
+  // Derive real contacts for the group creation modal, filtered by current user's role
+  const { groupModalClients, groupModalCollaborators } = useMemo(() => {
+    const rooms = allContactsResponse?.data ?? [];
+    const seen = new Set<number>();
+    const clients: GroupMember[] = [];
+    const collabs: GroupMember[] = [];
+
+    for (const room of rooms) {
+      for (const p of room.participantProfiles ?? []) {
+        const pid = Number(p.id);
+        if (pid === currentUid || seen.has(pid)) continue;
+        seen.add(pid);
+
+        const fullName =
+          [p.firstName, p.lastName].filter(Boolean).join(" ") ||
+          p.username ||
+          p.email ||
+          "?";
+        const avatar = fullName
+          .split(" ")
+          .map((w) => w[0])
+          .filter(Boolean)
+          .join("")
+          .slice(0, 2)
+          .toUpperCase();
+        const roleCode = (p.role?.code ?? "").toLowerCase();
+
+        if (roleCode === "client" || roleCode.startsWith("client_")) {
+          clients.push({ id: pid, name: fullName, role: "client", avatar });
+        } else {
+          collabs.push({
+            id: pid,
+            name: fullName,
+            role: "collaborateur",
+            avatar,
+          });
+        }
+      }
+    }
+
+    // ACCOUNTANT: can add both clients and collaborateurs
+    // CLIENT / COLLABORATOR: can only add collaborateurs (their accountant/colleagues)
+    return {
+      groupModalClients: iAmComptable ? clients : [],
+      groupModalCollaborators: collabs,
+    };
+  }, [allContactsResponse, currentUid, iAmComptable]);
+
   const [triggerSendMessage] = useSendMessageMutation();
   const [triggerGetOlderMessages] = useLazyGetRoomMessagesQuery();
   const [triggerMarkRoomAsRead] = useMarkRoomAsReadMutation();
   const [triggerFindOrCreateDirectRoom] = useFindOrCreateDirectRoomMutation();
+  const [createRoom] = useCreateRoomMutation();
+  const [addParticipant] = useAddParticipantMutation();
+  const [removeParticipant] = useRemoveParticipantMutation();
 
   // Older messages accumulation per room (scroll-based infinite loading)
   const [olderMessagesByRoom, setOlderMessagesByRoom] = useState<
@@ -529,45 +588,96 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   }, [openCreateGroupModal, openManageGroupModal]);
 
   // Handlers for group operations
-  const handleCreateGroup = (groupName: string, memberIds: number[]) => {
-    const newGroupId = 2000 + mockGroups.length;
-    const allMembers = [...availableClients, ...availableCollaborators];
-    const selectedMembers = allMembers.filter((m) => memberIds.includes(m.id));
+  const handleCreateGroup = async (groupName: string, memberIds: number[]) => {
+    try {
+      const newRoom = await createRoom({
+        type: "group",
+        name: groupName,
+        participants: memberIds,
+      }).unwrap();
 
-    const newGroup: Conversation = {
-      id: newGroupId,
-      name: groupName,
-      role: `${selectedMembers.length} membres`,
-      preview: "Aucun message",
-      fullDate: new Date().toISOString(),
-      time: new Date().toLocaleTimeString("fr-FR", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      avatar: groupName.substring(0, 2).toUpperCase(),
-      avatarColor: "#3B82F6",
-      avatarTextColor: "#FFFFFF",
-      online: false,
-      unreadCount: 0,
-      phone: "",
-      category: "group",
-      isGroup: true,
-      memberCount: selectedMembers.length,
-      members: selectedMembers,
-      createdBy: 1, // Current user ID (mock)
-    };
+      const allMembers = [...groupModalClients, ...groupModalCollaborators];
+      const selectedMembers = allMembers.filter((m) =>
+        memberIds.includes(m.id),
+      );
 
-    setMockGroups([newGroup, ...mockGroups]);
-    setMockGroupMessages((prev) => ({
-      ...prev,
-      [newGroupId]: [],
-    }));
-    setSelectedConversation(newGroupId);
+      const newGroup: Conversation = {
+        id: newRoom.id,
+        name: groupName,
+        role: `${selectedMembers.length} membres`,
+        preview: "Aucun message",
+        fullDate: newRoom.createdAt ?? new Date().toISOString(),
+        time: new Date().toLocaleTimeString("fr-FR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        avatar: groupName.substring(0, 2).toUpperCase(),
+        avatarColor: "#3B82F6",
+        avatarTextColor: "#FFFFFF",
+        online: false,
+        unreadCount: 0,
+        phone: "",
+        category: "group",
+        isGroup: true,
+        memberCount: selectedMembers.length,
+        members: selectedMembers,
+        createdBy: currentUid,
+      };
+
+      setMockGroups((prev) => [newGroup, ...prev]);
+      setSelectedConversation(newRoom.id);
+      setOpenCreateGroupModal(false);
+    } catch (error) {
+      console.error("[handleCreateGroup] Failed to create group:", error);
+    }
   };
 
-  const handleUpdateGroup = (groupName: string, members: GroupMember[]) => {
+  const handleUpdateGroup = async (
+    groupName: string,
+    members: GroupMember[],
+  ) => {
     if (!selectedGroupForManagement) return;
 
+    // Compute diff between current and new member lists
+    const currentGroup = mockGroups.find(
+      (g) => g.id === selectedGroupForManagement,
+    );
+    const currentMemberIds = new Set(
+      (currentGroup?.members ?? []).map((m) => m.id),
+    );
+    const newMemberIds = new Set(members.map((m) => m.id));
+
+    const added = members.filter((m) => !currentMemberIds.has(m.id));
+    const removed = (currentGroup?.members ?? []).filter(
+      (m) => !newMemberIds.has(m.id),
+    );
+
+    // Only call the backend for real rooms (mock rooms have id >= 1000)
+    if (selectedGroupForManagement < 1000) {
+      try {
+        await Promise.all([
+          ...added.map((m) =>
+            addParticipant({
+              roomId: selectedGroupForManagement,
+              participantId: m.id,
+            }).unwrap(),
+          ),
+          ...removed.map((m) =>
+            removeParticipant({
+              roomId: selectedGroupForManagement,
+              participantId: m.id,
+            }).unwrap(),
+          ),
+        ]);
+      } catch (error) {
+        console.error(
+          "[handleUpdateGroup] Failed to update participants:",
+          error,
+        );
+      }
+    }
+
+    // Update local state to reflect the new members list
     setMockGroups(
       mockGroups.map((g) =>
         g.id === selectedGroupForManagement
@@ -589,9 +699,12 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   };
 
   const allConversations: Conversation[] = useMemo(() => {
-    // For group tab, show mock group conversations (frontend only)
     if (activeTab === "group") {
-      return mockGroups.map((c) => ({
+      // Real backend group rooms take priority
+      const realGroups = apiConversations.filter((c) => c.isGroup);
+      // Fall back to mock groups only when the backend returns none
+      const groups = realGroups.length > 0 ? realGroups : mockGroups;
+      return groups.map((c) => ({
         ...c,
         ...(conversationOverrides[c.id] ?? {}),
       }));
@@ -823,7 +936,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   );
 
   const handleMarkCurrentRoomAsRead = useCallback(() => {
-    if (selectedConversation > 0) {
+    if (selectedConversation > 0 && selectedConversation < 1000) {
       triggerMarkRoomAsRead(selectedConversation);
     }
   }, [selectedConversation, triggerMarkRoomAsRead]);
@@ -832,7 +945,19 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     const lastMessage = updatedMessages[updatedMessages.length - 1];
     if (!lastMessage || !lastMessage.mine) return;
 
-    // Optimistic update
+    // Mock rooms (id >= 1000): store locally, never call the backend
+    if (selectedConversation >= 1000) {
+      setMockGroupMessages((prev) => ({
+        ...prev,
+        [selectedConversation]: [
+          ...(prev[selectedConversation] ?? []),
+          lastMessage,
+        ],
+      }));
+      return;
+    }
+
+    // Optimistic update (real rooms only)
     setLocalMessages((prev) => ({
       ...prev,
       [selectedConversation]: [
@@ -1399,6 +1524,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
           open={openCreateGroupModal}
           onClose={() => setOpenCreateGroupModal(false)}
           onCreate={handleCreateGroup}
+          clients={groupModalClients}
+          collaborators={groupModalCollaborators}
         />
 
         {selectedGroupForManagement && (
@@ -1570,6 +1697,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
         open={openCreateGroupModal}
         onClose={() => setOpenCreateGroupModal(false)}
         onCreate={handleCreateGroup}
+        clients={groupModalClients}
+        collaborators={groupModalCollaborators}
       />
 
       {selectedGroupForManagement && (

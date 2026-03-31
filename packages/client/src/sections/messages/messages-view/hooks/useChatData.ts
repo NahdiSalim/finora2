@@ -13,6 +13,7 @@ import {
 import type {
   Conversation,
   ConversationCategory,
+  GroupMember,
   Message,
 } from "../data/types";
 
@@ -20,6 +21,86 @@ function mapRoomToConversation(
   room: ChatRoom,
   currentUserId: number,
 ): Conversation {
+  // ── Group rooms ───────────────────────────────────────────────────────────
+  if (room.type === "group") {
+    const groupProfiles = room.participantProfiles ?? [];
+    const groupName = room.name || "Groupe";
+    const groupAvatar = groupName
+      .split(" ")
+      .map((w) => w[0])
+      .filter(Boolean)
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+
+    const members: GroupMember[] = groupProfiles
+      .filter((p) => Number(p.id) !== currentUserId)
+      .map((p) => {
+        const fullName =
+          [p.firstName, p.lastName].filter(Boolean).join(" ") ||
+          p.username ||
+          p.email ||
+          "?";
+        const roleCode = (p.role?.code ?? "").toLowerCase();
+        const memberRole: "client" | "collaborateur" =
+          roleCode === "client" || roleCode.startsWith("client_")
+            ? "client"
+            : "collaborateur";
+        return {
+          id: Number(p.id),
+          name: fullName,
+          role: memberRole,
+          avatar: fullName
+            .split(" ")
+            .map((w) => w[0])
+            .filter(Boolean)
+            .join("")
+            .slice(0, 2)
+            .toUpperCase(),
+        };
+      });
+
+    let groupPreview = "";
+    if (room.lastMessage) {
+      const lm = room.lastMessage;
+      const isOwn = Number(lm.senderId) === currentUserId;
+      let body: string;
+      if (lm.type === "file" || lm.type === "image") {
+        const fileName = lm.content?.split("/").pop() || "fichier";
+        body = `📎 ${fileName}`;
+      } else {
+        body = lm.content || "";
+      }
+      groupPreview = isOwn ? `Vous : ${body}` : body;
+    }
+
+    const groupLastDate =
+      room.lastActivity ?? room.updatedAt ?? new Date().toISOString();
+
+    return {
+      id: room.id,
+      name: groupName,
+      role: `${members.length} membres`,
+      preview: groupPreview,
+      fullDate: groupLastDate,
+      time: new Date(groupLastDate).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      avatar: groupAvatar,
+      avatarColor: "#3B82F6",
+      avatarTextColor: "#FFFFFF",
+      online: false,
+      unreadCount: room.unreadCount ?? 0,
+      phone: "",
+      category: "group",
+      isGroup: true,
+      members,
+      memberCount: members.length,
+    };
+  }
+
+  // ── Direct / other rooms (unchanged) ─────────────────────────────────────
   const profiles = room.participantProfiles ?? [];
   const other =
     profiles.find((p) => Number(p.id) !== currentUserId) ?? profiles[0] ?? null;

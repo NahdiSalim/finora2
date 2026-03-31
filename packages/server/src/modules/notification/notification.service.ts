@@ -28,6 +28,8 @@ export class NotificationService {
         title: data.title,
         message: data.message,
         data: data.data ? JSON.stringify(data.data) : null,
+        actionUrl: data.actionUrl ?? null,
+        priority: data.priority ?? 'normal',
       },
       include: {
         recipient: {
@@ -168,6 +170,16 @@ export class NotificationService {
     });
 
     return { unreadCount: count };
+  }
+
+  /**
+   * Emit a relationship update event via WebSocket (no DB record)
+   */
+  emitRelationshipUpdate(userId: number, payload: any) {
+    this.notificationGateway.sendNotificationUpdate(userId, {
+      type: 'relationship_update',
+      ...payload,
+    });
   }
 
   /**
@@ -320,7 +332,7 @@ export class NotificationService {
       },
       'relationship.invitation_accepted': {
         title: 'Invitation acceptée ✅',
-        message: `${actorName} a accepté votre invitation. La relation est maintenant active.`,
+        message: `${actorName} a accepté votre demande de collaboration. La relation est maintenant active.`,
         actionUrl: `/relationships/active`,
         priority: 'normal',
       },

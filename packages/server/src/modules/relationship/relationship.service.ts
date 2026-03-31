@@ -29,18 +29,39 @@ export class RelationshipService {
         companyId: true,
         firstName: true,
         lastName: true,
+        email: true,
+        username: true,
         company: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-          },
+          select: { id: true, name: true, type: true },
         },
       },
     });
 
     if (!user || !user.companyId || !user.company) {
-      throw new BadRequestException('Vous devez être associé à une entreprise');
+      // Auto-create company if missing (clients registered before this fix)
+      if (user && !user.companyId) {
+        const autoCompany = await this.prisma.company.create({
+          data: {
+            name: user.username || user.email.split('@')[0],
+            email: user.email,
+            type: 'client',
+            status: 'active',
+            ownerId: user.id,
+          },
+        });
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { companyId: autoCompany.id },
+        });
+        (user as any).companyId = autoCompany.id;
+        (user as any).company = {
+          id: autoCompany.id,
+          name: autoCompany.name,
+          type: autoCompany.type,
+        };
+      } else {
+        throw new BadRequestException('Vous devez être associé à une entreprise');
+      }
     }
 
     // Get target company
@@ -53,50 +74,52 @@ export class RelationshipService {
         ownerId: true,
       },
     });
-
+    console.log(targetCompany, 'targetCompany');
     if (!targetCompany) {
       throw new NotFoundException('Entreprise cible non trouvée');
     }
 
-    // Determine invitation type - be more permissive
-    const userType = user.company.type?.toLowerCase() || '';
+    // Determine who is client and who is accounting firm based on user role
+    // This is more reliable than company type which may not be set correctly
+    const userRoleCode = user.company
+      ? await this.prisma.user
+          .findUnique({
+            where: { id: userId },
+            select: { role: { select: { code: true } } },
+          })
+          .then((u) => u?.role?.code?.toUpperCase() || '')
+      : '';
+
+    const userType = user.company?.type?.toLowerCase() || '';
     const targetType = targetCompany.type?.toLowerCase() || '';
 
-    console.log('User company:', { id: user.companyId, name: user.company.name, type: userType });
-    console.log('Target company:', {
-      id: targetCompany.id,
-      name: targetCompany.name,
-      type: targetType,
-    });
+    // Determine if sender is accountant or client
+    const senderIsAccountant =
+      userRoleCode === 'ACCOUNTANT' ||
+      userRoleCode === 'COLLABORATOR' ||
+      userType === 'accounting_firm' ||
+      userType === 'accountant';
 
-    // Allow relationships in these cases:
-    // 1. User is client and target is accounting_firm
-    // 2. User is accounting_firm and target is client
-    // 3. User type not set and target is accounting_firm (assume user is client)
-    // 4. User is client and target type not set (assume target is accounting_firm)
-    // 5. Both types not set (allow anyway)
+    const senderIsClient = userRoleCode === 'CLIENT' || userType === 'client';
 
-    const isClientToAccountant =
-      (userType === 'client' &&
-        (targetType === 'accounting_firm' || targetType === 'accountant')) ||
-      (!userType && (targetType === 'accounting_firm' || targetType === 'accountant')); // User type not set, assume client
+    // Assign clientCompanyId and accountingFirmId based on who is sending
+    let clientCompanyId: number;
+    let accountingFirmId: number;
 
-    const isAccountantToClient =
-      ((userType === 'accounting_firm' || userType === 'accountant') && targetType === 'client') ||
-      ((userType === 'accounting_firm' || userType === 'accountant') && !targetType); // Target type not set, assume client
-
-    const bothTypesNotSet = !userType && !targetType;
-
-    if (!isClientToAccountant && !isAccountantToClient && !bothTypesNotSet) {
-      throw new BadRequestException(
-        `Type de relation invalide. Type utilisateur: "${userType || 'non défini'}", Type cible: "${targetType || 'non défini'}". ` +
-          `Les relations doivent être entre un client et un cabinet comptable.`
-      );
+    if (senderIsAccountant) {
+      // Accountant sends to client
+      accountingFirmId = user.companyId!;
+      clientCompanyId = dto.targetCompanyId;
+    } else if (senderIsClient) {
+      // Client sends to accountant
+      clientCompanyId = user.companyId!;
+      accountingFirmId = dto.targetCompanyId;
+    } else {
+      // Fallback: use company types
+      const isClientToAccountant = targetType === 'accounting_firm' || targetType === 'accountant';
+      clientCompanyId = isClientToAccountant ? user.companyId! : dto.targetCompanyId;
+      accountingFirmId = isClientToAccountant ? dto.targetCompanyId : user.companyId!;
     }
-
-    const invitationType = isClientToAccountant ? 'client_to_accountant' : 'accountant_to_client';
-    const clientCompanyId = isClientToAccountant ? user.companyId : dto.targetCompanyId;
-    const accountingFirmId = isClientToAccountant ? dto.targetCompanyId : user.companyId;
 
     // Check if relationship already exists
     const existingRelationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
@@ -126,19 +149,29 @@ export class RelationshipService {
       },
     });
 
-    // Send notification to target company owner with action buttons data
-    if (targetCompany.ownerId) {
-      const senderName =
-        `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.company.name;
+    // Send notification — ownerId peut être null, fallback sur le premier user de la compagnie
+    let notifyRecipientId: number | null = targetCompany.ownerId;
+    if (!notifyRecipientId) {
+      const companyUser = await this.prisma.user.findFirst({
+        where: { companyId: targetCompany.id },
+        select: { id: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      notifyRecipientId = companyUser?.id ?? null;
+    }
+
+    if (notifyRecipientId) {
+      const companyName = (user as any).company?.name ?? user.email.split('@')[0];
+      const senderName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || companyName;
       await this.notificationService.notify({
-        recipientId: targetCompany.ownerId,
+        recipientId: notifyRecipientId,
         type: 'relationship',
         action: 'invitation_received',
         priority: 'high',
         actorName: senderName,
         data: {
           invitationId: invitation.id,
-          companyName: user.company.name,
+          companyName,
           senderName,
           invitationMessage: dto.invitationMessage ?? null,
         },
@@ -205,7 +238,13 @@ export class RelationshipService {
 
     const invitation = await this.prisma.clientAccountingFirmRelationship.findUnique({
       where: { id: invitationId },
-      include: {
+      select: {
+        id: true,
+        status: true,
+        invitedBy: true,
+        clientCompanyId: true,
+        accountingFirmId: true,
+        rejectionReason: true,
         clientCompany: { select: { id: true, name: true } },
         accountingFirm: { select: { id: true, name: true } },
       },
@@ -248,34 +287,58 @@ export class RelationshipService {
       data: updateData,
     });
 
-    // Notify the sender - get company owner
-    const senderCompany =
-      invitation.clientCompanyId === user.companyId
-        ? invitation.accountingFirm
-        : invitation.clientCompany;
+    const isAccepted = dto.response === InvitationResponse.ACCEPT;
 
-    // Get owner of sender company
-    const senderCompanyData = await this.prisma.company.findUnique({
-      where: { id: senderCompany.id },
-      select: { ownerId: true },
-    });
+    const notificationData = {
+      relationshipId: updatedInvitation.id,
+      status: isAccepted ? 'active' : 'rejected',
+      rejectionReason: dto.rejectionReason ?? null,
+    };
 
-    if (senderCompanyData?.ownerId) {
-      const isAccepted = dto.response === InvitationResponse.ACCEPT;
-      const responderName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
-
-      await this.notificationService.notify({
-        recipientId: senderCompanyData.ownerId,
-        type: 'relationship',
-        action: isAccepted ? 'invitation_accepted' : 'invitation_rejected',
-        priority: 'normal',
-        actorName: responderName,
-        data: {
-          relationshipId: updatedInvitation.id,
-          status: isAccepted ? 'active' : 'rejected',
-          rejectionReason: dto.rejectionReason ?? null,
-        },
+    if (isAccepted) {
+      // Trouver le user côté client (celui qui a envoyé l'invitation)
+      const clientCompanyId = invitation.clientCompanyId;
+      const clientUser = await this.prisma.user.findFirst({
+        where: { companyId: clientCompanyId },
+        select: { id: true },
+        orderBy: { createdAt: 'asc' },
       });
+
+      if (clientUser) {
+        try {
+          console.log(invitation, 'ivnici');
+          const firmCompany = await this.prisma.company.findUnique({
+            where: { id: invitation.accountingFirmId },
+            select: { name: true },
+          });
+          console.log(firmCompany, 'firmCompany');
+
+          await this.notificationService.notify({
+            recipientId: clientUser.id,
+            type: 'relationship',
+            action: 'invitation_accepted',
+            priority: 'normal',
+            actorName: firmCompany?.name ?? invitation.accountingFirm.name,
+            data: notificationData,
+          });
+        } catch (err) {
+          console.error('[respondToInvitation] client notification error:', err?.message);
+        }
+      }
+
+      // Émettre un événement WebSocket au cabinet comptable pour rafraîchir le tableau clients
+      const accountingFirmUsers = await this.prisma.user.findMany({
+        where: { companyId: invitation.accountingFirmId },
+        select: { id: true },
+      });
+      for (const firmUser of accountingFirmUsers) {
+        this.notificationService.emitRelationshipUpdate(firmUser.id, {
+          event: 'relationship_activated',
+          relationshipId: updatedInvitation.id,
+          clientCompanyId: invitation.clientCompanyId,
+          accountingFirmId: invitation.accountingFirmId,
+        });
+      }
     }
     return {
       success: true,

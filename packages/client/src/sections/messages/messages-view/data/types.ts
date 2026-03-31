@@ -1,4 +1,11 @@
-export type ConversationCategory = "client" | "collaborateur";
+export type ConversationCategory = "client" | "collaborateur" | "group";
+
+export type GroupMember = {
+  id: number;
+  name: string;
+  role: "client" | "collaborateur";
+  avatar: string;
+};
 
 export type Conversation = {
   id: number;
@@ -13,7 +20,12 @@ export type Conversation = {
   online: boolean;
   unreadCount: number;
   phone: string;
-  category: ConversationCategory; // ✅ ajouté
+  category: ConversationCategory;
+  // Group-specific fields
+  isGroup?: boolean;
+  members?: GroupMember[];
+  memberCount?: number;
+  createdBy?: number;
 };
 
 export type MessageFile = {
@@ -61,6 +73,9 @@ export type Message = {
   large?: boolean;
   time?: string;
   date: string;
+  // For group messages
+  senderName?: string;
+  senderAvatar?: string;
 };
 
 export type SharedMediaFile = {

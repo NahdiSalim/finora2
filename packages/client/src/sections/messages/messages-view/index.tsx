@@ -12,6 +12,8 @@ import { useAppDispatch } from "src/hooks/use-redux";
 import ConversationsList from "./views/ConversationsList";
 import ChatWindow from "./views/ChatWindow";
 import SharedMediaView from "./views/SharedMediaView";
+import CreateGroupModal from "./components/CreateGroupModal";
+import GroupManagementModal from "./components/GroupManagementModal";
 
 import { useChatSocket } from "./hooks/useChatSocket";
 import type { SocketMessage } from "./hooks/useChatSocket";
@@ -28,7 +30,14 @@ import type {
   Conversation,
   ConversationCategory,
   Message,
+  GroupMember,
 } from "./data/types";
+import {
+  groupConversations,
+  availableClients,
+  availableCollaborators,
+  messagesByConversation as mockMessages,
+} from "./data/mock";
 import {
   useSendMessageMutation,
   useGetUserRoomsQuery,
@@ -93,6 +102,7 @@ function resolveApiCategory(
 export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const isMedium = useMediaQuery(theme.breakpoints.between("md", "lg"));
   const dispatch = useAppDispatch();
   const [searchParams] = useSearchParams();
 
@@ -105,22 +115,30 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   );
   const iAmComptable = isComptableRole(myRoleCode);
 
-  // Only Comptables see both tabs; everyone else sees only "Collaborateurs"
+  // Tabs: Comptables see all three tabs; everyone else sees Collaborateurs + Groupes
   const visibleTabs = useMemo(
     () =>
       iAmComptable
         ? [
             { label: "Clients", value: "client" as const },
             { label: "Collaborateurs", value: "collaborateur" as const },
+            { label: "Groupes", value: "group" as const },
           ]
-        : [{ label: "Collaborateurs", value: "collaborateur" as const }],
+        : [
+            { label: "Collaborateurs", value: "collaborateur" as const },
+            { label: "Groupes", value: "group" as const },
+          ],
     [iAmComptable],
   );
 
   // ── All local state declared first so roomsParams can reference them ───────
   const [activeTab, setActiveTab] = useState<ConversationCategory>(() => {
     const cat = searchParams.get("category");
-    return cat === "client" ? "client" : "collaborateur";
+    if (cat === "client" || cat === "collaborateur") {
+      return cat;
+    }
+    // Default to "client" for accountants, "collaborateur" for others
+    return iAmComptable ? "client" : "collaborateur";
   });
   const [roomsPage] = useState(1);
   const ROOMS_PAGE_SIZE = 50;
@@ -488,14 +506,103 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     Record<number, Partial<Conversation>>
   >({});
 
-  const allConversations: Conversation[] = useMemo(
-    () =>
-      apiConversations.map((c) => ({
+  // Upload progress tracking
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+
+  // Group chat state (mock data, frontend only)
+  const [openCreateGroupModal, setOpenCreateGroupModal] = useState(false);
+  const [openManageGroupModal, setOpenManageGroupModal] = useState(false);
+  const [selectedGroupForManagement, setSelectedGroupForManagement] = useState<
+    number | null
+  >(null);
+  const [mockGroups, setMockGroups] = useState(groupConversations);
+  const [mockGroupMessages, setMockGroupMessages] =
+    useState<Record<number, Message[]>>(mockMessages);
+
+  // Debug modal state
+  useEffect(() => {
+    console.log("[MessagesView] Modal state changed:", {
+      openCreateGroupModal,
+      openManageGroupModal,
+    });
+  }, [openCreateGroupModal, openManageGroupModal]);
+
+  // Handlers for group operations
+  const handleCreateGroup = (groupName: string, memberIds: number[]) => {
+    const newGroupId = 2000 + mockGroups.length;
+    const allMembers = [...availableClients, ...availableCollaborators];
+    const selectedMembers = allMembers.filter((m) => memberIds.includes(m.id));
+
+    const newGroup: Conversation = {
+      id: newGroupId,
+      name: groupName,
+      role: `${selectedMembers.length} membres`,
+      preview: "Aucun message",
+      fullDate: new Date().toISOString(),
+      time: new Date().toLocaleTimeString("fr-FR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      avatar: groupName.substring(0, 2).toUpperCase(),
+      avatarColor: "#3B82F6",
+      avatarTextColor: "#FFFFFF",
+      online: false,
+      unreadCount: 0,
+      phone: "",
+      category: "group",
+      isGroup: true,
+      memberCount: selectedMembers.length,
+      members: selectedMembers,
+      createdBy: 1, // Current user ID (mock)
+    };
+
+    setMockGroups([newGroup, ...mockGroups]);
+    setMockGroupMessages((prev) => ({
+      ...prev,
+      [newGroupId]: [],
+    }));
+    setSelectedConversation(newGroupId);
+  };
+
+  const handleUpdateGroup = (groupName: string, members: GroupMember[]) => {
+    if (!selectedGroupForManagement) return;
+
+    setMockGroups(
+      mockGroups.map((g) =>
+        g.id === selectedGroupForManagement
+          ? {
+              ...g,
+              name: groupName,
+              role: `${members.length} membres`,
+              members,
+              memberCount: members.length,
+            }
+          : g,
+      ),
+    );
+  };
+
+  const handleManageGroup = (groupId: number) => {
+    setSelectedGroupForManagement(groupId);
+    setOpenManageGroupModal(true);
+  };
+
+  const allConversations: Conversation[] = useMemo(() => {
+    // For group tab, show mock group conversations (frontend only)
+    if (activeTab === "group") {
+      return mockGroups.map((c) => ({
         ...c,
         ...(conversationOverrides[c.id] ?? {}),
-      })),
-    [apiConversations, conversationOverrides],
-  );
+      }));
+    }
+
+    // For other tabs, show API conversations
+    return apiConversations.map((c) => ({
+      ...c,
+      ...(conversationOverrides[c.id] ?? {}),
+    }));
+  }, [apiConversations, conversationOverrides, activeTab, mockGroups]);
 
   // Auto-select first conversation when rooms load (only if no room was pre-selected via URL)
   useEffect(() => {
@@ -560,6 +667,12 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   );
 
   const currentMessages: Message[] = useMemo(() => {
+    // For group conversations (frontend only), use mock data
+    if (selectedConversation >= 1000) {
+      return mockGroupMessages[selectedConversation] ?? [];
+    }
+
+    // For regular conversations, use API data
     const page1 = apiMessages;
     const older = olderMessagesByRoom[selectedConversation] ?? [];
     const local = localMessages[selectedConversation] ?? [];
@@ -570,7 +683,13 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
 
     // oldest (older pages) → page 1 (recent) → optimistic local
     return [...olderFiltered, ...page1, ...localFiltered];
-  }, [apiMessages, olderMessagesByRoom, localMessages, selectedConversation]);
+  }, [
+    apiMessages,
+    olderMessagesByRoom,
+    localMessages,
+    selectedConversation,
+    mockGroupMessages,
+  ]);
 
   // Clear optimistic messages once API confirms them
   useEffect(() => {
@@ -775,6 +894,78 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     }
   };
 
+  // Custom upload with progress tracking
+  const uploadFileWithProgress = async (
+    roomId: number,
+    file: File,
+    messageContent: string,
+    messageType: string,
+    requestId?: number,
+    taskId?: number,
+    appointmentId?: number,
+  ): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append("roomId", String(roomId));
+      formData.append("content", messageContent);
+      formData.append("type", messageType);
+      if (requestId) formData.append("requestId", String(requestId));
+      if (taskId) formData.append("taskId", String(taskId));
+      if (appointmentId)
+        formData.append("appointmentId", String(appointmentId));
+      formData.append("attachments", file);
+
+      const xhr = new XMLHttpRequest();
+      const token = localStorage.getItem("token");
+      const apiUrl =
+        import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          const percentComplete = Math.round((e.loaded / e.total) * 100);
+          setUploadProgress(percentComplete);
+        }
+      });
+
+      xhr.addEventListener("load", () => {
+        setIsUploading(false);
+        setUploadProgress(0);
+
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const response = JSON.parse(xhr.responseText);
+            resolve(response);
+          } catch (err) {
+            reject(new Error("Failed to parse response"));
+          }
+        } else {
+          reject(new Error(`Upload failed with status ${xhr.status}`));
+        }
+      });
+
+      xhr.addEventListener("error", () => {
+        setIsUploading(false);
+        setUploadProgress(0);
+        reject(new Error("Network error during upload"));
+      });
+
+      xhr.addEventListener("abort", () => {
+        setIsUploading(false);
+        setUploadProgress(0);
+        reject(new Error("Upload cancelled"));
+      });
+
+      xhr.open("POST", `${apiUrl}/chat/messages`);
+      if (token) {
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      }
+
+      setIsUploading(true);
+      setUploadProgress(0);
+      xhr.send(formData);
+    });
+  };
+
   const handleSendFile = async (
     messageHtml: string,
     file?: File,
@@ -797,6 +988,65 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       appointment?.title ||
       "";
 
+    // Handle group chat messages (frontend only)
+    if (roomId >= 1000) {
+      const newMessage: Message = {
+        id: Date.now(),
+        type: file
+          ? "file"
+          : request
+            ? "request"
+            : task
+              ? "task"
+              : appointment
+                ? "appointment"
+                : "text",
+        text: plainText,
+        mine: true,
+        time: new Date().toLocaleTimeString("fr-FR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        date: new Date().toISOString().split("T")[0],
+        ...(file && {
+          file: {
+            name: file.name,
+            size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+            type: file.type,
+            url: URL.createObjectURL(file),
+          },
+        }),
+        ...(request && { request }),
+        ...(task && { task }),
+        ...(appointment && { appointment }),
+      };
+
+      setMockGroupMessages((prev) => ({
+        ...prev,
+        [roomId]: [...(prev[roomId] ?? []), newMessage],
+      }));
+
+      // Update preview in group conversation
+      setMockGroups((prevGroups) =>
+        prevGroups.map((g) =>
+          g.id === roomId
+            ? {
+                ...g,
+                preview: plainText || file?.name || "Pièce jointe",
+                fullDate: new Date().toISOString(),
+                time: new Date().toLocaleTimeString("fr-FR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              }
+            : g,
+        ),
+      );
+
+      return;
+    }
+
+    // Regular conversation messages (API)
     if (file) {
       const messageType = file.type?.startsWith("image/") ? "image" : "file";
       console.log("[MessagesView] sending file via REST:", {
@@ -809,15 +1059,15 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       });
 
       try {
-        const saved = await triggerSendMessage({
+        const saved = await uploadFileWithProgress(
           roomId,
-          content: messageContent,
-          type: messageType,
-          attachments: [file],
-          requestId: request?.id,
-          taskId: task?.id,
-          appointmentId: appointment?.id,
-        }).unwrap();
+          file,
+          messageContent,
+          messageType,
+          request?.id,
+          task?.id,
+          appointment?.id,
+        );
 
         console.log("[MessagesView] file saved + message:new expected:", {
           messageId: saved.id,
@@ -1063,6 +1313,11 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                   onSearchChange={handleSearchChange}
                   onDateFilterChange={handleDateFilterChange}
                   onSelect={handleSelectConversation}
+                  showCreateGroupButton={iAmComptable}
+                  onCreateGroup={() => setOpenCreateGroupModal(true)}
+                  showManageGroupButton={iAmComptable}
+                  onManageGroup={handleManageGroup}
+                  allConversations={allConversations}
                 />
               </Box>
             </Box>
@@ -1104,6 +1359,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                 hasMore={hasMoreOlderMessages}
                 isLoadingMore={isLoadingOlder}
                 onMarkAsRead={handleMarkCurrentRoomAsRead}
+                uploadProgress={uploadProgress}
+                isUploading={isUploading}
                 onOpenMedia={() => {
                   setMobileView("media");
                   onOpenMedia?.();
@@ -1136,139 +1393,204 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
             )}
           </Box>
         )}
+
+        {/* Group Modals - Rendered outside main container for proper z-index */}
+        <CreateGroupModal
+          open={openCreateGroupModal}
+          onClose={() => setOpenCreateGroupModal(false)}
+          onCreate={handleCreateGroup}
+        />
+
+        {selectedGroupForManagement && (
+          <GroupManagementModal
+            open={openManageGroupModal}
+            onClose={() => {
+              setOpenManageGroupModal(false);
+              setSelectedGroupForManagement(null);
+            }}
+            groupId={selectedGroupForManagement}
+            initialGroupName={
+              mockGroups.find((g) => g.id === selectedGroupForManagement)
+                ?.name || ""
+            }
+            initialMembers={
+              mockGroups.find((g) => g.id === selectedGroupForManagement)
+                ?.members || []
+            }
+            onUpdate={handleUpdateGroup}
+          />
+        )}
       </>
     );
   }
 
   return (
-    <Box
-      sx={{
-        height: "calc(100vh - 120px)",
-        minHeight: 0,
-        width: "100%",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      }}
-    >
+    <>
       <Box
         sx={{
-          flex: 1,
+          height: isMedium
+            ? `calc(100vh - 120px - ${MOBILE_BOTTOM_NAV_HEIGHT}px)`
+            : "calc(100vh - 120px)",
           minHeight: 0,
+          width: "100%",
           display: "flex",
           flexDirection: "column",
-          width: "100%",
           overflow: "hidden",
         }}
       >
-        {renderContentHeader()}
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+            width: "100%",
+            overflow: "hidden",
+          }}
+        >
+          {renderContentHeader()}
 
-        {desktopView === "media" ? (
-          <Box
-            sx={{
-              flex: 1,
-              minHeight: 0,
-              width: "100%",
-              display: "flex",
-              overflow: "hidden",
-            }}
-          >
-            {renderMediaPanel(
-              <SharedMediaView
-                conversationId={selectedConversation}
-                onBack={() => setDesktopView("chat")}
-              />,
-            )}
-          </Box>
-        ) : (
-          <Box
-            sx={{
-              flex: 1,
-              minHeight: 0,
-              display: "flex",
-              gap: 2,
-              width: "100%",
-              overflow: "hidden",
-            }}
-          >
-            <Paper
-              elevation={0}
-              sx={{
-                width: 360,
-                p: 1.75,
-                display: "flex",
-                flexDirection: "column",
-                borderRadius: "20px",
-                border: "1px solid",
-                borderColor: theme.palette.grey[200],
-                backgroundColor: theme.palette.common.white,
-                flexShrink: 0,
-                minHeight: 0,
-                overflow: "hidden",
-              }}
-            >
-              <ConversationsList
-                conversations={filteredConversations}
-                selectedConversation={selectedConversation}
-                searchTerm={searchTerm}
-                selectedDateFilter={selectedDateFilter}
-                tabs={visibleTabs}
-                activeTab={activeTab}
-                onTabChange={handleTabChange}
-                onSearchChange={handleSearchChange}
-                onDateFilterChange={handleDateFilterChange}
-                onSelect={handleSelectConversation}
-              />
-            </Paper>
-
-            <Paper
-              elevation={0}
+          {desktopView === "media" ? (
+            <Box
               sx={{
                 flex: 1,
-                minWidth: 0,
                 minHeight: 0,
-                px: 2.5,
-                pt: 2,
-                pb: 1.75,
+                width: "100%",
                 display: "flex",
-                flexDirection: "column",
-                borderRadius: "20px",
-                border: "1px solid",
-                borderColor: theme.palette.grey[200],
-                backgroundColor: theme.palette.common.white,
                 overflow: "hidden",
               }}
             >
-              {showEmptyState ? (
-                <Box sx={{ flex: 1, minHeight: 0 }} />
-              ) : (
-                <ChatWindow
+              {renderMediaPanel(
+                <SharedMediaView
                   conversationId={selectedConversation}
-                  conversation={currentConversation}
-                  messages={currentMessages}
-                  isCommunicationConfirmed
-                  isRemoteTyping={isRemoteTyping}
-                  recipientType={recipientInfo.recipientType}
-                  recipientId={recipientInfo.recipientId}
-                  onTypingChange={(typing) =>
-                    emitTyping(selectedConversation, typing)
-                  }
-                  onMessagesChange={handleMessagesChange}
-                  onSendFile={handleSendFile}
-                  onLoadMore={handleLoadOlderMessages}
-                  hasMore={hasMoreOlderMessages}
-                  isLoadingMore={isLoadingOlder}
-                  onMarkAsRead={handleMarkCurrentRoomAsRead}
-                  onOpenMedia={() => {
-                    setDesktopView("media");
-                    onOpenMedia?.();
-                  }}
-                />
+                  onBack={() => setDesktopView("chat")}
+                />,
               )}
-            </Paper>
-          </Box>
-        )}
+            </Box>
+          ) : (
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                display: "flex",
+                gap: 2,
+                width: "100%",
+                overflow: "hidden",
+              }}
+            >
+              <Paper
+                elevation={0}
+                sx={{
+                  width: 360,
+                  p: 1.75,
+                  display: "flex",
+                  flexDirection: "column",
+                  borderRadius: "20px",
+                  border: "1px solid",
+                  borderColor: theme.palette.grey[200],
+                  backgroundColor: theme.palette.common.white,
+                  flexShrink: 0,
+                  minHeight: 0,
+                  overflow: "hidden",
+                }}
+              >
+                <ConversationsList
+                  conversations={filteredConversations}
+                  selectedConversation={selectedConversation}
+                  searchTerm={searchTerm}
+                  selectedDateFilter={selectedDateFilter}
+                  tabs={visibleTabs}
+                  activeTab={activeTab}
+                  onTabChange={handleTabChange}
+                  onSearchChange={handleSearchChange}
+                  onDateFilterChange={handleDateFilterChange}
+                  onSelect={handleSelectConversation}
+                  showCreateGroupButton={iAmComptable}
+                  onCreateGroup={() => setOpenCreateGroupModal(true)}
+                  showManageGroupButton={iAmComptable}
+                  onManageGroup={handleManageGroup}
+                  allConversations={allConversations}
+                />
+              </Paper>
+
+              <Paper
+                elevation={0}
+                sx={{
+                  flex: 1,
+                  minWidth: 0,
+                  minHeight: 0,
+                  px: 2.5,
+                  pt: 2,
+                  pb: 1.75,
+                  display: "flex",
+                  flexDirection: "column",
+                  borderRadius: "20px",
+                  border: "1px solid",
+                  borderColor: theme.palette.grey[200],
+                  backgroundColor: theme.palette.common.white,
+                  overflow: "hidden",
+                }}
+              >
+                {showEmptyState ? (
+                  <Box sx={{ flex: 1, minHeight: 0 }} />
+                ) : (
+                  <ChatWindow
+                    conversationId={selectedConversation}
+                    conversation={currentConversation}
+                    messages={currentMessages}
+                    isCommunicationConfirmed
+                    isRemoteTyping={isRemoteTyping}
+                    recipientType={recipientInfo.recipientType}
+                    recipientId={recipientInfo.recipientId}
+                    onTypingChange={(typing) =>
+                      emitTyping(selectedConversation, typing)
+                    }
+                    onMessagesChange={handleMessagesChange}
+                    onSendFile={handleSendFile}
+                    onLoadMore={handleLoadOlderMessages}
+                    hasMore={hasMoreOlderMessages}
+                    isLoadingMore={isLoadingOlder}
+                    onMarkAsRead={handleMarkCurrentRoomAsRead}
+                    uploadProgress={uploadProgress}
+                    isUploading={isUploading}
+                    onOpenMedia={() => {
+                      setDesktopView("media");
+                      onOpenMedia?.();
+                    }}
+                  />
+                )}
+              </Paper>
+            </Box>
+          )}
+        </Box>
       </Box>
-    </Box>
+
+      {/* Group Modals - Rendered outside main container for proper z-index */}
+      <CreateGroupModal
+        open={openCreateGroupModal}
+        onClose={() => setOpenCreateGroupModal(false)}
+        onCreate={handleCreateGroup}
+      />
+
+      {selectedGroupForManagement && (
+        <GroupManagementModal
+          open={openManageGroupModal}
+          onClose={() => {
+            setOpenManageGroupModal(false);
+            setSelectedGroupForManagement(null);
+          }}
+          groupId={selectedGroupForManagement}
+          initialGroupName={
+            mockGroups.find((g) => g.id === selectedGroupForManagement)?.name ||
+            ""
+          }
+          initialMembers={
+            mockGroups.find((g) => g.id === selectedGroupForManagement)
+              ?.members || []
+          }
+          onUpdate={handleUpdateGroup}
+        />
+      )}
+    </>
   );
 }

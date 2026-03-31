@@ -75,6 +75,16 @@ export default function MessageAttachmentButton({
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Check file size (10MB limit)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+    if (file.size > MAX_FILE_SIZE) {
+      alert(
+        `Le fichier est trop volumineux. La taille maximale est de 10 MB. Votre fichier fait ${(file.size / (1024 * 1024)).toFixed(2)} MB.`,
+      );
+      event.target.value = "";
+      return;
+    }
+
     onFileSelect(file);
     event.target.value = "";
   };

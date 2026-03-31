@@ -3,11 +3,11 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import IconButton from "@mui/material/IconButton";
 import Popover from "@mui/material/Popover";
-import { useTheme } from "@mui/material/styles";
+import { useTheme, alpha } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import CloseIcon from "@mui/icons-material/Close";
-import { Search } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import "dayjs/locale/fr";
@@ -36,6 +36,11 @@ type ConversationsListProps = {
   onSearchChange: (value: string) => void;
   onDateFilterChange: (value: Dayjs | null) => void;
   onSelect: (id: number) => void;
+  showCreateGroupButton?: boolean;
+  onCreateGroup?: () => void;
+  showManageGroupButton?: boolean;
+  onManageGroup?: (groupId: number) => void;
+  allConversations?: Conversation[];
 };
 
 export default function ConversationsList({
@@ -49,15 +54,28 @@ export default function ConversationsList({
   onSearchChange,
   onDateFilterChange,
   onSelect,
+  showCreateGroupButton = false,
+  onCreateGroup,
+  showManageGroupButton = false,
+  onManageGroup,
+  allConversations = [],
 }: ConversationsListProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const isMedium = useMediaQuery(theme.breakpoints.between("md", "lg"));
 
   const [calendarAnchorEl, setCalendarAnchorEl] = useState<null | HTMLElement>(
     null,
   );
 
   const isCalendarOpen = Boolean(calendarAnchorEl);
+
+  // Calculate unread count per tab
+  const getUnreadCountForTab = (category: ConversationCategory) => {
+    return allConversations
+      .filter((c) => c.category === category)
+      .reduce((sum, c) => sum + c.unreadCount, 0);
+  };
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="fr">
@@ -66,26 +84,28 @@ export default function ConversationsList({
           <Box
             sx={{
               mb: isMobile ? 1.25 : 1.5,
-              p: isMobile ? 0.875 : 0.75,
+              p: isMobile ? "6px" : "5px",
               borderRadius: isMobile ? "18px" : "16px",
               backgroundColor: theme.palette.common.white,
               border: "1px solid",
               borderColor: theme.palette.grey[200],
               flexShrink: 0,
+              boxShadow: "0 1px 3px rgba(16, 24, 40, 0.04)",
             }}
           >
             <Box
               sx={{
                 display: "flex",
-                alignItems: "center",
-                gap: isMobile ? 1 : 0.75,
-                p: isMobile ? "4px" : "6px",
-                borderRadius: isMobile ? "14px" : "8px",
-                backgroundColor: theme.palette.grey[100],
+                alignItems: "stretch",
+                gap: isMobile ? "6px" : "4px",
+                p: isMobile ? "5px" : "4px",
+                borderRadius: isMobile ? "14px" : "12px",
+                backgroundColor: alpha(theme.palette.grey[100], 0.6),
               }}
             >
               {tabs.map((tab) => {
                 const active = activeTab === tab.value;
+                const unreadCount = getUnreadCountForTab(tab.value);
 
                 return (
                   <Box
@@ -93,31 +113,78 @@ export default function ConversationsList({
                     onClick={() => onTabChange(tab.value)}
                     sx={{
                       flex: 1,
-                      height: isMobile ? 48 : 42,
+                      minHeight: isMobile ? 46 : 42,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      borderRadius: isMobile ? "12px" : "6px",
+                      gap: 0.5,
+                      borderRadius: isMobile ? "12px" : "10px",
                       cursor: "pointer",
                       userSelect: "none",
-                      fontSize: isMobile ? 14 : 14,
-                      fontWeight: active ? 600 : 500,
-                      transition: "all 0.2s ease",
+                      fontSize: isMobile ? 13.5 : 13,
+                      fontWeight: active ? 700 : 600,
+                      transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                      position: "relative",
                       backgroundColor: active
                         ? theme.palette.primary.main
                         : "transparent",
                       color: active
                         ? theme.palette.common.white
-                        : theme.palette.info.main,
-                      boxShadow: "none",
+                        : theme.palette.text.secondary,
+                      boxShadow: active
+                        ? `0 2px 8px ${alpha(theme.palette.primary.main, 0.25)}`
+                        : "none",
+                      transform: active ? "scale(1.02)" : "scale(1)",
                       "&:hover": {
                         backgroundColor: active
                           ? theme.palette.primary.main
-                          : theme.palette.grey[200],
+                          : alpha(theme.palette.grey[300], 0.5),
+                        transform: active ? "scale(1.02)" : "scale(1.01)",
+                      },
+                      "&:active": {
+                        transform: "scale(0.98)",
                       },
                     }}
                   >
-                    {tab.label}
+                    <Typography
+                      component="span"
+                      sx={{
+                        fontSize: "inherit",
+                        fontWeight: "inherit",
+                        letterSpacing: active ? "0.01em" : "0",
+                      }}
+                    >
+                      {tab.label}
+                    </Typography>
+
+                    {/* Unread Badge */}
+                    {unreadCount > 0 && (
+                      <Box
+                        sx={{
+                          minWidth: 18,
+                          height: 18,
+                          px: 0.5,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderRadius: "9px",
+                          bgcolor: active
+                            ? theme.palette.common.white
+                            : theme.palette.error.main,
+                          color: active
+                            ? theme.palette.primary.main
+                            : theme.palette.common.white,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          ml: 0.25,
+                          boxShadow: active
+                            ? "0 1px 3px rgba(0, 0, 0, 0.12)"
+                            : "0 1px 4px rgba(244, 63, 94, 0.3)",
+                        }}
+                      >
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </Box>
+                    )}
                   </Box>
                 );
               })}
@@ -279,17 +346,66 @@ export default function ConversationsList({
           sx={{
             overflowY: "auto",
             flex: 1,
-            pb: isMobile ? 2.5 : 0,
+            pb: isMobile ? 2.5 : isMedium ? 2 : 0,
+            display: "flex",
+            flexDirection: "column",
           }}
         >
-          {conversations.map((conversation) => (
-            <ConversationItem
-              key={conversation.id}
-              conversation={conversation}
-              selected={selectedConversation === conversation.id}
-              onClick={() => onSelect(conversation.id)}
-            />
-          ))}
+          <Box sx={{ flex: 1, overflowY: "auto" }}>
+            {conversations.map((conversation) => (
+              <ConversationItem
+                key={conversation.id}
+                conversation={conversation}
+                selected={selectedConversation === conversation.id}
+                onClick={() => onSelect(conversation.id)}
+                showManageButton={conversation.isGroup && showManageGroupButton}
+                onManage={
+                  onManageGroup
+                    ? () => onManageGroup(conversation.id)
+                    : undefined
+                }
+              />
+            ))}
+          </Box>
+
+          {/* Create Group Button - Only for accountants and only on group tab */}
+          {showCreateGroupButton && activeTab === "group" && (
+            <Box
+              sx={{
+                mt: 1.5,
+                px: 0.5,
+                flexShrink: 0,
+              }}
+            >
+              <CustomButton
+                fullWidth
+                variant="contained"
+                color="primary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  console.log(
+                    "[ConversationsList] Create group button clicked",
+                  );
+                  onCreateGroup?.();
+                }}
+                sx={{
+                  py: 1.5,
+                  borderRadius: "14px",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  textTransform: "none",
+                  gap: 1,
+                  boxShadow: "none",
+                  "&:hover": {
+                    boxShadow: theme.shadows[2],
+                  },
+                }}
+              >
+                <Plus size={18} />
+                Créer un groupe
+              </CustomButton>
+            </Box>
+          )}
         </Box>
       </>
     </LocalizationProvider>

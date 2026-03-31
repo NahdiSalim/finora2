@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { MinioService } from '../../common/services/minio.service';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -543,6 +548,17 @@ export class ChatService {
           size: files[0].size,
         },
       });
+
+      // Validate file sizes (10MB limit)
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+      for (const file of files) {
+        if (file.size > MAX_FILE_SIZE) {
+          throw new BadRequestException(
+            `Le fichier "${file.originalname}" est trop volumineux. Taille maximale: 10 MB.`
+          );
+        }
+      }
+
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         select: { companyId: true },

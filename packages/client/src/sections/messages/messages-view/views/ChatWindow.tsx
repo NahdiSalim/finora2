@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import Typography from "@mui/material/Typography";
+import LinearProgress from "@mui/material/LinearProgress";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 
@@ -42,6 +43,8 @@ type ChatWindowProps = {
   hasMore?: boolean;
   isLoadingMore?: boolean;
   onMarkAsRead?: () => void;
+  uploadProgress?: number;
+  isUploading?: boolean;
 };
 
 function htmlToText(html: string) {
@@ -73,9 +76,12 @@ export default function ChatWindow({
   hasMore = false,
   isLoadingMore = false,
   onMarkAsRead,
+  uploadProgress = 0,
+  isUploading = false,
 }: ChatWindowProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const isMedium = useMediaQuery(theme.breakpoints.between("md", "lg"));
 
   const currentConversation = conversation;
 
@@ -434,10 +440,7 @@ export default function ChatWindow({
           flexShrink: 0,
           px: { xs: 1, md: 2 },
           pt: { xs: 0.75, md: 1 },
-          pb: {
-            xs: 1.5,
-            md: 0.75,
-          },
+          pb: isMedium ? 1.5 : { xs: 1.5, md: 0.75 },
           borderTop: "1px solid #F2F4F7",
           backgroundColor: isCommunicationConfirmed ? "#FFFFFF" : "#FCFCFD",
           position: "relative",
@@ -458,12 +461,58 @@ export default function ChatWindow({
           </Typography>
         )}
 
+        {/* Upload Progress Bar */}
+        {isUploading && (
+          <Box sx={{ mb: 1.5 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                mb: 0.5,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 12,
+                  color: theme.palette.primary.main,
+                  fontWeight: 600,
+                }}
+              >
+                Téléchargement en cours...
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: 12,
+                  color: theme.palette.text.secondary,
+                  fontWeight: 600,
+                }}
+              >
+                {uploadProgress}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={uploadProgress}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: theme.palette.grey[200],
+                "& .MuiLinearProgress-bar": {
+                  borderRadius: 3,
+                  backgroundColor: theme.palette.primary.main,
+                },
+              }}
+            />
+          </Box>
+        )}
+
         <MessageInput
           value={inputValue}
           onChange={handleInputChange}
           onSend={handleSendMessage}
           requests={messageRequests}
-          disabled={!isCommunicationConfirmed}
+          disabled={!isCommunicationConfirmed || isUploading}
           recipientType={recipientType}
           recipientId={recipientId}
           onFocus={onMarkAsRead}

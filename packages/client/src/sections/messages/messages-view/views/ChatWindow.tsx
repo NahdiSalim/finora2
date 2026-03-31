@@ -41,6 +41,7 @@ type ChatWindowProps = {
   onLoadMore?: () => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
+  onMarkAsRead?: () => void;
 };
 
 function htmlToText(html: string) {
@@ -71,6 +72,7 @@ export default function ChatWindow({
   onLoadMore,
   hasMore = false,
   isLoadingMore = false,
+  onMarkAsRead,
 }: ChatWindowProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -464,6 +466,7 @@ export default function ChatWindow({
           disabled={!isCommunicationConfirmed}
           recipientType={recipientType}
           recipientId={recipientId}
+          onFocus={onMarkAsRead}
         />
       </Box>
     </Box>

@@ -327,6 +327,40 @@ export const chatApi = createApi({
         url: `/chat/rooms/${roomId}/read`,
         method: "POST",
       }),
+      async onQueryStarted(roomId, { dispatch, queryFulfilled }) {
+        // Optimistically update recent messages cache
+        const patchResult = dispatch(
+          chatApi.util.updateQueryData(
+            "getRecentMessages",
+            undefined,
+            (draft) => {
+              if (!draft) return;
+
+              // Mark all messages from this room as read
+              let hasChanges = false;
+              draft.messages.forEach((msg) => {
+                if (msg.roomId === roomId && msg.unread) {
+                  msg.unread = false;
+                  hasChanges = true;
+                }
+              });
+
+              // Recalculate unread count if any changes were made
+              if (hasChanges) {
+                draft.unreadCount = draft.messages.filter(
+                  (m) => m.unread,
+                ).length;
+              }
+            },
+          ),
+        );
+
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
       invalidatesTags: [
         { type: "ChatRooms", id: "LIST" },
         { type: "ChatMessages", id: "RECENT" },
@@ -340,7 +374,7 @@ export const chatApi = createApi({
         method: "GET",
       }),
       providesTags: [{ type: "ChatMessages", id: "RECENT" }],
-      keepUnusedDataFor: 0,
+      keepUnusedDataFor: 300,
       async onCacheEntryAdded(
         _arg,
         {
@@ -455,6 +489,27 @@ export const chatApi = createApi({
         url: "/chat/rooms/mark-all-read",
         method: "POST",
       }),
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        // Optimistically mark all messages as read
+        const patchResult = dispatch(
+          chatApi.util.updateQueryData(
+            "getRecentMessages",
+            undefined,
+            (draft) => {
+              draft.messages.forEach((msg) => {
+                msg.unread = false;
+              });
+              draft.unreadCount = 0;
+            },
+          ),
+        );
+
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
       invalidatesTags: [
         { type: "ChatRooms", id: "LIST" },
         { type: "ChatMessages", id: "RECENT" },

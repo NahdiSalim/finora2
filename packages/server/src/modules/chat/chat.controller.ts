@@ -35,6 +35,17 @@ export class ChatController {
 
   // ==================== ROOMS ====================
 
+  @Post('rooms/direct')
+  @ApiOperation({ summary: 'Find or create a direct chat room between two users' })
+  @ApiResponse({ status: 200, description: 'Direct room found or created' })
+  async findOrCreateDirectRoom(
+    @Request() req,
+    @Body('targetUserId', ParseIntPipe) targetUserId: number
+  ) {
+    const userId = req.user?.id ?? req.user?.sub;
+    return this.chatService.findOrCreateDirectRoom(Number(userId), targetUserId);
+  }
+
   @Post('rooms')
   @ApiOperation({ summary: 'Créer une salle de chat' })
   @ApiResponse({ status: 201, description: 'Salle créée avec succès' })

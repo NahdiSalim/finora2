@@ -278,7 +278,9 @@ export function MessagesPopover({ sx, ...other }: MessagesPopoverProps) {
     data: recentMessagesData,
     isLoading,
     refetch,
-  } = useGetRecentMessagesQuery();
+  } = useGetRecentMessagesQuery(undefined, {
+    pollingInterval: 5000, // Poll every 5 seconds to ensure red dot stays in sync
+  });
 
   const [markAllAsRead, { isLoading: isMarkingAllAsRead }] =
     useMarkAllRoomsAsReadMutation();

@@ -34,6 +34,7 @@ import {
   useGetUserRoomsQuery,
   useLazyGetRoomMessagesQuery,
   useMarkRoomAsReadMutation,
+  useFindOrCreateDirectRoomMutation,
   chatApi,
   type GetRoomsParams,
 } from "src/lib/services/chatApi";
@@ -179,6 +180,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const [triggerSendMessage] = useSendMessageMutation();
   const [triggerGetOlderMessages] = useLazyGetRoomMessagesQuery();
   const [triggerMarkRoomAsRead] = useMarkRoomAsReadMutation();
+  const [triggerFindOrCreateDirectRoom] = useFindOrCreateDirectRoomMutation();
 
   // Older messages accumulation per room (scroll-based infinite loading)
   const [olderMessagesByRoom, setOlderMessagesByRoom] = useState<
@@ -648,7 +650,30 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   ]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-  const handleSelectConversation = (id: number) => {
+  const handleSelectConversation = async (id: number) => {
+    // If it's a virtual room (negative ID), create the real room first
+    if (id < 0) {
+      const targetUserId = Math.abs(id);
+      try {
+        const result = await triggerFindOrCreateDirectRoom({
+          targetUserId,
+        }).unwrap();
+        const realRoomId = result.id;
+
+        // Now select the real room
+        setSelectedConversation(realRoomId);
+
+        if (isMobile) setMobileView("chat");
+        else setDesktopView("chat");
+
+        return;
+      } catch (error) {
+        console.error("Failed to create room:", error);
+        return;
+      }
+    }
+
+    // Normal room selection
     setSelectedConversation(id);
 
     if (isMobile) setMobileView("chat");
@@ -677,6 +702,12 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     },
     [isMobile],
   );
+
+  const handleMarkCurrentRoomAsRead = useCallback(() => {
+    if (selectedConversation > 0) {
+      triggerMarkRoomAsRead(selectedConversation);
+    }
+  }, [selectedConversation, triggerMarkRoomAsRead]);
 
   const handleMessagesChange = async (updatedMessages: Message[]) => {
     const lastMessage = updatedMessages[updatedMessages.length - 1];
@@ -1072,6 +1103,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                 onLoadMore={handleLoadOlderMessages}
                 hasMore={hasMoreOlderMessages}
                 isLoadingMore={isLoadingOlder}
+                onMarkAsRead={handleMarkCurrentRoomAsRead}
                 onOpenMedia={() => {
                   setMobileView("media");
                   onOpenMedia?.();
@@ -1226,6 +1258,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                   onLoadMore={handleLoadOlderMessages}
                   hasMore={hasMoreOlderMessages}
                   isLoadingMore={isLoadingOlder}
+                  onMarkAsRead={handleMarkCurrentRoomAsRead}
                   onOpenMedia={() => {
                     setDesktopView("media");
                     onOpenMedia?.();

@@ -39,6 +39,7 @@ type MessageInputProps = {
   disabled?: boolean;
   recipientType?: "client" | "collaborator" | null;
   recipientId?: number | null;
+  onFocus?: () => void;
 };
 
 const FLAG_SPAN_CLASS = "finora-flag-chip";
@@ -88,6 +89,7 @@ export default function MessageInput({
   disabled = false,
   recipientType,
   recipientId,
+  onFocus,
 }: MessageInputProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -706,6 +708,7 @@ export default function MessageInput({
             suppressContentEditableWarning
             onInput={handleEditorInput}
             onKeyDown={handleEditorKeyDown}
+            onFocus={onFocus}
             data-placeholder="Saisir un message ..."
             sx={{
               flex: 1,

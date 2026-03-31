@@ -39,6 +39,89 @@ export class ChatService {
 
   // ==================== ROOMS ====================
 
+  /**
+   * Find or create a direct (1-on-1) chat room between two users.
+   * Returns existing room if found, otherwise creates a new one.
+   */
+  async findOrCreateDirectRoom(userId: number, targetUserId: number) {
+    // Check if a direct room already exists between these two users
+    const existingRoom = await this.prisma.chatRoom.findFirst({
+      where: {
+        type: 'direct',
+        status: 'active',
+        AND: [
+          { participants: { has: String(userId) } },
+          { participants: { has: String(targetUserId) } },
+        ],
+      },
+      include: {
+        createdBy: {
+          select: { id: true, username: true, email: true, firstName: true, lastName: true },
+        },
+      },
+    });
+
+    if (existingRoom) {
+      // Enrich with participant profiles
+      const participantIds = existingRoom.participants.map(Number).filter((id) => id !== userId);
+      const profiles = await this.prisma.user.findMany({
+        where: { id: { in: participantIds } },
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          company: { select: { id: true, name: true } },
+          role: { select: { nameFr: true, code: true } },
+        },
+      });
+
+      return {
+        ...existingRoom,
+        participantProfiles: profiles,
+        lastMessage: null,
+        unreadCount: 0,
+      };
+    }
+
+    // Create new direct room
+    const newRoom = await this.prisma.chatRoom.create({
+      data: {
+        type: 'direct',
+        participants: [String(userId), String(targetUserId)],
+        createdById: userId,
+        status: 'active',
+      },
+      include: {
+        createdBy: {
+          select: { id: true, username: true, email: true, firstName: true, lastName: true },
+        },
+      },
+    });
+
+    // Enrich with participant profiles
+    const profiles = await this.prisma.user.findMany({
+      where: { id: targetUserId },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        company: { select: { id: true, name: true } },
+        role: { select: { nameFr: true, code: true } },
+      },
+    });
+
+    return {
+      ...newRoom,
+      participantProfiles: profiles,
+      lastMessage: null,
+      unreadCount: 0,
+    };
+  }
+
   async createRoom(userId: number, dto: CreateRoomDto) {
     // Vérifier que l'utilisateur est dans les participants
     if (!dto.participants.includes(userId)) {
@@ -101,7 +184,16 @@ export class ChatService {
   }
 
   async getUserRoomsDebug(userId: number, category?: string, search?: string, date?: string) {
-    // Apply the filter
+    // Get user info to determine what potential contacts they have
+    const currentUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        companyId: true,
+        role: { select: { code: true } },
+      },
+    });
+
+    // Get existing chat rooms
     const matchedRooms = await this.prisma.chatRoom.findMany({
       where: {
         participants: { has: String(userId) },
@@ -122,9 +214,91 @@ export class ChatService {
       ),
     ];
 
-    const profiles = allParticipantIds.length
+    // Get all potential contacts based on role
+    const potentialContactIds: number[] = [];
+
+    // If comptable/accountant, get all clients from active relationships
+    if (currentUser?.role?.code === 'ACCOUNTANT' && currentUser.companyId) {
+      const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
+        where: {
+          accountingFirmId: currentUser.companyId,
+          status: 'active',
+        },
+        include: {
+          clientCompany: {
+            select: {
+              employees: {
+                select: { id: true },
+                where: {
+                  role: { code: 'CLIENT' },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const clientIds = relationships.flatMap((rel) =>
+        rel.clientCompany.employees.map((emp) => emp.id)
+      );
+      potentialContactIds.push(...clientIds);
+
+      // Also get collaborators from same company
+      const collaborators = await this.prisma.user.findMany({
+        where: {
+          companyId: currentUser.companyId,
+          id: { not: userId },
+          role: { code: { in: ['COLLABORATOR', 'COLLABORATEUR'] } },
+        },
+        select: { id: true },
+      });
+      potentialContactIds.push(...collaborators.map((c) => c.id));
+    }
+    // If client, get their accountant and collaborators
+    else if (currentUser?.role?.code === 'CLIENT' && currentUser.companyId) {
+      const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
+        where: {
+          clientCompanyId: currentUser.companyId,
+          status: 'active',
+        },
+        include: {
+          accountingFirm: {
+            select: {
+              employees: {
+                select: { id: true },
+                where: {
+                  role: { code: 'ACCOUNTANT' },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const accountantIds = relationships.flatMap((rel) =>
+        rel.accountingFirm.employees.map((emp) => emp.id)
+      );
+      potentialContactIds.push(...accountantIds);
+    }
+    // If collaborator, get accountants from same company
+    else if (currentUser?.companyId) {
+      const colleagues = await this.prisma.user.findMany({
+        where: {
+          companyId: currentUser.companyId,
+          id: { not: userId },
+          role: { code: 'ACCOUNTANT' },
+        },
+        select: { id: true },
+      });
+      potentialContactIds.push(...colleagues.map((c) => c.id));
+    }
+
+    // Combine room participants + potential contacts
+    const allUserIds = [...new Set([...allParticipantIds, ...potentialContactIds])];
+
+    const profiles = allUserIds.length
       ? await this.prisma.user.findMany({
-          where: { id: { in: allParticipantIds } },
+          where: { id: { in: allUserIds } },
           select: {
             id: true,
             username: true,
@@ -186,6 +360,41 @@ export class ChatService {
       unreadCount: unreadMap.get(room.id) ?? 0,
     }));
 
+    // Create virtual rooms for contacts who don't have an existing room yet
+    const existingParticipantIds = new Set(allParticipantIds);
+    const contactsWithoutRooms = potentialContactIds.filter(
+      (id) => !existingParticipantIds.has(id)
+    );
+
+    const virtualRooms = contactsWithoutRooms.map((contactId) => {
+      const profile = profileMap.get(contactId);
+      return {
+        id: -contactId, // Negative ID to indicate virtual room
+        name: null,
+        type: 'direct',
+        description: null,
+        participants: [String(userId), String(contactId)],
+        createdById: userId,
+        lastMessageId: null,
+        lastActivity: new Date(0), // Epoch to sort at bottom
+        contextId: null,
+        contextType: null,
+        pinnedMessages: [],
+        admins: [],
+        status: 'active',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        createdBy: null,
+        participantProfiles: profile ? [profile] : [],
+        lastMessage: null,
+        unreadCount: 0,
+        messages: [],
+      };
+    });
+
+    // Combine existing rooms + virtual rooms
+    const allRooms = [...enriched, ...virtualRooms];
+
     // Map a requested category string to the set of role codes it covers.
     // Handles spelling variants (COLLABORATOR vs COLLABORATEUR, COMPTABLE vs ACCOUNTANT)
     // and case differences coming from different DB seeds or backends.
@@ -203,12 +412,12 @@ export class ChatService {
     // has a role.code that belongs to the requested category group.
     // Runs after profile enrichment because role data lives on users, not rooms.
     let filtered = category
-      ? enriched.filter((room) =>
+      ? allRooms.filter((room) =>
           room.participantProfiles.some(
             (p: any) => p?.role?.code && categoryMatchesRoleCode(category, p.role.code)
           )
         )
-      : enriched;
+      : allRooms;
 
     // Apply search filter: keep only rooms where at least one other participant
     // has a name, username or email that contains the search term.
@@ -558,8 +767,9 @@ export class ChatService {
 
     const roomIds = userRooms.map((r) => r.id);
 
-    // Get the last N received messages (not sent by current user)
-    const rawMessages = await this.prisma.chatMessage.findMany({
+    // Get recent received messages (not sent by current user)
+    // Fetch more than we need so we can filter to unique senders
+    const allRecentMessages = await this.prisma.chatMessage.findMany({
       where: {
         roomId: { in: roomIds },
         deleted: false,
@@ -594,8 +804,23 @@ export class ChatService {
         },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: limit,
+      take: 50, // Fetch more to ensure we get enough unique senders
     });
+
+    // Get last message from each unique sender (limit to N different users)
+    const seenSenders = new Set<number>();
+    const rawMessages: typeof allRecentMessages = [];
+
+    for (const msg of allRecentMessages) {
+      if (!seenSenders.has(msg.senderId)) {
+        rawMessages.push(msg);
+        seenSenders.add(msg.senderId);
+
+        if (rawMessages.length >= limit) {
+          break;
+        }
+      }
+    }
 
     // Get participant profiles to determine category
     const allParticipantIds = [

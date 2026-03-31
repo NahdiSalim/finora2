@@ -123,17 +123,15 @@ export class ChatService {
   }
 
   async createRoom(userId: number, dto: CreateRoomDto) {
-    // Vérifier que l'utilisateur est dans les participants
-    if (!dto.participants.includes(userId)) {
-      dto.participants.push(userId);
-    }
+    // Dédupliquer et s'assurer que le créateur est dans les participants
+    const uniqueParticipants = [...new Set([...dto.participants.map(Number), userId])];
 
     const room = await this.prisma.chatRoom.create({
       data: {
         name: dto.name,
         type: dto.type,
         description: dto.description,
-        participants: dto.participants.map(String),
+        participants: uniqueParticipants.map(String),
         createdById: userId,
         contextId: dto.contextId,
         contextType: dto.contextType,
@@ -510,13 +508,28 @@ export class ChatService {
       throw new ForbiddenException('Seuls les admins peuvent retirer des participants');
     }
 
-    // Retirer le participant
+    // Empêcher un admin de se retirer lui-même
+    if (userId === participantId) {
+      throw new ForbiddenException('Un admin ne peut pas se retirer lui-même de la salle');
+    }
+
+    // Synchroniser admins[] : retirer participantId des admins s'il y était
+    const updatedAdmins = room.admins.filter((a) => a !== String(participantId));
+
+    // S'assurer qu'il reste au moins un admin après la suppression
+    if (updatedAdmins.length === 0) {
+      throw new ForbiddenException(
+        'Impossible de retirer ce participant : la salle se retrouverait sans admin'
+      );
+    }
+
     const updatedParticipants = room.participants.filter((p) => p !== String(participantId));
 
     await this.prisma.chatRoom.update({
       where: { id: roomId },
       data: {
         participants: updatedParticipants,
+        admins: updatedAdmins,
       },
     });
 
@@ -730,6 +743,11 @@ export class ChatService {
 
     if (!message) {
       throw new NotFoundException('Message introuvable');
+    }
+
+    // Vérifier que l'utilisateur appartient à la room du message
+    if (message.roomId) {
+      await this.getRoomById(message.roomId, userId); // lève ForbiddenException si non participant
     }
 
     // Ajouter l'utilisateur à readBy s'il n'y est pas déjà

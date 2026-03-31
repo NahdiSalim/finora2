@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsInt, IsOptional, IsEnum, IsArray, IsNumber } from 'class-validator';
+import {
+  IsString,
+  IsInt,
+  IsOptional,
+  IsEnum,
+  IsArray,
+  IsNumber,
+  ArrayMinSize,
+} from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 
 export class CreateRoomDto {
@@ -27,6 +35,7 @@ export class CreateRoomDto {
     example: [1, 2, 3],
   })
   @IsArray()
+  @ArrayMinSize(1)
   @Type(() => Number)
   @IsNumber({}, { each: true })
   participants: number[];

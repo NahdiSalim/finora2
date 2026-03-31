@@ -1,6 +1,10 @@
 import { useState, useCallback, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
 import { Box, Typography, Chip, useTheme, alpha } from "@mui/material";
 import { FileText } from "lucide-react";
+import { useDashboardBase } from "src/hooks/useDashboardBase";
+import type { RootState } from "src/lib/store";
 import AttachmentSelectionModal from "./AttachmentSelectionModal";
 import { useGetChatAccessibleRequestsQuery } from "../../../../lib/services/chatApi";
 import type { ChatMessageRequest } from "../../../../lib/services/chatApi";
@@ -72,8 +76,17 @@ export default function RequestSelectionModal({
   clientId,
 }: RequestSelectionModalProps) {
   const theme = useTheme();
+  const navigate = useNavigate();
+  const dashboardBase = useDashboardBase();
   const [page, setPage] = useState(1);
   const [allRequests, setAllRequests] = useState<ChatMessageRequest[]>([]);
+
+  // Get current user role to check if they're a client
+  const userRole = useSelector((state: RootState) => state.auth.user?.role);
+  const roleCode = typeof userRole === "string" ? userRole : userRole?.code;
+  const isClient =
+    roleCode?.toLowerCase() === "client" ||
+    roleCode?.toLowerCase().startsWith("client_");
 
   const { data, isLoading, isFetching } = useGetChatAccessibleRequestsQuery(
     { recipientId: clientId!, page, limit: 5 },
@@ -113,6 +126,12 @@ export default function RequestSelectionModal({
         REQUEST_URGENCY_CONFIG[request.urgency]?.label || request.urgency,
     });
     onClose();
+  };
+
+  const handleCreateRequest = () => {
+    onClose();
+    // Navigate to requests page where the user can create a new request
+    navigate(`${dashboardBase}/requests?create=true`);
   };
 
   const renderRequestItem = (request: ChatMessageRequest) => {
@@ -220,7 +239,15 @@ export default function RequestSelectionModal({
       onLoadMore={handleLoadMore}
       onSelect={handleSelect}
       renderItem={renderRequestItem}
-      emptyMessage="Aucune demande disponible pour ce client"
+      emptyMessage="Aucune demande disponible"
+      emptyAction={
+        isClient
+          ? {
+              label: "Créer une demande",
+              onClick: handleCreateRequest,
+            }
+          : undefined
+      }
     />
   );
 }

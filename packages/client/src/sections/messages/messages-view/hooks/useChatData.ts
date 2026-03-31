@@ -42,7 +42,12 @@ function mapRoomToConversation(
       other.username ||
       other.email;
     name = fullName;
-    role = other.role?.nameFr ?? "";
+    // For clients, show company name instead of role
+    if (category === "client") {
+      role = other.company?.name ?? other.role?.nameFr ?? "";
+    } else {
+      role = other.role?.nameFr ?? "";
+    }
     avatar = fullName
       .split(" ")
       .map((w) => w[0])

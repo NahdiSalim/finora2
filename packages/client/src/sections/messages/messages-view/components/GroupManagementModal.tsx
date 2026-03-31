@@ -31,7 +31,6 @@ import {
   Search,
 } from "lucide-react";
 import CustomButton from "../../../../components/common/CustomButton";
-import { availableClients, availableCollaborators } from "../data/mock";
 import type { GroupMember } from "../data/types";
 
 type GroupManagementModalProps = {
@@ -41,15 +40,23 @@ type GroupManagementModalProps = {
   initialGroupName: string;
   initialMembers: GroupMember[];
   onUpdate: (groupName: string, members: GroupMember[]) => void;
+  /** If true, the current user can remove members from the group */
+  isAdmin?: boolean;
+  /** Real contacts available to add (falls back to mock if not provided) */
+  clients?: GroupMember[];
+  collaborators?: GroupMember[];
 };
 
 export default function GroupManagementModal({
   open,
   onClose,
-  groupId,
+  groupId: _groupId,
   initialGroupName,
   initialMembers,
   onUpdate,
+  isAdmin = false,
+  clients,
+  collaborators,
 }: GroupManagementModalProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -114,7 +121,7 @@ export default function GroupManagementModal({
     setSelectedMemberForMenu(null);
   };
 
-  const allAvailableMembers = [...availableClients, ...availableCollaborators];
+  const allAvailableMembers = [...(clients ?? []), ...(collaborators ?? [])];
   const availableToAdd = allAvailableMembers.filter(
     (u) => !members.find((m) => m.id === u.id),
   );
@@ -371,20 +378,22 @@ export default function GroupManagementModal({
                     },
                   }}
                   secondaryAction={
-                    <IconButton
-                      edge="end"
-                      size="small"
-                      onClick={(e) => handleOpenMemberMenu(e, member.id)}
-                      sx={{
-                        color: theme.palette.text.secondary,
-                        "&:hover": {
-                          bgcolor: alpha(theme.palette.error.main, 0.08),
-                          color: theme.palette.error.main,
-                        },
-                      }}
-                    >
-                      <MoreVertical size={isMobile ? 16 : 18} />
-                    </IconButton>
+                    isAdmin ? (
+                      <IconButton
+                        edge="end"
+                        size="small"
+                        onClick={(e) => handleOpenMemberMenu(e, member.id)}
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          "&:hover": {
+                            bgcolor: alpha(theme.palette.error.main, 0.08),
+                            color: theme.palette.error.main,
+                          },
+                        }}
+                      >
+                        <MoreVertical size={isMobile ? 16 : 18} />
+                      </IconButton>
+                    ) : undefined
                   }
                 >
                   <ListItemAvatar>
@@ -500,6 +509,7 @@ export default function GroupManagementModal({
         anchorEl={memberMenuAnchor}
         open={Boolean(memberMenuAnchor)}
         onClose={handleCloseMemberMenu}
+        sx={{ zIndex: 10001 }}
         PaperProps={{
           sx: {
             minWidth: 180,

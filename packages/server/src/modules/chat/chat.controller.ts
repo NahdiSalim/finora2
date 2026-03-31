@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -118,6 +119,18 @@ export class ChatController {
   async getRoomById(@Request() req, @Param('id', ParseIntPipe) id: number) {
     const userId = req.user?.id ?? req.user?.sub;
     return this.chatService.getRoomById(id, Number(userId));
+  }
+
+  @Patch('rooms/:id')
+  @ApiOperation({ summary: 'Mettre à jour une salle (nom)' })
+  @ApiResponse({ status: 200, description: 'Salle mise à jour' })
+  async updateRoom(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+    @Body('name') name?: string
+  ) {
+    const userId = req.user?.id ?? req.user?.sub;
+    return this.chatService.updateRoom(id, Number(userId), { name });
   }
 
   @Post('rooms/:id/participants')

@@ -43,6 +43,7 @@ import {
   useMarkRoomAsReadMutation,
   useFindOrCreateDirectRoomMutation,
   useCreateRoomMutation,
+  useUpdateRoomMutation,
   useAddParticipantMutation,
   useRemoveParticipantMutation,
   chatApi,
@@ -75,11 +76,6 @@ function isComptableRole(code: string): boolean {
     code.includes("comptable") ||
     code.includes("accountant")
   );
-}
-
-// True if the role code belongs to the "client" group.
-function isClientRole(code: string): boolean {
-  return code === "client" || code.startsWith("client_");
 }
 
 /**
@@ -173,12 +169,15 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   // ── API query params (drives the rooms list query) ─────────────────────────
   const roomsParams = useMemo<GetRoomsParams>(() => {
     const p: GetRoomsParams = {
-      // Translate the UI tab + viewer role into the actual participant role code
-      // the backend should filter by (see resolveApiCategory above).
-      category: resolveApiCategory(activeTab, myRoleCode),
       page: roomsPage,
       pageSize: ROOMS_PAGE_SIZE,
     };
+    // Group tab: no category filter — backend returns all user rooms, frontend
+    // filters by isGroup. A category filter would exclude groups whose
+    // participants don't match the role code, causing groups to silently disappear.
+    if (activeTab !== "group") {
+      p.category = resolveApiCategory(activeTab, myRoleCode);
+    }
     if (debouncedSearch) p.search = debouncedSearch;
     if (selectedDateFilter) p.date = selectedDateFilter.format("YYYY-MM-DD");
     return p;
@@ -256,6 +255,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const [triggerMarkRoomAsRead] = useMarkRoomAsReadMutation();
   const [triggerFindOrCreateDirectRoom] = useFindOrCreateDirectRoomMutation();
   const [createRoom] = useCreateRoomMutation();
+  const [updateGroupRoom] = useUpdateRoomMutation();
   const [addParticipant] = useAddParticipantMutation();
   const [removeParticipant] = useRemoveParticipantMutation();
 
@@ -626,6 +626,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
 
       setMockGroups((prev) => [newGroup, ...prev]);
       setSelectedConversation(newRoom.id);
+      // Explicitly join the new room's socket channel so real-time works immediately
+      joinRoom(newRoom.id);
       setOpenCreateGroupModal(false);
     } catch (error) {
       console.error("[handleCreateGroup] Failed to create group:", error);
@@ -638,10 +640,15 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   ) => {
     if (!selectedGroupForManagement) return;
 
-    // Compute diff between current and new member lists
-    const currentGroup = mockGroups.find(
-      (g) => g.id === selectedGroupForManagement,
-    );
+    // Capture before any async gap — the modal closes immediately after calling
+    // onUpdate(), so selectedGroupForManagement will be null by the time awaits resolve.
+    const roomId = selectedGroupForManagement;
+
+    // Compute diff between current and new member lists.
+    // Real backend groups live in allConversations; mock groups live in mockGroups.
+    const currentGroup =
+      allConversations.find((c) => c.id === roomId) ||
+      mockGroups.find((g) => g.id === roomId);
     const currentMemberIds = new Set(
       (currentGroup?.members ?? []).map((m) => m.id),
     );
@@ -653,34 +660,36 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     );
 
     // Only call the backend for real rooms (mock rooms have id >= 1000)
-    if (selectedGroupForManagement < 1000) {
+    if (roomId < 1000) {
       try {
         await Promise.all([
+          // Rename if the name changed (PATCH /chat/rooms/:id)
+          ...(currentGroup?.name !== groupName
+            ? [updateGroupRoom({ roomId, name: groupName }).unwrap()]
+            : []),
+          // Add new participants
           ...added.map((m) =>
-            addParticipant({
-              roomId: selectedGroupForManagement,
-              participantId: m.id,
-            }).unwrap(),
+            addParticipant({ roomId, participantId: m.id }).unwrap(),
           ),
+          // Remove departed participants
           ...removed.map((m) =>
-            removeParticipant({
-              roomId: selectedGroupForManagement,
-              participantId: m.id,
-            }).unwrap(),
+            removeParticipant({ roomId, participantId: m.id }).unwrap(),
           ),
         ]);
-      } catch (error) {
-        console.error(
-          "[handleUpdateGroup] Failed to update participants:",
-          error,
+        // Invalidate the rooms LIST so getUserRooms refetches and apiConversations
+        // reflects the updated name and participant count.
+        dispatch(
+          chatApi.util.invalidateTags([{ type: "ChatRooms", id: "LIST" }]),
         );
+      } catch (error) {
+        console.error("[handleUpdateGroup] Failed to update group:", error);
       }
     }
 
-    // Update local state to reflect the new members list
-    setMockGroups(
-      mockGroups.map((g) =>
-        g.id === selectedGroupForManagement
+    // Update local mockGroups state (functional form avoids stale closure after await)
+    setMockGroups((prev) =>
+      prev.map((g) =>
+        g.id === roomId
           ? {
               ...g,
               name: groupName,
@@ -698,6 +707,16 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     setOpenManageGroupModal(true);
   };
 
+  // True if the current user is an admin of the group being managed
+  const selectedGroupIsAdmin = useMemo(() => {
+    if (!selectedGroupForManagement) return false;
+    // Search in rawRooms (current tab) then in allContactsResponse (all rooms)
+    const allRooms = [...rawRooms, ...(allContactsResponse?.data ?? [])];
+    const room = allRooms.find((r) => r.id === selectedGroupForManagement);
+    if (!room) return false;
+    return room.admins?.includes(String(currentUid)) ?? false;
+  }, [selectedGroupForManagement, rawRooms, allContactsResponse, currentUid]);
+
   const allConversations: Conversation[] = useMemo(() => {
     if (activeTab === "group") {
       // Real backend group rooms take priority
@@ -710,11 +729,13 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       }));
     }
 
-    // For other tabs, show API conversations
-    return apiConversations.map((c) => ({
-      ...c,
-      ...(conversationOverrides[c.id] ?? {}),
-    }));
+    // For other tabs, show only 1:1 conversations (never group rooms)
+    return apiConversations
+      .filter((c) => !c.isGroup)
+      .map((c) => ({
+        ...c,
+        ...(conversationOverrides[c.id] ?? {}),
+      }));
   }, [apiConversations, conversationOverrides, activeTab, mockGroups]);
 
   // Auto-select first conversation when rooms load (only if no room was pre-selected via URL)
@@ -723,6 +744,22 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       setSelectedConversation(allConversations[0].id);
     }
   }, [allConversations, selectedConversation]);
+
+  // When a tab switch is triggered by the popover, the target room may not yet
+  // be in allConversations (it loads after the tab change). This ref holds the
+  // roomId we want to select once it becomes available.
+  const pendingRoomIdRef = useRef<number>(0);
+
+  // Once allConversations updates after a tab switch, resolve the pending room.
+  useEffect(() => {
+    const pending = pendingRoomIdRef.current;
+    if (!pending) return;
+    const found = allConversations.find((c) => Number(c.id) === pending);
+    if (found) {
+      pendingRoomIdRef.current = 0;
+      setSelectedConversation(found.id);
+    }
+  }, [allConversations]);
 
   // On mobile, navigate straight to chat if a roomId was passed via URL param
   useEffect(() => {
@@ -739,23 +776,66 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   useEffect(() => {
     const rid = Number(searchParams.get("roomId"));
     const cat = searchParams.get("category") as ConversationCategory | null;
-    if (rid > 0) {
-      if (cat === "client" || cat === "collaborateur") {
-        setActiveTab(cat);
+    if (rid <= 0) return;
+
+    // Determine the correct tab for this room.
+    // Strategy: use allContactsResponse (all rooms, no tab filter) as source of truth.
+    const resolveTab = (): ConversationCategory => {
+      // Explicit valid category from URL — trust it
+      if (cat === "client" || cat === "collaborateur" || cat === "group") {
+        return cat;
       }
+
+      // Search in all rooms (no category filter applied)
+      const allRooms = allContactsResponse?.data ?? [];
+      const targetRoom = allRooms.find((r) => Number(r.id) === rid);
+
+      if (!targetRoom) {
+        // Room not found yet — keep current tab, pendingRoomIdRef will handle selection
+        return activeTab;
+      }
+
+      // Group room → always "group" tab
+      if (targetRoom.type === "group") return "group";
+
+      // 1:1 room — find the other participant's role
+      const otherProfile = (targetRoom.participantProfiles ?? []).find(
+        (p) => Number(p.id) !== currentUid,
+      );
+      const otherRoleCode = (otherProfile?.role?.code ?? "").toLowerCase();
+
+      // Map other participant's role → correct UI tab for the connected user
+      // Comptable sees: CLIENT participants → "client" tab, COLLABORATOR → "collaborateur"
+      // Client/Collaborateur sees: ACCOUNTANT participants → "collaborateur" tab
+      if (otherRoleCode === "client" || otherRoleCode.startsWith("client_")) {
+        return "client"; // Only comptables have this tab
+      }
+      return "collaborateur"; // Covers: collaborator, accountant, comptable
+    };
+
+    const targetTab = resolveTab();
+    setActiveTab(targetTab);
+
+    setConversationOverrides((prev) => ({
+      ...prev,
+      [rid]: { ...(prev[rid] ?? {}), unreadCount: 0 },
+    }));
+    triggerMarkRoomAsRead(rid);
+
+    // Check if the target room is already visible in allConversations.
+    // If not (tab just changed, list not yet loaded), store as pending.
+    const alreadyVisible = allConversations.find((c) => Number(c.id) === rid);
+    if (alreadyVisible) {
+      pendingRoomIdRef.current = 0;
       setSelectedConversation(rid);
-      // Clear the unread badge for this room in the left panel — mirrors what
-      // handleSelectConversation does when the user clicks directly in the list.
-      setConversationOverrides((prev) => ({
-        ...prev,
-        [rid]: { ...(prev[rid] ?? {}), unreadCount: 0 },
-      }));
-      // Persist read state to backend
-      triggerMarkRoomAsRead(rid);
-      if (isMobile) setMobileView("chat");
-      else setDesktopView("chat");
+    } else {
+      pendingRoomIdRef.current = rid;
+      setSelectedConversation(rid); // Start loading messages immediately
     }
-  }, [searchParams, isMobile]);
+
+    if (isMobile) setMobileView("chat");
+    else setDesktopView("chat");
+  }, [searchParams, isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset older messages accumulation when switching conversations
   useEffect(() => {
@@ -1537,13 +1617,22 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
             }}
             groupId={selectedGroupForManagement}
             initialGroupName={
-              mockGroups.find((g) => g.id === selectedGroupForManagement)
-                ?.name || ""
+              (
+                allConversations.find(
+                  (c) => c.id === selectedGroupForManagement,
+                ) || mockGroups.find((g) => g.id === selectedGroupForManagement)
+              )?.name || ""
             }
             initialMembers={
-              mockGroups.find((g) => g.id === selectedGroupForManagement)
-                ?.members || []
+              (
+                allConversations.find(
+                  (c) => c.id === selectedGroupForManagement,
+                ) || mockGroups.find((g) => g.id === selectedGroupForManagement)
+              )?.members || []
             }
+            isAdmin={selectedGroupIsAdmin}
+            clients={groupModalClients}
+            collaborators={groupModalCollaborators}
             onUpdate={handleUpdateGroup}
           />
         )}
@@ -1710,13 +1799,22 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
           }}
           groupId={selectedGroupForManagement}
           initialGroupName={
-            mockGroups.find((g) => g.id === selectedGroupForManagement)?.name ||
-            ""
+            (
+              allConversations.find(
+                (c) => c.id === selectedGroupForManagement,
+              ) || mockGroups.find((g) => g.id === selectedGroupForManagement)
+            )?.name || ""
           }
           initialMembers={
-            mockGroups.find((g) => g.id === selectedGroupForManagement)
-              ?.members || []
+            (
+              allConversations.find(
+                (c) => c.id === selectedGroupForManagement,
+              ) || mockGroups.find((g) => g.id === selectedGroupForManagement)
+            )?.members || []
           }
+          isAdmin={selectedGroupIsAdmin}
+          clients={groupModalClients}
+          collaborators={groupModalCollaborators}
           onUpdate={handleUpdateGroup}
         />
       )}

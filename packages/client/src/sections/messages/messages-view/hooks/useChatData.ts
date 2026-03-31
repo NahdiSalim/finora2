@@ -71,7 +71,21 @@ function mapRoomToConversation(
       } else {
         body = lm.content || "";
       }
-      groupPreview = isOwn ? `Vous : ${body}` : body;
+      if (isOwn) {
+        groupPreview = `Vous : ${body}`;
+      } else {
+        const senderProfile = groupProfiles.find(
+          (p) => Number(p.id) === Number(lm.senderId),
+        );
+        const senderName = senderProfile
+          ? [senderProfile.firstName, senderProfile.lastName]
+              .filter(Boolean)
+              .join(" ") ||
+            senderProfile.username ||
+            ""
+          : "";
+        groupPreview = senderName ? `${senderName} : ${body}` : body;
+      }
     }
 
     const groupLastDate =
@@ -219,6 +233,20 @@ export function mapApiMessageToMessage(
   });
   const isMine = msg.senderId === currentUserId;
 
+  // Derive sender display name from the nested sender object (present in group rooms)
+  const senderName = msg.sender
+    ? [msg.sender.firstName, msg.sender.lastName].filter(Boolean).join(" ") ||
+      msg.sender.username ||
+      ""
+    : "";
+  const senderAvatar = senderName
+    .split(" ")
+    .map((w) => w[0])
+    .filter(Boolean)
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
   if (msg.request) {
     return {
       id: msg.id,
@@ -228,6 +256,8 @@ export function mapApiMessageToMessage(
       mine: isMine,
       time,
       date,
+      senderName: isMine ? undefined : senderName || undefined,
+      senderAvatar: isMine ? undefined : senderAvatar || undefined,
       request: {
         id: msg.request.id,
         title: msg.request.subject,
@@ -248,6 +278,8 @@ export function mapApiMessageToMessage(
       mine: isMine,
       time,
       date,
+      senderName: isMine ? undefined : senderName || undefined,
+      senderAvatar: isMine ? undefined : senderAvatar || undefined,
       task: {
         id: msg.task.id,
         title: msg.task.title,
@@ -266,6 +298,8 @@ export function mapApiMessageToMessage(
       mine: isMine,
       time,
       date,
+      senderName: isMine ? undefined : senderName || undefined,
+      senderAvatar: isMine ? undefined : senderAvatar || undefined,
       appointment: {
         id: msg.appointment.id,
         title: msg.appointment.title,
@@ -303,6 +337,8 @@ export function mapApiMessageToMessage(
       mine: isMine,
       time,
       date,
+      senderName: isMine ? undefined : senderName || undefined,
+      senderAvatar: isMine ? undefined : senderAvatar || undefined,
       file: { name: fileName, size: "", type: fileCategory, url },
     };
   }
@@ -314,6 +350,8 @@ export function mapApiMessageToMessage(
     mine: isMine,
     time,
     date,
+    senderName: isMine ? undefined : senderName || undefined,
+    senderAvatar: isMine ? undefined : senderAvatar || undefined,
   };
 }
 

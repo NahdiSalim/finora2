@@ -161,6 +161,7 @@ export interface RecentMessage {
   room: {
     id: number;
     name?: string;
+    type?: string;
     category: string;
   };
   fileUrl?: string | null;
@@ -260,6 +261,18 @@ export const chatApi = createApi({
         body: { targetUserId },
       }),
       invalidatesTags: [{ type: "ChatRooms", id: "LIST" }],
+    }),
+
+    updateRoom: builder.mutation<ChatRoom, { roomId: number; name?: string }>({
+      query: ({ roomId, name }) => ({
+        url: `/chat/rooms/${roomId}`,
+        method: "PATCH",
+        body: { name },
+      }),
+      invalidatesTags: (_result, _err, { roomId }) => [
+        { type: "ChatRooms", id: roomId },
+        { type: "ChatRooms", id: "LIST" },
+      ],
     }),
 
     addParticipant: builder.mutation<
@@ -674,6 +687,7 @@ export const {
   useMarkAllRoomsAsReadMutation,
   useEditMessageMutation,
   useDeleteMessageMutation,
+  useUpdateRoomMutation,
   useAddParticipantMutation,
   useRemoveParticipantMutation,
   useGetSharedDocumentsQuery,

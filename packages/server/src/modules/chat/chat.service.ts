@@ -482,6 +482,21 @@ export class ChatService {
     return rooms;
   }
 
+  async updateRoom(roomId: number, userId: number, data: { name?: string }) {
+    const room = await this.getRoomById(roomId, userId);
+
+    if (!room.admins.includes(String(userId))) {
+      throw new ForbiddenException('Seuls les admins peuvent modifier ce groupe');
+    }
+
+    const updated = await this.prisma.chatRoom.update({
+      where: { id: roomId },
+      data: { ...(data.name !== undefined && { name: data.name }) },
+    });
+
+    return updated;
+  }
+
   async addParticipant(roomId: number, userId: number, participantId: number) {
     const room = await this.getRoomById(roomId, userId);
 
@@ -919,6 +934,7 @@ export class ChatService {
           room: {
             id: msg.room?.id,
             name: msg.room?.name,
+            type: msg.room?.type,
             category,
           },
           fileUrl,

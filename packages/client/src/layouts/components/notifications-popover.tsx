@@ -36,6 +36,31 @@ export type NotificationsPopoverProps = ButtonProps & {
   data?: NotificationItemProps[];
 };
 
+const parseNotificationData = (value: unknown): Record<string, unknown> => {
+  if (!value) return {};
+  if (typeof value === "object") return value as Record<string, unknown>;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return parsed && typeof parsed === "object"
+        ? (parsed as Record<string, unknown>)
+        : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+};
+
+const readNumericId = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
 export function NotificationsPopover({
   data = [],
   sx,
@@ -120,12 +145,25 @@ export function NotificationsPopover({
       }));
     return source.map((n: any) => {
       const notificationType = String(n.type || "").toLowerCase();
-      const notificationData = n.data ?? {};
-      const invitationId = Number(notificationData.invitationId);
+      const notificationData = parseNotificationData(n.data);
+      const invitationId =
+        readNumericId(notificationData.invitationId) ??
+        readNumericId(notificationData.relationshipId) ??
+        readNumericId((n as Record<string, unknown>).invitationId);
+      const actionUrl = String(
+        (n as Record<string, unknown>).actionUrl ??
+          (notificationData.actionUrl as string | undefined) ??
+          "",
+      ).toLowerCase();
+      const title = String(n.title ?? "").toLowerCase();
       const isInvite =
         notificationType.includes("relationship") ||
         notificationType.includes("invitation");
-      const canRespond = isInvite && !n.read && Number.isFinite(invitationId);
+      const isInvitationToRespond =
+        actionUrl.includes("/relationships/invitations/") ||
+        title.includes("nouvelle invitation");
+      const canRespond =
+        isInvite && isInvitationToRespond && !n.read && invitationId != null;
       return {
         id: String(n.id),
         type: notificationType || "notification",
@@ -141,7 +179,7 @@ export function NotificationsPopover({
               try {
                 setProcessingId(n.id);
                 await respondToInvitation({
-                  invitationId,
+                  invitationId: invitationId as number,
                   response: "accept",
                 }).unwrap();
                 suppressNextBeepRef.current = true;
@@ -160,7 +198,7 @@ export function NotificationsPopover({
               try {
                 setProcessingId(n.id);
                 await respondToInvitation({
-                  invitationId,
+                  invitationId: invitationId as number,
                   response: "reject",
                 }).unwrap();
                 suppressNextBeepRef.current = true;

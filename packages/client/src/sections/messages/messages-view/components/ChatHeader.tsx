@@ -154,7 +154,9 @@ export default function ChatHeader({
                   const roleColor =
                     member.role === "client"
                       ? theme.palette.primary.main
-                      : theme.palette.secondary.main;
+                      : member.role === "comptable"
+                        ? theme.palette.warning.main
+                        : theme.palette.secondary.main;
                   return (
                     <Avatar
                       key={member.id}
@@ -231,9 +233,15 @@ export default function ChatHeader({
                     const roleColor =
                       member.role === "client"
                         ? theme.palette.primary.main
-                        : theme.palette.secondary.main;
+                        : member.role === "comptable"
+                          ? theme.palette.warning.main
+                          : theme.palette.secondary.main;
                     const roleLabel =
-                      member.role === "client" ? "Client" : "Collaborateur";
+                      member.role === "client"
+                        ? "Client"
+                        : member.role === "comptable"
+                          ? "Comptable"
+                          : "Collaborateur";
                     return (
                       <ListItem key={member.id} sx={{ px: 2, py: 0.75 }}>
                         <ListItemAvatar sx={{ minWidth: 38 }}>

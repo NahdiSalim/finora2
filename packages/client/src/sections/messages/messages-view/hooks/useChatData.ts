@@ -17,6 +17,16 @@ import type {
   Message,
 } from "../data/types";
 
+// Inline role helpers (mirrors index.tsx — kept local to avoid circular imports)
+function isComptableRole(code: string): boolean {
+  return (
+    code === "comptable" ||
+    code === "accountant" ||
+    code.includes("comptable") ||
+    code.includes("accountant")
+  );
+}
+
 /**
  * Returns the date string only if it represents a real activity date.
  * Rejects null/undefined AND the Unix epoch (new Date(0)) that the backend
@@ -53,11 +63,45 @@ function mapRoomToConversation(
           p.username ||
           p.email ||
           "?";
-        const roleCode = (p.role?.code ?? "").toLowerCase();
-        const memberRole: "client" | "collaborateur" =
-          roleCode === "client" || roleCode.startsWith("client_")
-            ? "client"
-            : "collaborateur";
+
+        // Log raw role data to diagnose mapping issues
+        console.log("[mapRoom:group] raw participant:", {
+          id: p.id,
+          name: fullName,
+          "role.code": p.role?.code ?? "MISSING",
+          "role.nameFr": p.role?.nameFr ?? "MISSING",
+          role: p.role,
+        });
+
+        const rawCode = p.role?.code ?? "";
+        const roleCode = rawCode.toUpperCase();
+
+        let memberRole: "client" | "collaborateur" | "comptable";
+        if (roleCode === "CLIENT" || roleCode.startsWith("CLIENT_")) {
+          memberRole = "client";
+        } else if (roleCode === "ACCOUNTANT" || roleCode === "COMPTABLE") {
+          memberRole = "comptable";
+        } else if (
+          roleCode === "COLLABORATOR" ||
+          roleCode === "COLLABORATEUR"
+        ) {
+          memberRole = "collaborateur";
+        } else {
+          console.warn(
+            "[mapRoom:group] UNKNOWN role.code:",
+            rawCode,
+            "→ defaulting to collaborateur",
+          );
+          memberRole = "collaborateur";
+        }
+
+        console.log("[mapRoom:group] mapped:", {
+          id: p.id,
+          name: fullName,
+          rawCode,
+          memberRole,
+        });
+
         return {
           id: Number(p.id),
           name: fullName,
@@ -146,13 +190,17 @@ function mapRoomToConversation(
   const other =
     profiles.find((p) => Number(p.id) !== currentUserId) ?? profiles[0] ?? null;
 
-  // Normalise role code to one of our two ConversationCategory values.
-  // CLIENT → "client"; anything in the collaborator/accountant family → "collaborateur"
+  // Normalise role code to the correct ConversationCategory.
+  // CLIENT → "client"
+  // ACCOUNTANT/COMPTABLE → "comptable"
+  // COLLABORATOR/COLLABORATEUR → "collaborateur"
   const otherRoleCode = (other?.role?.code ?? "").toLowerCase();
   const category: ConversationCategory =
     otherRoleCode === "client" || otherRoleCode.startsWith("client_")
       ? "client"
-      : "collaborateur";
+      : isComptableRole(otherRoleCode)
+        ? "comptable"
+        : "collaborateur";
 
   let name: string;
   let role: string;

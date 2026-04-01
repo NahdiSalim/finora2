@@ -91,25 +91,20 @@ function isCollaborateurRole(code: string): boolean {
 }
 
 /**
- * Map the selected UI tab + the viewer's role to the actual role-code that
- * the backend should filter participant profiles by.
+ * Map the selected UI tab to the category string sent to the backend.
  *
- * Tab "client"        (Comptables only)          → filter by CLIENT participants
- * Tab "collaborateur" + viewer is Comptable       → filter by COLLABORATOR participants
- * Tab "collaborateur" + viewer is Collaborateur   → filter by COLLABORATOR participants (peers)
- * Tab "comptable"     + viewer is Collaborateur   → filter by ACCOUNTANT participants
- * Tab "collaborateur" + viewer is Client          → filter by COMPTABLE participants
+ * Tab "client"        → filter by CLIENT participants       (Comptable viewer)
+ * Tab "comptable"     → filter by ACCOUNTANT participants   (Client / Collaborateur viewer)
+ * Tab "collaborateur" → filter by COLLABORATOR participants (Comptable / Collaborateur viewer)
  */
 function resolveApiCategory(
   tab: ConversationCategory,
-  myRoleCode: string,
+  _myRoleCode: string,
 ): string {
   if (tab === "client") return "client";
-  if (tab === "comptable") return "comptable"; // Collaborateur → Comptables tab
-  // "collaborateur" tab
-  if (isComptableRole(myRoleCode)) return "collaborateur";
-  if (isCollaborateurRole(myRoleCode)) return "collaborateur"; // peer collaborateurs
-  return "comptable"; // Client → Comptables
+  if (tab === "comptable") return "comptable";
+  if (tab === "collaborateur") return "collaborateur";
+  return tab;
 }
 
 export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
@@ -145,7 +140,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
           ]
         : iAmClient
           ? [
-              { label: "Comptables", value: "collaborateur" as const },
+              { label: "Comptables", value: "comptable" as const },
               { label: "Groupes", value: "group" as const },
             ]
           : iAmCollaborateur
@@ -175,7 +170,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     // Default tab per role
     if (iAmComptable) return "client";
     if (iAmCollaborateur) return "comptable"; // Collaborateur starts on Comptables tab
-    return "collaborateur"; // Client and others
+    if (iAmClient) return "comptable"; // Client starts on Comptables tab
+    return "collaborateur"; // fallback
   });
   const ROOMS_PAGE_SIZE = 500;
   const MESSAGES_PAGE_SIZE = 20;
@@ -204,10 +200,9 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       page: 1,
       pageSize: ROOMS_PAGE_SIZE,
     };
-    // Group tab: no category filter — backend returns all user rooms, frontend
-    // filters by isGroup. A category filter would exclude groups whose
-    // participants don't match the role code, causing groups to silently disappear.
-    if (activeTab !== "group") {
+    if (activeTab === "group") {
+      p.category = "group";
+    } else {
       p.category = resolveApiCategory(activeTab, myRoleCode);
     }
     return p;
@@ -226,11 +221,62 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     [roomsResponse?.data],
   );
 
-  // Fetch ALL contacts (no category filter) for the group creation modal
-  const { data: allContactsResponse } = useGetUserRoomsQuery(
-    { page: 1, pageSize: 100 },
-    { refetchOnMountOrArgChange: false },
+  // Fetch rooms per category for badge counts and group modal contacts.
+  // Each call has an explicit category so the backend never returns a mix.
+  // The params objects are also stored in refs so socket handlers can patch
+  // the correct RTK Query cache entries (cache key = serialized params object).
+  const badgeDirectCategory = iAmComptable ? "client" : "comptable";
+  const badgeDirectParams = useMemo<GetRoomsParams>(
+    () => ({ page: 1, pageSize: 200, category: badgeDirectCategory }),
+    [badgeDirectCategory],
   );
+  const badgeCollabParams = useMemo<GetRoomsParams>(
+    () => ({ page: 1, pageSize: 200, category: "collaborateur" }),
+    [],
+  );
+  const badgeGroupParams = useMemo<GetRoomsParams>(
+    () => ({ page: 1, pageSize: 200, category: "group" }),
+    [],
+  );
+
+  const badgeDirectParamsRef = useRef(badgeDirectParams);
+  badgeDirectParamsRef.current = badgeDirectParams;
+  const badgeCollabParamsRef = useRef(badgeCollabParams);
+  badgeCollabParamsRef.current = badgeCollabParams;
+  const badgeGroupParamsRef = useRef(badgeGroupParams);
+  badgeGroupParamsRef.current = badgeGroupParams;
+
+  const { data: directRoomsForBadges } = useGetUserRoomsQuery(
+    badgeDirectParams,
+    { refetchOnMountOrArgChange: true },
+  );
+  const { data: collaborateurRoomsForBadges } = useGetUserRoomsQuery(
+    badgeCollabParams,
+    {
+      skip: !iAmComptable && !iAmCollaborateur,
+      refetchOnMountOrArgChange: true,
+    },
+  );
+  const { data: groupRoomsForBadges } = useGetUserRoomsQuery(badgeGroupParams, {
+    refetchOnMountOrArgChange: true,
+  });
+
+  // Merge all category responses into one array for badge calculation and group modal
+  const allContactsResponse = useMemo(() => {
+    const data = [
+      ...(directRoomsForBadges?.data ?? []),
+      ...(collaborateurRoomsForBadges?.data ?? []),
+      ...(groupRoomsForBadges?.data ?? []),
+    ];
+    // Deduplicate by room id
+    const seen = new Set<number>();
+    const deduped = data.filter((r) => {
+      if (seen.has(r.id)) return false;
+      seen.add(r.id);
+      return true;
+    });
+    return { data: deduped };
+  }, [directRoomsForBadges, collaborateurRoomsForBadges, groupRoomsForBadges]);
 
   // Derive real contacts for the group creation modal, filtered by current user's role
   const { groupModalClients, groupModalCollaborators } = useMemo(() => {
@@ -238,6 +284,18 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     const seen = new Set<number>();
     const clients: GroupMember[] = [];
     const collabs: GroupMember[] = [];
+
+    console.log(
+      "[groupModal] participantProfiles raw:",
+      rooms.flatMap((r) =>
+        (r.participantProfiles ?? []).map((p) => ({
+          id: p.id,
+          name:
+            [p.firstName, p.lastName].filter(Boolean).join(" ") || p.username,
+          roleCode: p.role?.code,
+        })),
+      ),
+    );
 
     for (const room of rooms) {
       for (const p of room.participantProfiles ?? []) {
@@ -261,6 +319,13 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
 
         if (roleCode === "client" || roleCode.startsWith("client_")) {
           clients.push({ id: pid, name: fullName, role: "client", avatar });
+        } else if (
+          roleCode === "accountant" ||
+          roleCode === "comptable" ||
+          roleCode.includes("accountant") ||
+          roleCode.includes("comptable")
+        ) {
+          collabs.push({ id: pid, name: fullName, role: "comptable", avatar });
         } else {
           collabs.push({
             id: pid,
@@ -454,8 +519,12 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       // Patch the active tab's cache (used for the conversation list)
       patchRoomsCache(roomsParamsRef.current);
 
-      // Also patch the "all rooms" cache used for per-tab badge counts
-      patchRoomsCache({ page: 1, pageSize: 100 });
+      // Also patch all badge caches so per-tab unread counts update in real-time
+      patchRoomsCache(badgeDirectParamsRef.current);
+      if (iAmComptable || iAmCollaborateur) {
+        patchRoomsCache(badgeCollabParamsRef.current);
+      }
+      patchRoomsCache(badgeGroupParamsRef.current);
 
       // Prevent stale optimistic preview overrides from overriding the
       // computed preview for the current authenticated user.
@@ -701,34 +770,30 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   }, [selectedGroupForManagement, rawRooms, allContactsResponse, currentUid]);
 
   const allConversations: Conversation[] = useMemo(() => {
+    let result: Conversation[];
     if (activeTab === "group") {
-      return apiConversations
-        .filter((c) => c.isGroup)
-        .map((c) => ({
-          ...c,
-          ...(conversationOverrides[c.id] ?? {}),
-        }));
+      result = apiConversations
+        .filter((c) => c.isGroup === true)
+        .map((c) => ({ ...c, ...(conversationOverrides[c.id] ?? {}) }));
+    } else {
+      result = apiConversations
+        .filter((c) => {
+          if (c.isGroup) return false;
+          return c.category === activeTab;
+        })
+        .map((c) => ({ ...c, ...(conversationOverrides[c.id] ?? {}) }));
     }
 
-    // For other tabs, show only 1:1 conversations (never group rooms)
-    return apiConversations
-      .filter((c) => !c.isGroup)
-      .map((c) => ({
-        ...c,
-        ...(conversationOverrides[c.id] ?? {}),
-      }));
+    return result;
   }, [apiConversations, conversationOverrides, activeTab]);
 
-  // All conversations across ALL tabs — used to compute per-tab unread badges
-  // independently of which tab is currently active.
-  // Source: allContactsResponse (no category filter) + mockGroups for group tab.
   const allConversationsForBadges: Conversation[] = useMemo(() => {
     const allRooms = allContactsResponse?.data ?? [];
-    return allRooms.map((room) => {
+    const result = allRooms.map((room) => {
       const mapped = mapRoomToConversation(room, currentUid);
-      // Apply any local overrides (e.g. unreadCount cleared after opening)
       return { ...mapped, ...(conversationOverrides[mapped.id] ?? {}) };
     });
+    return result;
   }, [allContactsResponse, currentUid, conversationOverrides]);
 
   // Auto-select first conversation when rooms load (only if no room was pre-selected via URL)
@@ -810,10 +875,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
         return "client"; // Only comptables have this tab
       }
       if (isComptableRole(otherRoleCode)) {
-        // Other is a comptable:
-        // - Collaborateur viewer → "comptable" tab
-        // - Client viewer → "collaborateur" tab (labeled "Comptables")
-        return iAmCollaborateur ? "comptable" : "collaborateur";
+        // Other is a comptable/accountant → always "comptable" tab
+        return "comptable";
       }
       // Other is a collaborateur → "collaborateur" tab for everyone
       return "collaborateur";
@@ -838,7 +901,11 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       );
     };
     resetUnreadUrl(roomsParamsRef.current);
-    resetUnreadUrl({ page: 1, pageSize: 100 });
+    resetUnreadUrl(badgeDirectParamsRef.current);
+    if (iAmComptable || iAmCollaborateur) {
+      resetUnreadUrl(badgeCollabParamsRef.current);
+    }
+    resetUnreadUrl(badgeGroupParamsRef.current);
 
     // Check if the target room is already visible in allConversations.
     // If not (tab just changed, list not yet loaded), store as pending.
@@ -1052,7 +1119,11 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       );
     };
     resetUnread(roomsParamsRef.current);
-    resetUnread({ page: 1, pageSize: 100 });
+    resetUnread(badgeDirectParamsRef.current);
+    if (iAmComptable || iAmCollaborateur) {
+      resetUnread(badgeCollabParamsRef.current);
+    }
+    resetUnread(badgeGroupParamsRef.current);
 
     // Persist read state to backend so it survives page reload
     triggerMarkRoomAsRead(id);
@@ -1325,13 +1396,11 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
 
     if (selectedDateFilter) {
       const targetYear = selectedDateFilter.year();
-      const targetMonth = selectedDateFilter.month(); // 0-indexed, matches Date.getMonth()
+      const targetMonth = selectedDateFilter.month();
       const targetDay = selectedDateFilter.date();
 
       result = result.filter((c) => {
         if (!c.fullDate) return false;
-        // Backend stores timestamps with a +1h offset (local time treated as UTC).
-        // Subtract 1 hour before extracting the calendar day to get the real local date.
         const corrected = new Date(
           new Date(c.fullDate).getTime() - 60 * 60 * 1000,
         );
@@ -1342,6 +1411,24 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
         );
       });
     }
+
+    console.log(
+      `[TAB-DEBUG] tab="${activeTab}" | rawRooms=${rawRooms.length} | apiConversations=${apiConversations.length}` +
+        ` | allConversations=${allConversations.length} | filtered=${result.length}` +
+        (result.length === 0 && rawRooms.length === 0
+          ? " → VIDE NORMAL (aucune room reçue du backend)"
+          : result.length === 0 && rawRooms.length > 0
+            ? ` → VIDE ANORMAL — rawRooms reçues mais filtrées. Catégories reçues: [${
+                [
+                  ...new Set(
+                    apiConversations.map(
+                      (c) => `${c.category}${c.isGroup ? "(group)" : ""}`,
+                    ),
+                  ),
+                ].join(", ") || "aucune"
+              }]`
+            : ""),
+    );
 
     return result;
   }, [allConversations, searchTerm, selectedDateFilter]);

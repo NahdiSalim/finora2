@@ -7,7 +7,7 @@ export type ConversationCategory =
 export type GroupMember = {
   id: number;
   name: string;
-  role: "client" | "collaborateur";
+  role: "client" | "collaborateur" | "comptable";
   avatar: string;
 };
 

@@ -357,7 +357,9 @@ export default function GroupManagementModal({
               const roleColor =
                 member.role === "client"
                   ? theme.palette.primary.main
-                  : theme.palette.secondary.main;
+                  : member.role === "comptable"
+                    ? theme.palette.warning.main
+                    : theme.palette.secondary.main;
 
               return (
                 <ListItem
@@ -426,7 +428,11 @@ export default function GroupManagementModal({
                     secondary={
                       <Chip
                         label={
-                          member.role === "client" ? "Client" : "Collaborateur"
+                          member.role === "client"
+                            ? "Client"
+                            : member.role === "comptable"
+                              ? "Comptable"
+                              : "Collaborateur"
                         }
                         size="small"
                         sx={{
@@ -841,7 +847,9 @@ function MemberSelectItem({ member, onAdd }: MemberSelectItemProps) {
   const roleColor =
     member.role === "client"
       ? theme.palette.primary.main
-      : theme.palette.secondary.main;
+      : member.role === "comptable"
+        ? theme.palette.warning.main
+        : theme.palette.secondary.main;
 
   return (
     <Box
@@ -900,7 +908,11 @@ function MemberSelectItem({ member, onAdd }: MemberSelectItemProps) {
               color: theme.palette.text.secondary,
             }}
           >
-            {member.role === "client" ? "Client" : "Collaborateur"}
+            {member.role === "client"
+              ? "Client"
+              : member.role === "comptable"
+                ? "Comptable"
+                : "Collaborateur"}
           </Typography>
         )}
       </Box>

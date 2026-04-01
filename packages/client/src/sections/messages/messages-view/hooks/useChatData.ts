@@ -17,6 +17,18 @@ import type {
   Message,
 } from "../data/types";
 
+/**
+ * Returns the date string only if it represents a real activity date.
+ * Rejects null/undefined AND the Unix epoch (new Date(0)) that the backend
+ * uses as a sentinel value for virtual rooms with no activity.
+ */
+function toActivityDate(d: string | null | undefined): string | null {
+  if (!d) return null;
+  const ts = new Date(d).getTime();
+  if (!ts || ts <= 0) return null; // epoch sentinel → no date
+  return d;
+}
+
 function mapRoomToConversation(
   room: ChatRoom,
   currentUserId: number,
@@ -88,8 +100,21 @@ function mapRoomToConversation(
       }
     }
 
+    // lastActivity = date of last message; lastMessage.createdAt = fallback from
+    // the embedded last-message object. Never use updatedAt: it reflects DB record
+    // changes (migrations, seeding) and not actual conversation activity.
     const groupLastDate =
-      room.lastActivity ?? room.updatedAt ?? new Date().toISOString();
+      toActivityDate(room.lastActivity) ??
+      toActivityDate(room.lastMessage?.createdAt) ??
+      null;
+
+    console.debug("[mapRoom:group]", {
+      roomId: room.id,
+      lastActivity: room.lastActivity,
+      lastMessageCreatedAt: room.lastMessage?.createdAt,
+      updatedAt: room.updatedAt,
+      resolved: groupLastDate,
+    });
 
     return {
       id: room.id,
@@ -97,10 +122,12 @@ function mapRoomToConversation(
       role: `${members.length} membres`,
       preview: groupPreview,
       fullDate: groupLastDate,
-      time: new Date(groupLastDate).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      time: groupLastDate
+        ? new Date(groupLastDate).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : undefined,
       avatar: groupAvatar,
       avatarColor: "#3B82F6",
       avatarTextColor: "#FFFFFF",
@@ -177,7 +204,17 @@ function mapRoomToConversation(
   }
 
   const lastDate =
-    room.lastActivity ?? room.updatedAt ?? new Date().toISOString();
+    toActivityDate(room.lastActivity) ??
+    toActivityDate(room.lastMessage?.createdAt) ??
+    null;
+
+  console.debug("[mapRoom:direct]", {
+    roomId: room.id,
+    lastActivity: room.lastActivity,
+    lastMessageCreatedAt: room.lastMessage?.createdAt,
+    updatedAt: room.updatedAt,
+    resolved: lastDate,
+  });
 
   return {
     id: room.id,
@@ -185,10 +222,12 @@ function mapRoomToConversation(
     role,
     preview,
     fullDate: lastDate,
-    time: new Date(lastDate).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
+    time: lastDate
+      ? new Date(lastDate).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : undefined,
     avatar,
     avatarColor: "#D9D9D9",
     avatarTextColor: "#666666",
@@ -384,23 +423,26 @@ export function useRoomMessages(roomId: number, page: number, limit: number) {
   const currentUserId = useSelector((state: RootState) => state.auth.user?.id);
   const uid = currentUserId ? Number(currentUserId) : 0;
 
-  const { data, isLoading, error } = useGetRoomMessagesQuery(
+  const { data, isLoading, isFetching, error } = useGetRoomMessagesQuery(
     { roomId, page, limit },
     {
       skip: !roomId,
       refetchOnMountOrArgChange: true,
-      // No polling — real-time updates handled by WebSocket
     },
   );
 
-  const messages = useMemo(
-    () => (data?.messages ?? []).map((msg) => mapApiMessageToMessage(msg, uid)),
-    [data, uid],
-  );
+  const messages = useMemo(() => {
+    const raw = data?.messages ?? [];
+    // CRITICAL: filter strictly by roomId to prevent stale cache from a
+    // previously selected room from leaking into the current conversation.
+    const filtered = raw.filter((msg) => Number(msg.roomId) === Number(roomId));
+    return filtered.map((msg) => mapApiMessageToMessage(msg, uid));
+  }, [data, uid, roomId]);
 
   return {
     messages,
     isLoading,
+    isFetching,
     error,
     totalMessages: data?.total ?? 0,
     totalPages: data?.totalPages ?? 1,
@@ -408,3 +450,4 @@ export function useRoomMessages(roomId: number, page: number, limit: number) {
 }
 
 export { useSendMessageMutation, useMarkAsReadMutation };
+export { mapRoomToConversation };

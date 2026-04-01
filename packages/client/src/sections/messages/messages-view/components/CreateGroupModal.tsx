@@ -16,7 +16,6 @@ import {
 } from "@mui/material";
 import { X, Users, Search } from "lucide-react";
 import CustomButton from "../../../../components/common/CustomButton";
-import { availableClients, availableCollaborators } from "../data/mock";
 import type { GroupMember } from "../data/types";
 
 type CreateGroupModalProps = {
@@ -70,8 +69,8 @@ export default function CreateGroupModal({
     handleClose();
   };
 
-  const contactClients = clients ?? availableClients;
-  const contactCollaborators = collaborators ?? availableCollaborators;
+  const contactClients = clients ?? [];
+  const contactCollaborators = collaborators ?? [];
 
   const filteredClients = contactClients.filter((c) =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase()),

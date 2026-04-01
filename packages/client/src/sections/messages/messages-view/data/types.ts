@@ -1,4 +1,8 @@
-export type ConversationCategory = "client" | "collaborateur" | "group";
+export type ConversationCategory =
+  | "client"
+  | "collaborateur"
+  | "comptable"
+  | "group";
 
 export type GroupMember = {
   id: number;
@@ -12,7 +16,7 @@ export type Conversation = {
   name: string;
   role: string;
   preview: string;
-  fullDate: string;
+  fullDate: string | null;
   time?: string;
   avatar: string;
   avatarColor: string;

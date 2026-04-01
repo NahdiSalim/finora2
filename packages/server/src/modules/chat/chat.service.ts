@@ -336,6 +336,31 @@ export class ChatService {
 
     const lastMessageMap = new Map(lastMessages.map((m) => [m.roomId, m]));
 
+    // For rooms without a lastMessageId (old data created before tracking was added),
+    // fall back to fetching the actual most recent message from the DB.
+    const roomsNeedingFallback = matchedRooms
+      .filter((r) => !r.lastMessageId && !lastMessageMap.has(r.id))
+      .map((r) => r.id);
+
+    if (roomsNeedingFallback.length) {
+      const fallbackMessages = await this.prisma.chatMessage.findMany({
+        where: { roomId: { in: roomsNeedingFallback }, deleted: false },
+        orderBy: { createdAt: 'desc' },
+        distinct: ['roomId'],
+        select: {
+          id: true,
+          roomId: true,
+          content: true,
+          type: true,
+          senderId: true,
+          createdAt: true,
+        },
+      });
+      for (const msg of fallbackMessages) {
+        lastMessageMap.set(msg.roomId, msg);
+      }
+    }
+
     // Count unread messages per room: sent by someone else AND not yet in readBy for this user
     const unreadCounts = matchedRooms.length
       ? await this.prisma.chatMessage.groupBy({
@@ -379,7 +404,7 @@ export class ChatService {
         participants: [String(userId), String(contactId)],
         createdById: userId,
         lastMessageId: null,
-        lastActivity: new Date(0), // Epoch to sort at bottom
+        lastActivity: null, // No activity yet — sort at bottom via null ordering
         contextId: null,
         contextType: null,
         pinnedMessages: [],

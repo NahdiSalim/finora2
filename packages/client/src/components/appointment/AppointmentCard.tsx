@@ -102,7 +102,14 @@ export default function AppointmentCard({
         </Avatar>
 
         <Box sx={{ width: "100%" }}>
-          <Typography variant="body2" noWrap fontWeight={600}>
+          <Typography
+            variant="body2"
+            noWrap
+            overflow="hidden"
+            textOverflow="ellipsis"
+            width="90%"
+            fontWeight={600}
+          >
             {appointment.title}
           </Typography>
 

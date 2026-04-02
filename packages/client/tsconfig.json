@@ -7,9 +7,6 @@
     "allowJs": true,
     "resolveJsonModule": true,
 
-    /* Remove this after!! */
-    "ignoreDeprecations": "6.0",
-
     /* Build */
     "target": "ES2020",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],

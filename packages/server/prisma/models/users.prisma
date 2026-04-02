@@ -73,6 +73,7 @@ model User {
   sentMessages         ChatMessage[] @relation("ChatMessageSender")
   createdThreads       ChatThread[] @relation("ChatThreadCreatedBy")
   resolvedThreads      ChatThread[] @relation("ChatThreadResolvedBy")
+  initiatedCalls       Call[] @relation("CallInitiator")
   
   // Role Actions
   grantedRoleActions   RoleAction[] @relation("RoleActionGrantedBy")

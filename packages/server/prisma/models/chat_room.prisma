@@ -18,6 +18,7 @@ model ChatRoom {
   createdBy       User      @relation("ChatRoomCreatedBy", fields: [createdById], references: [id])
   
   messages        ChatMessage[]
+  calls           Call[]    @relation("RoomCalls")
 
   @@index([createdById])
   @@index([contextId])

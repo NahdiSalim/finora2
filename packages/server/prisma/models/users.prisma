@@ -42,7 +42,7 @@ model User {
   assignedTasks        Task[] @relation("TaskAssignee")
   createdTasks         Task[] @relation("TaskCreatedBy")
   validatedTasks       Task[] @relation("TaskValidator")
-  clientTasks          Task[] @relation("TaskClient")
+  taskClientRelations  TaskClient[] @relation("TaskClientRelation")
   taskComments         TaskComment[]
   
   // Requests

@@ -14,16 +14,20 @@ export function useNavigation() {
   const { user } = useAppSelector((state) => state.auth);
 
   const navItems: NavItem[] = useMemo(() => {
-    if (!features || features.length === 0) {
-      return [];
+    const allowedPaths = new Set<string>();
+
+    if (features && features.length > 0) {
+      features.forEach((feature) => {
+        feature.pages.forEach((page) => {
+          allowedPaths.add(page.route);
+        });
+      });
     }
 
-    const allowedPaths = new Set<string>();
-    features.forEach((feature) => {
-      feature.pages.forEach((page) => {
-        allowedPaths.add(page.route);
-      });
-    });
+    // 👇 ajout temporaire pour afficher Messagerie en dev
+    if (import.meta.env.DEV) {
+      allowedPaths.add("/messages");
+    }
 
     // Determine user role
     const userRole =

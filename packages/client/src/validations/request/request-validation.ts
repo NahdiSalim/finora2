@@ -55,21 +55,13 @@ export const requestValidationSchema = Yup.object({
             "image/png",
           ];
           return acceptedTypes.includes(file.type);
-        }),
+        })
+        .nonNullable(),
     )
     .max(10, "Vous ne pouvez télécharger que 10 fichiers maximum")
     .default([])
     .transform((value) => value || []),
 });
 
-// Explicitly define the type to avoid Yup inference issues
-export type RequestFormData = {
-  subject: string;
-  topic: string;
-  type: "accounting" | "tax" | "consultation" | "document" | "other";
-  description: string;
-  urgency: "low" | "normal" | "high" | "urgent";
-  desiredResponseDate: string;
-  desiredResponseTime: string;
-  attachments: File[];
-};
+// Use Yup.InferType for type safety
+export type RequestFormData = Yup.InferType<typeof requestValidationSchema>;

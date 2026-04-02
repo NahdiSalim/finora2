@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useParams } from "react-router-dom";
 import {
   Box,
   Card,
@@ -30,7 +30,9 @@ import {
   useGetMyAssignedRequestsQuery,
   useGetAllRequestsQuery,
   useGetMyRequestsQuery,
+  useGetRequestByIdQuery,
   useDeleteRequestMutation,
+  useCheckHasAccountantQuery,
 } from "src/lib/services/requestApi";
 import RequestModal from "../modal/RequestModal";
 import ViewRequestDrawer from "../drawer/ViewRequestDrawer";
@@ -59,6 +61,8 @@ export default function RequestView() {
   const { user } = useAppSelector((state) => state.auth);
   const { showAlert } = useAlert();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const { id: routeId } = useParams<{ id: string }>();
+  const routeRequestId = routeId ? parseInt(routeId, 10) : undefined;
   const [searchParams, setSearchParams] = useSearchParams();
   const [openModal, setOpenModal] = useState(false);
   const [openViewDrawer, setOpenViewDrawer] = useState(false);
@@ -77,6 +81,17 @@ export default function RequestView() {
 
   const [deleteRequest, { isLoading: isDeleting }] = useDeleteRequestMutation();
 
+  // When navigated to /requests/:id (e.g. from chat), fetch the request and open its drawer
+  const { data: requestByIdData } = useGetRequestByIdQuery(routeRequestId!, {
+    skip: !routeRequestId,
+  });
+  useEffect(() => {
+    if (requestByIdData?.data) {
+      setSelectedRequest(requestByIdData.data);
+      setOpenViewDrawer(true);
+    }
+  }, [requestByIdData]);
+
   // Read tab from URL query parameter
   useEffect(() => {
     const tabParam = searchParams.get("tab");
@@ -91,6 +106,12 @@ export default function RequestView() {
   const userRoleUpper = userRole?.toUpperCase();
   const isClient =
     userRoleUpper === ROLE_CODES.CLIENT || userRoleUpper === "CLIENT";
+
+  // Check if client has accountant relationship (only for clients)
+  const { data: hasAccountantData } = useCheckHasAccountantQuery(undefined, {
+    skip: !isClient,
+  });
+  // Handle both ACCOUNTANT and comptable (backend fallback)
   const isAccountant =
     userRoleUpper === ROLE_CODES.ACCOUNTANT ||
     userRoleUpper === "COMPTABLE" ||
@@ -210,8 +231,22 @@ export default function RequestView() {
     setSearchParams({ tab: newTab });
   };
 
-  const handleOpenModal = () => setOpenModal(true);
-  const handleCloseModal = () => setOpenModal(false);
+  const handleOpenModal = () => {
+    // Check if client has an accountant relationship before opening modal
+    if (isClient && hasAccountantData && !hasAccountantData.hasAccountant) {
+      showAlert(
+        "Vous devez être en relation avec un cabinet comptable pour créer une demande. Veuillez contacter votre administrateur.",
+        "warning",
+      );
+      return;
+    }
+    setOpenModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setOpenModal(false);
+  };
+
   const handleOpenViewDrawer = (request: Request) => {
     setSelectedRequest(request);
     setOpenViewDrawer(true);
@@ -308,36 +343,51 @@ export default function RequestView() {
           },
         ]
       : []),
-    {
-      id: "assignedTo",
-      label: "Assigné à",
-      width: 200,
-      render: (request: Request) => {
-        const assignedName = request.assignedTo
-          ? `${request.assignedTo.firstName} ${request.assignedTo.lastName}`
-          : "Non assigné";
-        const taskAssigneeName = request.convertedToTask?.assignee
-          ? `${request.convertedToTask.assignee.firstName} ${request.convertedToTask.assignee.lastName}`
-          : null;
-        return (
-          <Box>
-            <Typography
-              variant="body2"
-              noWrap
-              color={request.assignedTo ? "text.primary" : "text.disabled"}
-              fontStyle={request.assignedTo ? "normal" : "italic"}
-            >
-              {assignedName}
-            </Typography>
-            {taskAssigneeName && (
-              <Typography variant="caption" color="info.main" noWrap>
-                → {taskAssigneeName}
-              </Typography>
-            )}
-          </Box>
-        );
-      },
-    },
+    // Conditional "Assigné à" column - only show on "Mes demandes" tab
+    ...(isAccountant && viewTab === "my_requests"
+      ? [
+          {
+            id: "assignedTo",
+            label: "Assigné à",
+            render: (request: Request) => (
+              <Box>
+                {request.convertedToTask?.assignee ? (
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 500,
+                      color: theme.palette.text.primary,
+                    }}
+                  >
+                    {request.convertedToTask.assignee.firstName}{" "}
+                    {request.convertedToTask.assignee.lastName}
+                  </Typography>
+                ) : request.assignedTo ? (
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 500,
+                      color: theme.palette.text.primary,
+                    }}
+                  >
+                    {request.assignedTo.firstName} {request.assignedTo.lastName}
+                  </Typography>
+                ) : (
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: theme.palette.text.disabled,
+                      fontStyle: "italic",
+                    }}
+                  >
+                    Non assigné
+                  </Typography>
+                )}
+              </Box>
+            ),
+          },
+        ]
+      : []),
     {
       id: "status",
       label: (

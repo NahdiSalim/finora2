@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
 import {
   Box,
   CircularProgress,
@@ -695,7 +696,11 @@ export default function MeetingsView() {
   const [tab, setTab] = useState<TimeTab>("today");
   const ROWS_PER_PAGE = 5;
   const [page, setPage] = useState(0); // RTK Query expects 1-based pages
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const { id: routeId } = useParams<{ id: string }>();
+  const [selectedId, setSelectedId] = useState<number | null>(() => {
+    const parsed = routeId ? parseInt(routeId, 10) : NaN;
+    return isNaN(parsed) ? null : parsed;
+  });
   const [selectedAppointmentSnapshot, setSelectedAppointmentSnapshot] =
     useState<AppointmentItem | null>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);

@@ -1,4 +1,16 @@
 packages:
   - packages/*
 
+ignoredBuiltDependencies:
+  - '@nestjs/core'
+  - '@scarf/scarf'
+  - unrs-resolver
+
 nodeLinker: node-modules
+
+onlyBuiltDependencies:
+  - '@prisma/engines'
+  - '@swc/core'
+  - bcrypt
+  - esbuild
+  - prisma

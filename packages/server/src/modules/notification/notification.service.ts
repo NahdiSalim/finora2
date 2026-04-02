@@ -28,6 +28,8 @@ export class NotificationService {
         title: data.title,
         message: data.message,
         data: data.data ? JSON.stringify(data.data) : null,
+        actionUrl: data.actionUrl ?? null,
+        priority: data.priority ?? 'normal',
       },
       include: {
         recipient: {
@@ -168,6 +170,16 @@ export class NotificationService {
     });
 
     return { unreadCount: count };
+  }
+
+  /**
+   * Emit a relationship update event via WebSocket (no DB record)
+   */
+  emitRelationshipUpdate(userId: number, payload: any) {
+    this.notificationGateway.sendNotificationUpdate(userId, {
+      type: 'relationship_update',
+      ...payload,
+    });
   }
 
   /**
@@ -313,21 +325,21 @@ export class NotificationService {
 
       // Relationships
       'relationship.invitation_received': {
-        title: 'Nouvelle invitation de relation',
-        message: `${actorName} vous a envoyé une invitation pour établir une relation professionnelle`,
+        title: 'Nouvelle invitation de collaboration',
+        message: `${actorName} vous invite à collaborer sur Finora.${data.invitationMessage ? ` Message : "${data.invitationMessage}"` : ''}`,
         actionUrl: `/relationships/invitations/${data.invitationId}`,
-        priority: 'normal',
+        priority: 'high',
       },
       'relationship.invitation_accepted': {
-        title: 'Invitation acceptée',
-        message: `${actorName} a accepté votre invitation`,
-        actionUrl: `/relationships`,
+        title: 'Invitation acceptée ✅',
+        message: `${actorName} a accepté votre demande de collaboration. La relation est maintenant active.`,
+        actionUrl: `/relationships/active`,
         priority: 'normal',
       },
       'relationship.invitation_rejected': {
-        title: 'Invitation refusée',
-        message: `${actorName} a refusé votre invitation`,
-        actionUrl: `/relationships`,
+        title: 'Invitation refusée ❌',
+        message: `${actorName} a refusé votre invitation.${data.rejectionReason ? ` Raison : "${data.rejectionReason}"` : ''}`,
+        actionUrl: `/relationships/history`,
         priority: 'normal',
       },
       'relationship.terminated': {

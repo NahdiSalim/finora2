@@ -11,7 +11,7 @@ import {
 } from "@mui/material";
 import { X } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
-import trash from "../../../public/assets/Animations/DeleteBin.json";
+import trash from "src/assets/Animations/DeleteBin.json";
 import Lottie from "lottie-react";
 
 export interface ConfirmDeleteModalProps {

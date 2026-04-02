@@ -56,7 +56,7 @@ import {
   useSynchronizeDocumentMutation,
 } from "src/lib/services/invoicesApi";
 import type { ProcessingStatus } from "src/lib/services/invoicesApi";
-import ExtractionAnim from "../../../public/assets/Animations/extraction.json";
+import ExtractionAnim from "src/assets/Animations/extraction.json";
 import Lottie from "lottie-react";
 import ItemsTable from "./Itemstable";
 
@@ -472,6 +472,26 @@ function DocumentDetailsPanel({
       tvaPercent: tvaPercent ? String(tvaPercent).replace(",", ".") : "",
     };
   }, [extractedObject]);
+
+  const derivedCurrency = useMemo(() => {
+    const direct =
+      extractedObject?.currency ??
+      extractedObject?.invoice_currency ??
+      extractedObject?.currency_code ??
+      extractedObject?.invoice_header?.currency ??
+      extractedObject?.invoice_header?.currency_code ??
+      null;
+    if (typeof direct === "string" && direct.trim()) return direct.trim();
+
+    const metadataAmounts = (invoiceMetadata as any)?.amounts;
+    const fromMetadata =
+      metadataAmounts?.currency ?? metadataAmounts?.currencyCode ?? null;
+    if (typeof fromMetadata === "string" && fromMetadata.trim()) {
+      return fromMetadata.trim();
+    }
+
+    return "";
+  }, [extractedObject, invoiceMetadata]);
 
   const derivedLineItems = useMemo(() => {
     const lines = extractedObject?.lin_section;
@@ -1277,7 +1297,7 @@ function DocumentDetailsPanel({
                   fullWidth
                   size="small"
                   label="Devise"
-                  value="EUR"
+                  value={derivedCurrency}
                   InputProps={{ readOnly: true }}
                 />
               </Grid>
@@ -1597,6 +1617,7 @@ interface EditFileModalProps {
   onClose: () => void;
   file: FileItem;
   breadcrumb: Array<{ id: number; name: string }>;
+  initialCurrency?: string;
   onSave: (values: Record<string, string>) => void;
 }
 
@@ -1605,6 +1626,7 @@ function EditFileModal({
   onClose,
   file,
   breadcrumb,
+  initialCurrency = "",
   onSave,
 }: EditFileModalProps) {
   const [fileName, setFileName] = useState(file.name);
@@ -1614,6 +1636,11 @@ function EditFileModal({
   const [category, setCategory] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
   const [currency, setCurrency] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setCurrency(initialCurrency || "");
+  }, [open, initialCurrency]);
 
   const handleSubmit = () => {
     onSave({

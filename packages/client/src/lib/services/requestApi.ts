@@ -79,6 +79,17 @@ export const requestApi = createApi({
           : [{ type: "Requests" as const, id: "LIST" }],
     }),
 
+    // Check if client has accountant relationship (Client only)
+    checkHasAccountant: builder.query<
+      { success: boolean; hasAccountant: boolean },
+      void
+    >({
+      query: () => ({
+        url: "/requests/has-accountant",
+        method: "GET",
+      }),
+    }),
+
     // Get my requests (Client only)
     getMyRequests: builder.query<GetRequestsResponse, GetRequestsParams>({
       query: (params) => {
@@ -218,6 +229,7 @@ export const {
   useGetAllRequestsQuery,
   useGetMyRequestsQuery,
   useGetRequestByIdQuery,
+  useCheckHasAccountantQuery,
   useCreateRequestMutation,
   useUpdateRequestMutation,
   useRespondToRequestMutation,

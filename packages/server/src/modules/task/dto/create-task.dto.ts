@@ -105,14 +105,39 @@ export class CreateTaskDto {
   assigneeIds?: number[];
 
   @ApiProperty({
-    example: 2,
-    description: 'Client user ID (optional - company will be auto-detected)',
+    example: '[2, 5, 8]',
+    description:
+      'Client user IDs (one or multiple clients) - can be JSON array or comma-separated string',
     required: false,
+    type: String,
   })
-  @Type(() => Number)
-  @IsInt()
+  @Transform(({ value }) => {
+    // Handle different input formats
+    if (Array.isArray(value)) {
+      return value.map(Number);
+    }
+    if (typeof value === 'string') {
+      // Try to parse as JSON array
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed.map(Number) : [Number(value)];
+      } catch {
+        // If not JSON, try comma-separated
+        return value
+          .split(',')
+          .map((v) => Number(v.trim()))
+          .filter((n) => !isNaN(n));
+      }
+    }
+    if (typeof value === 'number') {
+      return [value];
+    }
+    return [];
+  })
+  @IsArray()
+  @IsInt({ each: true })
   @IsOptional()
-  clientId?: number;
+  clientIds?: number[];
 
   @ApiProperty({
     type: 'array',

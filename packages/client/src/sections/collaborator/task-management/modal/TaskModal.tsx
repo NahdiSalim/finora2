@@ -24,12 +24,14 @@ import CustomInput from "src/components/common/CustomInput";
 import CustomButton from "src/components/common/CustomButton";
 import CustomSelect from "src/components/common/CustomSelect";
 import FileUpload from "src/components/common/FileUpload";
-import { useCreateTaskMutation } from "src/lib/services/tasksApi";
+import {
+  useCreateTaskMutation,
+  useGetMyClientsQuery,
+} from "src/lib/services/tasksApi";
 import {
   useGetCollaboratorsQuery,
   type Collaborator,
 } from "src/lib/services/collaboratorsApi";
-import { useGetClientsQuery } from "src/lib/services/clientApi";
 import type { KanbanColumn } from "../types";
 
 interface TaskModalProps {
@@ -39,13 +41,25 @@ interface TaskModalProps {
   onTaskCreated?: () => void;
 }
 
+interface Client {
+  id: number;
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+  company: {
+    id: number;
+    name: string;
+    logo: string | null;
+  };
+}
+
 interface TaskFormData {
   title: string;
   description: string;
   priority: "low" | "medium" | "high" | "urgent";
   type: "accounting" | "review" | "meeting" | "document" | "other";
   assigneeIds: number[];
-  clientId: string;
+  clientIds: number[];
   dueDate: string;
 }
 
@@ -64,14 +78,25 @@ export default function TaskModal({
   const [selectedCollaborators, setSelectedCollaborators] = useState<
     Collaborator[]
   >([]);
+  const [clientSearch, setClientSearch] = useState("");
+  const [debouncedClientSearch, setDebouncedClientSearch] = useState("");
+  const [selectedClients, setSelectedClients] = useState<Client[]>([]);
 
-  // Debounce search input
+  // Debounce collaborator search
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(collaboratorSearch);
-    }, 300);
+    }, 500);
     return () => clearTimeout(timer);
   }, [collaboratorSearch]);
+
+  // Debounce client search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedClientSearch(clientSearch);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [clientSearch]);
 
   const [createTask, { isLoading: isCreating }] = useCreateTaskMutation();
   const { data: collaboratorsData, isLoading: isLoadingCollaborators } =
@@ -82,10 +107,20 @@ export default function TaskModal({
         search: debouncedSearch || undefined,
       },
       {
-        refetchOnMountOrArgChange: true,
+        skip: !open,
       },
     );
-  const { data: clientsData } = useGetClientsQuery({ page: 1, limit: 100 });
+  const { data: clientsData, isLoading: isLoadingClients } =
+    useGetMyClientsQuery(
+      {
+        page: 1,
+        limit: 50,
+        search: debouncedClientSearch || undefined,
+      },
+      {
+        skip: !open,
+      },
+    );
 
   // Combine selected collaborators with search results
   const allCollaborators = useMemo(() => {
@@ -94,6 +129,14 @@ export default function TaskModal({
     const filteredData = dataCollabs.filter((c) => !selectedIds.has(c.id));
     return [...selectedCollaborators, ...filteredData];
   }, [collaboratorsData, selectedCollaborators]);
+
+  // Combine selected clients with search results
+  const allClients = useMemo(() => {
+    const dataClients = clientsData?.data || [];
+    const selectedIds = new Set(selectedClients.map((c) => c.id));
+    const filteredData = dataClients.filter((c) => !selectedIds.has(c.id));
+    return [...selectedClients, ...filteredData];
+  }, [clientsData, selectedClients]);
 
   const {
     register,
@@ -109,7 +152,7 @@ export default function TaskModal({
       priority: "medium",
       type: "other",
       assigneeIds: [],
-      clientId: "",
+      clientIds: [],
       dueDate: "",
     },
   });
@@ -122,13 +165,15 @@ export default function TaskModal({
         priority: "medium",
         type: "other",
         assigneeIds: [],
-        clientId: "",
+        clientIds: [],
         dueDate: "",
       });
       setFileSlots([null]);
       setSubmitError("");
       setSelectedCollaborators([]);
       setCollaboratorSearch("");
+      setSelectedClients([]);
+      setClientSearch("");
     }
   }, [open, reset]);
 
@@ -147,7 +192,8 @@ export default function TaskModal({
       formData.append("priority", data.priority);
       formData.append("type", data.type);
       formData.append("assigneeIds", JSON.stringify(data.assigneeIds));
-      if (data.clientId) formData.append("clientId", data.clientId);
+      if (data.clientIds && data.clientIds.length > 0)
+        formData.append("clientIds", JSON.stringify(data.clientIds));
       if (data.dueDate)
         formData.append("dueDate", new Date(data.dueDate).toISOString());
 
@@ -298,7 +344,7 @@ export default function TaskModal({
             </Alert>
           )}
 
-          {/* Titre - Full Width */}
+          {/* Titre */}
           <CustomInput
             {...register("title", { required: "Titre est requis" })}
             label="Titre"
@@ -309,7 +355,7 @@ export default function TaskModal({
             helperText={errors.title?.message}
           />
 
-          {/* Description - Full Width */}
+          {/* Description */}
           <CustomInput
             {...register("description")}
             label="Description"
@@ -321,7 +367,7 @@ export default function TaskModal({
             helperText={errors.description?.message}
           />
 
-          {/* Two-Column Grid Row 1: Priorité | Type */}
+          {/* Two-Column Grid: Priorité | Type */}
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, sm: 6 }}>
               <Controller
@@ -373,7 +419,7 @@ export default function TaskModal({
             name="assigneeIds"
             control={control}
             rules={{ required: "Au moins un collaborateur est requis" }}
-            render={({ field: { onChange } }) => (
+            render={({ field: { onChange, value } }) => (
               <Autocomplete
                 multiple
                 freeSolo={false}
@@ -381,7 +427,8 @@ export default function TaskModal({
                 value={selectedCollaborators}
                 onChange={(_, newValue) => {
                   setSelectedCollaborators(newValue);
-                  onChange(newValue.map((collab) => Number(collab.id)));
+                  const ids = newValue.map((collab) => Number(collab.id));
+                  onChange(ids);
                 }}
                 onInputChange={(_, newInputValue) => {
                   setCollaboratorSearch(newInputValue);
@@ -399,7 +446,6 @@ export default function TaskModal({
                   <TextField
                     {...params}
                     label="Assigner à"
-                    required
                     error={!!errors.assigneeIds}
                     helperText={errors.assigneeIds?.message}
                     placeholder="Rechercher un collaborateur..."
@@ -457,64 +503,116 @@ export default function TaskModal({
             )}
           />
 
-          {/* Two-Column Grid Row 2: Client | Date d'échéance */}
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <Controller
-                name="clientId"
-                control={control}
-                render={({ field }) => (
-                  <CustomSelect
-                    {...field}
-                    label="Client (optionnel)"
-                    error={!!errors.clientId}
-                    helperText={errors.clientId?.message}
-                  >
-                    <MenuItem value="">Aucun</MenuItem>
-                    {clientsData?.data.map((client) => {
-                      let displayName = client.fullName || "";
-
-                      if (
-                        !displayName &&
-                        client.ownerFirstName &&
-                        client.ownerLastName
-                      ) {
-                        displayName = `${client.ownerFirstName} ${client.ownerLastName}`;
-                      }
-
-                      if (!displayName && client.company) {
-                        displayName =
-                          typeof client.company === "string"
-                            ? client.company
-                            : client.company.name;
-                      }
-
-                      if (!displayName) {
-                        displayName = client.email || `Client ${client.id}`;
-                      }
-
-                      return (
-                        <MenuItem key={client.id} value={client.id}>
-                          {displayName}
-                        </MenuItem>
-                      );
-                    })}
-                  </CustomSelect>
+          {/* Clients (Multiple Selection with Search) */}
+          <Controller
+            name="clientIds"
+            control={control}
+            render={({ field: { onChange, value } }) => (
+              <Autocomplete
+                multiple
+                freeSolo={false}
+                options={allClients}
+                value={selectedClients}
+                onChange={(_, newValue) => {
+                  setSelectedClients(newValue);
+                  const ids = newValue.map((client) => Number(client.id));
+                  onChange(ids);
+                }}
+                onInputChange={(_, newInputValue) => {
+                  setClientSearch(newInputValue);
+                }}
+                inputValue={clientSearch}
+                getOptionLabel={(option) =>
+                  option.company?.name ||
+                  `${option.firstName || ""} ${option.lastName || ""}`.trim() ||
+                  option.email
+                }
+                isOptionEqualToValue={(option, selectedValue) =>
+                  option.id === selectedValue.id
+                }
+                loading={isLoadingClients}
+                filterOptions={(x) => x}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Clients (optionnel)"
+                    error={!!errors.clientIds}
+                    helperText={errors.clientIds?.message}
+                    placeholder="Rechercher un client..."
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {isLoadingClients ? (
+                            <CircularProgress color="inherit" size={20} />
+                          ) : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        borderRadius: "10px",
+                        bgcolor: "white",
+                        "&:hover .MuiOutlinedInput-notchedOutline": {
+                          borderColor: theme.palette.grey[600],
+                        },
+                        "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                          borderColor: theme.palette.primary.main,
+                          borderWidth: "1.5px",
+                        },
+                      },
+                    }}
+                  />
                 )}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>
+                    <Box>
+                      <Typography variant="body2" fontWeight={500}>
+                        {option.company?.name ||
+                          `${option.firstName || ""} ${option.lastName || ""}`.trim()}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {option.email}
+                      </Typography>
+                    </Box>
+                  </li>
+                )}
+                renderTags={(tagValue, getTagProps) =>
+                  tagValue.map((option, index) => (
+                    <Chip
+                      {...getTagProps({ index })}
+                      key={option.id}
+                      label={
+                        option.company?.name ||
+                        `${option.firstName || ""} ${option.lastName || ""}`.trim()
+                      }
+                      size="small"
+                    />
+                  ))
+                }
+                noOptionsText="Aucun client trouvé"
+                sx={{ width: "100%" }}
               />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <CustomInput
-                {...register("dueDate")}
-                label="Date d'échéance"
-                type="date"
-                fullWidth
-                error={!!errors.dueDate}
-                helperText={errors.dueDate?.message}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-          </Grid>
+            )}
+          />
+
+          {/* Date d'échéance */}
+          <CustomInput
+            {...register("dueDate", {
+              required: "Date d'échéance est requise",
+            })}
+            label="Date d'échéance"
+            type="date"
+            fullWidth
+            required
+            error={!!errors.dueDate}
+            helperText={errors.dueDate?.message}
+            InputLabelProps={{ shrink: true }}
+            inputProps={{
+              min: new Date().toISOString().split("T")[0],
+            }}
+          />
 
           {/* File Upload */}
           <Box>

@@ -12,12 +12,25 @@ import {
   Menu,
   Divider,
 } from "@mui/material";
-import { X, Download, Edit, Trash2, Save, UserPlus, Send } from "lucide-react";
+import {
+  X,
+  Download,
+  Edit,
+  Trash2,
+  Save,
+  UserPlus,
+  Send,
+  Volume2,
+  FileText,
+  Mic,
+} from "lucide-react";
 import type { Request, RequestType } from "src/types/request";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
 import CustomSelect from "src/components/common/CustomSelect";
 import FileUpload from "src/components/common/FileUpload";
+import AudioRecorder from "src/components/common/AudioRecorder";
+import ModernTabs from "src/components/common/ModernTabs";
 import DeleteConfirmModal from "src/components/common/DeleteConfirmModal";
 import dayjs from "dayjs";
 import { useAlert } from "src/contexts/AlertContext";
@@ -26,6 +39,7 @@ import {
   useUpdateRequestMutation,
   useGetUsersByRoleQuery,
   useRespondToRequestMutation,
+  useGetRequestByIdQuery,
 } from "src/lib/services/requestApi";
 import { tasksApi } from "src/lib/services/tasksApi";
 import { useForm, Controller } from "react-hook-form";
@@ -59,6 +73,12 @@ export default function ViewRequestDrawer({
   const [updateRequest, { isLoading: isUpdating }] = useUpdateRequestMutation();
   const [respondToRequest, { isLoading: isResponding }] =
     useRespondToRequestMutation();
+
+  // Query hook to refetch request data
+  const { refetch: refetchRequest } = useGetRequestByIdQuery(request?.id || 0, {
+    skip: !request?.id,
+  });
+
   const [isEditMode, setIsEditMode] = useState(false);
   const [assignedUserId, setAssignedUserId] = useState<number | null>(null);
   const [localRequest, setLocalRequest] = useState<Request | null>(null);
@@ -69,6 +89,13 @@ export default function ViewRequestDrawer({
   const [showResponseView, setShowResponseView] = useState(false);
   const [responseNote, setResponseNote] = useState("");
   const [responseFiles, setResponseFiles] = useState<File[]>([]);
+
+  // Edit mode tabs
+  const [editTab, setEditTab] = useState<"form" | "voice">("form");
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioDuration, setAudioDuration] = useState<number>(0);
+  const [uploadedAudioFile, setUploadedAudioFile] = useState<File | null>(null);
+  const [isVoiceRequest, setIsVoiceRequest] = useState(false);
 
   // Get current user and check role
   const { user } = useAppSelector((state) => state.auth);
@@ -144,12 +171,12 @@ export default function ViewRequestDrawer({
     watch,
     formState: { errors, isDirty, isValid },
   } = useForm<RequestFormData>({
-    resolver: yupResolver(requestValidationSchema),
+    resolver: yupResolver(requestValidationSchema) as any,
     mode: "onChange",
     defaultValues: {
       subject: "",
-      type: "accounting",
-      urgency: "normal",
+      type: "accounting" as const,
+      urgency: "normal" as const,
       topic: "",
       description: "",
       desiredResponseDate: "",
@@ -162,6 +189,20 @@ export default function ViewRequestDrawer({
   useEffect(() => {
     if (request) {
       setLocalRequest(request);
+
+      // Detect if this is a voice request (has audio attachments)
+      const hasAudioAttachment = request.attachments?.some((att) => {
+        const ext = att.split(".").pop()?.toLowerCase();
+        return ["mp3", "wav", "m4a", "ogg", "webm"].includes(ext || "");
+      });
+      setIsVoiceRequest(hasAudioAttachment || false);
+
+      // Set initial edit tab based on request type
+      if (hasAudioAttachment) {
+        setEditTab("voice");
+      } else {
+        setEditTab("form");
+      }
     }
   }, [request]);
 
@@ -194,6 +235,11 @@ export default function ViewRequestDrawer({
       setShowResponseView(false);
       setResponseNote("");
       setResponseFiles([]);
+      setAudioBlob(null);
+      setAudioDuration(0);
+      setUploadedAudioFile(null);
+      setIsVoiceRequest(false);
+      setEditTab("form");
     }
   }, [open]);
 
@@ -347,11 +393,27 @@ export default function ViewRequestDrawer({
         }
       }
 
-      // Add new attachments if any
-      if (data.attachments && data.attachments.length > 0) {
+      // Add new attachments if any (from form tab or voice tab)
+      if (
+        editTab === "form" &&
+        data.attachments &&
+        data.attachments.length > 0
+      ) {
         data.attachments.forEach((file) => {
-          formData.append("attachments", file);
+          if (file) {
+            formData.append("attachments", file);
+          }
         });
+      } else if (editTab === "voice") {
+        // Handle voice tab audio
+        if (audioBlob) {
+          const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, {
+            type: audioBlob.type,
+          });
+          formData.append("attachments", audioFile);
+        } else if (uploadedAudioFile) {
+          formData.append("attachments", uploadedAudioFile);
+        }
       }
 
       const result = await updateRequest({
@@ -369,9 +431,20 @@ export default function ViewRequestDrawer({
         );
       }
 
-      // Update local request with the response data
-      if (result.data) {
-        setLocalRequest(result.data);
+      // Refetch the request from backend to get fresh presigned URLs
+      const refetchResult = await refetchRequest();
+
+      // Update local request with the refetched data (with fresh URLs)
+      if (refetchResult.data?.data) {
+        setLocalRequest({ ...refetchResult.data.data });
+
+        // Reset audio state after update
+        setAudioBlob(null);
+        setUploadedAudioFile(null);
+        setAudioDuration(0);
+      } else if (result.data) {
+        // Fallback to update response if refetch fails
+        setLocalRequest({ ...result.data });
       }
 
       // Show appropriate message
@@ -390,6 +463,22 @@ export default function ViewRequestDrawer({
     } catch (error) {
       showAlert("Erreur lors de la mise à jour de la demande", "error");
     }
+  };
+
+  const handleAudioReady = (blob: Blob, duration: number) => {
+    setAudioBlob(blob);
+    setAudioDuration(duration);
+    setUploadedAudioFile(null);
+  };
+
+  const handleAudioDelete = () => {
+    setAudioBlob(null);
+    setAudioDuration(0);
+  };
+
+  const handleAudioFileUpload = (file: File | null) => {
+    setUploadedAudioFile(file);
+    setAudioBlob(null);
   };
 
   const handleSubmitResponse = async () => {
@@ -467,8 +556,12 @@ export default function ViewRequestDrawer({
 
   const downloadAttachment = (url: string, filename: string) => {
     const link = document.createElement("a");
-    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3000";
-    link.href = `${apiUrl}/${url}`;
+    // If it's already a full URL (presigned), use it directly
+    // Otherwise, prepend the API URL
+    const downloadUrl = url.startsWith("http")
+      ? url
+      : `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/${url}`;
+    link.href = downloadUrl;
     link.download = filename;
     link.target = "_blank";
     document.body.appendChild(link);
@@ -891,7 +984,115 @@ export default function ViewRequestDrawer({
                         .pop()
                         ?.toLowerCase();
                       const isPDF = fileExtension === "pdf";
+                      const isAudio = [
+                        "mp3",
+                        "wav",
+                        "m4a",
+                        "ogg",
+                        "webm",
+                      ].includes(fileExtension || "");
 
+                      // Audio files get special treatment
+                      if (isAudio) {
+                        return (
+                          <Box
+                            key={index}
+                            sx={{
+                              p: 2,
+                              bgcolor: alpha(theme.palette.primary.main, 0.05),
+                              borderRadius: 2,
+                              border: `2px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 1.5,
+                                mb: 1.5,
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  width: 36,
+                                  height: 36,
+                                  bgcolor: theme.palette.primary.main,
+                                  borderRadius: 1,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <Volume2 size={20} color="white" />
+                              </Box>
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography
+                                  variant="body2"
+                                  fontWeight={600}
+                                  sx={{
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                    fontSize: 13,
+                                  }}
+                                >
+                                  Message vocal
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{ fontSize: 11 }}
+                                >
+                                  {filename}
+                                </Typography>
+                              </Box>
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  downloadAttachment(
+                                    localRequest.attachmentUrls?.[index] ||
+                                      attachment,
+                                    filename,
+                                  )
+                                }
+                                sx={{
+                                  width: 32,
+                                  height: 32,
+                                  border: `1px solid ${theme.palette.divider}`,
+                                  borderRadius: 1,
+                                  color: theme.palette.text.secondary,
+                                  "&:hover": {
+                                    bgcolor: alpha(
+                                      theme.palette.primary.main,
+                                      0.08,
+                                    ),
+                                    borderColor: theme.palette.primary.main,
+                                    color: theme.palette.primary.main,
+                                  },
+                                }}
+                              >
+                                <Download size={14} />
+                              </IconButton>
+                            </Box>
+                            {/* HTML5 Audio Player */}
+                            <audio
+                              key={`view-audio-${index}-${localRequest.updatedAt}`}
+                              controls
+                              style={{ width: "100%", height: 40 }}
+                              preload="metadata"
+                              src={
+                                localRequest.attachmentUrls?.[index] ||
+                                attachment
+                              }
+                            >
+                              Votre navigateur ne supporte pas la lecture audio.
+                            </audio>
+                          </Box>
+                        );
+                      }
+
+                      // Regular files (documents, PDFs, images)
                       return (
                         <Box
                           key={index}
@@ -950,7 +1151,11 @@ export default function ViewRequestDrawer({
                           <IconButton
                             size="small"
                             onClick={() =>
-                              downloadAttachment(attachment, filename)
+                              downloadAttachment(
+                                localRequest.attachmentUrls?.[index] ||
+                                  attachment,
+                                filename,
+                              )
                             }
                             sx={{
                               width: 28,
@@ -1115,7 +1320,12 @@ export default function ViewRequestDrawer({
                                 <IconButton
                                   size="small"
                                   onClick={() =>
-                                    downloadAttachment(attachment, filename)
+                                    downloadAttachment(
+                                      localRequest.responseAttachments?.[
+                                        index
+                                      ] || attachment,
+                                      filename,
+                                    )
                                   }
                                   sx={{
                                     width: 28,
@@ -1361,299 +1571,480 @@ export default function ViewRequestDrawer({
           </Box>
         ) : (
           // EDIT MODE
-          <Box
-            component="form"
-            onSubmit={handleSubmit(onSubmit)}
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 2,
-              animation: "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
-              "@keyframes fadeInUp": {
-                "0%": {
-                  opacity: 0,
-                  transform: "translateY(20px)",
-                },
-                "100%": {
-                  opacity: 1,
-                  transform: "translateY(0)",
-                },
-              },
-            }}
-          >
-            {/* Titre de la demande and Priorité Row */}
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: { xs: "column", sm: "row" },
-                gap: 2,
-                animation:
-                  "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.05s both",
-              }}
-            >
-              {/* Titre de la demande */}
-              <Box sx={{ flex: 2 }}>
-                <CustomInput
-                  {...register("subject")}
-                  label="Titre de la demande"
-                  placeholder="Saisir le Titre de la demande"
-                  fullWidth
-                  required
-                  error={!!errors.subject}
-                  helperText={errors.subject?.message}
-                />
-              </Box>
-
-              {/* Priorité */}
-              <Box sx={{ flex: 1 }}>
-                <Controller
-                  name="urgency"
-                  control={control}
-                  render={({ field }) => (
-                    <CustomSelect
-                      {...field}
-                      label="Priorité"
-                      required
-                      error={!!errors.urgency}
-                      helperText={errors.urgency?.message}
-                    >
-                      <MenuItem value="low">Low</MenuItem>
-                      <MenuItem value="normal">Normal</MenuItem>
-                      <MenuItem value="high">High</MenuItem>
-                      <MenuItem value="urgent">Urgent</MenuItem>
-                    </CustomSelect>
-                  )}
-                />
-              </Box>
-            </Box>
-
-            {/* Type de demande */}
-            <Box
-              sx={{
-                animation:
-                  "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.05s both",
-              }}
-            >
-              <Controller
-                name="type"
-                control={control}
-                render={({ field }) => (
-                  <CustomSelect
-                    {...field}
-                    label="Type de demande"
-                    required
-                    error={!!errors.type}
-                    helperText={errors.type?.message}
-                    fullWidth
-                  >
-                    <MenuItem value="accounting">Comptabilité</MenuItem>
-                    <MenuItem value="tax">Fiscalité</MenuItem>
-                    <MenuItem value="consultation">Consultation</MenuItem>
-                    <MenuItem value="document">Document</MenuItem>
-                    <MenuItem value="other">Autre</MenuItem>
-                  </CustomSelect>
-                )}
+          <>
+            {/* Edit Mode Tabs */}
+            <Box sx={{ mb: 2 }}>
+              <ModernTabs
+                tabs={[
+                  {
+                    id: "form",
+                    label: "Formulaire",
+                    icon: <FileText size={18} />,
+                  },
+                  {
+                    id: "voice",
+                    label: "Message vocal",
+                    icon: <Mic size={18} />,
+                  },
+                ]}
+                activeTab={editTab}
+                onTabChange={(tab) => setEditTab(tab as "form" | "voice")}
               />
             </Box>
 
-            {/* Assigné à (Only for accountants) */}
-            {isAccountant && (
+            {/* FORM TAB */}
+            {editTab === "form" && (
               <Box
+                component="form"
+                onSubmit={handleSubmit(onSubmit)}
                 sx={{
-                  animation:
-                    "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s both",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                  animation: "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+                  "@keyframes fadeInUp": {
+                    "0%": {
+                      opacity: 0,
+                      transform: "translateY(20px)",
+                    },
+                    "100%": {
+                      opacity: 1,
+                      transform: "translateY(0)",
+                    },
+                  },
                 }}
               >
-                <CustomSelect
-                  label="Assigné à"
-                  value={assignedUserId || ""}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setAssignedUserId(value === "" ? null : Number(value));
+                {/* Titre de la demande and Priorité Row */}
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: { xs: "column", sm: "row" },
+                    gap: 2,
+                    animation:
+                      "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.05s both",
                   }}
-                  fullWidth
                 >
-                  <MenuItem value="">Non assigné</MenuItem>
-                  {assignableUsers.map((assignableUser) => {
-                    const isCurrentUser =
-                      assignableUser.id === Number(user?.id);
-                    const displayName =
-                      assignableUser.firstName && assignableUser.lastName
-                        ? `${assignableUser.firstName} ${assignableUser.lastName}`
-                        : assignableUser.username;
-                    const roleName =
-                      typeof assignableUser.role === "object" &&
-                      "nameFr" in assignableUser.role
-                        ? assignableUser.role.nameFr
-                        : "Comptable";
-                    return (
-                      <MenuItem
-                        key={assignableUser.id}
-                        value={assignableUser.id}
+                  {/* Titre de la demande */}
+                  <Box sx={{ flex: 2 }}>
+                    <CustomInput
+                      {...register("subject")}
+                      label="Titre de la demande"
+                      placeholder="Saisir le Titre de la demande"
+                      fullWidth
+                      required
+                      error={!!errors.subject}
+                      helperText={errors.subject?.message}
+                    />
+                  </Box>
+
+                  {/* Priorité */}
+                  <Box sx={{ flex: 1 }}>
+                    <Controller
+                      name="urgency"
+                      control={control}
+                      render={({ field }) => (
+                        <CustomSelect
+                          {...field}
+                          label="Priorité"
+                          required
+                          error={!!errors.urgency}
+                          helperText={errors.urgency?.message}
+                        >
+                          <MenuItem value="low">Low</MenuItem>
+                          <MenuItem value="normal">Normal</MenuItem>
+                          <MenuItem value="high">High</MenuItem>
+                          <MenuItem value="urgent">Urgent</MenuItem>
+                        </CustomSelect>
+                      )}
+                    />
+                  </Box>
+                </Box>
+
+                {/* Type de demande */}
+                <Box
+                  sx={{
+                    animation:
+                      "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.05s both",
+                  }}
+                >
+                  <Controller
+                    name="type"
+                    control={control}
+                    render={({ field }) => (
+                      <CustomSelect
+                        {...field}
+                        label="Type de demande"
+                        required
+                        error={!!errors.type}
+                        helperText={errors.type?.message}
+                        fullWidth
                       >
-                        {isCurrentUser
-                          ? `Moi (${displayName})`
-                          : `${displayName} (${roleName})`}
-                      </MenuItem>
-                    );
-                  })}
-                </CustomSelect>
+                        <MenuItem value="accounting">Comptabilité</MenuItem>
+                        <MenuItem value="tax">Fiscalité</MenuItem>
+                        <MenuItem value="consultation">Consultation</MenuItem>
+                        <MenuItem value="document">Document</MenuItem>
+                        <MenuItem value="other">Autre</MenuItem>
+                      </CustomSelect>
+                    )}
+                  />
+                </Box>
+
+                {/* Assigné à (Only for accountants) */}
+                {isAccountant && (
+                  <Box
+                    sx={{
+                      animation:
+                        "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s both",
+                    }}
+                  >
+                    <CustomSelect
+                      label="Assigné à"
+                      value={assignedUserId || ""}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setAssignedUserId(value === "" ? null : Number(value));
+                      }}
+                      fullWidth
+                    >
+                      <MenuItem value="">Non assigné</MenuItem>
+                      {assignableUsers.map((assignableUser) => {
+                        const isCurrentUser =
+                          assignableUser.id === Number(user?.id);
+                        const displayName =
+                          assignableUser.firstName && assignableUser.lastName
+                            ? `${assignableUser.firstName} ${assignableUser.lastName}`
+                            : assignableUser.username;
+                        const roleName =
+                          typeof assignableUser.role === "object" &&
+                          "nameFr" in assignableUser.role
+                            ? assignableUser.role.nameFr
+                            : "Comptable";
+                        return (
+                          <MenuItem
+                            key={assignableUser.id}
+                            value={assignableUser.id}
+                          >
+                            {isCurrentUser
+                              ? `Moi (${displayName})`
+                              : `${displayName} (${roleName})`}
+                          </MenuItem>
+                        );
+                      })}
+                    </CustomSelect>
+                  </Box>
+                )}
+
+                {/* Sujet */}
+                <Box
+                  sx={{
+                    animation:
+                      "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s both",
+                  }}
+                >
+                  <CustomInput
+                    {...register("topic")}
+                    label="Sujet"
+                    placeholder="Choisir votre sujet"
+                    fullWidth
+                    error={!!errors.topic}
+                    helperText={errors.topic?.message}
+                  />
+                </Box>
+
+                {/* Description */}
+                <Box
+                  sx={{
+                    animation:
+                      "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.15s both",
+                  }}
+                >
+                  <CustomInput
+                    {...register("description")}
+                    label="Description"
+                    placeholder="Veuillez détailler votre demande"
+                    fullWidth
+                    multiline
+                    rows={4}
+                    error={!!errors.description}
+                    helperText={errors.description?.message}
+                  />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: "block",
+                      textAlign: "right",
+                      mt: 0.5,
+                      color: theme.palette.text.secondary,
+                    }}
+                  >
+                    Caractères: {characterCount}/5000
+                  </Typography>
+                </Box>
+
+                {/* Date & Time Row */}
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: { xs: "column", sm: "row" },
+                    gap: 1.5,
+                    animation:
+                      "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both",
+                  }}
+                >
+                  {/* Date de réponse souhaitée */}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Controller
+                      name="desiredResponseDate"
+                      control={control}
+                      render={({ field }) => (
+                        <CustomInput
+                          {...field}
+                          label="Date"
+                          type="date"
+                          fullWidth
+                          error={!!errors.desiredResponseDate}
+                          helperText={errors.desiredResponseDate?.message}
+                          slotProps={{
+                            inputLabel: {
+                              shrink: true,
+                            },
+                          }}
+                        />
+                      )}
+                    />
+                  </Box>
+
+                  {/* Heure de réponse souhaitée */}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Controller
+                      name="desiredResponseTime"
+                      control={control}
+                      render={({ field }) => (
+                        <CustomInput
+                          {...field}
+                          label="Heure"
+                          type="time"
+                          fullWidth
+                          error={!!errors.desiredResponseTime}
+                          helperText={errors.desiredResponseTime?.message}
+                          slotProps={{
+                            inputLabel: {
+                              shrink: true,
+                            },
+                          }}
+                        />
+                      )}
+                    />
+                  </Box>
+                </Box>
+
+                {/* Pièces jointes */}
+                <Box
+                  sx={{
+                    animation:
+                      "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.25s both",
+                  }}
+                >
+                  <Controller
+                    name="attachments"
+                    control={control}
+                    render={({ field }) => (
+                      <FileUpload
+                        label="Pièce jointe"
+                        value={(field.value && field.value[0]) || null}
+                        onChange={(file) => field.onChange(file ? [file] : [])}
+                        existingFileUrl={
+                          localRequest?.attachmentUrls?.[0] &&
+                          !(field.value && field.value[0])
+                            ? localRequest.attachmentUrls[0]
+                            : null
+                        }
+                        existingFileName={
+                          localRequest?.attachments?.[0] &&
+                          !(field.value && field.value[0])
+                            ? localRequest.attachments[0].split("/").pop() ||
+                              undefined
+                            : undefined
+                        }
+                        error={!!errors.attachments}
+                        helperText={
+                          errors.attachments?.message ||
+                          "Ajouter une nouvelle pièce jointe (remplacera l'ancienne)"
+                        }
+                        maxSize={5}
+                        acceptedFiles={[
+                          ".pdf",
+                          ".doc",
+                          ".docx",
+                          ".xls",
+                          ".xlsx",
+                          ".jpg",
+                          ".jpeg",
+                          ".png",
+                        ]}
+                      />
+                    )}
+                  />
+                </Box>
               </Box>
             )}
 
-            {/* Sujet */}
-            <Box
-              sx={{
-                animation:
-                  "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s both",
-              }}
-            >
-              <CustomInput
-                {...register("topic")}
-                label="Sujet"
-                placeholder="Choisir votre sujet"
-                fullWidth
-                error={!!errors.topic}
-                helperText={errors.topic?.message}
-              />
-            </Box>
-
-            {/* Description */}
-            <Box
-              sx={{
-                animation:
-                  "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.15s both",
-              }}
-            >
-              <CustomInput
-                {...register("description")}
-                label="Description"
-                placeholder="Veuillez détailler votre demande"
-                fullWidth
-                multiline
-                rows={4}
-                error={!!errors.description}
-                helperText={errors.description?.message}
-              />
-              <Typography
-                variant="caption"
+            {/* VOICE TAB */}
+            {editTab === "voice" && (
+              <Box
                 sx={{
-                  display: "block",
-                  textAlign: "right",
-                  mt: 0.5,
-                  color: theme.palette.text.secondary,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 3,
+                  animation: "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
               >
-                Caractères: {characterCount}/5000
-              </Typography>
-            </Box>
+                {/* Show existing audio if this is a voice request */}
+                {isVoiceRequest &&
+                  localRequest.attachments &&
+                  localRequest.attachments.length > 0 && (
+                    <Box>
+                      <Typography
+                        variant="subtitle2"
+                        sx={{ mb: 1.5, fontWeight: 600, fontSize: 14 }}
+                      >
+                        Message vocal actuel
+                      </Typography>
+                      {localRequest.attachments.map((attachment, index) => {
+                        const filename =
+                          attachment.split("/").pop() || `file-${index + 1}`;
+                        const fileExtension = filename
+                          .split(".")
+                          .pop()
+                          ?.toLowerCase();
+                        const isAudio = [
+                          "mp3",
+                          "wav",
+                          "m4a",
+                          "ogg",
+                          "webm",
+                        ].includes(fileExtension || "");
 
-            {/* Date & Time Row */}
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: { xs: "column", sm: "row" },
-                gap: 1.5,
-                animation:
-                  "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both",
-              }}
-            >
-              {/* Date de réponse souhaitée */}
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Controller
-                  name="desiredResponseDate"
-                  control={control}
-                  render={({ field }) => (
-                    <CustomInput
-                      {...field}
-                      label="Date"
-                      type="date"
-                      fullWidth
-                      error={!!errors.desiredResponseDate}
-                      helperText={errors.desiredResponseDate?.message}
-                      slotProps={{
-                        inputLabel: {
-                          shrink: true,
-                        },
+                        if (!isAudio) return null;
+
+                        return (
+                          <Box
+                            key={index}
+                            sx={{
+                              p: 2,
+                              bgcolor: alpha(theme.palette.primary.main, 0.05),
+                              borderRadius: 2,
+                              border: `2px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 1.5,
+                                mb: 1.5,
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  width: 36,
+                                  height: 36,
+                                  bgcolor: theme.palette.primary.main,
+                                  borderRadius: 1,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <Volume2 size={20} color="white" />
+                              </Box>
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography
+                                  variant="body2"
+                                  fontWeight={600}
+                                  sx={{ fontSize: 13 }}
+                                >
+                                  Message vocal
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{ fontSize: 11 }}
+                                >
+                                  {filename}
+                                </Typography>
+                              </Box>
+                            </Box>
+                            <audio
+                              key={`edit-audio-${index}-${localRequest.updatedAt}`}
+                              controls
+                              style={{ width: "100%", height: 40 }}
+                              preload="metadata"
+                              src={
+                                localRequest.attachmentUrls?.[index] ||
+                                attachment
+                              }
+                            >
+                              Votre navigateur ne supporte pas la lecture audio.
+                            </audio>
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  )}
+
+                {/* Replace with new audio */}
+                <Box>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ mb: 1.5, fontWeight: 600, fontSize: 14 }}
+                  >
+                    {isVoiceRequest
+                      ? "Remplacer le message vocal"
+                      : "Ajouter un message vocal"}
+                  </Typography>
+
+                  {!uploadedAudioFile && (
+                    <Box sx={{ mb: 2 }}>
+                      <AudioRecorder
+                        onAudioReady={handleAudioReady}
+                        onDelete={handleAudioDelete}
+                        maxDuration={300}
+                      />
+                    </Box>
+                  )}
+
+                  {!audioBlob && !uploadedAudioFile && (
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 2,
+                        my: 1,
                       }}
+                    >
+                      <Box sx={{ flex: 1, height: 1, bgcolor: "divider" }} />
+                      <Typography variant="body2" color="text.secondary">
+                        OU
+                      </Typography>
+                      <Box sx={{ flex: 1, height: 1, bgcolor: "divider" }} />
+                    </Box>
+                  )}
+
+                  {!audioBlob && (
+                    <FileUpload
+                      label="Télécharger un fichier audio"
+                      value={uploadedAudioFile}
+                      onChange={handleAudioFileUpload}
+                      acceptedFiles={[".mp3", ".wav", ".m4a", ".ogg", ".webm"]}
+                      maxSize={10}
                     />
                   )}
-                />
+                </Box>
               </Box>
-
-              {/* Heure de réponse souhaitée */}
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Controller
-                  name="desiredResponseTime"
-                  control={control}
-                  render={({ field }) => (
-                    <CustomInput
-                      {...field}
-                      label="Heure"
-                      type="time"
-                      fullWidth
-                      error={!!errors.desiredResponseTime}
-                      helperText={errors.desiredResponseTime?.message}
-                      slotProps={{
-                        inputLabel: {
-                          shrink: true,
-                        },
-                      }}
-                    />
-                  )}
-                />
-              </Box>
-            </Box>
-
-            {/* Pièces jointes */}
-            <Box
-              sx={{
-                animation:
-                  "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.25s both",
-              }}
-            >
-              <Controller
-                name="attachments"
-                control={control}
-                render={({ field }) => (
-                  <FileUpload
-                    label="Pièce jointe"
-                    value={(field.value && field.value[0]) || null}
-                    onChange={(file) => field.onChange(file ? [file] : [])}
-                    existingFileUrl={
-                      localRequest?.attachmentUrls?.[0] &&
-                      !(field.value && field.value[0])
-                        ? localRequest.attachmentUrls[0]
-                        : null
-                    }
-                    existingFileName={
-                      localRequest?.attachments?.[0] &&
-                      !(field.value && field.value[0])
-                        ? localRequest.attachments[0].split("/").pop() ||
-                          undefined
-                        : undefined
-                    }
-                    error={!!errors.attachments}
-                    helperText={
-                      errors.attachments?.message ||
-                      "Ajouter une nouvelle pièce jointe (remplacera l'ancienne)"
-                    }
-                    maxSize={5}
-                    acceptedFiles={[
-                      ".pdf",
-                      ".doc",
-                      ".docx",
-                      ".xls",
-                      ".xlsx",
-                      ".jpg",
-                      ".jpeg",
-                      ".png",
-                    ]}
-                  />
-                )}
-              />
-            </Box>
-          </Box>
+            )}
+          </>
         )}
       </Box>
 
@@ -1820,8 +2211,26 @@ export default function ViewRequestDrawer({
             <CustomButton
               variant="contained"
               startIcon={isUpdating ? undefined : <Save size={16} />}
-              onClick={handleSubmit(onSubmit)}
-              disabled={isUpdating || !isDirty || !isValid}
+              onClick={
+                editTab === "voice"
+                  ? async () => {
+                      // Voice tab doesn't use form validation
+                      if (!audioBlob && !uploadedAudioFile) {
+                        showAlert(
+                          "Veuillez enregistrer ou télécharger un fichier audio",
+                          "error",
+                        );
+                        return;
+                      }
+                      await onSubmit(watch() as RequestFormData);
+                    }
+                  : handleSubmit(onSubmit)
+              }
+              disabled={
+                isUpdating ||
+                (editTab === "form" && (!isDirty || !isValid)) ||
+                (editTab === "voice" && !audioBlob && !uploadedAudioFile)
+              }
               fullWidth
               sx={{
                 fontSize: 13,
@@ -1851,13 +2260,24 @@ export default function ViewRequestDrawer({
           vertical: "bottom",
           horizontal: "center",
         }}
+        sx={{
+          zIndex: (theme2) => theme2.zIndex.modal + 20,
+        }}
+        slotProps={{
+          paper: {
+            sx: {
+              width: { xs: "90%", sm: 320 },
+              maxWidth: 400,
+              maxHeight: { xs: 300, sm: 400 },
+              mt: -1,
+              borderRadius: 2,
+              boxShadow: theme.shadows[8],
+              overflow: "auto",
+            },
+          },
+        }}
         PaperProps={{
           sx: {
-            width: { xs: "calc(100% - 48px)", sm: 320 },
-            maxHeight: 400,
-            mt: -1,
-            borderRadius: 2,
-            boxShadow: theme.shadows[8],
             "& .MuiList-root": {
               py: 1,
             },

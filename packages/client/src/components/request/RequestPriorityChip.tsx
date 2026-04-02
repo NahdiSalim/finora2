@@ -1,29 +1,23 @@
 import Chip from "@mui/material/Chip";
+import { alpha } from "@mui/material";
 import type { RequestUrgency } from "src/types/request";
 
-const PRIORITY_MAP: Record<
-  RequestUrgency,
-  { label: string; bgColor: string; textColor: string }
-> = {
+const PRIORITY_MAP: Record<RequestUrgency, { label: string; color: string }> = {
   low: {
     label: "Low",
-    bgColor: "#DBEAFE",
-    textColor: "#1E40AF",
+    color: "#1d61e7", // Primary blue from theme
   },
   normal: {
     label: "Medium",
-    bgColor: "#FEF3C7",
-    textColor: "#D97706",
+    color: "#F59E0B", // Medium amber/yellow
   },
   high: {
     label: "High",
-    bgColor: "#FED7AA",
-    textColor: "#EA580C",
+    color: "#ff7d0d", // Muted gold/orange from theme warning
   },
   urgent: {
     label: "Urgent !",
-    bgColor: "#FEE2E2",
-    textColor: "#DC2626",
+    color: "#ff5757", // Coral red from theme error
   },
 };
 
@@ -41,11 +35,12 @@ export default function RequestPriorityChip({
       size={size}
       label={cfg.label}
       sx={{
-        bgcolor: cfg.bgColor,
-        color: cfg.textColor,
+        bgcolor: alpha(cfg.color, 0.08),
+        color: cfg.color,
         fontWeight: 600,
-        borderRadius: 2,
+        borderRadius: 2.5,
         fontSize: size === "small" ? 12 : 14,
+        border: `1px solid ${alpha(cfg.color, 0.25)}`,
         px: 1.5,
         py: 0.5,
         height: "auto",

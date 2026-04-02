@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { AppController } from './app.controller';
+import { MailModule } from './modules/mail/mail.module';
 import { RoleModule } from './modules/role/role.module';
 import { UserModule } from './modules/user/user.module';
 import { CommonModule } from './common/common.module';
@@ -51,6 +52,7 @@ import { LocationModule } from './modules/location/location.module';
     RoleModule,
     UserModule,
     CommonModule,
+    MailModule,
     AuthModule,
     AdminModule,
     AccountantModule,

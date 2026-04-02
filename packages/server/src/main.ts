@@ -17,7 +17,6 @@ import { seedPages } from '../prisma/seeds/pages.seed';
 import { seedActions } from '../prisma/seeds/actions.seed';
 import { seedUsers } from '../prisma/seeds/users.seed';
 import { seedRolePermissions } from '../prisma/seeds/role-permissions.seed';
-import { seedRequests } from '../prisma/seeds/requests.seed';
 
 async function runSeeds() {
   const prisma = new PrismaClient({
@@ -27,17 +26,17 @@ async function runSeeds() {
   });
 
   try {
-    console.log(' Running database seeds...');
-
-    // Check if data already exists
+    // Check if data already exists - skip seeding if database has data
     const rolesCount = await prisma.role.count();
-    if (rolesCount > 0) {
-      console.log(' Database already seeded, checking requests...');
-      // Only seed requests if they don't exist
-      await seedRequests(prisma);
+    const usersCount = await prisma.user.count();
+
+    if (rolesCount > 0 || usersCount > 0) {
+      console.log(' Database already seeded, skipping...');
       await prisma.$disconnect();
       return;
     }
+
+    console.log(' Running database seeds...');
 
     await seedRoles(prisma);
     await seedFeatures(prisma);
@@ -45,7 +44,6 @@ async function runSeeds() {
     await seedActions(prisma);
     await seedUsers(prisma);
     await seedRolePermissions(prisma);
-    await seedRequests(prisma);
 
     console.log(' Database seeding completed!');
   } catch (error) {

@@ -31,6 +31,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import type { AuthRequest } from '../auth/types/user-type';
+import { FileValidationPipe } from '../../common/pipes/file-validation.pipe';
 
 @ApiTags('requests')
 @UseGuards(JwtAuthGuard)
@@ -47,17 +48,33 @@ export class RequestController {
   @Roles('CLIENT')
   @UseInterceptors(FilesInterceptor('attachments', 10))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: '[Client] Create a new request with optional attachments' })
+  @ApiOperation({
+    summary: '[Client] Create a new request with optional attachments (documents and audio files)',
+  })
   @ApiResponse({ status: 201, description: 'Request created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid file type or size' })
   async createRequest(
     @Body() dto: CreateRequestDto,
     @Req() req: AuthRequest,
-    @UploadedFiles() files?: Express.Multer.File[]
+    @UploadedFiles(new FileValidationPipe()) files?: Express.Multer.File[]
   ) {
     console.log('Controller received DTO:', dto);
     console.log('Controller received files:', files?.length || 0);
     const clientId = req.user!.id;
     return this.requestService.createRequest(dto, clientId, files);
+  }
+
+  /**
+   * Check if client has accounting firm relationship (Client)
+   */
+  @Get('has-accountant')
+  @UseGuards(RolesGuard)
+  @Roles('CLIENT')
+  @ApiOperation({ summary: '[Client] Check if client has an accounting firm relationship' })
+  @ApiResponse({ status: 200, description: 'Returns whether client has a relationship' })
+  async hasAccountant(@Req() req: AuthRequest) {
+    const clientId = req.user!.id;
+    return this.requestService.checkClientHasAccountant(clientId);
   }
 
   /**
@@ -298,6 +315,41 @@ export class RequestController {
   ) {
     const accountantId = req.user!.id;
     return this.requestService.convertToTask(id, dto, accountantId);
+  }
+
+  /**
+   * Get chat-accessible requests by client ID (for messagerie attachments)
+   */
+  @Get('chat-accessible/:clientId')
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({ summary: '[Accountant] Get requests for a client (chat attachments)' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: 'number',
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: 'number',
+    description: 'Items per page (default: 5)',
+  })
+  @ApiResponse({ status: 200, description: 'Paginated list of client requests' })
+  async getChatAccessibleRequests(
+    @Param('clientId', ParseIntPipe) clientId: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Req() req?: AuthRequest
+  ) {
+    const accountantId = req!.user!.id;
+    return this.requestService.getChatAccessibleRequestsByClient(
+      clientId,
+      accountantId,
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 5
+    );
   }
 
   /**

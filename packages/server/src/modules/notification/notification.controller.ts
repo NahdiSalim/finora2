@@ -55,13 +55,13 @@ export class NotificationController {
       filters.offset = parseInt(offset, 10);
     }
 
-    return this.notificationService.getUserNotifications(req.user.userId, filters);
+    return this.notificationService.getUserNotifications(req.user.id, filters);
   }
 
   @Get('unread-count')
-  @ApiOperation({ summary: 'Get unread notifications count' })
+  @ApiOperation({ summary: 'Get unùread notifications count' })
   async getUnreadCount(@Request() req) {
-    return this.notificationService.getUnreadCount(req.user.userId);
+    return this.notificationService.getUnreadCount(req.user.id);
   }
 
   @Post()
@@ -102,18 +102,18 @@ export class NotificationController {
   @Patch(':id/read')
   @ApiOperation({ summary: 'Mark notification as read' })
   async markAsRead(@Request() req, @Param('id', ParseIntPipe) id: number) {
-    return this.notificationService.markAsRead(id, req.user.userId);
+    return this.notificationService.markAsRead(id, req.user.id);
   }
 
   @Post('mark-all-read')
   @ApiOperation({ summary: 'Mark all notifications as read' })
   async markAllAsRead(@Request() req) {
-    return this.notificationService.markAllAsRead(req.user.userId);
+    return this.notificationService.markAllAsRead(req.user.id);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a notification' })
   async deleteNotification(@Request() req, @Param('id', ParseIntPipe) id: number) {
-    return this.notificationService.deleteNotification(id, req.user.userId);
+    return this.notificationService.deleteNotification(id, req.user.id);
   }
 }

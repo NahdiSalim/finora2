@@ -1,34 +1,27 @@
 import Chip from "@mui/material/Chip";
+import { alpha } from "@mui/material";
 import type { RequestStatus } from "src/types/request";
 
-const STATUS_MAP: Record<
-  RequestStatus,
-  { label: string; bgColor: string; textColor: string }
-> = {
+const STATUS_MAP: Record<RequestStatus, { label: string; color: string }> = {
   pending: {
-    label: "Pending",
-    bgColor: "#FEF3C7",
-    textColor: "#D97706",
+    label: "En attente",
+    color: "#ff7d0d", // Warm amber/orange from theme warning
   },
   in_progress: {
-    label: "In progress",
-    bgColor: "#E9D5FF",
-    textColor: "#7C3AED",
+    label: "En cours",
+    color: "#8B5CF6", // Vibrant violet/indigo
   },
   resolved: {
-    label: "Completed",
-    bgColor: "#D1FAE5",
-    textColor: "#059669",
+    label: "Terminé",
+    color: "#10B981", // Emerald green (success)
   },
   rejected: {
-    label: "Rejected",
-    bgColor: "#FEE2E2",
-    textColor: "#DC2626",
+    label: "Rejeté",
+    color: "#ff5757", // Coral red from theme error
   },
   cancelled: {
-    label: "Cancelled",
-    bgColor: "#F3F4F6",
-    textColor: "#6B7280",
+    label: "Annulé",
+    color: "#6B7280", // Neutral gray
   },
 };
 
@@ -46,11 +39,12 @@ export default function RequestStatusChip({
       size={size}
       label={cfg.label}
       sx={{
-        bgcolor: cfg.bgColor,
-        color: cfg.textColor,
+        bgcolor: alpha(cfg.color, 0.08),
+        color: cfg.color,
         fontWeight: 600,
-        borderRadius: 2,
+        borderRadius: 2.5,
         fontSize: size === "small" ? 12 : 14,
+        border: `1px solid ${alpha(cfg.color, 0.25)}`,
         px: 1.5,
         py: 0.5,
         height: "auto",

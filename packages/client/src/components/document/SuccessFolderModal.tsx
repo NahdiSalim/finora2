@@ -8,7 +8,7 @@ import {
 } from "@mui/material";
 import { X } from "lucide-react";
 import { useTheme } from "@mui/material/styles";
-import AddFolder from "../../../public/assets/Animations/SavedFolder.json";
+import AddFolder from "src/assets/Animations/SavedFolder.json";
 import Lottie from "lottie-react";
 
 export interface SuccessFolderModalProps {

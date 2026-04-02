@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ApiError } from '../../common/errors/api-error';
+import { MSG } from '../../common/messages';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto, AppointmentStatus } from './dto/update-appointment.dto';
 import { RespondAppointmentDto, AppointmentAction } from './dto/respond-appointment.dto';
@@ -52,7 +53,7 @@ export class AppointmentService {
 
         if (!matchingRule) {
           throw new ApiError(
-            `Le comptable n'est pas disponible à cette date`,
+            MSG.appointment.accountant_unavailable,
             400,
             'ACCOUNTANT_NOT_AVAILABLE'
           );
@@ -67,7 +68,11 @@ export class AppointmentService {
 
         if (apptHour < ruleStart || apptHour >= ruleEnd) {
           throw new ApiError(
-            `L'heure ${dto.hour} est hors des disponibilités du comptable (${matchingRule.startTime} - ${matchingRule.endTime})`,
+            MSG.appointment.hour_out_of_range(
+              dto.hour,
+              matchingRule.startTime,
+              matchingRule.endTime
+            ),
             400,
             'HOUR_OUT_OF_AVAILABILITY'
           );
@@ -163,7 +168,7 @@ export class AppointmentService {
         }
       }
 
-      return { success: true, message: 'Appointment created successfully', data: appointment };
+      return { success: true, message: MSG.appointment.created, data: appointment };
     } catch (error) {
       console.error('Create appointment error:', error);
       throw error;
@@ -319,7 +324,7 @@ export class AppointmentService {
     });
 
     if (!accountant?.companyId) {
-      throw new ApiError('Accountant must belong to a company', 400, 'NO_COMPANY');
+      throw new ApiError(MSG.user.no_company, 400, 'NO_COMPANY');
     }
 
     const skip = (page - 1) * limit;
@@ -433,7 +438,7 @@ export class AppointmentService {
     });
 
     if (!appointment) {
-      throw new ApiError('Appointment not found', 404, 'APPOINTMENT_NOT_FOUND');
+      throw new ApiError(MSG.appointment.not_found, 404, 'APPOINTMENT_NOT_FOUND');
     }
 
     // Check access rights
@@ -447,7 +452,7 @@ export class AppointmentService {
       appointment.accountantId !== userId &&
       appointment.companyId !== user?.companyId
     ) {
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.appointment.access_denied, 403, 'ACCESS_DENIED');
     }
 
     return {
@@ -465,12 +470,12 @@ export class AppointmentService {
     });
 
     if (!appointment) {
-      throw new ApiError('Appointment not found', 404, 'APPOINTMENT_NOT_FOUND');
+      throw new ApiError(MSG.appointment.not_found, 404, 'APPOINTMENT_NOT_FOUND');
     }
 
     // Check access rights
     if (appointment.clientId !== userId && appointment.accountantId !== userId) {
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.appointment.access_denied, 403, 'ACCESS_DENIED');
     }
 
     const updatedAppointment = await this.prisma.appointment.update({
@@ -517,7 +522,7 @@ export class AppointmentService {
 
     return {
       success: true,
-      message: 'Appointment updated successfully',
+      message: MSG.appointment.updated,
       data: updatedAppointment,
     };
   }
@@ -531,16 +536,16 @@ export class AppointmentService {
     });
 
     if (!appointment) {
-      throw new ApiError('Appointment not found', 404, 'APPOINTMENT_NOT_FOUND');
+      throw new ApiError(MSG.appointment.not_found, 404, 'APPOINTMENT_NOT_FOUND');
     }
 
     // Both client and accountant can respond
     if (appointment.clientId !== userId && appointment.accountantId !== userId) {
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.appointment.access_denied, 403, 'ACCESS_DENIED');
     }
 
     if (appointment.status !== 'pending') {
-      throw new ApiError('Can only respond to pending appointments', 400, 'INVALID_STATUS');
+      throw new ApiError(MSG.appointment.invalid_status, 400, 'INVALID_STATUS');
     }
 
     const isConfirmed = dto.action === AppointmentAction.CONFIRM;
@@ -597,7 +602,7 @@ export class AppointmentService {
 
     return {
       success: true,
-      message: isConfirmed ? 'Appointment confirmed successfully' : 'Appointment rejected',
+      message: isConfirmed ? MSG.appointment.confirmed : MSG.appointment.rejected,
       data: updatedAppointment,
     };
   }
@@ -615,12 +620,12 @@ export class AppointmentService {
     });
 
     if (!appointment) {
-      throw new ApiError('Appointment not found', 404, 'APPOINTMENT_NOT_FOUND');
+      throw new ApiError(MSG.appointment.not_found, 404, 'APPOINTMENT_NOT_FOUND');
     }
 
     // Check access rights
     if (appointment.clientId !== userId && appointment.accountantId !== userId) {
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.appointment.access_denied, 403, 'ACCESS_DENIED');
     }
 
     // Create new appointment with rescheduled status
@@ -691,7 +696,7 @@ export class AppointmentService {
 
     return {
       success: true,
-      message: 'Appointment rescheduled successfully',
+      message: MSG.appointment.rescheduled,
       data: {
         originalAppointment: { id: appointment.id, status: 'rescheduled' },
         newAppointment,
@@ -708,12 +713,12 @@ export class AppointmentService {
     });
 
     if (!appointment) {
-      throw new ApiError('Appointment not found', 404, 'APPOINTMENT_NOT_FOUND');
+      throw new ApiError(MSG.appointment.not_found, 404, 'APPOINTMENT_NOT_FOUND');
     }
 
     // Check access rights
     if (appointment.clientId !== userId && appointment.accountantId !== userId) {
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.appointment.access_denied, 403, 'ACCESS_DENIED');
     }
 
     const updatedAppointment = await this.prisma.appointment.update({
@@ -747,7 +752,7 @@ export class AppointmentService {
 
     return {
       success: true,
-      message: 'Appointment cancelled successfully',
+      message: MSG.appointment.cancelled,
       data: updatedAppointment,
     };
   }
@@ -757,12 +762,12 @@ export class AppointmentService {
     });
 
     if (!appointment) {
-      throw new ApiError('Appointment not found', 404, 'APPOINTMENT_NOT_FOUND');
+      throw new ApiError(MSG.appointment.not_found, 404, 'APPOINTMENT_NOT_FOUND');
     }
 
     // Only client can delete their own appointment
     if (appointment.clientId !== userId) {
-      throw new ApiError('Only appointment creator can delete', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.appointment.access_denied, 403, 'ACCESS_DENIED');
     }
 
     await this.prisma.appointment.delete({
@@ -771,7 +776,7 @@ export class AppointmentService {
 
     return {
       success: true,
-      message: 'Appointment deleted successfully',
+      message: MSG.appointment.deleted,
     };
   }
 
@@ -787,13 +792,13 @@ export class AppointmentService {
     });
 
     if (dto.isRecurring && dto.dayOfWeek === undefined) {
-      throw new ApiError('dayOfWeek is required for recurring slots', 400, 'MISSING_DAY');
+      throw new ApiError(MSG.availability.missing_day, 400, 'MISSING_DAY');
     }
     if (!dto.isRecurring && !dto.specificDate) {
-      throw new ApiError('specificDate is required for one-off slots', 400, 'MISSING_DATE');
+      throw new ApiError(MSG.availability.missing_date, 400, 'MISSING_DATE');
     }
     if (dto.startTime >= dto.endTime) {
-      throw new ApiError('startTime must be before endTime', 400, 'INVALID_TIME');
+      throw new ApiError(MSG.availability.invalid_time, 400, 'INVALID_TIME');
     }
 
     const availability = await this.prisma.availability.create({
@@ -809,7 +814,7 @@ export class AppointmentService {
       },
     });
 
-    return { success: true, message: 'Availability created', data: availability };
+    return { success: true, message: MSG.availability.created, data: availability };
   }
 
   /**
@@ -868,14 +873,14 @@ export class AppointmentService {
   ) {
     const slot = await this.prisma.availability.findUnique({ where: { id: availabilityId } });
 
-    if (!slot) throw new ApiError('Availability not found', 404, 'NOT_FOUND');
+    if (!slot) throw new ApiError(MSG.availability.not_found, 404, 'NOT_FOUND');
     if (slot.accountantId !== accountantId)
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.appointment.access_denied, 403, 'ACCESS_DENIED');
 
     const startTime = dto.startTime ?? slot.startTime;
     const endTime = dto.endTime ?? slot.endTime;
     if (startTime >= endTime) {
-      throw new ApiError('startTime must be before endTime', 400, 'INVALID_TIME');
+      throw new ApiError(MSG.availability.invalid_time, 400, 'INVALID_TIME');
     }
 
     const updated = await this.prisma.availability.update({
@@ -888,7 +893,7 @@ export class AppointmentService {
       },
     });
 
-    return { success: true, message: 'Availability updated', data: updated };
+    return { success: true, message: MSG.availability.updated, data: updated };
   }
 
   /**
@@ -897,13 +902,13 @@ export class AppointmentService {
   async deleteAvailability(availabilityId: number, accountantId: number) {
     const slot = await this.prisma.availability.findUnique({ where: { id: availabilityId } });
 
-    if (!slot) throw new ApiError('Availability not found', 404, 'NOT_FOUND');
+    if (!slot) throw new ApiError(MSG.availability.not_found, 404, 'NOT_FOUND');
     if (slot.accountantId !== accountantId)
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.appointment.access_denied, 403, 'ACCESS_DENIED');
 
     await this.prisma.availability.delete({ where: { id: availabilityId } });
 
-    return { success: true, message: 'Availability deleted' };
+    return { success: true, message: MSG.availability.deleted };
   }
 
   async getConfirmedThisMonth(userId: number) {
@@ -956,7 +961,7 @@ export class AppointmentService {
       select: { role: true, companyId: true },
     });
 
-    if (!user?.companyId) throw new ApiError('Utilisateur sans compagnie', 400, 'NO_COMPANY');
+    if (!user?.companyId) throw new ApiError(MSG.user.no_company, 400, 'NO_COMPANY');
 
     const isAccountant = (user as any)?.role === 'ACCOUNTANT';
 
@@ -1074,7 +1079,7 @@ export class AppointmentService {
     const leave = await this.prisma.accountantLeave.findUnique({ where: { id: leaveId } });
     if (!leave) throw new ApiError('Congé introuvable', 404, 'NOT_FOUND');
     if (leave.accountantId !== accountantId)
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.appointment.access_denied, 403, 'ACCESS_DENIED');
     await this.prisma.accountantLeave.delete({ where: { id: leaveId } });
     return { success: true, message: 'Congé supprimé' };
   }
@@ -1085,9 +1090,9 @@ export class AppointmentService {
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
     });
-    if (!appointment) throw new ApiError('Appointment not found', 404, 'APPOINTMENT_NOT_FOUND');
+    if (!appointment) throw new ApiError(MSG.appointment.not_found, 404, 'APPOINTMENT_NOT_FOUND');
     if (appointment.clientId !== userId && appointment.accountantId !== userId)
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.appointment.access_denied, 403, 'ACCESS_DENIED');
 
     // Save report history
     await this.prisma.appointmentReport.create({
@@ -1159,9 +1164,9 @@ export class AppointmentService {
 
   async getAppointmentHistory(appointmentId: number, userId: number) {
     const appointment = await this.prisma.appointment.findUnique({ where: { id: appointmentId } });
-    if (!appointment) throw new ApiError('Appointment not found', 404, 'APPOINTMENT_NOT_FOUND');
+    if (!appointment) throw new ApiError(MSG.appointment.not_found, 404, 'APPOINTMENT_NOT_FOUND');
     if (appointment.clientId !== userId && appointment.accountantId !== userId)
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+      throw new ApiError(MSG.appointment.access_denied, 403, 'ACCESS_DENIED');
 
     const history = await this.prisma.appointmentReport.findMany({
       where: { appointmentId },
@@ -1233,5 +1238,69 @@ export class AppointmentService {
         },
       },
     ];
+  }
+
+  async getChatAccessibleAppointmentsByClient(
+    clientId: number,
+    accountantId: number,
+    page: number = 1,
+    limit: number = 5
+  ) {
+    const accountant = await this.prisma.user.findUnique({
+      where: { id: accountantId },
+      select: { companyId: true },
+    });
+
+    if (!accountant?.companyId) {
+      throw new ApiError(
+        'Accountant not found or not associated with a company',
+        403,
+        'ACCESS_DENIED'
+      );
+    }
+
+    const client = await this.prisma.user.findUnique({
+      where: { id: clientId },
+      select: { id: true, companyId: true },
+    });
+
+    if (!client) {
+      throw new ApiError('Client not found', 404, 'CLIENT_NOT_FOUND');
+    }
+
+    const where = {
+      clientId: clientId,
+      status: { notIn: ['cancelled', 'rejected'] },
+    };
+
+    const [appointments, total] = await Promise.all([
+      this.prisma.appointment.findMany({
+        where,
+        select: {
+          id: true,
+          title: true,
+          date: true,
+          hour: true,
+          status: true,
+          type: true,
+          createdAt: true,
+        },
+        orderBy: { date: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.appointment.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: appointments,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 }

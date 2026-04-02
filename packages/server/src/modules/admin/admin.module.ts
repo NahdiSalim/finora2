@@ -2,17 +2,13 @@ import { Module } from '@nestjs/common';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { PrismaModule } from 'prisma/prisma.module';
-import { MailModule } from '../mail/mail.module';
-import { AuthService } from '../auth/auth.service';
-import { HashService } from 'src/common/crypto/hash.service';
-import { JwtTokenService } from 'src/common/jwt/jwt-token.service';
-import { JwtService } from '@nestjs/jwt';
-import { CommonModule } from 'src/common/common.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [PrismaModule, MailModule, CommonModule],
+  imports: [PrismaModule, AuthModule],
+  // CommonModule and MailModule are @Global() — no need to import here
   controllers: [AdminController],
-  providers: [AdminService, AuthService, HashService, JwtTokenService, JwtService],
+  providers: [AdminService],
   exports: [AdminService],
 })
 export class AdminModule {}

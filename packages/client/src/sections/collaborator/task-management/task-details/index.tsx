@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Box, Card, useTheme, CircularProgress, Alert } from "@mui/material";
-import { Loader2, Check, Send } from "lucide-react";
+import { Loader2, Check, Send, Info, FileText } from "lucide-react";
 import { PageHeader } from "src/layouts/components/page-header";
 import { useDashboardBase } from "src/hooks/useDashboardBase";
 import { useAppSelector } from "src/hooks/use-redux";
@@ -172,7 +172,7 @@ export default function TaskDetailsView() {
 
     if (task.status === "completed" && isAccountant) {
       return {
-        label: "Marquer comme à revoir",
+        label: "Marquer en révision",
         icon: <Send size={18} />,
         onClick: handleSubmitForReview,
         variant: "contained" as const,
@@ -271,10 +271,12 @@ export default function TaskDetailsView() {
                 {
                   id: "details",
                   label: "Détails de la tâche",
+                  icon: <Info />,
                 },
                 {
                   id: "documents",
                   label: "Documents",
+                  icon: <FileText />,
                 },
               ]}
               activeTab={activeTab}

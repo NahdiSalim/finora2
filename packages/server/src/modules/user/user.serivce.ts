@@ -3,74 +3,115 @@ import { PrismaService } from 'prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ApiError } from 'src/common/errors/api-error';
 import { errors } from 'src/common/errors/errors';
+import { MSG } from 'src/common/messages';
 import { UpdateUserDto } from './update-user.dto';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { Prisma } from '@prisma/client';
-import { HashService } from 'src/common/crypto/hash.service';
 import { JwtTokenService } from 'src/common/jwt/jwt-token.service';
-import { FileUploadService, FileCategory } from 'src/common/services/file-upload.service';
 import { MinioService } from 'src/common/services/minio.service';
 import { UserStatus } from 'src/common/enums/user-status.enum';
 import * as bcrypt from 'bcrypt';
 import { stringify } from 'csv-stringify/sync';
+import { RoleCode } from 'src/common/enums/role.enum';
 
 @Injectable()
 export class UserService {
   constructor(
     private prisma: PrismaService,
-    private hashService: HashService,
     private jwtTokenService: JwtTokenService,
-    private fileUploadService: FileUploadService,
     private minioService: MinioService
   ) {}
 
-  async getAll(page: number = 1, limit: number = 10, search?: string) {
+  async getAll(
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+    role?: string,
+    status?: string
+  ) {
     const skip = (page - 1) * limit;
-    const where: Prisma.UserWhereInput = {};
+    const where: Prisma.UserWhereInput = {
+      role: { code: { not: 'ADMINISTRATOR' } },
+    };
 
     if (search) {
       where.OR = [
         { username: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } },
         { phone: { contains: search, mode: 'insensitive' } },
-        {
-          role: {
-            OR: [
-              { nameFr: { contains: search, mode: 'insensitive' } },
-              { nameEn: { contains: search, mode: 'insensitive' } },
-            ],
-          },
-        },
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
       ];
     }
 
-    const [total, data] = await Promise.all([
-      this.prisma.user.count(),
+    if (role) {
+      where.role = { code: { equals: role.toUpperCase(), not: 'ADMINISTRATOR' } };
+    }
+
+    if (status) {
+      where.status = status;
+    }
+
+    const [total, data, roleCounts] = await Promise.all([
+      this.prisma.user.count({ where }),
       this.prisma.user.findMany({
         where,
         skip,
         take: limit,
-        include: {
-          role: {
-            select: {
-              nameFr: true,
-              nameEn: true,
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          photo: true,
+          status: true,
+          isActive: true,
+          createdAt: true,
+          role: { select: { code: true, nameFr: true, nameEn: true } },
+          company: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.user
+        .groupBy({
+          by: ['id_role'],
+          _count: { id: true },
+          where: {
+            role: {
+              code: { in: ['ACCOUNTANT', 'COLLABORATOR', 'CLIENT'] },
             },
           },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      }),
+        })
+        .then(async (groups) => {
+          const roles = await this.prisma.role.findMany({
+            where: { code: { in: ['ACCOUNTANT', 'COLLABORATOR', 'CLIENT'] } },
+            select: { id: true, code: true },
+          });
+          const map: Record<string, number> = { ALL: 0, ACCOUNTANT: 0, COLLABORATOR: 0, CLIENT: 0 };
+          for (const g of groups) {
+            const r = roles.find((r) => r.id === g.id_role);
+            if (r) {
+              map[r.code] = g._count.id;
+              map['ALL'] += g._count.id;
+            }
+          }
+          return map;
+        }),
     ]);
 
     return {
+      success: true,
       data,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      counts: roleCounts,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 
@@ -163,24 +204,249 @@ export class UserService {
     }
   }
 
-  async getById(id: number) {
+  async getById(id: number, currentUserId?: number) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      include: {
-        role: {
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        photo: true,
+        coverPhoto: true,
+        cin: true,
+        diploma: true,
+        position: true,
+        department: true,
+        status: true,
+        isActive: true,
+        lastLogin: true,
+        createdAt: true,
+        updatedAt: true,
+        role: { select: { id: true, code: true, nameFr: true, nameEn: true } },
+        company: {
           select: {
-            nameFr: true,
-            nameEn: true,
+            id: true,
+            name: true,
+            legalName: true,
+            email: true,
+            phone: true,
+            numWhatsapp: true,
+            address: true,
+            city: true,
+            postalCode: true,
+            country: true,
+            countryCode: true,
+            website: true,
+            siret: true,
+            vatNumber: true,
+            legalForm: true,
+            rne: true,
+            rneFile: true,
+            patentNumber: true,
+            patentFile: true,
+            creationDate: true,
+            capital: true,
+            activityCode: true,
+            sector: true,
+            employeeCount: true,
+            type: true,
+            description: true,
+            experience: true,
+            specialties: true,
+            rating: true,
+            numberOfReviews: true,
+            logo: true,
+            status: true,
+            createdAt: true,
           },
+        },
+        documents: {
+          where: { isFolder: false, status: 'active' },
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            category: true,
+            size: true,
+            url: true,
+            processingStatus: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
         },
       },
     });
 
-    if (!user) {
-      throw new NotFoundException(`User with id ${id} not found`);
+    if (!user) throw new ApiError(MSG.user.not_found, 404, 'NOT_FOUND');
+
+    const roleCode = user.role?.code;
+    const PRESIGN_TTL = 7 * 24 * 60 * 60; // 7 days
+
+    const presign = async (path: string | null | undefined): Promise<string | null> => {
+      if (!path) return null;
+      try {
+        return await this.minioService.getPresignedUrl(path, PRESIGN_TTL);
+      } catch {
+        return path;
+      }
+    };
+
+    // ── COLLABORATOR ──────────────────────────────────────────────────────────
+    if (roleCode === RoleCode.COLLABORATOR) {
+      const photoUrl = await presign(user.photo);
+      const coverPhotoUrl = await presign(user.coverPhoto);
+
+      return {
+        success: true,
+        data: {
+          id: user.id,
+          id_role: user.role?.id ?? null,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          phone: user.phone,
+          companyId: user.company?.id ?? null,
+          position: user.position,
+          department: user.department,
+          cin: user.cin,
+          diploma: user.diploma,
+          photo: photoUrl,
+          coverPhoto: coverPhotoUrl,
+          lastLogin: user.lastLogin,
+          isActive: user.isActive,
+          status: user.status,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+          role: user.role
+            ? { nameFr: user.role.nameFr, nameEn: user.role.nameEn, code: user.role.code }
+            : null,
+        },
+      };
     }
 
-    return user;
+    // ── ACCOUNTANT ────────────────────────────────────────────────────────────
+    if (roleCode === RoleCode.ACCOUNTANT) {
+      const photoUrl = await presign(user.photo);
+      const coverPhotoUrl = await presign(user.coverPhoto);
+      const logoUrl = await presign(user.company?.logo);
+      const patentFileUrl = await presign(user.company?.patentFile);
+
+      const rneFilePath =
+        user.company?.rneFile || (user.company?.rne?.includes('/') ? user.company.rne : null);
+      const rneFileUrl = await presign(rneFilePath);
+
+      return {
+        success: true,
+        data: {
+          id: user.id,
+          name: `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim(),
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          phone: user.phone,
+          photoUrl,
+          coverPhotoUrl,
+          specialty: user.position,
+          department: user.department,
+          diploma: user.diploma,
+          company: user.company
+            ? {
+                id: user.company.id,
+                name: user.company.name,
+                description: user.company.description,
+                experience: user.company.experience,
+                employeeCount: user.company.employeeCount
+                  ? String(user.company.employeeCount)
+                  : null,
+                sector: user.company.sector,
+                city: user.company.city,
+                address: user.company.address,
+                postalCode: user.company.postalCode,
+                phone: user.company.phone,
+                numWhatsapp: user.company.numWhatsapp,
+                email: user.company.email,
+                website: user.company.website,
+                siret: user.company.siret,
+                vatNumber: user.company.vatNumber,
+                legalForm: user.company.legalForm,
+                patentNumber: user.company.patentNumber,
+                patentFileUrl,
+                rne: user.company.rne?.includes('/') ? null : user.company.rne,
+                rneFileUrl,
+                logoUrl,
+                specialties: user.company.specialties || [],
+                rating: user.company.rating || 0,
+                numberOfReviews: user.company.numberOfReviews || 0,
+              }
+            : null,
+        },
+      };
+    }
+
+    // ── CLIENT ────────────────────────────────────────────────────────────────
+    if (roleCode === RoleCode.CLIENT) {
+      const patentFileUrl = await presign(user.company?.patentFile);
+
+      // Fetch relationship with the current user's company (if caller is an accountant)
+      let relationshipStatus: string | null = null;
+      let relationshipStart: Date | null = null;
+      if (currentUserId && currentUserId !== id && user.company?.id) {
+        const caller = await this.prisma.user.findUnique({
+          where: { id: currentUserId },
+          select: { companyId: true },
+        });
+        if (caller?.companyId) {
+          const rel = await this.prisma.clientAccountingFirmRelationship.findFirst({
+            where: {
+              clientCompanyId: user.company.id,
+              accountingFirmId: caller.companyId,
+            },
+            select: { status: true, relationshipStart: true },
+            orderBy: { createdAt: 'desc' },
+          });
+          if (rel) {
+            relationshipStatus = rel.status;
+            relationshipStart = rel.relationshipStart;
+          }
+        }
+      }
+
+      return {
+        success: true,
+        data: {
+          id: user.id,
+          fullName: `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim(),
+          email: user.email,
+          phone: user.phone,
+          company: user.company
+            ? {
+                name: user.company.name,
+                siret: user.company.siret,
+                vatNumber: user.company.vatNumber,
+                legalForm: user.company.legalForm,
+                address: user.company.address,
+                city: user.company.city,
+                postalCode: user.company.postalCode,
+                country: user.company.country,
+                patentFile: user.company.patentFile,
+                patentFileUrl,
+              }
+            : null,
+          status: user.status,
+          relationshipStatus,
+          relationshipStart,
+          createdAt: user.createdAt,
+        },
+      };
+    }
+
+    // ── Fallback (ADMINISTRATOR, etc.) ────────────────────────────────────────
+    return { success: true, data: user };
   }
 
   async update(
@@ -305,73 +571,40 @@ export class UserService {
     return user;
   }
 
-  async toggleActive(targetUserId: number) {
+  async updateUserStatus(targetUserId: number, action: 'activate' | 'suspend', reason?: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: targetUserId },
       include: { role: true },
     });
 
-    if (!user) {
-      throw new ApiError(
-        errors.NOT_FOUND.message,
-        errors.NOT_FOUND.code,
-        errors.NOT_FOUND.errorCode
-      );
-    }
+    if (!user) throw new ApiError(MSG.user.not_found, 404, 'NOT_FOUND');
+    if (user.role?.id === 1) throw new ApiError(MSG.auth.forbidden, 403, 'FORBIDDEN');
 
-    if (user.role?.id === 1) {
-      throw new ApiError(
-        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.message,
-        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.code,
-        errors.ADMIN_ROLE_UPDATE_FORBIDDEN.errorCode
-      );
-    }
-
-    const newStatus = user.status === UserStatus.ACTIVE ? UserStatus.SUSPENDED : UserStatus.ACTIVE;
+    const newStatus = action === 'activate' ? UserStatus.ACTIVE : UserStatus.SUSPENDED;
 
     const updatedUser = await this.prisma.user.update({
       where: { id: targetUserId },
       data: { status: newStatus },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        status: true,
+      },
     });
 
-    return {
-      message:
-        updatedUser.status === UserStatus.ACTIVE
-          ? 'User has been activated!'
-          : 'User has been deactivated!',
-      user: updatedUser,
-    };
+    const message = newStatus === UserStatus.ACTIVE ? MSG.user.activated : MSG.user.suspended;
+    return { success: true, message, data: updatedUser };
+  }
+
+  async toggleActive(targetUserId: number) {
+    return this.updateUserStatus(targetUserId, 'activate');
   }
 
   async suspendUser(targetUserId: number, reason?: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: targetUserId },
-      include: { role: true },
-    });
-
-    if (!user) {
-      throw new ApiError(
-        errors.NOT_FOUND.message,
-        errors.NOT_FOUND.code,
-        errors.NOT_FOUND.errorCode
-      );
-    }
-
-    // Prevent suspending admin accounts
-    if (user.role?.id === 1) {
-      throw new ApiError('Cannot suspend administrator accounts', 403, 'FORBIDDEN_SUSPEND_ADMIN');
-    }
-
-    const updatedUser = await this.prisma.user.update({
-      where: { id: targetUserId },
-      data: { status: UserStatus.SUSPENDED },
-    });
-
-    return {
-      success: true,
-      message: 'User account suspended successfully',
-      user: updatedUser,
-    };
+    return this.updateUserStatus(targetUserId, 'suspend', reason);
   }
 
   async exportUsersCSV(lang: 'fr' | 'en' = 'fr'): Promise<Buffer> {

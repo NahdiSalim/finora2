@@ -63,6 +63,6 @@ CMD ["sh", "-lc", "\
   fi; \
   node scripts/merge-prisma-models.js; \
   npx prisma generate --schema ./prisma/schema.prisma; \
-  npx prisma db push --schema ./prisma/schema.prisma --url \"$DATABASE_URL\"; \
+  npx prisma db push --accept-data-loss --schema ./prisma/schema.prisma --url \"$DATABASE_URL\"; \
   exec node dist/src/main.js \
 "]

@@ -39,13 +39,23 @@ export interface Task {
   assignee: TaskUser;
   createdById: number;
   createdBy: TaskUser;
-  clientId: number | null;
-  client: TaskUser | null;
   companyId: number | null;
   company: {
     id: number;
     name: string;
   } | null;
+  taskClients?: Array<{
+    client: {
+      id: number;
+      firstName: string | null;
+      lastName: string | null;
+      email: string;
+      company: {
+        id: number;
+        name: string;
+      } | null;
+    };
+  }>;
   attachments: string[];
   comments: TaskComment[];
   createdAt: string;
@@ -77,7 +87,7 @@ export interface CreateTaskDto {
   priority?: "low" | "medium" | "high" | "urgent";
   dueDate?: string;
   assigneeIds: number[];
-  clientId?: number;
+  clientIds?: number[];
 }
 
 export interface UpdateTaskDto {
@@ -194,6 +204,48 @@ export const tasksApi = createApi({
               { type: "Tasks", id: "MY_ASSIGNED_LIST" },
             ]
           : [{ type: "Tasks", id: "MY_ASSIGNED_LIST" }],
+    }),
+
+    // Get my clients (Accountant) - from active relationships
+    getMyClients: builder.query<
+      {
+        success: boolean;
+        data: Array<{
+          id: number;
+          firstName: string | null;
+          lastName: string | null;
+          email: string;
+          company: {
+            id: number;
+            name: string;
+            logo: string | null;
+          };
+        }>;
+        pagination: {
+          total: number;
+          page: number;
+          limit: number;
+          totalPages: number;
+        };
+      },
+      {
+        page?: number;
+        limit?: number;
+        search?: string;
+      }
+    >({
+      query: ({ page = 1, limit = 20, search } = {}) => {
+        const params = new URLSearchParams();
+        params.append("page", page.toString());
+        params.append("limit", limit.toString());
+        if (search?.trim()) params.append("search", search.trim());
+
+        return {
+          url: `/tasks/my-clients?${params.toString()}`,
+          method: "GET",
+        };
+      },
+      providesTags: [{ type: "Tasks", id: "MY_CLIENTS" }],
     }),
 
     // Get task by ID
@@ -347,6 +399,7 @@ export const tasksApi = createApi({
 export const {
   useGetMyCreatedTasksQuery,
   useGetMyTasksQuery,
+  useGetMyClientsQuery,
   useGetTaskByIdQuery,
   useCreateTaskMutation,
   useUpdateTaskMutation,

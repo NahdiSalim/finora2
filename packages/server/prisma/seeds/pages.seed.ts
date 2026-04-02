@@ -23,10 +23,17 @@ export async function seedPages(prisma: PrismaClient) {
   });
   const gestionTaches = await prisma.feature.findUnique({ where: { slug: 'gestion-taches' } });
   const gestionClients = await prisma.feature.findUnique({ where: { slug: 'gestion-clients' } });
+  const gestionUtilisateurs = await prisma.feature.findUnique({
+    where: { slug: 'gestion-utilisateurs' },
+  });
 
   const pages = [
     // Dashboard
     { PageUrl: '/dashboard', slug: 'dashboard-view', featureId: dashboard!.id },
+
+    // Gestion des utilisateurs (super admin)
+    { PageUrl: '/users', slug: 'users-list', featureId: gestionUtilisateurs!.id },
+    { PageUrl: '/users/:id', slug: 'user-detail', featureId: gestionUtilisateurs!.id },
 
     // Gestion des comptes comptables (Admin)
     { PageUrl: '/admin/accountants', slug: 'accountants-list', featureId: gestionComptables!.id },

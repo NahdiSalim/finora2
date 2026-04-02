@@ -11,9 +11,10 @@ import Popover from "@mui/material/Popover";
 import Typography from "@mui/material/Typography";
 import IconButton from "@mui/material/IconButton";
 import ListSubheader from "@mui/material/ListSubheader";
+import CircularProgress from "@mui/material/CircularProgress";
 import { useTheme, alpha } from "@mui/material/styles";
 
-import { Bell } from "lucide-react";
+import { Bell, BellDot } from "lucide-react";
 
 import { Iconify } from "src/components/iconify";
 import { Scrollbar } from "src/components/scrollbar";
@@ -69,14 +70,17 @@ export function NotificationsPopover({
   const theme = useTheme();
   const { showAlert } = useAlert();
   const [processingId, setProcessingId] = useState<number | null>(null);
-  const { data: notificationsData, refetch: refetchNotifications } =
-    useGetNotificationsQuery(
-      { limit: 20, offset: 0 },
-      {
-        refetchOnFocus: false,
-        refetchOnReconnect: false,
-      },
-    );
+  const {
+    data: notificationsData,
+    refetch: refetchNotifications,
+    isLoading,
+  } = useGetNotificationsQuery(
+    { limit: 20, offset: 0 },
+    {
+      refetchOnFocus: false,
+      refetchOnReconnect: false,
+    },
+  );
   const [markAsRead] = useMarkNotificationAsReadMutation();
   const [markAllAsRead] = useMarkAllNotificationsAsReadMutation();
   const [respondToInvitation] = useRespondToInvitationMutation();
@@ -252,6 +256,39 @@ export function NotificationsPopover({
       .catch(() => showAlert("Erreur lors du marquage", "error"));
   }, [markAllAsRead, refetchNotifications, showAlert]);
 
+  // Render empty state if no notifications
+  const renderEmptyState = () => (
+    <Box
+      sx={{
+        py: 8,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+      }}
+    >
+      <BellDot size={20} sx={{ color: "text.disabled", mb: 1, opacity: 0.6 }} />
+      <Typography variant="body2" color="text.disabled">
+        Aucune notification
+      </Typography>
+    </Box>
+  );
+
+  // Render loading skeleton
+  const renderLoading = () => (
+    <Box
+      sx={{
+        py: 8,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    >
+      <CircularProgress size={32} />
+    </Box>
+  );
+
   return (
     <>
       <Button
@@ -270,11 +307,16 @@ export function NotificationsPopover({
             "border-color",
             "background-color",
             "color",
+            "transform",
           ]),
           "&:hover": {
             borderColor: theme.palette.primary.main,
             backgroundColor: alpha(theme.palette.primary.main, 0.08),
             color: theme.palette.primary.main,
+            transform: "scale(1.02)",
+          },
+          "&:active": {
+            transform: "scale(0.98)",
           },
           ...(openPopover && {
             borderColor: theme.palette.primary.main,
@@ -285,22 +327,32 @@ export function NotificationsPopover({
         }}
         {...other}
       >
-        <Bell />
+        <Bell size={20} />
 
-        {/* Red Dot Badge for Unread */}
+        {/* Badge for unread count */}
         {hasUnread && (
           <Box
             sx={{
               position: "absolute",
-              top: 8,
-              right: 8,
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
+              top: 4,
+              right: 4,
+              minWidth: 18,
+              height: 18,
+              borderRadius: 9,
               backgroundColor: theme.palette.error.main,
-              border: `2px solid ${theme.palette.background.paper}`,
+              color: theme.palette.common.white,
+              fontSize: "0.65rem",
+              fontWeight: "bold",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              px: 0.5,
+              lineHeight: 1,
+              transform: "translate(25%, -25%)",
             }}
-          />
+          >
+            {totalUnRead > 9 ? "9+" : totalUnRead}
+          </Box>
         )}
       </Button>
 
@@ -317,33 +369,42 @@ export function NotificationsPopover({
               overflow: "hidden",
               display: "flex",
               flexDirection: "column",
-              mt: 1,
-              boxShadow: theme.shadows[8],
+              mt: 1.5,
+              borderRadius: 2.5,
+              boxShadow: theme.shadows[16],
+              transition: theme.transitions.create(["transform", "opacity"], {
+                duration: theme.transitions.duration.short,
+              }),
             },
           },
         }}
       >
+        {/* Header */}
         <Box
           sx={{
-            py: 2,
-            pl: 2.5,
-            pr: 1.5,
+            py: 1.5,
+            px: 2,
             display: "flex",
             alignItems: "center",
+            justifyContent: "space-between",
+            borderBottom: `1px solid ${theme.palette.divider}`,
           }}
         >
-          <Box sx={{ flexGrow: 1 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
               Notifications
             </Typography>
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              You have {totalUnRead} unread message
-              {totalUnRead !== 1 ? "s" : ""}
+              {totalUnRead === 0
+                ? "Aucun message non lu"
+                : `${totalUnRead} message${totalUnRead > 1 ? "s" : ""} non lu${
+                    totalUnRead > 1 ? "s" : ""
+                  }`}
             </Typography>
           </Box>
 
           {hasUnread && (
-            <Tooltip title="Mark all as read">
+            <Tooltip title="Tout marquer comme lu">
               <IconButton
                 color="primary"
                 onClick={handleMarkAllAsRead}
@@ -354,71 +415,103 @@ export function NotificationsPopover({
                   },
                 }}
               >
-                <Iconify icon="eva:done-all-fill" />
+                <Iconify icon="eva:done-all-fill" width={20} />
               </IconButton>
             </Tooltip>
           )}
         </Box>
 
-        <Divider sx={{ borderStyle: "dashed" }} />
-
+        {/* Notification list */}
         <Scrollbar
           fillContent
-          sx={{ minHeight: 240, maxHeight: { xs: 360, sm: "none" } }}
+          sx={{
+            minHeight: 240,
+            maxHeight: { xs: 360, sm: "none" },
+            "& .MuiList-root": {
+              py: 0,
+            },
+          }}
         >
-          <List
-            disablePadding
-            subheader={
-              <ListSubheader
-                disableSticky
-                sx={{ py: 1, px: 2.5, typography: "overline" }}
+          {isLoading ? (
+            renderLoading()
+          ) : notifications.length === 0 ? (
+            renderEmptyState()
+          ) : (
+            <>
+              {/* New section */}
+              <List
+                disablePadding
+                subheader={
+                  <ListSubheader
+                    disableSticky
+                    sx={{
+                      py: 1,
+                      px: 2,
+                      typography: "overline",
+                      fontWeight: 600,
+                      color: "text.secondary",
+                      backgroundColor: "transparent",
+                    }}
+                  >
+                    Nouveau
+                  </ListSubheader>
+                }
               >
-                New
-              </ListSubheader>
-            }
-          >
-            {notifications.slice(0, 2).map((notification) => (
-              <NotificationItem
-                key={notification.id}
-                notification={notification}
-              />
-            ))}
-          </List>
+                {notifications.slice(0, 2).map((notification) => (
+                  <NotificationItem
+                    key={notification.id}
+                    notification={notification}
+                  />
+                ))}
+              </List>
 
-          <List
-            disablePadding
-            subheader={
-              <ListSubheader
-                disableSticky
-                sx={{ py: 1, px: 2.5, typography: "overline" }}
+              {/* Older section */}
+              <List
+                disablePadding
+                subheader={
+                  <ListSubheader
+                    disableSticky
+                    sx={{
+                      py: 1,
+                      px: 2,
+                      typography: "overline",
+                      fontWeight: 600,
+                      color: "text.secondary",
+                      backgroundColor: "transparent",
+                    }}
+                  >
+                    Avant
+                  </ListSubheader>
+                }
               >
-                Before that
-              </ListSubheader>
-            }
-          >
-            {notifications.slice(2, 20).map((notification) => (
-              <NotificationItem
-                key={notification.id}
-                notification={notification}
-              />
-            ))}
-          </List>
+                {notifications.slice(2, 20).map((notification) => (
+                  <NotificationItem
+                    key={notification.id}
+                    notification={notification}
+                  />
+                ))}
+              </List>
+            </>
+          )}
         </Scrollbar>
 
+        {/* Footer with "View all" button */}
         <Divider sx={{ borderStyle: "dashed" }} />
-
-        <Box sx={{ p: 1 }}>
+        <Box sx={{ p: 1.5 }}>
           <Button
             fullWidth
             disableRipple
             color="inherit"
             sx={{
+              borderRadius: 1.5,
+              textTransform: "none",
+              fontWeight: 500,
               "&:hover": {
                 backgroundColor: alpha(theme.palette.primary.main, 0.08),
               },
             }}
           >
-            View all
+            Voir toutes les notifications
           </Button>
         </Box>
       </Popover>

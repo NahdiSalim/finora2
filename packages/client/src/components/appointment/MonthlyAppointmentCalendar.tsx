@@ -114,282 +114,311 @@ export default function MonthlyAppointmentCalendar({
           borderRadius: 2,
           overflow: "hidden",
           bgcolor: "common.white",
+          overflowX: "auto", // allow horizontal scroll on narrow screens
         }}
       >
         {/* Week-day header */}
         <Box
           sx={{
-            display: "grid",
-            gridTemplateColumns: "repeat(7, 1fr)",
-            bgcolor: "grey.50",
+            borderBottom: "1px solid",
+            borderColor: "divider",
           }}
         >
-          {WEEK_DAYS.map((d) => (
-            <Box
-              key={d}
-              sx={{
-                p: 1,
-                borderRight: "1px solid",
-                borderColor: "divider",
-                "&:last-child": { borderRight: 0 },
-              }}
-            >
-              <Typography variant="caption" color="text.secondary">
-                {d}
-              </Typography>
-            </Box>
-          ))}
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: "repeat(7, minmax(100px, 1fr))", // min 100px, grow to fill
+              width: "100%",
+              bgcolor: "grey.50",
+            }}
+          >
+            {WEEK_DAYS.map((d) => (
+              <Box
+                key={d}
+                sx={{
+                  p: { xs: 0.75, sm: 1 },
+                  textAlign: "center",
+                  borderRight: "1px solid",
+                  borderColor: "divider",
+                  "&:last-child": { borderRight: 0 },
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    fontSize: { xs: "0.7rem", sm: "0.75rem" },
+                    fontWeight: 500,
+                  }}
+                >
+                  {d}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
         </Box>
 
         {/* Day cells */}
-        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
-          {cells.map((dayNum, idx) => {
-            const d = new Date(
-              monthDate.getFullYear(),
-              monthDate.getMonth(),
-              dayNum,
-            );
-            const isCurrentMonth = d.getMonth() === monthDate.getMonth();
-            const isToday = isSameDay(d, today);
-            const dayItems = appointmentsByDay[toKey(d)] || [];
-            const col = idx % 7;
+        <Box>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: "repeat(7, minmax(100px, 1fr))",
+              width: "100%",
+            }}
+          >
+            {cells.map((dayNum, idx) => {
+              const d = new Date(
+                monthDate.getFullYear(),
+                monthDate.getMonth(),
+                dayNum,
+              );
+              const isCurrentMonth = d.getMonth() === monthDate.getMonth();
+              const isToday = isSameDay(d, today);
+              const dayItems = appointmentsByDay[toKey(d)] || [];
+              const col = idx % 7;
 
-            return (
-              <Box
-                key={`${toKey(d)}-${idx}`}
-                onClick={() => handleDayClick(dayItems, d)}
-                sx={{
-                  position: "relative",
-                  minHeight: 100,
-                  p: 0.75,
-                  borderTop: "1px solid",
-                  borderRight: col === 6 ? 0 : "1px solid",
-                  borderColor: "divider",
-                  bgcolor: isToday
-                    ? alpha(theme.palette.primary.main, 0.06)
-                    : "transparent",
-                  cursor: dayItems.length > 0 ? "pointer" : "default",
-                  transition: "background-color 0.15s ease",
-                  "&:hover": {
-                    bgcolor:
-                      dayItems.length > 0 ? "action.hover" : "transparent",
-                  },
-                }}
-              >
-                {/* Day number */}
-                <Typography
-                  variant="caption"
+              return (
+                <Box
+                  key={`${toKey(d)}-${idx}`}
+                  onClick={() => handleDayClick(dayItems, d)}
                   sx={{
-                    display: "block",
-                    fontWeight: 600,
-                    fontSize: "0.9rem",
-                    mb: 0.5,
-                    color: isToday
-                      ? "primary.main"
-                      : isCurrentMonth
-                        ? "text.primary"
-                        : "text.disabled",
+                    position: "relative",
+                    height: { xs: 100, sm: 120 }, // fixed height – responsive
+                    overflowY: "auto", // scroll if content exceeds height
+                    p: { xs: 0.5, sm: 0.75 },
+                    borderTop: "1px solid",
+                    borderRight: col === 6 ? 0 : "1px solid",
+                    borderColor: "divider",
+                    bgcolor: isToday
+                      ? alpha(theme.palette.primary.main, 0.06)
+                      : "transparent",
+                    cursor: dayItems.length > 0 ? "pointer" : "default",
+                    transition: "background-color 0.15s ease",
+                    "&:hover": {
+                      bgcolor:
+                        dayItems.length > 0 ? "action.hover" : "transparent",
+                    },
                   }}
                 >
-                  {d.getDate()}
-                </Typography>
-
-                {/* Single appointment: card */}
-                {dayItems.length === 1 && (
-                  <Box
+                  {/* Day number */}
+                  <Typography
+                    variant="caption"
                     sx={{
-                      px: 1,
-                      py: 0.6,
-                      bgcolor: getPalette(dayItems[0].color).bg,
-                      borderLeft: `2px solid ${getPalette(dayItems[0].color).border}`,
-                      overflow: "hidden",
+                      display: "block",
+                      fontWeight: 600,
+                      fontSize: { xs: "0.8rem", sm: "0.9rem" },
+                      mb: 0.5,
+                      color: isToday
+                        ? "primary.main"
+                        : isCurrentMonth
+                          ? "text.primary"
+                          : "text.disabled",
                     }}
                   >
-                    <Typography
-                      noWrap
+                    {d.getDate()}
+                  </Typography>
+
+                  {/* Single appointment: card */}
+                  {dayItems.length === 1 && (
+                    <Box
                       sx={{
-                        display: "block",
-                        fontSize: "0.72rem",
-                        fontWeight: 600,
-                        color: getPalette(dayItems[0].color).text,
-                        lineHeight: 1.3,
-                        mb: 1,
+                        px: { xs: 0.75, sm: 1 },
+                        py: { xs: 0.4, sm: 0.6 },
+                        bgcolor: getPalette(dayItems[0].color).bg,
+                        borderLeft: `2px solid ${getPalette(dayItems[0].color).border}`,
+                        overflow: "hidden",
+                        // No width: 100% → card shrinks to content
                       }}
                     >
-                      {dayItems[0].title}
-                    </Typography>
-                    <Box
-                      sx={{ display: "flex", alignItems: "center", gap: 0.4 }}
-                    >
-                      <AccessTimeIcon
+                      <Typography
+                        noWrap
                         sx={{
-                          fontSize: "0.68rem",
+                          display: "block",
+                          fontSize: { xs: "0.65rem", sm: "0.72rem" },
+                          fontWeight: 600,
                           color: getPalette(dayItems[0].color).text,
+                          lineHeight: 1.3,
+                          mb: { xs: 0.5, sm: 1 },
                         }}
-                      />
+                      >
+                        {dayItems[0].title}
+                      </Typography>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 0.4,
+                        }}
+                      >
+                        <AccessTimeIcon
+                          sx={{
+                            fontSize: { xs: "0.6rem", sm: "0.68rem" },
+                            color: getPalette(dayItems[0].color).text,
+                          }}
+                        />
+                        <Typography
+                          sx={{
+                            fontSize: { xs: "0.6rem", sm: "0.68rem" },
+                            fontWeight: 500,
+                            color: getPalette(dayItems[0].color).text,
+                          }}
+                        >
+                          {formatTime(dayItems[0].startTime)}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {/* Two appointments: both as cards */}
+                  {dayItems.length === 2 && (
+                    <>
+                      {dayItems.map((a) => (
+                        <Box
+                          key={a.id}
+                          sx={{
+                            px: { xs: 0.75, sm: 1 },
+                            py: { xs: 0.4, sm: 0.6 },
+                            bgcolor: getPalette(a.color).bg,
+                            borderLeft: `2px solid ${getPalette(a.color).border}`,
+                            overflow: "hidden",
+                            mb: 0.5,
+                          }}
+                        >
+                          <Typography
+                            noWrap
+                            sx={{
+                              display: "block",
+                              fontSize: { xs: "0.65rem", sm: "0.72rem" },
+                              fontWeight: 600,
+                              color: getPalette(a.color).text,
+                              lineHeight: 1.3,
+                              mb: { xs: 0.5, sm: 1 },
+                            }}
+                          >
+                            {a.title}
+                          </Typography>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 0.4,
+                            }}
+                          >
+                            <AccessTimeIcon
+                              sx={{
+                                fontSize: { xs: "0.6rem", sm: "0.68rem" },
+                                color: getPalette(a.color).text,
+                              }}
+                            />
+                            <Typography
+                              sx={{
+                                fontSize: { xs: "0.6rem", sm: "0.68rem" },
+                                fontWeight: 500,
+                                color: getPalette(a.color).text,
+                              }}
+                            >
+                              {formatTime(a.startTime)}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Three or more appointments: extra count badge */}
+                  {dayItems.length > 2 && (
+                    <Box
+                      sx={{
+                        backgroundColor: theme.palette.secondary.main,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: { xs: 22, sm: 26 },
+                        height: { xs: 22, sm: 26 },
+                        borderRadius: "50%",
+                        position: "absolute",
+                        top: { xs: 4, sm: 6 },
+                        right: { xs: 4, sm: 6 },
+                      }}
+                    >
                       <Typography
                         sx={{
-                          fontSize: "0.68rem",
+                          fontSize: { xs: 10, sm: 12 },
                           fontWeight: 500,
-                          color: getPalette(dayItems[0].color).text,
+                          color: theme.palette.common.white,
                         }}
                       >
-                        {formatTime(dayItems[0].startTime)}
+                        +{dayItems.length - 2}
                       </Typography>
                     </Box>
-                  </Box>
-                )}
+                  )}
 
-                {/* Two appointments: both as cards */}
-                {dayItems.length === 2 && (
-                  <>
-                    {dayItems.map((a) => (
-                      <Box
-                        key={a.id}
-                        sx={{
-                          px: 1,
-                          py: 0.6,
-                          bgcolor: getPalette(a.color).bg,
-                          borderLeft: `2px solid ${getPalette(a.color).border}`,
-                          overflow: "hidden",
-                          mb: 0.5,
-                        }}
-                      >
-                        <Typography
-                          noWrap
-                          sx={{
-                            display: "block",
-                            fontSize: "0.72rem",
-                            fontWeight: 600,
-                            color: getPalette(a.color).text,
-                            lineHeight: 1.3,
-                            mb: 1,
-                          }}
-                        >
-                          {a.title}
-                        </Typography>
-                        <Box
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 0.4,
-                          }}
-                        >
-                          <AccessTimeIcon
-                            sx={{
-                              fontSize: "0.68rem",
-                              color: getPalette(a.color).text,
-                            }}
-                          />
-                          <Typography
-                            sx={{
-                              fontSize: "0.68rem",
-                              fontWeight: 500,
-                              color: getPalette(a.color).text,
-                            }}
-                          >
-                            {formatTime(a.startTime)}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    ))}
-                  </>
-                )}
-
-                {/* Three or more appointments: three colored boxes + extra count */}
-                {dayItems.length > 2 && (
-                  <Box
-                    sx={{
-                      backgroundColor: theme.palette.secondary.main,
-                      display: "flex",
-                      flexDirection: "column",
-                      alignContent: "center",
-                      justifyContent: "center",
-                      textAlign: "center",
-                      width: 26,
-                      height: 26,
-                      borderRadius: "50%",
-                      position: "absolute",
-                      top: 6,
-                      right: 6,
-                    }}
-                  >
-                    <Typography
-                      fontSize={12}
+                  {/* First two appointments (when more than 2) */}
+                  {dayItems.length >= 3 && (
+                    <Box
                       sx={{
-                        fontWeight: 500,
-                        color: theme.palette.common.white,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 0.5,
+                        mt: { xs: 3, sm: 4 },
                       }}
                     >
-                      +{dayItems.length - 2}
-                    </Typography>
-                  </Box>
-                )}
-                {dayItems.length >= 3 && (
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1,
-                      mt: 4,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    {dayItems.slice(0, 2).map((a) => (
-                      <Box
-                        key={a.id}
-                        sx={{
-                          px: 1,
-                          py: 0.6,
-                          bgcolor: getPalette(a.color).bg,
-                          borderLeft: `2px solid ${getPalette(a.color).border}`,
-                          overflow: "hidden",
-                          mb: 0.5,
-                        }}
-                      >
-                        <Typography
-                          noWrap
-                          sx={{
-                            display: "block",
-                            fontSize: "0.72rem",
-                            fontWeight: 600,
-                            color: getPalette(a.color).text,
-                            lineHeight: 1.3,
-                            mb: 1,
-                          }}
-                        >
-                          {a.title}
-                        </Typography>
+                      {dayItems.slice(0, 2).map((a) => (
                         <Box
+                          key={a.id}
                           sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 0.4,
+                            px: { xs: 0.75, sm: 1 },
+                            py: { xs: 0.4, sm: 0.6 },
+                            bgcolor: getPalette(a.color).bg,
+                            borderLeft: `2px solid ${getPalette(a.color).border}`,
+                            overflow: "hidden",
                           }}
                         >
-                          <AccessTimeIcon
-                            sx={{
-                              fontSize: "0.68rem",
-                              color: getPalette(a.color).text,
-                            }}
-                          />
                           <Typography
+                            noWrap
                             sx={{
-                              fontSize: "0.68rem",
-                              fontWeight: 500,
+                              display: "block",
+                              fontSize: { xs: "0.65rem", sm: "0.72rem" },
+                              fontWeight: 600,
                               color: getPalette(a.color).text,
+                              lineHeight: 1.3,
+                              mb: { xs: 0.5, sm: 1 },
                             }}
                           >
-                            {formatTime(a.startTime)}
+                            {a.title}
                           </Typography>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 0.4,
+                            }}
+                          >
+                            <AccessTimeIcon
+                              sx={{
+                                fontSize: { xs: "0.6rem", sm: "0.68rem" },
+                                color: getPalette(a.color).text,
+                              }}
+                            />
+                            <Typography
+                              sx={{
+                                fontSize: { xs: "0.6rem", sm: "0.68rem" },
+                                fontWeight: 500,
+                                color: getPalette(a.color).text,
+                              }}
+                            >
+                              {formatTime(a.startTime)}
+                            </Typography>
+                          </Box>
                         </Box>
-                      </Box>
-                    ))}
-                  </Box>
-                )}
-              </Box>
-            );
-          })}
+                      ))}
+                    </Box>
+                  )}
+                </Box>
+              );
+            })}
+          </Box>
         </Box>
       </Box>
 

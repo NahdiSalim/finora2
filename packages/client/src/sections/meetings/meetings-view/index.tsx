@@ -977,7 +977,7 @@ export default function MeetingsView() {
       caption="Suivi de vos rendez-vous"
       actions={headerActions}
     >
-      {/* ── CustomTabs + search ── */}
+      {/* ── CustomTabs ── */}
       <Box mt={2}>
         <FolderTabNavigation
           activeTab={tab}
@@ -996,22 +996,16 @@ export default function MeetingsView() {
             p: 2,
           }}
         >
-          {/* Search */}
-          <Box
-            sx={{ display: "flex", justifyContent: "flex-end", mb: 2, mt: -8 }}
-          >
-            <Box sx={{ width: { xs: "100%", sm: 300 } }}>
-              <CustomInput
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Rechercher par client ..."
-                startIcon={<Search />}
-              />
-            </Box>
-          </Box>
-
           {/* Appointment list */}
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
+            {/* Search */}
+            <CustomInput
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher par client ..."
+              startIcon={<Search />}
+              fullWidth
+            />
             {isLoading ? (
               <Typography color="text.secondary">Chargement...</Typography>
             ) : appointments.length === 0 ? (

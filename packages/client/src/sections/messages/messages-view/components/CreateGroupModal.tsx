@@ -42,8 +42,6 @@ export default function CreateGroupModal({
   );
   const [searchTerm, setSearchTerm] = useState("");
 
-  console.log("[CreateGroupModal] Render state:", { open, isMobile });
-
   const handleClose = () => {
     setGroupName("");
     setSelectedMembers(new Set());

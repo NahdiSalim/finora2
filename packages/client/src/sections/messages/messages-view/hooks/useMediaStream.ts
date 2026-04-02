@@ -9,36 +9,15 @@ export function useMediaStream(callType: CallType | null) {
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [videoEnabled, setVideoEnabled] = useState(true);
 
-  // Debug: Log when stream changes
-  useEffect(() => {
-    console.log("[useMediaStream] ⚡ Stream state changed:", {
-      streamId: stream?.id || "null",
-      audioTracks: stream?.getAudioTracks().length || 0,
-      videoTracks: stream?.getVideoTracks().length || 0,
-      audioEnabled,
-      videoEnabled,
-    });
-  }, [stream, audioEnabled, videoEnabled]);
-
   const startStream = useCallback(
     async (overrideCallType?: CallType) => {
       const typeToUse = overrideCallType || callType;
 
       if (!typeToUse) {
-        console.warn(
-          "[useMediaStream] Cannot start stream - no callType provided",
-        );
         return;
       }
 
-      console.log("[useMediaStream] Starting stream for callType:", typeToUse);
-      console.log("[useMediaStream] Existing stream:", stream?.id || "none");
-
-      // If we already have a stream, stop it first
       if (stream) {
-        console.log(
-          "[useMediaStream] Stopping existing stream before starting new one",
-        );
         stream.getTracks().forEach((track) => track.stop());
       }
 
@@ -62,55 +41,22 @@ export function useMediaStream(callType: CallType | null) {
               : false,
         };
 
-        console.log(
-          "[useMediaStream] Requesting getUserMedia with constraints:",
-          constraints,
-        );
         const mediaStream =
           await navigator.mediaDevices.getUserMedia(constraints);
-        console.log(
-          "[useMediaStream] getUserMedia success, got stream:",
-          mediaStream.id,
-        );
 
-        // Ensure audio is enabled by default
         mediaStream.getAudioTracks().forEach((track) => {
           track.enabled = true;
         });
 
-        // Video enabled by default for video calls
         if (callType === "video") {
           mediaStream.getVideoTracks().forEach((track) => {
             track.enabled = true;
           });
         }
 
-        console.log(
-          "[useMediaStream] Setting stream in state:",
-          mediaStream.id,
-        );
         setStream(mediaStream);
         setAudioEnabled(true);
         setVideoEnabled(typeToUse === "video");
-
-        console.log("[useMediaStream] ✅ Stream started successfully:", {
-          streamId: mediaStream.id,
-          callType: typeToUse,
-          audioTracks: mediaStream.getAudioTracks().length,
-          videoTracks: mediaStream.getVideoTracks().length,
-          audioTrackDetails: mediaStream.getAudioTracks().map((t) => ({
-            id: t.id,
-            label: t.label,
-            enabled: t.enabled,
-            muted: t.muted,
-            readyState: t.readyState,
-          })),
-          videoTrackDetails: mediaStream.getVideoTracks().map((t) => ({
-            id: t.id,
-            enabled: t.enabled,
-            readyState: t.readyState,
-          })),
-        });
       } catch (err: any) {
         console.error("[useMediaStream] Error getting media:", err);
 
@@ -159,7 +105,6 @@ export function useMediaStream(callType: CallType | null) {
     if (stream) {
       stream.getTracks().forEach((track) => {
         track.stop();
-        console.log("[useMediaStream] Stopped track:", track.kind);
       });
       setStream(null);
       setAudioEnabled(false);
@@ -171,25 +116,17 @@ export function useMediaStream(callType: CallType | null) {
     if (stream) {
       const audioTracks = stream.getAudioTracks();
       if (audioTracks.length === 0) {
-        console.warn("[useMediaStream] No audio tracks found to toggle");
         return false;
       }
 
       const newState = !audioTracks[0].enabled;
       audioTracks.forEach((track) => {
         track.enabled = newState;
-        console.log(
-          "[useMediaStream] Audio track toggled:",
-          track.enabled,
-          "id:",
-          track.id,
-        );
       });
 
       setAudioEnabled(newState);
       return newState;
     }
-    console.warn("[useMediaStream] No stream available to toggle audio");
     return false;
   }, [stream]);
 
@@ -197,25 +134,17 @@ export function useMediaStream(callType: CallType | null) {
     if (stream) {
       const videoTracks = stream.getVideoTracks();
       if (videoTracks.length === 0) {
-        console.warn("[useMediaStream] No video tracks found to toggle");
         return false;
       }
 
       const newState = !videoTracks[0].enabled;
       videoTracks.forEach((track) => {
         track.enabled = newState;
-        console.log(
-          "[useMediaStream] Video track toggled:",
-          track.enabled,
-          "id:",
-          track.id,
-        );
       });
 
       setVideoEnabled(newState);
       return newState;
     }
-    console.warn("[useMediaStream] No stream available to toggle video");
     return false;
   }, [stream]);
 

@@ -8,7 +8,10 @@ import { fr } from "date-fns/locale";
 import { useDashboardBase } from "src/hooks/useDashboardBase";
 import type { RootState } from "src/lib/store";
 import AttachmentSelectionModal from "./AttachmentSelectionModal";
-import { useGetChatAccessibleAppointmentsQuery } from "../../../../lib/services/chatApi";
+import {
+  useGetChatAccessibleAppointmentsQuery,
+  useGetMyAppointmentsQuery,
+} from "../../../../lib/services/chatApi";
 import type { ChatMessageAppointment } from "../../../../lib/services/chatApi";
 import type { MessageAppointment } from "../data/types";
 
@@ -70,19 +73,40 @@ export default function AppointmentSelectionModal({
     ChatMessageAppointment[]
   >([]);
 
-  // Get current user role - both clients and accountants can create appointments
+  const userId = useSelector((state: RootState) => state.auth.user?.id);
   const userRole = useSelector((state: RootState) => state.auth.user?.role);
   const roleCode = typeof userRole === "string" ? userRole : userRole?.code;
-  const isClientOrAccountant =
+  const isClient =
     roleCode?.toLowerCase() === "client" ||
-    roleCode?.toLowerCase().startsWith("client_") ||
+    roleCode?.toLowerCase().startsWith("client_");
+  const isClientOrAccountant =
+    isClient ||
     roleCode?.toLowerCase() === "comptable" ||
     roleCode?.toLowerCase() === "accountant";
 
-  const { data, isLoading, isFetching } = useGetChatAccessibleAppointmentsQuery(
-    { clientId: clientId!, page, limit: 5 },
-    { skip: !open || !clientId },
+  const isOwnAppointments = isClient && clientId === Number(userId);
+
+  const {
+    data: myData,
+    isLoading: myIsLoading,
+    isFetching: myIsFetching,
+  } = useGetMyAppointmentsQuery(
+    { page, limit: 5 },
+    { skip: !open || !isOwnAppointments },
   );
+
+  const {
+    data: chatData,
+    isLoading: chatIsLoading,
+    isFetching: chatIsFetching,
+  } = useGetChatAccessibleAppointmentsQuery(
+    { clientId: clientId!, page, limit: 5 },
+    { skip: !open || isOwnAppointments || !clientId },
+  );
+
+  const data = isOwnAppointments ? myData : chatData;
+  const isLoading = isOwnAppointments ? myIsLoading : chatIsLoading;
+  const isFetching = isOwnAppointments ? myIsFetching : chatIsFetching;
 
   const handleLoadMore = useCallback(() => {
     if (data?.pagination && page < data.pagination.totalPages) {
@@ -135,8 +159,17 @@ export default function AppointmentSelectionModal({
 
     const startDate = new Date(appointment.startTime);
     const endDate = new Date(appointment.endTime);
-    const dateLabel = format(startDate, "dd MMM yyyy", { locale: fr });
-    const timeLabel = `${format(startDate, "HH:mm")} - ${format(endDate, "HH:mm")}`;
+
+    const isValidStartDate = !isNaN(startDate.getTime());
+    const isValidEndDate = !isNaN(endDate.getTime());
+
+    const dateLabel = isValidStartDate
+      ? format(startDate, "dd MMM yyyy", { locale: fr })
+      : "Date invalide";
+    const timeLabel =
+      isValidStartDate && isValidEndDate
+        ? `${format(startDate, "HH:mm")} - ${format(endDate, "HH:mm")}`
+        : "Heure non définie";
 
     return (
       <Box

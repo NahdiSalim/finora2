@@ -16,6 +16,7 @@ type MessageAttachmentButtonProps = {
   onTaskClick?: () => void;
   onAppointmentClick?: () => void;
   recipientType?: "client" | "collaborator" | null;
+  isGroup?: boolean;
 };
 
 export default function MessageAttachmentButton({
@@ -25,6 +26,7 @@ export default function MessageAttachmentButton({
   onTaskClick,
   onAppointmentClick,
   recipientType,
+  isGroup = false,
 }: MessageAttachmentButtonProps) {
   const theme = useTheme();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -189,7 +191,7 @@ export default function MessageAttachmentButton({
             </Typography>
           </MenuItem>,
 
-          ...(recipientType === "client"
+          ...(!isGroup && recipientType === "client"
             ? [
                 <MenuItem
                   key="request"
@@ -273,7 +275,7 @@ export default function MessageAttachmentButton({
               ]
             : []),
 
-          ...(recipientType === "collaborator"
+          ...(!isGroup && recipientType === "collaborator"
             ? [
                 <MenuItem
                   key="task"

@@ -6,7 +6,10 @@ import { FileText } from "lucide-react";
 import { useDashboardBase } from "src/hooks/useDashboardBase";
 import type { RootState } from "src/lib/store";
 import AttachmentSelectionModal from "./AttachmentSelectionModal";
-import { useGetChatAccessibleRequestsQuery } from "../../../../lib/services/chatApi";
+import {
+  useGetAllClientRequestsQuery,
+  useGetMyRequestsQuery,
+} from "../../../../lib/services/chatApi";
 import type { ChatMessageRequest } from "../../../../lib/services/chatApi";
 import type { MessageRequest } from "../data/types";
 
@@ -81,17 +84,36 @@ export default function RequestSelectionModal({
   const [page, setPage] = useState(1);
   const [allRequests, setAllRequests] = useState<ChatMessageRequest[]>([]);
 
-  // Get current user role to check if they're a client
+  const userId = useSelector((state: RootState) => state.auth.user?.id);
   const userRole = useSelector((state: RootState) => state.auth.user?.role);
   const roleCode = typeof userRole === "string" ? userRole : userRole?.code;
   const isClient =
     roleCode?.toLowerCase() === "client" ||
     roleCode?.toLowerCase().startsWith("client_");
 
-  const { data, isLoading, isFetching } = useGetChatAccessibleRequestsQuery(
-    { recipientId: clientId!, page, limit: 5 },
-    { skip: !open || !clientId },
+  const isOwnRequests = isClient && clientId === Number(userId);
+
+  const {
+    data: myData,
+    isLoading: myIsLoading,
+    isFetching: myIsFetching,
+  } = useGetMyRequestsQuery(
+    { page, limit: 5 },
+    { skip: !open || !isOwnRequests },
   );
+
+  const {
+    data: chatData,
+    isLoading: chatIsLoading,
+    isFetching: chatIsFetching,
+  } = useGetAllClientRequestsQuery(
+    { clientId: clientId!, page, limit: 5 },
+    { skip: !open || isOwnRequests || !clientId },
+  );
+
+  const data = isOwnRequests ? myData : chatData;
+  const isLoading = isOwnRequests ? myIsLoading : chatIsLoading;
+  const isFetching = isOwnRequests ? myIsFetching : chatIsFetching;
 
   const handleLoadMore = useCallback(() => {
     if (data?.pagination && page < data.pagination.totalPages) {

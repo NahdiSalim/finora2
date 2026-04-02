@@ -1,8 +1,13 @@
 import { useState, useCallback, useEffect } from "react";
+import { useSelector } from "react-redux";
 import { Box, Typography, Chip, useTheme, alpha } from "@mui/material";
 import { CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import type { RootState } from "src/lib/store";
 import AttachmentSelectionModal from "./AttachmentSelectionModal";
-import { useGetChatAccessibleTasksQuery } from "../../../../lib/services/chatApi";
+import {
+  useGetChatAccessibleTasksQuery,
+  useGetMyTasksQuery,
+} from "../../../../lib/services/chatApi";
 import type { ChatMessageTask } from "../../../../lib/services/chatApi";
 import type { MessageTask } from "../data/types";
 
@@ -68,10 +73,34 @@ export default function TaskSelectionModal({
   const [page, setPage] = useState(1);
   const [allTasks, setAllTasks] = useState<ChatMessageTask[]>([]);
 
-  const { data, isLoading, isFetching } = useGetChatAccessibleTasksQuery(
+  const userId = useSelector((state: RootState) => state.auth.user?.id);
+  const userRole = useSelector((state: RootState) => state.auth.user?.role);
+  const roleCode = typeof userRole === "string" ? userRole : userRole?.code;
+  const isCollaborator =
+    roleCode?.toLowerCase() === "collaborator" ||
+    roleCode?.toLowerCase() === "collaborateur" ||
+    roleCode?.toLowerCase().includes("collaborat");
+
+  const isOwnTasks = isCollaborator && collaboratorId === Number(userId);
+
+  const {
+    data: myData,
+    isLoading: myIsLoading,
+    isFetching: myIsFetching,
+  } = useGetMyTasksQuery({ page, limit: 5 }, { skip: !open || !isOwnTasks });
+
+  const {
+    data: chatData,
+    isLoading: chatIsLoading,
+    isFetching: chatIsFetching,
+  } = useGetChatAccessibleTasksQuery(
     { collaboratorId: collaboratorId!, page, limit: 5 },
-    { skip: !open || !collaboratorId },
+    { skip: !open || isOwnTasks || !collaboratorId },
   );
+
+  const data = isOwnTasks ? myData : chatData;
+  const isLoading = isOwnTasks ? myIsLoading : chatIsLoading;
+  const isFetching = isOwnTasks ? myIsFetching : chatIsFetching;
 
   const handleLoadMore = useCallback(() => {
     if (data?.pagination && page < data.pagination.totalPages) {

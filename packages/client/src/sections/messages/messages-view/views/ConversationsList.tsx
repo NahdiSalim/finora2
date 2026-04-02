@@ -336,9 +336,6 @@ export default function ConversationsList({
                 color="primary"
                 onClick={(e) => {
                   e.stopPropagation();
-                  console.log(
-                    "[ConversationsList] Create group button clicked",
-                  );
                   onCreateGroup?.();
                 }}
                 sx={{

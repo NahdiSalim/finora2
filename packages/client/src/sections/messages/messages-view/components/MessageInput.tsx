@@ -39,6 +39,7 @@ type MessageInputProps = {
   disabled?: boolean;
   recipientType?: "client" | "collaborator" | null;
   recipientId?: number | null;
+  isGroup?: boolean;
   onFocus?: () => void;
 };
 
@@ -89,6 +90,7 @@ export default function MessageInput({
   disabled = false,
   recipientType,
   recipientId,
+  isGroup = false,
   onFocus,
 }: MessageInputProps) {
   const theme = useTheme();
@@ -670,6 +672,7 @@ export default function MessageInput({
         <MessageAttachmentButton
           disabled={disabled}
           recipientType={recipientType}
+          isGroup={isGroup}
           onFileSelect={(file) => {
             setSelectedFile(file);
           }}

@@ -634,6 +634,7 @@ export class ChatService {
         requestId: dto.requestId ?? null,
         taskId: dto.taskId ?? null,
         appointmentId: dto.appointmentId ?? null,
+        callId: dto.callId ?? null,
         readBy: [String(userId)],
       },
       include: {
@@ -650,6 +651,15 @@ export class ChatService {
             hour: true,
             status: true,
             type: true,
+          },
+        },
+        call: {
+          select: {
+            id: true,
+            callType: true,
+            status: true,
+            duration: true,
+            initiatorId: true,
           },
         },
       },
@@ -709,6 +719,15 @@ export class ChatService {
             hour: true,
             status: true,
             type: true,
+          },
+        },
+        call: {
+          select: {
+            id: true,
+            callType: true,
+            status: true,
+            duration: true,
+            initiatorId: true,
           },
         },
       },

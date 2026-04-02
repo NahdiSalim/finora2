@@ -68,6 +68,8 @@ function mapRoomToConversation(
       if (lm.type === "file" || lm.type === "image") {
         const fileName = lm.content?.split("/").pop() || "fichier";
         body = `📎 ${fileName}`;
+      } else if (lm.type === "call") {
+        body = `📞 ${lm.content}`;
       } else {
         body = lm.content || "";
       }
@@ -170,6 +172,8 @@ function mapRoomToConversation(
     if (lm.type === "file" || lm.type === "image") {
       const fileName = lm.content?.split("/").pop() || "fichier";
       body = `📎 ${fileName}`;
+    } else if (lm.type === "call") {
+      body = `📞 ${lm.content}`;
     } else {
       body = lm.content || "";
     }
@@ -196,6 +200,7 @@ function mapRoomToConversation(
     unreadCount: room.unreadCount ?? 0,
     phone: "",
     category,
+    participantId: other ? Number(other.id) : undefined,
   };
 }
 
@@ -307,6 +312,31 @@ export function mapApiMessageToMessage(
         endTime: msg.appointment.endTime,
         status: msg.appointment.status,
         type: msg.appointment.type,
+      },
+    };
+  }
+
+  if (msg.call) {
+    return {
+      id: msg.id,
+      type: "call" as const,
+      text: msg.content,
+      html: msg.content,
+      mine: isMine,
+      time,
+      date,
+      senderName: isMine ? undefined : senderName || undefined,
+      senderAvatar: isMine ? undefined : senderAvatar || undefined,
+      call: {
+        id: msg.call.id,
+        callType: msg.call.callType as "audio" | "video",
+        status: msg.call.status as
+          | "missed"
+          | "completed"
+          | "rejected"
+          | "cancelled",
+        duration: msg.call.duration,
+        initiatorId: msg.call.initiatorId,
       },
     };
   }

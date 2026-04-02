@@ -72,6 +72,14 @@ export interface ChatMessageAppointment {
   type: string;
 }
 
+export interface ChatMessageCall {
+  id: number;
+  callType: string;
+  status: string;
+  duration?: number;
+  initiatorId: number;
+}
+
 export interface ChatMessage {
   id: number;
   roomId: number;
@@ -84,6 +92,7 @@ export interface ChatMessage {
   requestId?: number;
   taskId?: number;
   appointmentId?: number;
+  callId?: number;
   readBy?: string[];
   deleted: boolean;
   edited: boolean;
@@ -95,6 +104,7 @@ export interface ChatMessage {
   request?: ChatMessageRequest;
   task?: ChatMessageTask;
   appointment?: ChatMessageAppointment;
+  call?: ChatMessageCall;
 }
 
 export interface GetRoomsResponse {

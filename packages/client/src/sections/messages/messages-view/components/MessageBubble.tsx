@@ -14,7 +14,15 @@ import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme, alpha } from "@mui/material/styles";
-import { CheckSquare, Calendar, Clock } from "lucide-react";
+import {
+  CheckSquare,
+  Calendar,
+  Clock,
+  Phone,
+  Video,
+  PhoneMissed,
+  PhoneOff,
+} from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useDashboardBase } from "../../../../hooks/useDashboardBase";
@@ -90,6 +98,7 @@ export default function MessageBubble({
   const isTaskMessage = message.type === "task" && !!message.task;
   const isAppointmentMessage =
     message.type === "appointment" && !!message.appointment;
+  const isCallMessage = message.type === "call" && !!message.call;
 
   const fileCategory: FileCategory = isFileMessage
     ? detectFileCategory(message.file!.name, message.file!.type)
@@ -460,6 +469,126 @@ export default function MessageBubble({
                     />
                   </Paper>
                 )}
+              </>
+            ) : isCallMessage ? (
+              <>
+                {/* ── Call bubble ────────────────────────────────────────── */}
+                <Box
+                  sx={{
+                    width: "fit-content",
+                    maxWidth: isMobile ? "100%" : 280,
+                    borderRadius: isMobile ? "12px" : "14px",
+                    backgroundColor:
+                      message.call?.status === "missed"
+                        ? "#FEF3F2"
+                        : message.call?.status === "rejected"
+                          ? "#FEF3F2"
+                          : "#F0FDF4",
+                    border:
+                      message.call?.status === "missed"
+                        ? "1px solid #FEE4E2"
+                        : message.call?.status === "rejected"
+                          ? "1px solid #FEE4E2"
+                          : "1px solid #D1FAE5",
+                    px: isMobile ? 1.25 : 1.5,
+                    py: isMobile ? 1 : 1.25,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: isMobile ? 1 : 1.25,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: isMobile ? 36 : 40,
+                        height: isMobile ? 36 : 40,
+                        borderRadius: "10px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor:
+                          message.call?.status === "missed"
+                            ? alpha("#F04438", 0.08)
+                            : message.call?.status === "rejected"
+                              ? alpha("#F04438", 0.08)
+                              : alpha("#10B981", 0.08),
+                        color:
+                          message.call?.status === "missed"
+                            ? "#F04438"
+                            : message.call?.status === "rejected"
+                              ? "#F04438"
+                              : "#10B981",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {message.call?.status === "missed" ? (
+                        <PhoneMissed size={isMobile ? 18 : 20} />
+                      ) : message.call?.status === "rejected" ? (
+                        <PhoneOff size={isMobile ? 18 : 20} />
+                      ) : message.call?.callType === "video" ? (
+                        <Video size={isMobile ? 18 : 20} />
+                      ) : (
+                        <Phone size={isMobile ? 18 : 20} />
+                      )}
+                    </Box>
+
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Typography
+                        sx={{
+                          fontSize: isMobile ? "13px" : "14px",
+                          fontWeight: 600,
+                          lineHeight: 1.4,
+                          color: theme.palette.text.primary,
+                          wordBreak: "break-word",
+                          mb: 0.25,
+                        }}
+                      >
+                        {message.call?.status === "missed"
+                          ? message.mine
+                            ? "Appel non répondu"
+                            : "Appel manqué"
+                          : message.call?.status === "rejected"
+                            ? "Appel refusé"
+                            : message.call?.callType === "video"
+                              ? "Appel vidéo"
+                              : "Appel audio"}
+                      </Typography>
+
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 0.5,
+                        }}
+                      >
+                        <Clock
+                          size={isMobile ? 12 : 13}
+                          color={theme.palette.text.secondary}
+                        />
+                        <Typography
+                          sx={{
+                            fontSize: isMobile ? "11px" : "12px",
+                            lineHeight: 1.4,
+                            color: theme.palette.text.secondary,
+                            fontWeight: 400,
+                          }}
+                        >
+                          {message.call?.status === "completed" &&
+                          message.call?.duration
+                            ? `${Math.floor(message.call.duration / 60)}:${String(message.call.duration % 60).padStart(2, "0")}`
+                            : message.call?.status === "missed"
+                              ? "Non répondu"
+                              : message.call?.status === "rejected"
+                                ? "Refusé"
+                                : "Terminé"}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Box>
+                </Box>
               </>
             ) : isAppointmentMessage ? (
               <>

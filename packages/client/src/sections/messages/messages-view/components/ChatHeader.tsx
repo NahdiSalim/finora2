@@ -9,6 +9,7 @@ import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import CircleIcon from "@mui/icons-material/Circle";
 import ArrowBackIosNewRoundedIcon from "@mui/icons-material/ArrowBackIosNewRounded";
 import { Users, Phone, Video } from "lucide-react";
+import { useGlobalCall } from "src/contexts/GlobalCallContext";
 
 import type { Conversation } from "../data/types";
 
@@ -25,6 +26,42 @@ export default function ChatHeader({
 }: ChatHeaderProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const { initiateCall } = useGlobalCall();
+
+  const handleStartCall = (type: "audio" | "video") => {
+    if (!conversation) return;
+
+    const participants = [];
+
+    if (conversation.isGroup && conversation.members) {
+      participants.push(
+        ...conversation.members.map((m) => ({
+          id: m.id,
+          name: m.name,
+          avatar: m.avatar,
+        })),
+      );
+    } else if (conversation.participantId) {
+      participants.push({
+        id: conversation.participantId,
+        name: conversation.name,
+        avatar: conversation.avatar,
+      });
+    }
+
+    if (participants.length === 0) {
+      console.error("[ChatHeader] No participants found for call");
+      return;
+    }
+
+    initiateCall(
+      conversation.id,
+      type,
+      participants,
+      conversation.name,
+      conversation.isGroup || false,
+    );
+  };
 
   return (
     <Box
@@ -195,16 +232,11 @@ export default function ChatHeader({
           flexShrink: 0,
         }}
       >
-        {/* Call and Video buttons - Only for groups */}
-        {conversation?.isGroup && (
+        {/* Call buttons - For both 1:1 and group conversations */}
+        {conversation && (
           <>
             <IconButton
-              onClick={() => {
-                console.log(
-                  "Audio call initiated for group:",
-                  conversation.name,
-                );
-              }}
+              onClick={() => handleStartCall("audio")}
               sx={{
                 width: isMobile ? 34 : 40,
                 height: isMobile ? 34 : 40,
@@ -223,12 +255,7 @@ export default function ChatHeader({
             </IconButton>
 
             <IconButton
-              onClick={() => {
-                console.log(
-                  "Video call initiated for group:",
-                  conversation.name,
-                );
-              }}
+              onClick={() => handleStartCall("video")}
               sx={{
                 width: isMobile ? 34 : 40,
                 height: isMobile ? 34 : 40,

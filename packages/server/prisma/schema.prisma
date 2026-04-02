@@ -251,6 +251,7 @@ model ChatMessage {
   requestId       Int?
   taskId          Int?
   appointmentId   Int?
+  callId          Int?
 
   room            ChatRoom?      @relation(fields: [roomId], references: [id])
   thread          ChatThread?    @relation(fields: [threadId], references: [id])
@@ -258,6 +259,7 @@ model ChatMessage {
   request         Request?       @relation("ChatMessageRequest", fields: [requestId], references: [id], onDelete: SetNull)
   task            Task?          @relation("ChatMessageTask", fields: [taskId], references: [id], onDelete: SetNull)
   appointment     Appointment?   @relation("ChatMessageAppointment", fields: [appointmentId], references: [id], onDelete: SetNull)
+  call            Call?          @relation("ChatMessageCall", fields: [callId], references: [id], onDelete: SetNull)
 
   @@index([roomId])
   @@index([threadId])
@@ -266,6 +268,7 @@ model ChatMessage {
   @@index([requestId])
   @@index([taskId])
   @@index([appointmentId])
+  @@index([callId])
 }
 
 
@@ -290,11 +293,36 @@ model ChatRoom {
   createdBy       User      @relation("ChatRoomCreatedBy", fields: [createdById], references: [id])
   
   messages        ChatMessage[]
+  calls           Call[]
 
   @@index([createdById])
   @@index([contextId])
   @@index([contextType])
   @@index([status])
+}
+
+
+// From call.prisma
+model Call {
+  id            Int       @id @default(autoincrement())
+  roomId        Int
+  initiatorId   Int
+  callType      String    // "audio" | "video"
+  status        String    @default("initiated") // "initiated" | "ongoing" | "completed" | "missed" | "rejected"
+  participants  String[]  // Array of user IDs who joined
+  startedAt     DateTime  @default(now())
+  endedAt       DateTime?
+  duration      Int?      // Duration in seconds
+  createdAt     DateTime  @default(now())
+
+  room          ChatRoom     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  initiator     User         @relation("CallInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
+  chatMessages  ChatMessage[] @relation("ChatMessageCall")
+
+  @@index([roomId])
+  @@index([initiatorId])
+  @@index([startedAt])
+  @@map("calls")
 }
 
 
@@ -1176,6 +1204,7 @@ model User {
   sentMessages         ChatMessage[] @relation("ChatMessageSender")
   createdThreads       ChatThread[] @relation("ChatThreadCreatedBy")
   resolvedThreads      ChatThread[] @relation("ChatThreadResolvedBy")
+  initiatedCalls       Call[] @relation("CallInitiator")
   
   // Role Actions
   grantedRoleActions   RoleAction[] @relation("RoleActionGrantedBy")

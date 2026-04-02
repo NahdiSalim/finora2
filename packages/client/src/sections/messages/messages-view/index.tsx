@@ -49,7 +49,7 @@ import {
   chatApi,
   type GetRoomsParams,
 } from "src/lib/services/chatApi";
-import { disconnectSocket, isSocketConnected } from "src/lib/socket";
+import { isSocketConnected } from "src/lib/socket";
 
 import type { RootState } from "src/lib/store";
 import type { Role } from "src/types/auth";
@@ -359,9 +359,11 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                 requestId: msg.requestId ?? undefined,
                 taskId: msg.taskId ?? undefined,
                 appointmentId: msg.appointmentId ?? undefined,
+                callId: msg.callId ?? undefined,
                 request: msg.request ?? undefined,
                 task: msg.task ?? undefined,
                 appointment: msg.appointment ?? undefined,
+                call: msg.call ?? undefined,
               });
               draft.total += 1;
               console.log("[MessagesView] cache updated:", {
@@ -551,14 +553,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     });
   }, [selectedConversation, dispatch]);
 
-  // Disconnect socket when leaving the messages page
-  // Use disconnectSocket (not destroySocket) so the singleton survives StrictMode double-mount
-  useEffect(
-    () => () => {
-      disconnectSocket();
-    },
-    [],
-  );
+  // Note: Socket connection is managed globally now
+  // Don't disconnect when leaving messages page since calls work everywhere
 
   // Local overrides for optimistic UI (preview text, unread counts)
   const [conversationOverrides, setConversationOverrides] = useState<

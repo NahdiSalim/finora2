@@ -26,6 +26,8 @@ export type Conversation = {
   members?: GroupMember[];
   memberCount?: number;
   createdBy?: number;
+  // 1:1-specific fields
+  participantId?: number;
 };
 
 export type MessageFile = {
@@ -60,15 +62,24 @@ export type MessageAppointment = {
   type: string;
 };
 
+export type MessageCall = {
+  id: number;
+  callType: "audio" | "video";
+  status: "missed" | "completed" | "rejected" | "cancelled";
+  duration?: number;
+  initiatorId: number;
+};
+
 export type Message = {
   id: number;
-  type: "text" | "file" | "request" | "task" | "appointment";
+  type: "text" | "file" | "request" | "task" | "appointment" | "call";
   text?: string;
   html?: string;
   file?: MessageFile;
   request?: MessageRequest;
   task?: MessageTask;
   appointment?: MessageAppointment;
+  call?: MessageCall;
   mine: boolean;
   large?: boolean;
   time?: string;

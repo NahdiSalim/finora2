@@ -20,11 +20,14 @@ type ConversationItemProps = {
 };
 
 const getConversationDateLabel = (
-  fullDate: string,
+  fullDate: string | null | undefined,
   time?: string,
   nowRef?: dayjs.Dayjs,
 ) => {
+  if (!fullDate) return "";
   const date = dayjs(fullDate);
+  if (!date.isValid()) return "";
+
   const now = nowRef ?? dayjs();
 
   if (date.isSame(now, "minute")) {

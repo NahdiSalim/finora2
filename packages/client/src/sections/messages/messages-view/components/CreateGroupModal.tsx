@@ -16,7 +16,6 @@ import {
 } from "@mui/material";
 import { X, Users, Search } from "lucide-react";
 import CustomButton from "../../../../components/common/CustomButton";
-import { availableClients, availableCollaborators } from "../data/mock";
 import type { GroupMember } from "../data/types";
 
 type CreateGroupModalProps = {
@@ -70,8 +69,8 @@ export default function CreateGroupModal({
     handleClose();
   };
 
-  const contactClients = clients ?? availableClients;
-  const contactCollaborators = collaborators ?? availableCollaborators;
+  const contactClients = clients ?? [];
+  const contactCollaborators = collaborators ?? [];
 
   const filteredClients = contactClients.filter((c) =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase()),
@@ -433,7 +432,9 @@ function MemberItem({ member, selected, onToggle }: MemberItemProps) {
   const roleColor =
     member.role === "client"
       ? theme.palette.primary.main
-      : theme.palette.secondary.main;
+      : member.role === "comptable"
+        ? theme.palette.warning.main
+        : theme.palette.secondary.main;
 
   return (
     <Box
@@ -513,7 +514,11 @@ function MemberItem({ member, selected, onToggle }: MemberItemProps) {
               color: theme.palette.text.secondary,
             }}
           >
-            {member.role === "client" ? "Client" : "Collaborateur"}
+            {member.role === "client"
+              ? "Client"
+              : member.role === "comptable"
+                ? "Comptable"
+                : "Collaborateur"}
           </Typography>
         )}
       </Box>

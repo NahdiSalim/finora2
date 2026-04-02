@@ -47,6 +47,14 @@ export class ChatController {
     return this.chatService.findOrCreateDirectRoom(Number(userId), targetUserId);
   }
 
+  @Post('rooms/backfill')
+  @ApiOperation({ summary: 'Backfill: create missing direct rooms for all existing contacts' })
+  @ApiResponse({ status: 200, description: 'Backfill completed' })
+  async backfillDirectRooms(@Request() req) {
+    const userId = req.user?.id ?? req.user?.sub;
+    return this.chatService.backfillDirectRooms(Number(userId));
+  }
+
   @Post('rooms')
   @ApiOperation({ summary: 'Créer une salle de chat' })
   @ApiResponse({ status: 201, description: 'Salle créée avec succès' })

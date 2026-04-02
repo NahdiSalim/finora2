@@ -3,6 +3,12 @@ import Typography from "@mui/material/Typography";
 import IconButton from "@mui/material/IconButton";
 import Avatar from "@mui/material/Avatar";
 import AvatarGroup from "@mui/material/AvatarGroup";
+import Popover from "@mui/material/Popover";
+import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
+import ListItemAvatar from "@mui/material/ListItemAvatar";
+import ListItemText from "@mui/material/ListItemText";
+import Chip from "@mui/material/Chip";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme, alpha } from "@mui/material/styles";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
@@ -183,7 +189,9 @@ export default function ChatHeader({
                   const roleColor =
                     member.role === "client"
                       ? theme.palette.primary.main
-                      : theme.palette.secondary.main;
+                      : member.role === "comptable"
+                        ? theme.palette.warning.main
+                        : theme.palette.secondary.main;
                   return (
                     <Avatar
                       key={member.id}
@@ -198,14 +206,128 @@ export default function ChatHeader({
                 })}
               </AvatarGroup>
               <Typography
+                onClick={(e) => setMembersAnchor(e.currentTarget)}
                 sx={{
                   color: theme.palette.info.light,
                   fontSize: isMobile ? 11 : 12,
                   fontWeight: 400,
+                  cursor: "pointer",
+                  "&:hover": {
+                    color: theme.palette.primary.main,
+                    textDecoration: "underline",
+                  },
                 }}
               >
                 {conversation.memberCount} membres
               </Typography>
+
+              {/* Members popover */}
+              <Popover
+                open={Boolean(membersAnchor)}
+                anchorEl={membersAnchor}
+                onClose={() => setMembersAnchor(null)}
+                anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+                transformOrigin={{ vertical: "top", horizontal: "left" }}
+                slotProps={{
+                  paper: {
+                    sx: {
+                      mt: 1,
+                      borderRadius: "14px",
+                      boxShadow: "0px 8px 24px rgba(16,24,40,0.12)",
+                      minWidth: 220,
+                      maxWidth: 280,
+                      maxHeight: 320,
+                      overflow: "hidden",
+                      display: "flex",
+                      flexDirection: "column",
+                    },
+                  },
+                }}
+              >
+                <Box
+                  sx={{
+                    px: 2,
+                    pt: 1.5,
+                    pb: 1,
+                    borderBottom: "1px solid",
+                    borderColor: theme.palette.grey[100],
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontWeight: 700,
+                      fontSize: 13,
+                      color: (theme.palette.grey as any)[1000],
+                    }}
+                  >
+                    Membres ({conversation.memberCount})
+                  </Typography>
+                </Box>
+                <List dense disablePadding sx={{ overflowY: "auto", py: 0.5 }}>
+                  {conversation.members.map((member) => {
+                    const roleColor =
+                      member.role === "client"
+                        ? theme.palette.primary.main
+                        : member.role === "comptable"
+                          ? theme.palette.warning.main
+                          : theme.palette.secondary.main;
+                    const roleLabel =
+                      member.role === "client"
+                        ? "Client"
+                        : member.role === "comptable"
+                          ? "Comptable"
+                          : "Collaborateur";
+                    return (
+                      <ListItem key={member.id} sx={{ px: 2, py: 0.75 }}>
+                        <ListItemAvatar sx={{ minWidth: 38 }}>
+                          <Avatar
+                            sx={{
+                              width: 30,
+                              height: 30,
+                              fontSize: 12,
+                              fontWeight: 700,
+                              bgcolor: alpha(roleColor, 0.15),
+                              color: roleColor,
+                            }}
+                          >
+                            {member.avatar.charAt(0)}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={
+                            <Typography
+                              sx={{
+                                fontSize: 13,
+                                fontWeight: 500,
+                                color: (theme.palette.grey as any)[1000],
+                                lineHeight: 1.3,
+                              }}
+                            >
+                              {member.name}
+                            </Typography>
+                          }
+                          secondary={
+                            <Chip
+                              label={roleLabel}
+                              size="small"
+                              sx={{
+                                mt: 0.25,
+                                height: 18,
+                                fontSize: 10,
+                                fontWeight: 600,
+                                bgcolor: alpha(roleColor, 0.1),
+                                color: roleColor,
+                                border: "none",
+                                "& .MuiChip-label": { px: 0.75 },
+                              }}
+                            />
+                          }
+                        />
+                      </ListItem>
+                    );
+                  })}
+                </List>
+              </Popover>
             </Box>
           ) : (
             <Typography

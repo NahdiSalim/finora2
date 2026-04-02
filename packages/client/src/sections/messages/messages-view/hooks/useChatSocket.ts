@@ -8,7 +8,7 @@ export interface SocketMessage {
   roomId: number;
   senderId: number;
   content: string;
-  type: "text" | "file" | "image" | "system";
+  type: "text" | "file" | "image" | "system" | "call";
   createdAt: string;
   attachments?: string[];
   fileUrl?: string | null;
@@ -21,6 +21,7 @@ export interface SocketMessage {
   requestId?: number | null;
   taskId?: number | null;
   appointmentId?: number | null;
+  callId?: number | null;
   request?: {
     id: number;
     subject: string;
@@ -41,6 +42,13 @@ export interface SocketMessage {
     endTime: string;
     status: string;
     type: string;
+  } | null;
+  call?: {
+    id: number;
+    callType: string;
+    status: string;
+    duration?: number;
+    initiatorId: number;
   } | null;
 }
 

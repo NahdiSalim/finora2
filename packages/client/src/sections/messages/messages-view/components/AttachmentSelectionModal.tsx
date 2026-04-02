@@ -7,10 +7,11 @@ import {
   IconButton,
   Typography,
   CircularProgress,
+  Button,
   useTheme,
   useMediaQuery,
 } from "@mui/material";
-import { X } from "lucide-react";
+import { X, Plus } from "lucide-react";
 
 type AttachmentSelectionModalProps<T extends { id: number }> = {
   open: boolean;
@@ -23,6 +24,10 @@ type AttachmentSelectionModalProps<T extends { id: number }> = {
   onSelect: (item: T) => void;
   renderItem: (item: T) => ReactNode;
   emptyMessage?: string;
+  emptyAction?: {
+    label: string;
+    onClick: () => void;
+  };
 };
 
 export default function AttachmentSelectionModal<T extends { id: number }>({
@@ -36,6 +41,7 @@ export default function AttachmentSelectionModal<T extends { id: number }>({
   onSelect,
   renderItem,
   emptyMessage = "Aucun élément disponible",
+  emptyAction,
 }: AttachmentSelectionModalProps<T>) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -148,10 +154,12 @@ export default function AttachmentSelectionModal<T extends { id: number }>({
           <Box
             sx={{
               display: "flex",
+              flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
               py: 6,
               px: 3,
+              gap: 2,
             }}
           >
             <Typography
@@ -164,6 +172,23 @@ export default function AttachmentSelectionModal<T extends { id: number }>({
             >
               {emptyMessage}
             </Typography>
+            {emptyAction && (
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<Plus size={18} />}
+                onClick={emptyAction.onClick}
+                sx={{
+                  mt: 1,
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontWeight: 600,
+                  px: 3,
+                }}
+              >
+                {emptyAction.label}
+              </Button>
+            )}
           </Box>
         ) : (
           <Box sx={{ p: { xs: 1.5, sm: 2 } }}>

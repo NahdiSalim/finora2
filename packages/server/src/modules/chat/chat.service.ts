@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { MinioService } from '../../common/services/minio.service';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -38,6 +43,117 @@ export class ChatService {
   ) {}
 
   // ==================== ROOMS ====================
+
+  /**
+   * Ensure a direct chat room exists between two users.
+   * Used when creating a new user so they appear immediately in messaging.
+   * No-op if the room already exists.
+   */
+  async createDirectRoomIfNotExists(userAId: number, userBId: number) {
+    return this.findOrCreateDirectRoom(userAId, userBId);
+  }
+
+  /**
+   * Backfill: create all missing direct rooms for a given user.
+   * Idempotent — safe to call multiple times.
+   * Should be called once per existing user via POST /chat/rooms/backfill,
+   * then removed from GET /chat/rooms once all users are migrated.
+   */
+  async backfillDirectRooms(userId: number): Promise<{ created: number; skipped: number }> {
+    const currentUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { companyId: true, role: { select: { code: true } } },
+    });
+
+    if (!currentUser?.companyId) return { created: 0, skipped: 0 };
+
+    const potentialContactIds: number[] = [];
+
+    if (currentUser.role?.code === 'ACCOUNTANT') {
+      // Clients from active relationships
+      const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
+        where: { accountingFirmId: currentUser.companyId, status: 'active' },
+        include: {
+          clientCompany: {
+            select: {
+              employees: { select: { id: true }, where: { role: { code: 'CLIENT' } } },
+            },
+          },
+        },
+      });
+      potentialContactIds.push(
+        ...relationships.flatMap((r) => r.clientCompany.employees.map((e) => e.id))
+      );
+
+      // Collaborators from same company
+      const collabs = await this.prisma.user.findMany({
+        where: {
+          companyId: currentUser.companyId,
+          id: { not: userId },
+          role: { code: { in: ['COLLABORATOR', 'COLLABORATEUR'] } },
+        },
+        select: { id: true },
+      });
+      potentialContactIds.push(...collabs.map((c) => c.id));
+    } else if (currentUser.role?.code === 'CLIENT') {
+      const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
+        where: { clientCompanyId: currentUser.companyId, status: 'active' },
+        include: {
+          accountingFirm: {
+            select: {
+              employees: { select: { id: true }, where: { role: { code: 'ACCOUNTANT' } } },
+            },
+          },
+        },
+      });
+      potentialContactIds.push(
+        ...relationships.flatMap((r) => r.accountingFirm.employees.map((e) => e.id))
+      );
+    } else {
+      // Collaborator — get accountants from same company
+      const accountants = await this.prisma.user.findMany({
+        where: {
+          companyId: currentUser.companyId,
+          id: { not: userId },
+          role: { code: 'ACCOUNTANT' },
+        },
+        select: { id: true },
+      });
+      potentialContactIds.push(...accountants.map((a) => a.id));
+    }
+
+    if (potentialContactIds.length === 0) return { created: 0, skipped: 0 };
+
+    // Find which contacts already have a direct room
+    const existingRooms = await this.prisma.chatRoom.findMany({
+      where: {
+        type: 'direct',
+        status: 'active',
+        participants: { has: String(userId) },
+      },
+      select: { participants: true },
+    });
+    const existingPartners = new Set(
+      existingRooms.flatMap((r) => r.participants.map(Number).filter((id) => id !== userId))
+    );
+
+    const missing = [...new Set(potentialContactIds)].filter((id) => !existingPartners.has(id));
+
+    let created = 0;
+    for (const contactId of missing) {
+      try {
+        await this.findOrCreateDirectRoom(userId, contactId);
+        created++;
+      } catch (err) {
+        console.error(
+          `[backfillDirectRooms] failed for userId=${userId} contactId=${contactId}:`,
+          err
+        );
+      }
+    }
+
+    return { created, skipped: existingPartners.size };
+  }
 
   /**
    * Find or create a direct (1-on-1) chat room between two users.
@@ -123,17 +239,15 @@ export class ChatService {
   }
 
   async createRoom(userId: number, dto: CreateRoomDto) {
-    // Vérifier que l'utilisateur est dans les participants
-    if (!dto.participants.includes(userId)) {
-      dto.participants.push(userId);
-    }
+    // Dédupliquer et s'assurer que le créateur est dans les participants
+    const uniqueParticipants = [...new Set([...dto.participants.map(Number), userId])];
 
     const room = await this.prisma.chatRoom.create({
       data: {
         name: dto.name,
         type: dto.type,
         description: dto.description,
-        participants: dto.participants.map(String),
+        participants: uniqueParticipants.map(String),
         createdById: userId,
         contextId: dto.contextId,
         contextType: dto.contextType,
@@ -183,7 +297,16 @@ export class ChatService {
     return room;
   }
 
-  async getUserRoomsDebug(userId: number, category?: string, search?: string, date?: string) {
+  async getUserRoomsDebug(
+    userId: number,
+    category?: string,
+    search?: string,
+    date?: string,
+    page: number = 1,
+    pageSize: number = 50,
+    categories?: string[],
+    unreadOnly?: boolean
+  ) {
     // Get user info to determine what potential contacts they have
     const currentUser = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -193,12 +316,47 @@ export class ChatService {
       },
     });
 
-    // Get existing chat rooms
+    // Use categories array if provided, otherwise fallback to single category for backwards compatibility
+    const categoriesToFilter = categories || (category ? [category] : undefined);
+
+    // Determine room type filter from categories BEFORE hitting the DB.
+    // "group" in categories → include group rooms
+    // other categories → include direct rooms
+    // no categories → all rooms
+    let roomTypeFilter: string | string[] | undefined;
+    if (categoriesToFilter && categoriesToFilter.length > 0) {
+      const hasGroup = categoriesToFilter.some((c) => c.toLowerCase() === 'group');
+      const hasOther = categoriesToFilter.some((c) => c.toLowerCase() !== 'group');
+
+      if (hasGroup && hasOther) {
+        roomTypeFilter = ['group', 'direct']; // Include both types
+      } else if (hasGroup) {
+        roomTypeFilter = 'group';
+      } else {
+        roomTypeFilter = 'direct';
+      }
+    }
+
+    // Build where clause with type filter
+    const whereClause: any = {
+      participants: { has: String(userId) },
+      status: 'active',
+    };
+
+    // Add type filter if provided
+    if (roomTypeFilter) {
+      if (Array.isArray(roomTypeFilter)) {
+        whereClause.type = { in: roomTypeFilter };
+      } else {
+        whereClause.type = roomTypeFilter;
+      }
+    }
+
+    // Get existing chat rooms — filtered by type at DB level
+    // Note: We fetch all rooms first to apply category and search filters in-memory
+    // since these depend on participant profile data. Pagination applied after filtering.
     const matchedRooms = await this.prisma.chatRoom.findMany({
-      where: {
-        participants: { has: String(userId) },
-        status: 'active',
-      },
+      where: whereClause,
       include: {
         createdBy: {
           select: { id: true, username: true, email: true, firstName: true, lastName: true },
@@ -293,7 +451,8 @@ export class ChatService {
       potentialContactIds.push(...colleagues.map((c) => c.id));
     }
 
-    // Combine room participants + potential contacts
+    // Build the full list of user IDs to fetch profiles for.
+    // Only includes participants of real persisted rooms — GET is read-only.
     const allUserIds = [...new Set([...allParticipantIds, ...potentialContactIds])];
 
     const profiles = allUserIds.length
@@ -333,6 +492,31 @@ export class ChatService {
 
     const lastMessageMap = new Map(lastMessages.map((m) => [m.roomId, m]));
 
+    // For rooms without a lastMessageId (old data created before tracking was added),
+    // fall back to fetching the actual most recent message from the DB.
+    const roomsNeedingFallback = matchedRooms
+      .filter((r) => !r.lastMessageId && !lastMessageMap.has(r.id))
+      .map((r) => r.id);
+
+    if (roomsNeedingFallback.length) {
+      const fallbackMessages = await this.prisma.chatMessage.findMany({
+        where: { roomId: { in: roomsNeedingFallback }, deleted: false },
+        orderBy: { createdAt: 'desc' },
+        distinct: ['roomId'],
+        select: {
+          id: true,
+          roomId: true,
+          content: true,
+          type: true,
+          senderId: true,
+          createdAt: true,
+        },
+      });
+      for (const msg of fallbackMessages) {
+        lastMessageMap.set(msg.roomId, msg);
+      }
+    }
+
     // Count unread messages per room: sent by someone else AND not yet in readBy for this user
     const unreadCounts = matchedRooms.length
       ? await this.prisma.chatMessage.groupBy({
@@ -349,51 +533,26 @@ export class ChatService {
 
     const unreadMap = new Map(unreadCounts.map((u) => [u.roomId, u._count.id]));
 
-    const enriched = matchedRooms.map((room) => ({
-      ...room,
-      participantProfiles: room.participants
+    const enriched = matchedRooms.map((room) => {
+      const roomProfiles = room.participants
         .map(Number)
         .filter((id) => id !== userId)
         .map((id) => profileMap.get(id) ?? null)
-        .filter(Boolean),
-      lastMessage: lastMessageMap.get(room.id) ?? null,
-      unreadCount: unreadMap.get(room.id) ?? 0,
-    }));
+        .filter(Boolean);
 
-    // Create virtual rooms for contacts who don't have an existing room yet
-    const existingParticipantIds = new Set(allParticipantIds);
-    const contactsWithoutRooms = potentialContactIds.filter(
-      (id) => !existingParticipantIds.has(id)
-    );
-
-    const virtualRooms = contactsWithoutRooms.map((contactId) => {
-      const profile = profileMap.get(contactId);
       return {
-        id: -contactId, // Negative ID to indicate virtual room
-        name: null,
-        type: 'direct',
-        description: null,
-        participants: [String(userId), String(contactId)],
-        createdById: userId,
-        lastMessageId: null,
-        lastActivity: new Date(0), // Epoch to sort at bottom
-        contextId: null,
-        contextType: null,
-        pinnedMessages: [],
-        admins: [],
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        createdBy: null,
-        participantProfiles: profile ? [profile] : [],
-        lastMessage: null,
-        unreadCount: 0,
-        messages: [],
+        ...room,
+        participantProfiles: roomProfiles,
+        lastMessage: lastMessageMap.get(room.id) ?? null,
+        unreadCount: unreadMap.get(room.id) ?? 0,
       };
     });
 
-    // Combine existing rooms + virtual rooms
-    const allRooms = [...enriched, ...virtualRooms];
+    // Return only real persisted rooms — no virtual/synthetic rooms.
+    // Virtual rooms (negative IDs) were removed because they cause cache corruption,
+    // socket join failures, and UI instability. The frontend handles new conversations
+    // by calling POST /chat/rooms/direct when the user initiates a chat.
+    const allRooms = enriched;
 
     // Map a requested category string to the set of role codes it covers.
     // Handles spelling variants (COLLABORATOR vs COLLABORATEUR, COMPTABLE vs ACCOUNTANT)
@@ -408,16 +567,34 @@ export class ChatService {
       return r === c;
     }
 
-    // Apply category filter: keep only rooms where at least one other participant
-    // has a role.code that belongs to the requested category group.
+    // Apply category filter with OR logic: keep rooms where at least one other participant
+    // has a role.code that belongs to ANY of the requested categories.
     // Runs after profile enrichment because role data lives on users, not rooms.
-    let filtered = category
-      ? allRooms.filter((room) =>
-          room.participantProfiles.some(
-            (p: any) => p?.role?.code && categoryMatchesRoleCode(category, p.role.code)
-          )
-        )
-      : allRooms;
+    let filtered =
+      categoriesToFilter && categoriesToFilter.length > 0
+        ? allRooms.filter((room) => {
+            const isGroupRoom = room.type === 'group';
+
+            // Check if any category matches this room
+            return categoriesToFilter.some((cat) => {
+              const catLower = cat.toLowerCase();
+
+              // Group rooms match "group" category
+              if (catLower === 'group') {
+                return isGroupRoom;
+              }
+
+              // Direct rooms match role-based categories
+              if (!isGroupRoom) {
+                return room.participantProfiles.some(
+                  (p: any) => p?.role?.code && categoryMatchesRoleCode(cat, p.role.code)
+                );
+              }
+
+              return false;
+            });
+          })
+        : allRooms;
 
     // Apply search filter: keep only rooms where at least one other participant
     // has a name, username or email that contains the search term.
@@ -442,13 +619,27 @@ export class ChatService {
       });
     }
 
+    // Apply unread filter: keep only rooms with unread messages
+    if (unreadOnly) {
+      filtered = filtered.filter((room) => room.unreadCount > 0);
+    }
+
+    // Calculate pagination
+    const total = filtered.length;
+    const totalPages = Math.ceil(total / pageSize);
+    const skip = (page - 1) * pageSize;
+    const take = pageSize;
+
+    // Apply pagination to filtered results
+    const paginated = filtered.slice(skip, skip + take);
+
     // Return paginated shape expected by frontend
     return {
-      data: filtered,
-      total: filtered.length,
-      page: 1,
-      pageSize: 50,
-      totalPages: Math.ceil(filtered.length / 50),
+      data: paginated,
+      total,
+      page,
+      pageSize,
+      totalPages,
     };
   }
 
@@ -477,6 +668,21 @@ export class ChatService {
     });
 
     return rooms;
+  }
+
+  async updateRoom(roomId: number, userId: number, data: { name?: string }) {
+    const room = await this.getRoomById(roomId, userId);
+
+    if (!room.admins.includes(String(userId))) {
+      throw new ForbiddenException('Seuls les admins peuvent modifier ce groupe');
+    }
+
+    const updated = await this.prisma.chatRoom.update({
+      where: { id: roomId },
+      data: { ...(data.name !== undefined && { name: data.name }) },
+    });
+
+    return updated;
   }
 
   async addParticipant(roomId: number, userId: number, participantId: number) {
@@ -510,13 +716,28 @@ export class ChatService {
       throw new ForbiddenException('Seuls les admins peuvent retirer des participants');
     }
 
-    // Retirer le participant
+    // Empêcher un admin de se retirer lui-même
+    if (userId === participantId) {
+      throw new ForbiddenException('Un admin ne peut pas se retirer lui-même de la salle');
+    }
+
+    // Synchroniser admins[] : retirer participantId des admins s'il y était
+    const updatedAdmins = room.admins.filter((a) => a !== String(participantId));
+
+    // S'assurer qu'il reste au moins un admin après la suppression
+    if (updatedAdmins.length === 0) {
+      throw new ForbiddenException(
+        'Impossible de retirer ce participant : la salle se retrouverait sans admin'
+      );
+    }
+
     const updatedParticipants = room.participants.filter((p) => p !== String(participantId));
 
     await this.prisma.chatRoom.update({
       where: { id: roomId },
       data: {
         participants: updatedParticipants,
+        admins: updatedAdmins,
       },
     });
 
@@ -533,16 +754,16 @@ export class ChatService {
 
     // Upload des fichiers si présents
     if (files && files.length > 0) {
-      console.log('[ChatService] sendMessage file upload:', {
-        roomId: dto.roomId,
-        dtoType: dto.type,
-        filesCount: files.length,
-        firstFile: {
-          originalname: files[0].originalname,
-          mimetype: files[0].mimetype,
-          size: files[0].size,
-        },
-      });
+      // Validate file sizes (10MB limit)
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+      for (const file of files) {
+        if (file.size > MAX_FILE_SIZE) {
+          throw new BadRequestException(
+            `Le fichier "${file.originalname}" est trop volumineux. Taille maximale: 10 MB.`
+          );
+        }
+      }
+
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         select: { companyId: true },
@@ -571,12 +792,6 @@ export class ChatService {
     // Créer le message
     // For file messages: store objectName in content field (no attachments[] column in schema)
     const messageContent = attachmentUrls.length > 0 ? attachmentUrls[0] : dto.content;
-    console.log('[ChatService] messageContent computed:', {
-      hasAttachments: attachmentUrls.length > 0,
-      messageContent: attachmentUrls.length > 0 ? messageContent : '(dto.content)',
-      dtoContent: dto.content,
-      dtoType: dto.type,
-    });
 
     const message = await this.prisma.chatMessage.create({
       data: {
@@ -590,6 +805,7 @@ export class ChatService {
         requestId: dto.requestId ?? null,
         taskId: dto.taskId ?? null,
         appointmentId: dto.appointmentId ?? null,
+        callId: dto.callId ?? null,
         readBy: [String(userId)],
       },
       include: {
@@ -608,15 +824,16 @@ export class ChatService {
             type: true,
           },
         },
+        call: {
+          select: {
+            id: true,
+            callType: true,
+            status: true,
+            duration: true,
+            initiatorId: true,
+          },
+        },
       },
-    });
-    console.log('[ChatService] chatMessage created:', {
-      id: message.id,
-      roomId: message.roomId,
-      senderId: message.senderId,
-      type: message.type,
-      contentPrefix:
-        typeof message.content === 'string' ? message.content.slice(0, 30) : message.content,
     });
 
     // Mettre à jour lastActivity de la salle
@@ -665,6 +882,15 @@ export class ChatService {
             hour: true,
             status: true,
             type: true,
+          },
+        },
+        call: {
+          select: {
+            id: true,
+            callType: true,
+            status: true,
+            duration: true,
+            initiatorId: true,
           },
         },
       },
@@ -730,6 +956,11 @@ export class ChatService {
 
     if (!message) {
       throw new NotFoundException('Message introuvable');
+    }
+
+    // Vérifier que l'utilisateur appartient à la room du message
+    if (message.roomId) {
+      await this.getRoomById(message.roomId, userId); // lève ForbiddenException si non participant
     }
 
     // Ajouter l'utilisateur à readBy s'il n'y est pas déjà
@@ -885,6 +1116,7 @@ export class ChatService {
           room: {
             id: msg.room?.id,
             name: msg.room?.name,
+            type: msg.room?.type,
             category,
           },
           fileUrl,
@@ -1245,5 +1477,21 @@ export class ChatService {
     });
 
     return messages;
+  }
+
+  async getUserById(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        photo: true,
+      },
+    });
+
+    return user;
   }
 }

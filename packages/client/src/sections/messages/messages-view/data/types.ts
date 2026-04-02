@@ -1,11 +1,22 @@
-export type ConversationCategory = "client" | "collaborateur";
+export type ConversationCategory =
+  | "client"
+  | "collaborateur"
+  | "comptable"
+  | "group";
+
+export type GroupMember = {
+  id: number;
+  name: string;
+  role: "client" | "collaborateur" | "comptable";
+  avatar: string;
+};
 
 export type Conversation = {
   id: number;
   name: string;
   role: string;
   preview: string;
-  fullDate: string;
+  fullDate: string | null;
   time?: string;
   avatar: string;
   avatarColor: string;
@@ -13,7 +24,14 @@ export type Conversation = {
   online: boolean;
   unreadCount: number;
   phone: string;
-  category: ConversationCategory; // ✅ ajouté
+  category: ConversationCategory;
+  // Group-specific fields
+  isGroup?: boolean;
+  members?: GroupMember[];
+  memberCount?: number;
+  createdBy?: number;
+  // 1:1-specific fields
+  participantId?: number;
 };
 
 export type MessageFile = {
@@ -48,19 +66,31 @@ export type MessageAppointment = {
   type: string;
 };
 
+export type MessageCall = {
+  id: number;
+  callType: "audio" | "video";
+  status: "missed" | "completed" | "rejected" | "cancelled";
+  duration?: number;
+  initiatorId: number;
+};
+
 export type Message = {
   id: number;
-  type: "text" | "file" | "request" | "task" | "appointment";
+  type: "text" | "file" | "request" | "task" | "appointment" | "call";
   text?: string;
   html?: string;
   file?: MessageFile;
   request?: MessageRequest;
   task?: MessageTask;
   appointment?: MessageAppointment;
+  call?: MessageCall;
   mine: boolean;
   large?: boolean;
   time?: string;
   date: string;
+  // For group messages
+  senderName?: string;
+  senderAvatar?: string;
 };
 
 export type SharedMediaFile = {

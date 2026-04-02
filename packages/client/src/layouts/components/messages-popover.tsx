@@ -163,7 +163,15 @@ function MessageItem({
             color: theme.palette.primary.darker,
           }}
         >
-          {getAvatarInitials(message.sender)}
+          {message.room.type === "group"
+            ? (message.room.name || "G")
+                .split(" ")
+                .map((w) => w[0])
+                .filter(Boolean)
+                .join("")
+                .slice(0, 2)
+                .toUpperCase()
+            : getAvatarInitials(message.sender)}
         </Avatar>
 
         {message.unread && (
@@ -204,7 +212,9 @@ function MessageItem({
               lineHeight: 1.3,
             }}
           >
-            {getSenderName(message.sender)}
+            {message.room.type === "group"
+              ? message.room.name || "Groupe"
+              : getSenderName(message.sender)}
           </Typography>
           <Typography
             sx={{
@@ -255,7 +265,9 @@ function MessageItem({
               lineHeight: 1.4,
             }}
           >
-            {preview.text || "Message"}
+            {message.room.type === "group"
+              ? `${getSenderName(message.sender)}: ${preview.text || "Message"}`
+              : preview.text || "Message"}
           </Typography>
         </Box>
       </Box>
@@ -285,7 +297,17 @@ export function MessagesPopover({ sx, ...other }: MessagesPopoverProps) {
   const [markAllAsRead, { isLoading: isMarkingAllAsRead }] =
     useMarkAllRoomsAsReadMutation();
 
-  const messages = recentMessagesData?.messages ?? [];
+  // Deduplicate by roomId — keep only the latest message per room
+  const messages = useMemo(() => {
+    const raw = recentMessagesData?.messages ?? [];
+    const seen = new Map<number, RecentMessage>();
+    for (const msg of raw) {
+      if (!seen.has(msg.roomId)) {
+        seen.set(msg.roomId, msg);
+      }
+    }
+    return Array.from(seen.values());
+  }, [recentMessagesData]);
   const totalUnread = recentMessagesData?.unreadCount ?? 0;
   const hasUnread = totalUnread > 0;
 
@@ -303,9 +325,16 @@ export function MessagesPopover({ sx, ...other }: MessagesPopoverProps) {
   const handleMessageClick = useCallback(
     (message: RecentMessage) => {
       handleClosePopover();
-      navigate(
-        `${dashboardBase}/messages?roomId=${message.roomId}&category=${message.room.category}`,
-      );
+      // Use room.type to determine the correct tab:
+      // - "group" → group tab
+      // - anything else → derive from room.category if available, otherwise omit
+      //   so index.tsx can search across all tabs
+      const category =
+        message.room.type === "group" ? "group" : (message.room.category ?? "");
+      const params = new URLSearchParams();
+      params.set("roomId", String(message.roomId));
+      if (category) params.set("category", category);
+      navigate(`${dashboardBase}/messages?${params.toString()}`);
     },
     [navigate, handleClosePopover, dashboardBase],
   );

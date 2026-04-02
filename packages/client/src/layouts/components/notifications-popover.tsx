@@ -14,7 +14,7 @@ import ListSubheader from "@mui/material/ListSubheader";
 import CircularProgress from "@mui/material/CircularProgress";
 import { useTheme, alpha } from "@mui/material/styles";
 
-import { Bell, BellDot } from "lucide-react";
+import { Bell } from "lucide-react";
 
 import { Iconify } from "src/components/iconify";
 import { Scrollbar } from "src/components/scrollbar";
@@ -268,7 +268,9 @@ export function NotificationsPopover({
         textAlign: "center",
       }}
     >
-      <BellDot size={20} sx={{ color: "text.disabled", mb: 1, opacity: 0.6 }} />
+      <Box sx={{ mb: 1, opacity: 0.6 }}>
+        <Bell size={20} color={theme.palette.text.disabled} />
+      </Box>
       <Typography variant="body2" color="text.disabled">
         Aucune notification
       </Typography>

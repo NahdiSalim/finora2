@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Avatar from "@mui/material/Avatar";
 import Typography from "@mui/material/Typography";
+import IconButton from "@mui/material/IconButton";
 import CircleIcon from "@mui/icons-material/Circle";
 import useMediaQuery from "@mui/material/useMediaQuery";
-import { useTheme } from "@mui/material/styles";
+import { useTheme, alpha } from "@mui/material/styles";
+import { Settings, Users } from "lucide-react";
 import dayjs from "dayjs";
 
 import type { Conversation } from "../data/types";
@@ -13,14 +15,19 @@ type ConversationItemProps = {
   conversation: Conversation;
   selected: boolean;
   onClick: () => void;
+  showManageButton?: boolean;
+  onManage?: () => void;
 };
 
 const getConversationDateLabel = (
-  fullDate: string,
+  fullDate: string | null | undefined,
   time?: string,
   nowRef?: dayjs.Dayjs,
 ) => {
+  if (!fullDate) return "";
   const date = dayjs(fullDate);
+  if (!date.isValid()) return "";
+
   const now = nowRef ?? dayjs();
 
   if (date.isSame(now, "minute")) {
@@ -38,6 +45,8 @@ export default function ConversationItem({
   conversation,
   selected,
   onClick,
+  showManageButton = false,
+  onManage,
 }: ConversationItemProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -114,10 +123,10 @@ export default function ConversationItem({
             fontWeight: 700,
           }}
         >
-          {conversation.avatar}
+          {conversation.isGroup ? <Users size={22} /> : conversation.avatar}
         </Avatar>
 
-        {conversation.online && (
+        {conversation.online && !conversation.isGroup && (
           <CircleIcon
             sx={{
               position: "absolute",
@@ -165,18 +174,39 @@ export default function ConversationItem({
             {conversation.name}
           </Typography>
 
-          <Typography
-            sx={{
-              flexShrink: 0,
-              whiteSpace: "nowrap",
-              color: theme.palette.info.light,
-              fontSize: isMobile ? 12 : 12,
-              fontWeight: 400,
-              lineHeight: "18px",
-            }}
-          >
-            {displayDate}
-          </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+            <Typography
+              sx={{
+                flexShrink: 0,
+                whiteSpace: "nowrap",
+                color: theme.palette.info.light,
+                fontSize: isMobile ? 12 : 12,
+                fontWeight: 400,
+                lineHeight: "18px",
+              }}
+            >
+              {displayDate}
+            </Typography>
+            {conversation.unreadCount > 0 && (
+              <Box
+                sx={{
+                  minWidth: 20,
+                  height: 20,
+                  px: 0.75,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "10px",
+                  bgcolor: theme.palette.primary.main,
+                  color: theme.palette.common.white,
+                  fontSize: 11,
+                  fontWeight: 700,
+                }}
+              >
+                {conversation.unreadCount}
+              </Box>
+            )}
+          </Box>
         </Box>
 
         <Typography
@@ -214,6 +244,28 @@ export default function ConversationItem({
           >
             {conversation.preview}
           </Typography>
+
+          {/* Group Management Button */}
+          {conversation.isGroup && showManageButton && onManage && (
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                onManage();
+              }}
+              sx={{
+                width: 28,
+                height: 28,
+                color: theme.palette.primary.main,
+                bgcolor: alpha(theme.palette.primary.main, 0.08),
+                "&:hover": {
+                  bgcolor: alpha(theme.palette.primary.main, 0.15),
+                },
+              }}
+            >
+              <Settings size={16} />
+            </IconButton>
+          )}
         </Box>
       </Box>
     </Box>

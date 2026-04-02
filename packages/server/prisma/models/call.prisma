@@ -1,0 +1,22 @@
+model Call {
+  id           Int       @id @default(autoincrement())
+  roomId       Int
+  initiatorId  Int
+  callType     String    // "audio" | "video"
+  status       String    @default("initiated") // "initiated" | "ongoing" | "completed" | "missed" | "rejected"
+  participants String[]  // Array of participant user IDs
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+  duration     Int?      // Duration in seconds
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  room         ChatRoom  @relation("RoomCalls", fields: [roomId], references: [id])
+  initiator    User      @relation("CallInitiator", fields: [initiatorId], references: [id])
+  messages     ChatMessage[] @relation("ChatMessageCall")
+
+  @@index([roomId])
+  @@index([initiatorId])
+  @@index([status])
+  @@index([startedAt])
+}

@@ -4,6 +4,7 @@ import { ApiError } from 'src/common/errors/api-error';
 import * as bcrypt from 'bcrypt';
 import { MailService } from '../mail/mail.service';
 import { MinioService } from 'src/common/services/minio.service';
+import { ChatService } from '../chat/chat.service';
 import { CreateCollaboratorDto } from './dto/create-collaborator.dto';
 import { CreateClientDto } from './dto/create-client.dto';
 import { RoleCode } from 'src/common/enums/role.enum';
@@ -15,7 +16,8 @@ export class AccountantService {
   constructor(
     private prisma: PrismaService,
     private mailService: MailService,
-    private minioService: MinioService
+    private minioService: MinioService,
+    private chatService: ChatService
   ) {}
 
   // Create collaborator (by accountant)
@@ -111,6 +113,13 @@ export class AccountantService {
         );
       } catch (error) {
         console.error('Failed to send welcome email:', error);
+      }
+
+      // Auto-create direct chat room so the collaborator appears immediately in messaging
+      try {
+        await this.chatService.createDirectRoomIfNotExists(accountantId, collaborator.id);
+      } catch (error) {
+        console.error('Failed to create direct chat room for collaborator:', error);
       }
 
       return {
@@ -299,6 +308,13 @@ export class AccountantService {
         );
       } catch (error) {
         console.error('Failed to send welcome email:', error);
+      }
+
+      // Auto-create direct chat room so the client appears immediately in messaging
+      try {
+        await this.chatService.createDirectRoomIfNotExists(accountantId, client.id);
+      } catch (error) {
+        console.error('Failed to create direct chat room for client:', error);
       }
 
       // Return simple response with essential information

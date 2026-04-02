@@ -1,8 +1,12 @@
 import { useState, useCallback, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
 import { Box, Typography, Chip, useTheme, alpha } from "@mui/material";
 import { Calendar, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { useDashboardBase } from "src/hooks/useDashboardBase";
+import type { RootState } from "src/lib/store";
 import AttachmentSelectionModal from "./AttachmentSelectionModal";
 import { useGetChatAccessibleAppointmentsQuery } from "../../../../lib/services/chatApi";
 import type { ChatMessageAppointment } from "../../../../lib/services/chatApi";
@@ -59,10 +63,21 @@ export default function AppointmentSelectionModal({
   clientId,
 }: AppointmentSelectionModalProps) {
   const theme = useTheme();
+  const navigate = useNavigate();
+  const dashboardBase = useDashboardBase();
   const [page, setPage] = useState(1);
   const [allAppointments, setAllAppointments] = useState<
     ChatMessageAppointment[]
   >([]);
+
+  // Get current user role - both clients and accountants can create appointments
+  const userRole = useSelector((state: RootState) => state.auth.user?.role);
+  const roleCode = typeof userRole === "string" ? userRole : userRole?.code;
+  const isClientOrAccountant =
+    roleCode?.toLowerCase() === "client" ||
+    roleCode?.toLowerCase().startsWith("client_") ||
+    roleCode?.toLowerCase() === "comptable" ||
+    roleCode?.toLowerCase() === "accountant";
 
   const { data, isLoading, isFetching } = useGetChatAccessibleAppointmentsQuery(
     { clientId: clientId!, page, limit: 5 },
@@ -102,6 +117,12 @@ export default function AppointmentSelectionModal({
       type: appointment.type,
     });
     onClose();
+  };
+
+  const handleCreateAppointment = () => {
+    onClose();
+    // Navigate to appointments page where the user can create a new appointment
+    navigate(`${dashboardBase}/appointments?create=true`);
   };
 
   const renderAppointmentItem = (appointment: ChatMessageAppointment) => {
@@ -218,7 +239,15 @@ export default function AppointmentSelectionModal({
       onLoadMore={handleLoadMore}
       onSelect={handleSelect}
       renderItem={renderAppointmentItem}
-      emptyMessage="Aucun rendez-vous disponible pour ce client"
+      emptyMessage="Aucun rendez-vous disponible"
+      emptyAction={
+        isClientOrAccountant
+          ? {
+              label: "Créer un rendez-vous",
+              onClick: handleCreateAppointment,
+            }
+          : undefined
+      }
     />
   );
 }

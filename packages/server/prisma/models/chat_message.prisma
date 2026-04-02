@@ -5,7 +5,7 @@ model ChatMessage {
   documentId      Int?
   senderId        Int
   content         String    @db.Text
-  type            String    @default("text") // "text" | "file" | "image" | "system"
+  type            String    @default("text") // "text" | "file" | "image" | "system" | "call"
   attachmentId    Int?
   readBy          String[]  // Array of user IDs who read the message
   reactions       String[]  // JSON array of reaction objects
@@ -22,6 +22,7 @@ model ChatMessage {
   requestId       Int?
   taskId          Int?
   appointmentId   Int?
+  callId          Int?
 
   room            ChatRoom?      @relation(fields: [roomId], references: [id])
   thread          ChatThread?    @relation(fields: [threadId], references: [id])
@@ -29,6 +30,7 @@ model ChatMessage {
   request         Request?       @relation("ChatMessageRequest", fields: [requestId], references: [id], onDelete: SetNull)
   task            Task?          @relation("ChatMessageTask", fields: [taskId], references: [id], onDelete: SetNull)
   appointment     Appointment?   @relation("ChatMessageAppointment", fields: [appointmentId], references: [id], onDelete: SetNull)
+  call            Call?          @relation("ChatMessageCall", fields: [callId], references: [id], onDelete: SetNull)
 
   @@index([roomId])
   @@index([threadId])
@@ -37,4 +39,5 @@ model ChatMessage {
   @@index([requestId])
   @@index([taskId])
   @@index([appointmentId])
+  @@index([callId])
 }

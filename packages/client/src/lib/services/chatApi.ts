@@ -72,6 +72,14 @@ export interface ChatMessageAppointment {
   type: string;
 }
 
+export interface ChatMessageCall {
+  id: number;
+  callType: string;
+  status: string;
+  duration?: number;
+  initiatorId: number;
+}
+
 export interface ChatMessage {
   id: number;
   roomId: number;
@@ -84,6 +92,7 @@ export interface ChatMessage {
   requestId?: number;
   taskId?: number;
   appointmentId?: number;
+  callId?: number;
   readBy?: string[];
   deleted: boolean;
   edited: boolean;
@@ -95,6 +104,7 @@ export interface ChatMessage {
   request?: ChatMessageRequest;
   task?: ChatMessageTask;
   appointment?: ChatMessageAppointment;
+  call?: ChatMessageCall;
 }
 
 export interface GetRoomsResponse {
@@ -106,11 +116,19 @@ export interface GetRoomsResponse {
 }
 
 export interface GetRoomsParams {
-  /** Role code to filter the other participant by. Not the same as the tab label. */
+  /** Array of role codes to filter by (OR logic) */
+  categories?: string[];
+  /** Legacy single category support (deprecated) */
   category?: string;
+  /** Search term for participant names and messages */
   search?: string;
-  date?: string; // YYYY-MM-DD
+  /** Filter by date (YYYY-MM-DD) */
+  date?: string;
+  /** Show only unread conversations */
+  unreadOnly?: boolean;
+  /** Page number for pagination */
   page?: number;
+  /** Number of results per page */
   pageSize?: number;
 }
 
@@ -161,6 +179,7 @@ export interface RecentMessage {
   room: {
     id: number;
     name?: string;
+    type?: string;
     category: string;
   };
   fileUrl?: string | null;
@@ -224,9 +243,13 @@ export const chatApi = createApi({
     getUserRooms: builder.query<GetRoomsResponse, GetRoomsParams | undefined>({
       query: (params) => {
         const qs = new URLSearchParams();
+        if (params?.categories && params.categories.length > 0) {
+          params.categories.forEach((cat) => qs.append("categories", cat));
+        }
         if (params?.category) qs.set("category", params.category);
         if (params?.search) qs.set("search", params.search);
         if (params?.date) qs.set("date", params.date);
+        if (params?.unreadOnly) qs.set("unreadOnly", "true");
         if (params?.page !== undefined) qs.set("page", String(params.page));
         if (params?.pageSize !== undefined)
           qs.set("pageSize", String(params.pageSize));
@@ -260,6 +283,45 @@ export const chatApi = createApi({
         body: { targetUserId },
       }),
       invalidatesTags: [{ type: "ChatRooms", id: "LIST" }],
+    }),
+
+    updateRoom: builder.mutation<ChatRoom, { roomId: number; name?: string }>({
+      query: ({ roomId, name }) => ({
+        url: `/chat/rooms/${roomId}`,
+        method: "PATCH",
+        body: { name },
+      }),
+      invalidatesTags: (_result, _err, { roomId }) => [
+        { type: "ChatRooms", id: roomId },
+        { type: "ChatRooms", id: "LIST" },
+      ],
+    }),
+
+    addParticipant: builder.mutation<
+      { message: string },
+      { roomId: number; participantId: number }
+    >({
+      query: ({ roomId, participantId }) => ({
+        url: `/chat/rooms/${roomId}/participants`,
+        method: "POST",
+        body: { participantId },
+      }),
+      invalidatesTags: (_result, _err, { roomId }) => [
+        { type: "ChatRooms", id: roomId },
+      ],
+    }),
+
+    removeParticipant: builder.mutation<
+      { message: string },
+      { roomId: number; participantId: number }
+    >({
+      query: ({ roomId, participantId }) => ({
+        url: `/chat/rooms/${roomId}/participants/${participantId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (_result, _err, { roomId }) => [
+        { type: "ChatRooms", id: roomId },
+      ],
     }),
 
     getRoomMessages: builder.query<
@@ -647,6 +709,9 @@ export const {
   useMarkAllRoomsAsReadMutation,
   useEditMessageMutation,
   useDeleteMessageMutation,
+  useUpdateRoomMutation,
+  useAddParticipantMutation,
+  useRemoveParticipantMutation,
   useGetSharedDocumentsQuery,
   useGetUserRequestsQuery,
   useGetChatAccessibleRequestsQuery,

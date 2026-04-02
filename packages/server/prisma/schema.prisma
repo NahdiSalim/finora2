@@ -234,7 +234,7 @@ model ChatMessage {
   documentId      Int?
   senderId        Int
   content         String    @db.Text
-  type            String    @default("text") // "text" | "file" | "image" | "system"
+  type            String    @default("text") // "text" | "file" | "image" | "system" | "call"
   attachmentId    Int?
   readBy          String[]  // Array of user IDs who read the message
   reactions       String[]  // JSON array of reaction objects
@@ -293,7 +293,7 @@ model ChatRoom {
   createdBy       User      @relation("ChatRoomCreatedBy", fields: [createdById], references: [id])
   
   messages        ChatMessage[]
-  calls           Call[]
+  calls           Call[]    @relation("RoomCalls")
 
   @@index([createdById])
   @@index([contextId])
@@ -304,25 +304,26 @@ model ChatRoom {
 
 // From call.prisma
 model Call {
-  id            Int       @id @default(autoincrement())
-  roomId        Int
-  initiatorId   Int
-  callType      String    // "audio" | "video"
-  status        String    @default("initiated") // "initiated" | "ongoing" | "completed" | "missed" | "rejected"
-  participants  String[]  // Array of user IDs who joined
-  startedAt     DateTime  @default(now())
-  endedAt       DateTime?
-  duration      Int?      // Duration in seconds
-  createdAt     DateTime  @default(now())
+  id           Int       @id @default(autoincrement())
+  roomId       Int
+  initiatorId  Int
+  callType     String    // "audio" | "video"
+  status       String    @default("initiated") // "initiated" | "ongoing" | "completed" | "missed" | "rejected"
+  participants String[]  // Array of participant user IDs
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+  duration     Int?      // Duration in seconds
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  room          ChatRoom     @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  initiator     User         @relation("CallInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
-  chatMessages  ChatMessage[] @relation("ChatMessageCall")
+  room         ChatRoom  @relation("RoomCalls", fields: [roomId], references: [id])
+  initiator    User      @relation("CallInitiator", fields: [initiatorId], references: [id])
+  messages     ChatMessage[] @relation("ChatMessageCall")
 
   @@index([roomId])
   @@index([initiatorId])
+  @@index([status])
   @@index([startedAt])
-  @@map("calls")
 }
 
 

@@ -125,56 +125,33 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const iAmClient = isClientRole(myRoleCode);
   const iAmCollaborateur = isCollaborateurRole(myRoleCode);
 
-  // Tabs per role:
-  // - Comptable      → Clients | Collaborateurs | Groupes
-  // - Client         → Comptables | Groupes
-  // - Collaborateur  → Comptables | Collaborateurs | Groupes
-  // - Other          → Collaborateurs | Groupes (fallback)
-  const visibleTabs = useMemo(
-    () =>
-      iAmComptable
-        ? [
-            { label: "Clients", value: "client" as const },
-            { label: "Collaborateurs", value: "collaborateur" as const },
-            { label: "Groupes", value: "group" as const },
-          ]
-        : iAmClient
-          ? [
-              { label: "Comptables", value: "comptable" as const },
-              { label: "Groupes", value: "group" as const },
-            ]
-          : iAmCollaborateur
-            ? [
-                { label: "Comptables", value: "comptable" as const },
-                { label: "Collaborateurs", value: "collaborateur" as const },
-                { label: "Groupes", value: "group" as const },
-              ]
-            : [
-                { label: "Collaborateurs", value: "collaborateur" as const },
-                { label: "Groupes", value: "group" as const },
-              ],
-    [iAmComptable, iAmClient, iAmCollaborateur],
-  );
+  // Determine user role for filters
+  const userRoleForFilters: "comptable" | "client" | "collaborateur" | "other" =
+    iAmComptable
+      ? "comptable"
+      : iAmClient
+        ? "client"
+        : iAmCollaborateur
+          ? "collaborateur"
+          : "other";
 
   // ── All local state declared first so roomsParams can reference them ───────
-  const [activeTab, setActiveTab] = useState<ConversationCategory>(() => {
-    const cat = searchParams.get("category");
-    if (
-      cat === "client" ||
-      cat === "collaborateur" ||
-      cat === "comptable" ||
-      cat === "group"
-    ) {
-      return cat;
-    }
-    // Default tab per role
-    if (iAmComptable) return "client";
-    if (iAmCollaborateur) return "comptable"; // Collaborateur starts on Comptables tab
-    if (iAmClient) return "comptable"; // Client starts on Comptables tab
-    return "collaborateur"; // fallback
+  const [activeFilters, setActiveFilters] = useState<
+    (ConversationCategory | "unread")[]
+  >(() => {
+    // Default filters per role - show all categories by default
+    if (iAmComptable) return ["client", "collaborateur", "group"];
+    if (iAmClient) return ["comptable", "group"];
+    if (iAmCollaborateur) return ["comptable", "collaborateur", "group"];
+    return ["collaborateur", "group"];
   });
-  const ROOMS_PAGE_SIZE = 500;
+
+  const ROOMS_PAGE_SIZE = 10;
   const MESSAGES_PAGE_SIZE = 20;
+  const [conversationsPage, setConversationsPage] = useState<number>(1);
+  const [hasMoreConversations, setHasMoreConversations] =
+    useState<boolean>(true);
+
   const [selectedConversation, setSelectedConversation] = useState<number>(
     () => {
       const rid = Number(searchParams.get("roomId"));
@@ -182,6 +159,11 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     },
   );
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState<string>("");
+  const searchDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
   const [selectedDateFilter, setSelectedDateFilter] = useState<Dayjs | null>(
     null,
   );
@@ -194,19 +176,54 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const selectedConversationRef = useRef(selectedConversation);
   selectedConversationRef.current = selectedConversation;
 
+  // Search debouncing: update debouncedSearchTerm after 500ms of no typing
+  useEffect(() => {
+    if (searchDebounceTimer.current) {
+      clearTimeout(searchDebounceTimer.current);
+    }
+
+    searchDebounceTimer.current = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setConversationsPage(1); // Reset to first page on search
+    }, 500);
+
+    return () => {
+      if (searchDebounceTimer.current) {
+        clearTimeout(searchDebounceTimer.current);
+      }
+    };
+  }, [searchTerm]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setConversationsPage(1);
+  }, [activeFilters, selectedDateFilter]);
+
   // ── API query params (drives the rooms list query) ─────────────────────────
   const roomsParams = useMemo<GetRoomsParams>(() => {
+    const categoryFilters = activeFilters.filter(
+      (f) => f !== "unread",
+    ) as ConversationCategory[];
+    const hasUnreadFilter = activeFilters.includes("unread");
+
     const p: GetRoomsParams = {
-      page: 1,
+      page: conversationsPage,
       pageSize: ROOMS_PAGE_SIZE,
+      categories: categoryFilters.length > 0 ? categoryFilters : undefined,
+      search: debouncedSearchTerm || undefined,
+      date: selectedDateFilter
+        ? selectedDateFilter.format("YYYY-MM-DD")
+        : undefined,
+      unreadOnly: hasUnreadFilter || undefined,
     };
-    if (activeTab === "group") {
-      p.category = "group";
-    } else {
-      p.category = resolveApiCategory(activeTab, myRoleCode);
-    }
+
     return p;
-  }, [activeTab, myRoleCode]);
+  }, [
+    activeFilters,
+    conversationsPage,
+    debouncedSearchTerm,
+    selectedDateFilter,
+  ]);
 
   // Keep a ref so socket callbacks can always read the current params
   const roomsParamsRef = useRef(roomsParams);
@@ -221,62 +238,40 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     [roomsResponse?.data],
   );
 
-  // Fetch rooms per category for badge counts and group modal contacts.
-  // Each call has an explicit category so the backend never returns a mix.
-  // The params objects are also stored in refs so socket handlers can patch
-  // the correct RTK Query cache entries (cache key = serialized params object).
-  const badgeDirectCategory = iAmComptable ? "client" : "comptable";
-  const badgeDirectParams = useMemo<GetRoomsParams>(
-    () => ({ page: 1, pageSize: 200, category: badgeDirectCategory }),
-    [badgeDirectCategory],
-  );
-  const badgeCollabParams = useMemo<GetRoomsParams>(
-    () => ({ page: 1, pageSize: 200, category: "collaborateur" }),
-    [],
-  );
-  const badgeGroupParams = useMemo<GetRoomsParams>(
-    () => ({ page: 1, pageSize: 200, category: "group" }),
-    [],
+  // Update hasMore when response changes
+  useEffect(() => {
+    if (roomsResponse) {
+      setHasMoreConversations(roomsResponse.page < roomsResponse.totalPages);
+    }
+  }, [roomsResponse]);
+
+  // Fetch all rooms (no filters) for badge counts and group modal contacts
+  const allRoomsParams = useMemo<GetRoomsParams>(
+    () => ({
+      page: 1,
+      pageSize: 500,
+      categories: iAmComptable
+        ? ["client", "collaborateur", "group"]
+        : iAmClient
+          ? ["comptable", "group"]
+          : iAmCollaborateur
+            ? ["comptable", "collaborateur", "group"]
+            : ["collaborateur", "group"],
+    }),
+    [iAmComptable, iAmClient, iAmCollaborateur],
   );
 
-  const badgeDirectParamsRef = useRef(badgeDirectParams);
-  badgeDirectParamsRef.current = badgeDirectParams;
-  const badgeCollabParamsRef = useRef(badgeCollabParams);
-  badgeCollabParamsRef.current = badgeCollabParams;
-  const badgeGroupParamsRef = useRef(badgeGroupParams);
-  badgeGroupParamsRef.current = badgeGroupParams;
+  const allRoomsParamsRef = useRef(allRoomsParams);
+  allRoomsParamsRef.current = allRoomsParams;
 
-  const { data: directRoomsForBadges } = useGetUserRoomsQuery(
-    badgeDirectParams,
-    { refetchOnMountOrArgChange: true },
-  );
-  const { data: collaborateurRoomsForBadges } = useGetUserRoomsQuery(
-    badgeCollabParams,
-    {
-      skip: !iAmComptable && !iAmCollaborateur,
-      refetchOnMountOrArgChange: true,
-    },
-  );
-  const { data: groupRoomsForBadges } = useGetUserRoomsQuery(badgeGroupParams, {
+  const { data: allRoomsResponse } = useGetUserRoomsQuery(allRoomsParams, {
     refetchOnMountOrArgChange: true,
   });
 
-  // Merge all category responses into one array for badge calculation and group modal
+  // Use allRoomsResponse for both badge counts and group modal contacts
   const allContactsResponse = useMemo(() => {
-    const data = [
-      ...(directRoomsForBadges?.data ?? []),
-      ...(collaborateurRoomsForBadges?.data ?? []),
-      ...(groupRoomsForBadges?.data ?? []),
-    ];
-    // Deduplicate by room id
-    const seen = new Set<number>();
-    const deduped = data.filter((r) => {
-      if (seen.has(r.id)) return false;
-      seen.add(r.id);
-      return true;
-    });
-    return { data: deduped };
-  }, [directRoomsForBadges, collaborateurRoomsForBadges, groupRoomsForBadges]);
+    return { data: allRoomsResponse?.data ?? [] };
+  }, [allRoomsResponse]);
 
   // Derive real contacts for the group creation modal, filtered by current user's role
   const { groupModalClients, groupModalCollaborators } = useMemo(() => {
@@ -344,6 +339,39 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       groupModalCollaborators: collabs,
     };
   }, [allContactsResponse, currentUid, iAmComptable]);
+
+  // Calculate badge counts from all rooms
+  const badgeCounts = useMemo(() => {
+    const allConversations = (allRoomsResponse?.data ?? []).map((room) =>
+      mapRoomToConversation(room, currentUid),
+    );
+
+    const counts: Record<string, number> = {
+      client: 0,
+      comptable: 0,
+      collaborateur: 0,
+      group: 0,
+      unread: 0,
+    };
+
+    allConversations.forEach((conv) => {
+      if (conv.unreadCount > 0) {
+        counts.unread += conv.unreadCount;
+      }
+
+      if (conv.category && counts[conv.category] !== undefined) {
+        counts[conv.category] += conv.unreadCount;
+      }
+    });
+
+    return counts;
+  }, [allRoomsResponse, currentUid]);
+
+  // Load more conversations (infinite scroll)
+  const handleLoadMoreConversations = useCallback(() => {
+    if (!hasMoreConversations || roomsLoading) return;
+    setConversationsPage((prev) => prev + 1);
+  }, [hasMoreConversations, roomsLoading]);
 
   const [triggerSendMessage] = useSendMessageMutation();
   const [triggerGetOlderMessages] = useLazyGetRoomMessagesQuery();
@@ -521,12 +549,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       // Patch the active tab's cache (used for the conversation list)
       patchRoomsCache(roomsParamsRef.current);
 
-      // Also patch all badge caches so per-tab unread counts update in real-time
-      patchRoomsCache(badgeDirectParamsRef.current);
-      if (iAmComptable || iAmCollaborateur) {
-        patchRoomsCache(badgeCollabParamsRef.current);
-      }
-      patchRoomsCache(badgeGroupParamsRef.current);
+      // Also patch all rooms cache for badge counts
+      patchRoomsCache(allRoomsParamsRef.current);
 
       // Prevent stale optimistic preview overrides from overriding the
       // computed preview for the current authenticated user.
@@ -765,23 +789,13 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     return room.admins?.includes(String(currentUid)) ?? false;
   }, [selectedGroupForManagement, rawRooms, allContactsResponse, currentUid]);
 
+  // Since backend now handles all filtering, just apply conversation overrides
   const allConversations: Conversation[] = useMemo(() => {
-    let result: Conversation[];
-    if (activeTab === "group") {
-      result = apiConversations
-        .filter((c) => c.isGroup === true)
-        .map((c) => ({ ...c, ...(conversationOverrides[c.id] ?? {}) }));
-    } else {
-      result = apiConversations
-        .filter((c) => {
-          if (c.isGroup) return false;
-          return c.category === activeTab;
-        })
-        .map((c) => ({ ...c, ...(conversationOverrides[c.id] ?? {}) }));
-    }
-
-    return result;
-  }, [apiConversations, conversationOverrides, activeTab]);
+    return apiConversations.map((c) => ({
+      ...c,
+      ...(conversationOverrides[c.id] ?? {}),
+    }));
+  }, [apiConversations, conversationOverrides]);
 
   const allConversationsForBadges: Conversation[] = useMemo(() => {
     const allRooms = allContactsResponse?.data ?? [];
@@ -829,65 +843,16 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   // only run on first mount so they miss subsequent URL changes).
   useEffect(() => {
     const rid = Number(searchParams.get("roomId"));
-    const cat = searchParams.get("category") as ConversationCategory | null;
     if (rid <= 0) return;
 
-    // Determine the correct tab for this room.
-    // Strategy: use allContactsResponse (all rooms, no tab filter) as source of truth.
-    const resolveTab = (): ConversationCategory => {
-      // Explicit valid category from URL — trust it
-      if (
-        cat === "client" ||
-        cat === "collaborateur" ||
-        cat === "comptable" ||
-        cat === "group"
-      ) {
-        return cat;
-      }
-
-      // Search in all rooms (no category filter applied)
-      const allRooms = allContactsResponse?.data ?? [];
-      const targetRoom = allRooms.find((r) => Number(r.id) === rid);
-
-      if (!targetRoom) {
-        // Room not found yet — keep current tab, pendingRoomIdRef will handle selection
-        return activeTab;
-      }
-
-      // Group room → always "group" tab
-      if (targetRoom.type === "group") return "group";
-
-      // 1:1 room — find the other participant's role
-      const otherProfile = (targetRoom.participantProfiles ?? []).find(
-        (p) => Number(p.id) !== currentUid,
-      );
-      const otherRoleCode = (otherProfile?.role?.code ?? "").toLowerCase();
-
-      // Map other participant's role → correct UI tab for the connected user
-      // Comptable sees: CLIENT → "client", COLLABORATOR → "collaborateur"
-      // Client sees: ACCOUNTANT → "collaborateur" (tab labeled "Comptables")
-      // Collaborateur sees: ACCOUNTANT → "comptable", COLLABORATOR → "collaborateur"
-      if (otherRoleCode === "client" || otherRoleCode.startsWith("client_")) {
-        return "client"; // Only comptables have this tab
-      }
-      if (isComptableRole(otherRoleCode)) {
-        // Other is a comptable/accountant → always "comptable" tab
-        return "comptable";
-      }
-      // Other is a collaborateur → "collaborateur" tab for everyone
-      return "collaborateur";
-    };
-
-    const targetTab = resolveTab();
-    setActiveTab(targetTab);
-
+    // Mark room as read
     setConversationOverrides((prev) => ({
       ...prev,
       [rid]: { ...(prev[rid] ?? {}), unreadCount: 0 },
     }));
     triggerMarkRoomAsRead(rid);
 
-    // Reset unreadCount in RTK Query caches so tab badges update immediately
+    // Reset unreadCount in RTK Query caches so badge counts update immediately
     const resetUnreadUrl = (params: typeof roomsParamsRef.current) => {
       dispatch(
         chatApi.util.updateQueryData("getUserRooms", params, (draft) => {
@@ -897,11 +862,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       );
     };
     resetUnreadUrl(roomsParamsRef.current);
-    resetUnreadUrl(badgeDirectParamsRef.current);
-    if (iAmComptable || iAmCollaborateur) {
-      resetUnreadUrl(badgeCollabParamsRef.current);
-    }
-    resetUnreadUrl(badgeGroupParamsRef.current);
+    resetUnreadUrl(allRoomsParamsRef.current);
 
     // Check if the target room is already visible in allConversations.
     // If not (tab just changed, list not yet loaded), store as pending.
@@ -1105,7 +1066,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       [id]: { ...(prev[id] ?? {}), unreadCount: 0 },
     }));
 
-    // Reset unreadCount in both RTK Query caches so tab badges update immediately
+    // Reset unreadCount in RTK Query caches so badge counts update immediately
     const resetUnread = (params: typeof roomsParamsRef.current) => {
       dispatch(
         chatApi.util.updateQueryData("getUserRooms", params, (draft) => {
@@ -1115,11 +1076,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       );
     };
     resetUnread(roomsParamsRef.current);
-    resetUnread(badgeDirectParamsRef.current);
-    if (iAmComptable || iAmCollaborateur) {
-      resetUnread(badgeCollabParamsRef.current);
-    }
-    resetUnread(badgeGroupParamsRef.current);
+    resetUnread(allRoomsParamsRef.current);
 
     // Persist read state to backend so it survives page reload
     triggerMarkRoomAsRead(id);
@@ -1128,11 +1085,10 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const handleSearchChange = (value: string) => setSearchTerm(value);
   const handleDateFilterChange = (value: Dayjs | null) =>
     setSelectedDateFilter(value);
-  const handleTabChange = useCallback(
-    (tab: ConversationCategory) => {
-      setActiveTab(tab);
-      setSearchTerm("");
-      setSelectedDateFilter(null);
+
+  const handleFiltersChange = useCallback(
+    (filters: (ConversationCategory | "unread")[]) => {
+      setActiveFilters(filters);
       setSelectedConversation(0);
       if (isMobile) setMobileView("list");
       else setDesktopView("chat");
@@ -1382,38 +1338,14 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   // allConversations already contains only the relevant subset from the API.
   // Client-side filtering: search by name, optional date filter.
   // No backend search — the full list is loaded upfront (ROOMS_PAGE_SIZE = 500).
+  // Backend now handles all filtering (search, categories, unread, date),
+  // so just use apiConversations directly
   const filteredConversations = useMemo(() => {
-    let result = allConversations;
-
-    const term = searchTerm.trim().toLowerCase();
-    if (term) {
-      result = result.filter((c) => c.name.toLowerCase().includes(term));
-    }
-
-    if (selectedDateFilter) {
-      const targetYear = selectedDateFilter.year();
-      const targetMonth = selectedDateFilter.month();
-      const targetDay = selectedDateFilter.date();
-
-      result = result.filter((c) => {
-        if (!c.fullDate) return false;
-        const corrected = new Date(
-          new Date(c.fullDate).getTime() - 60 * 60 * 1000,
-        );
-        return (
-          corrected.getFullYear() === targetYear &&
-          corrected.getMonth() === targetMonth &&
-          corrected.getDate() === targetDay
-        );
-      });
-    }
-
     console.log(
-      `[TAB-DEBUG] tab="${activeTab}" | rawRooms=${rawRooms.length} | apiConversations=${apiConversations.length}` +
-        ` | allConversations=${allConversations.length} | filtered=${result.length}` +
-        (result.length === 0 && rawRooms.length === 0
+      `[FILTERS-DEBUG] filters=${JSON.stringify(activeFilters)} | rawRooms=${rawRooms.length} | apiConversations=${apiConversations.length}` +
+        (apiConversations.length === 0 && rawRooms.length === 0
           ? " → VIDE NORMAL (aucune room reçue du backend)"
-          : result.length === 0 && rawRooms.length > 0
+          : apiConversations.length === 0 && rawRooms.length > 0
             ? ` → VIDE ANORMAL — rawRooms reçues mais filtrées. Catégories reçues: [${
                 [
                   ...new Set(
@@ -1426,8 +1358,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
             : ""),
     );
 
-    return result;
-  }, [allConversations, searchTerm, selectedDateFilter]);
+    return apiConversations;
+  }, [apiConversations, activeFilters, rawRooms.length]);
 
   useEffect(() => {
     if (filteredConversations.length === 0) return;
@@ -1614,9 +1546,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                   selectedConversation={selectedConversation}
                   searchTerm={searchTerm}
                   selectedDateFilter={selectedDateFilter}
-                  tabs={visibleTabs}
-                  activeTab={activeTab}
-                  onTabChange={handleTabChange}
+                  activeFilters={activeFilters}
+                  onFiltersChange={handleFiltersChange}
                   onSearchChange={handleSearchChange}
                   onDateFilterChange={handleDateFilterChange}
                   onSelect={handleSelectConversation}
@@ -1624,7 +1555,11 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                   onCreateGroup={() => setOpenCreateGroupModal(true)}
                   showManageGroupButton={iAmComptable}
                   onManageGroup={handleManageGroup}
-                  allConversations={allConversationsForBadges}
+                  badgeCounts={badgeCounts}
+                  userRole={userRoleForFilters}
+                  onLoadMore={handleLoadMoreConversations}
+                  hasMore={hasMoreConversations}
+                  isLoadingMore={roomsLoading && conversationsPage > 1}
                 />
               </Box>
             </Box>
@@ -1812,9 +1747,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                   selectedConversation={selectedConversation}
                   searchTerm={searchTerm}
                   selectedDateFilter={selectedDateFilter}
-                  tabs={visibleTabs}
-                  activeTab={activeTab}
-                  onTabChange={handleTabChange}
+                  activeFilters={activeFilters}
+                  onFiltersChange={handleFiltersChange}
                   onSearchChange={handleSearchChange}
                   onDateFilterChange={handleDateFilterChange}
                   onSelect={handleSelectConversation}
@@ -1822,7 +1756,11 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                   onCreateGroup={() => setOpenCreateGroupModal(true)}
                   showManageGroupButton={iAmComptable}
                   onManageGroup={handleManageGroup}
-                  allConversations={allConversationsForBadges}
+                  badgeCounts={badgeCounts}
+                  userRole={userRoleForFilters}
+                  onLoadMore={handleLoadMoreConversations}
+                  hasMore={hasMoreConversations}
+                  isLoadingMore={roomsLoading && conversationsPage > 1}
                 />
               </Paper>
 

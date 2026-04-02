@@ -381,19 +381,57 @@ export default function ChatWindow({
               height: "100%",
               minHeight: 260,
               display: "flex",
+              flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
               py: 6,
+              gap: 2,
             }}
           >
-            <Typography
+            <Box
               sx={{
-                fontSize: 14,
-                color: "#98A2B3",
-                textAlign: "center",
+                width: isMobile ? 56 : 64,
+                height: isMobile ? 56 : 64,
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#F3F4F6",
+                color: "#9CA3AF",
               }}
             >
-              Aucun message pour le moment.
+              <svg
+                width={isMobile ? 28 : 32}
+                height={isMobile ? 28 : 32}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </Box>
+            <Typography
+              sx={{
+                fontSize: isMobile ? 14 : 15,
+                color: "#6B7280",
+                textAlign: "center",
+                fontWeight: 500,
+              }}
+            >
+              Aucun message pour le moment
+            </Typography>
+            <Typography
+              sx={{
+                fontSize: isMobile ? 12 : 13,
+                color: "#9CA3AF",
+                textAlign: "center",
+                maxWidth: 280,
+              }}
+            >
+              Commencez la conversation en envoyant un message
             </Typography>
           </Box>
         ) : (

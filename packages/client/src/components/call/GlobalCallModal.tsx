@@ -551,187 +551,405 @@ export default function GlobalCallModal() {
           </Tooltip>
         </Box>
 
-        {/* Video Grid */}
+        {/* Video Grid - Smart Layout like Messenger/Google Meet */}
         <Box
           sx={{
             flex: 1,
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "1fr",
-              md: remoteStreams.length > 1 ? "repeat(2, 1fr)" : "1fr",
-            },
-            gap: 2,
-            p: 2,
-            overflow: "auto",
+            position: "relative",
+            overflow: "hidden",
+            p: isMobile ? 1 : 2,
           }}
         >
-          {/* Local stream */}
-          {callType === "video" && (
-            <Box
-              sx={{
-                position: "relative",
-                bgcolor: "#2a2a2a",
-                borderRadius: 2,
-                overflow: "hidden",
-                aspectRatio: "16/9",
-              }}
-            >
-              <video
-                ref={localVideoRef}
-                autoPlay
-                playsInline
-                muted
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                  transform: "scaleX(-1)",
-                }}
-              />
-              <Box
-                sx={{
-                  position: "absolute",
-                  bottom: 12,
-                  left: 12,
-                  bgcolor: alpha("#000", 0.6),
-                  color: "white",
-                  px: 1.5,
-                  py: 0.5,
-                  borderRadius: 2,
-                  fontSize: 12,
-                  fontWeight: 500,
-                }}
-              >
-                Vous
-              </Box>
-              {!isVideoEnabled && (
-                <Box
-                  sx={{
-                    position: "absolute",
-                    inset: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexDirection: "column",
-                    gap: 2,
-                    bgcolor: alpha("#000", 0.8),
-                  }}
-                >
-                  <VideoOff size={48} color="white" />
-                  {isAudioEnabled && (
-                    <AudioVisualizer stream={localStream} size={60} />
-                  )}
-                </Box>
-              )}
-            </Box>
-          )}
+          {/* Calculate optimal grid layout */}
+          {(() => {
+            const remoteCount = remoteStreams.length;
 
-          {/* Remote streams */}
-          {remoteStreams.length > 0 ? (
-            remoteStreams.map((rs) => {
-              const participant = participants.find((p) => p.id === rs.userId);
-              return (
+            // For video calls: Show remotes in grid, local as PIP overlay
+            // For audio calls: Show all participants in grid
+            const shouldShowLocalInGrid =
+              callType === "audio" || remoteCount === 0;
+            const totalInGrid = shouldShowLocalInGrid
+              ? remoteCount + 1
+              : remoteCount;
+
+            // Determine grid layout based on participant count
+            let gridCols: number;
+            let gridRows: number;
+
+            if (totalInGrid === 1) {
+              gridCols = 1;
+              gridRows = 1;
+            } else if (totalInGrid === 2) {
+              gridCols = isMobile ? 1 : 2;
+              gridRows = isMobile ? 2 : 1;
+            } else if (totalInGrid <= 4) {
+              gridCols = 2;
+              gridRows = 2;
+            } else if (totalInGrid <= 6) {
+              gridCols = 3;
+              gridRows = 2;
+            } else if (totalInGrid <= 9) {
+              gridCols = 3;
+              gridRows = 3;
+            } else {
+              gridCols = 4;
+              gridRows = Math.ceil(totalInGrid / 4);
+            }
+
+            return (
+              <>
+                {/* Main Grid */}
                 <Box
-                  key={rs.userId}
                   sx={{
-                    position: "relative",
-                    bgcolor: "#2a2a2a",
-                    borderRadius: 2,
-                    overflow: "hidden",
-                    aspectRatio: "16/9",
+                    height: "100%",
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
+                    gridTemplateRows: `repeat(${gridRows}, 1fr)`,
+                    gap: isMobile ? 1 : 1.5,
+                    overflow: "auto",
+                    alignItems: "stretch",
+                    "&::-webkit-scrollbar": {
+                      width: 8,
+                    },
+                    "&::-webkit-scrollbar-thumb": {
+                      backgroundColor: alpha("#fff", 0.3),
+                      borderRadius: "4px",
+                    },
                   }}
                 >
-                  {callType === "video" ? (
-                    <video
-                      ref={(el) => {
-                        if (el) remoteVideoRefs.current.set(rs.userId, el);
-                      }}
-                      autoPlay
-                      playsInline
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                      }}
-                    />
+                  {/* Remote streams */}
+                  {remoteStreams.length > 0 ? (
+                    remoteStreams.map((rs) => {
+                      const participant = participants.find(
+                        (p) => p.id === rs.userId,
+                      );
+                      return (
+                        <Box
+                          key={rs.userId}
+                          sx={{
+                            position: "relative",
+                            bgcolor: "#1a1a1a",
+                            borderRadius: isMobile ? 2 : 3,
+                            overflow: "hidden",
+                            border: "2px solid rgba(255,255,255,0.1)",
+                            minHeight: 0,
+                            width: "100%",
+                            height: "100%",
+                          }}
+                        >
+                          {callType === "video" ? (
+                            <video
+                              ref={(el) => {
+                                if (el)
+                                  remoteVideoRefs.current.set(rs.userId, el);
+                              }}
+                              autoPlay
+                              playsInline
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                              }}
+                            />
+                          ) : (
+                            <Box
+                              sx={{
+                                width: "100%",
+                                height: "100%",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexDirection: "column",
+                                gap: totalInGrid <= 4 ? 2 : 1,
+                              }}
+                            >
+                              <Avatar
+                                src={participant?.avatar}
+                                sx={{
+                                  width:
+                                    totalInGrid <= 2
+                                      ? 100
+                                      : totalInGrid <= 4
+                                        ? 70
+                                        : 50,
+                                  height:
+                                    totalInGrid <= 2
+                                      ? 100
+                                      : totalInGrid <= 4
+                                        ? 70
+                                        : 50,
+                                  fontSize:
+                                    totalInGrid <= 2
+                                      ? 40
+                                      : totalInGrid <= 4
+                                        ? 28
+                                        : 20,
+                                  bgcolor: theme.palette.primary.main,
+                                }}
+                              >
+                                {participant?.name?.charAt(0).toUpperCase()}
+                              </Avatar>
+                              <Typography
+                                variant={
+                                  totalInGrid <= 2
+                                    ? "h6"
+                                    : totalInGrid <= 4
+                                      ? "body1"
+                                      : "body2"
+                                }
+                                color="white"
+                                sx={{ fontWeight: 600, textAlign: "center" }}
+                              >
+                                {participant?.name}
+                              </Typography>
+                              {totalInGrid <= 4 && (
+                                <AudioVisualizer
+                                  stream={rs.stream}
+                                  size={totalInGrid <= 2 ? 60 : 50}
+                                />
+                              )}
+                            </Box>
+                          )}
+
+                          {/* Name overlay */}
+                          <Box
+                            sx={{
+                              position: "absolute",
+                              bottom: 8,
+                              left: 8,
+                              bgcolor: alpha("#000", 0.7),
+                              backdropFilter: "blur(8px)",
+                              color: "white",
+                              px: 1.5,
+                              py: 0.5,
+                              borderRadius: 1.5,
+                              fontSize: isMobile ? 11 : 12,
+                              fontWeight: 600,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 0.5,
+                            }}
+                          >
+                            {!rs.stream?.getAudioTracks()[0]?.enabled && (
+                              <MicOff size={12} color="white" />
+                            )}
+                            {participant?.name || `Utilisateur ${rs.userId}`}
+                          </Box>
+                        </Box>
+                      );
+                    })
                   ) : (
+                    // Waiting screen when no remote participants yet
                     <Box
                       sx={{
-                        width: "100%",
-                        height: "100%",
+                        gridColumn: `1 / -1`,
+                        gridRow: `1 / -1`,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         flexDirection: "column",
                         gap: 2,
+                        color: "white",
                       }}
                     >
                       <Avatar
-                        src={participant?.avatar}
                         sx={{
-                          width: 80,
-                          height: 80,
-                          fontSize: 32,
+                          width: 100,
+                          height: 100,
+                          fontSize: 40,
                           bgcolor: theme.palette.primary.main,
                         }}
                       >
-                        {participant?.name?.charAt(0).toUpperCase()}
+                        {participants[0]?.name?.charAt(0).toUpperCase() || "?"}
                       </Avatar>
-                      <Typography variant="h6" color="white">
-                        {participant?.name}
+                      <Typography variant="h6">
+                        {participants[0]?.name || "En attente..."}
                       </Typography>
-                      <AudioVisualizer stream={rs.stream} size={60} />
+                      <Typography variant="body2" color="rgba(255,255,255,0.6)">
+                        Connexion en cours...
+                      </Typography>
                     </Box>
                   )}
-                  <Box
-                    sx={{
-                      position: "absolute",
-                      bottom: 12,
-                      left: 12,
-                      bgcolor: alpha("#000", 0.6),
-                      color: "white",
-                      px: 1.5,
-                      py: 0.5,
-                      borderRadius: 2,
-                      fontSize: 12,
-                      fontWeight: 500,
-                    }}
-                  >
-                    {participant?.name || `Utilisateur ${rs.userId}`}
-                  </Box>
+
+                  {/* Local stream in grid (only for audio calls or when alone) */}
+                  {shouldShowLocalInGrid && callType === "video" && (
+                    <Box
+                      sx={{
+                        position: "relative",
+                        bgcolor: "#1a1a1a",
+                        borderRadius: isMobile ? 2 : 3,
+                        overflow: "hidden",
+                        border: `2px solid ${theme.palette.primary.main}`,
+                        minHeight: 0,
+                        width: "100%",
+                        height: "100%",
+                      }}
+                    >
+                      <video
+                        ref={localVideoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          transform: "scaleX(-1)",
+                        }}
+                      />
+                      <Box
+                        sx={{
+                          position: "absolute",
+                          bottom: 8,
+                          left: 8,
+                          bgcolor: alpha("#000", 0.7),
+                          backdropFilter: "blur(8px)",
+                          color: "white",
+                          px: 1.5,
+                          py: 0.5,
+                          borderRadius: 1.5,
+                          fontSize: isMobile ? 11 : 12,
+                          fontWeight: 600,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 0.5,
+                        }}
+                      >
+                        {!isAudioEnabled && <MicOff size={12} color="white" />}
+                        Vous
+                      </Box>
+                      {!isVideoEnabled && (
+                        <Box
+                          sx={{
+                            position: "absolute",
+                            inset: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexDirection: "column",
+                            gap: 2,
+                            bgcolor: alpha("#000", 0.9),
+                          }}
+                        >
+                          <Avatar
+                            sx={{
+                              width:
+                                totalInGrid <= 2
+                                  ? 80
+                                  : totalInGrid <= 4
+                                    ? 60
+                                    : 48,
+                              height:
+                                totalInGrid <= 2
+                                  ? 80
+                                  : totalInGrid <= 4
+                                    ? 60
+                                    : 48,
+                              fontSize:
+                                totalInGrid <= 2
+                                  ? 32
+                                  : totalInGrid <= 4
+                                    ? 24
+                                    : 20,
+                              bgcolor: theme.palette.primary.main,
+                            }}
+                          >
+                            V
+                          </Avatar>
+                          {isAudioEnabled && totalInGrid <= 4 && (
+                            <AudioVisualizer stream={localStream} size={50} />
+                          )}
+                        </Box>
+                      )}
+                    </Box>
+                  )}
                 </Box>
-              );
-            })
-          ) : (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexDirection: "column",
-                gap: 2,
-                color: "white",
-                minHeight: 300,
-              }}
-            >
-              <Avatar
-                sx={{
-                  width: 100,
-                  height: 100,
-                  fontSize: 40,
-                  bgcolor: theme.palette.primary.main,
-                }}
-              >
-                {participants[0]?.name?.charAt(0).toUpperCase() || "?"}
-              </Avatar>
-              <Typography variant="h6">
-                {participants[0]?.name || "En attente..."}
-              </Typography>
-              <Typography variant="body2" color="rgba(255,255,255,0.6)">
-                Connexion en cours...
-              </Typography>
-            </Box>
-          )}
+
+                {/* Picture-in-Picture: Local video overlay (for video calls with remotes) */}
+                {callType === "video" &&
+                  remoteStreams.length > 0 &&
+                  !shouldShowLocalInGrid && (
+                    <Box
+                      sx={{
+                        position: "absolute",
+                        top: isMobile ? 16 : 24,
+                        right: isMobile ? 16 : 24,
+                        width: isMobile ? 120 : 200,
+                        height: isMobile ? 90 : 150,
+                        borderRadius: 2,
+                        overflow: "hidden",
+                        border: `3px solid ${theme.palette.primary.main}`,
+                        boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+                        bgcolor: "#1a1a1a",
+                        zIndex: 10,
+                        transition: "all 0.3s ease",
+                        "&:hover": {
+                          transform: "scale(1.05)",
+                          boxShadow: "0 12px 40px rgba(0,0,0,0.7)",
+                        },
+                      }}
+                    >
+                      <video
+                        ref={localVideoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          transform: "scaleX(-1)",
+                        }}
+                      />
+                      <Box
+                        sx={{
+                          position: "absolute",
+                          bottom: 6,
+                          left: 6,
+                          bgcolor: alpha("#000", 0.7),
+                          backdropFilter: "blur(8px)",
+                          color: "white",
+                          px: 1,
+                          py: 0.25,
+                          borderRadius: 1,
+                          fontSize: 10,
+                          fontWeight: 600,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 0.5,
+                        }}
+                      >
+                        {!isAudioEnabled && <MicOff size={10} color="white" />}
+                        Vous
+                      </Box>
+                      {!isVideoEnabled && (
+                        <Box
+                          sx={{
+                            position: "absolute",
+                            inset: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            bgcolor: alpha("#000", 0.9),
+                          }}
+                        >
+                          <Avatar
+                            sx={{
+                              width: isMobile ? 40 : 60,
+                              height: isMobile ? 40 : 60,
+                              fontSize: isMobile ? 16 : 24,
+                              bgcolor: theme.palette.primary.main,
+                            }}
+                          >
+                            V
+                          </Avatar>
+                        </Box>
+                      )}
+                    </Box>
+                  )}
+              </>
+            );
+          })()}
         </Box>
 
         {/* Error alerts */}

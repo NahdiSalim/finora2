@@ -57,6 +57,16 @@ export class CallService {
         endedAt: new Date(),
         duration,
       },
+      include: {
+        initiator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
     });
   }
 
@@ -67,6 +77,16 @@ export class CallService {
         status: 'missed',
         endedAt: new Date(),
       },
+      include: {
+        initiator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
     });
   }
 
@@ -76,6 +96,16 @@ export class CallService {
       data: {
         status: 'rejected',
         endedAt: new Date(),
+      },
+      include: {
+        initiator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
       },
     });
   }

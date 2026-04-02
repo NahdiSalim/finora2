@@ -238,7 +238,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
 
     socketInstance.on(
       "call:accepted",
-      (data: { acceptedBy: number; roomId: number }) => {
+      (data: { acceptedBy: number; roomId: number; userName?: string }) => {
         console.log("[GlobalCallContext] Call accepted by:", data.acceptedBy);
 
         // Only set state if we're the initiator waiting for acceptance
@@ -246,6 +246,20 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
           setCallState("active");
           callStartTimeRef.current = Date.now();
         }
+
+        // Add to participants list if not already there
+        setParticipants((prev) => {
+          if (prev.some((p) => p.id === data.acceptedBy)) {
+            return prev;
+          }
+          return [
+            ...prev,
+            {
+              id: data.acceptedBy,
+              name: data.userName || `User ${data.acceptedBy}`,
+            },
+          ];
+        });
 
         // Create offer to the user who just accepted
         makeOffer(data.acceptedBy);
@@ -285,11 +299,55 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
       },
     );
 
+    // New handler: Notify newly joined user of all existing participants
+    socketInstance.on(
+      "call:existing-participants",
+      (data: { participants: Array<{ userId: number; userName: string }> }) => {
+        console.log(
+          "[GlobalCallContext] Received existing participants:",
+          data.participants,
+        );
+
+        // Add existing participants to the list
+        // Don't create offers here - existing participants will offer to us
+        data.participants.forEach((participant) => {
+          if (participant.userId !== currentUserIdRef.current) {
+            console.log(
+              "[GlobalCallContext] Adding existing participant:",
+              participant.userId,
+            );
+
+            setParticipants((prev) => {
+              if (prev.some((p) => p.id === participant.userId)) {
+                return prev;
+              }
+              return [
+                ...prev,
+                {
+                  id: participant.userId,
+                  name: participant.userName,
+                },
+              ];
+            });
+          }
+        });
+      },
+    );
+
     socketInstance.on(
       "call:rejected",
-      (data: { rejectedBy: number; roomId: number }) => {
+      (data: { rejectedBy: number; roomId: number; callEnded?: boolean }) => {
         console.log("[GlobalCallContext] Call rejected by:", data.rejectedBy);
-        resetCallState();
+
+        // Only end the call if explicitly told to (no other participants accepted)
+        if (data.callEnded) {
+          resetCallState();
+        } else {
+          // Call continues with other participants - just log the rejection
+          console.log(
+            "[GlobalCallContext] Call continues with other participants",
+          );
+        }
       },
     );
 
@@ -321,6 +379,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
       socketInstance.off("call:ice-candidate");
       socketInstance.off("call:accepted");
       socketInstance.off("call:user-joined");
+      socketInstance.off("call:existing-participants");
       socketInstance.off("call:user-left");
       socketInstance.off("call:rejected");
       socketInstance.off("call:ended");

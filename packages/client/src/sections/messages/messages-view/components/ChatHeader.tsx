@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import IconButton from "@mui/material/IconButton";
@@ -33,6 +34,7 @@ export default function ChatHeader({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const { initiateCall } = useGlobalCall();
+  const [membersAnchor, setMembersAnchor] = useState<HTMLElement | null>(null);
 
   const handleStartCall = (type: "audio" | "video") => {
     if (!conversation) return;

@@ -57,14 +57,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       userSockets.push(client.id);
       this.userSockets.set(userId, userSockets);
 
-      console.log(`User ${userId} connected with socket ${client.id}`);
-
       // Rejoindre automatiquement les salles de l'utilisateur
       const rooms = await this.chatService.getUserRooms(userId);
-      console.log(
-        `User ${userId} auto-joining ${rooms.length} rooms:`,
-        rooms.map((r) => r.id)
-      );
       rooms.forEach((room) => {
         client.join(`room:${room.id}`);
       });
@@ -90,7 +84,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // If user was in any active calls, notify other participants
         this.callParticipants.forEach((participants, roomId) => {
           if (participants.has(userId)) {
-            console.log(`User ${userId} disconnected while in call ${roomId}`);
             participants.delete(userId);
 
             // Notify other participants that this user left
@@ -123,8 +116,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       } else {
         this.userSockets.set(userId, updatedSockets);
       }
-
-      console.log(`User ${userId} disconnected socket ${client.id}`);
     }
   }
 
@@ -290,15 +281,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       const userId = client.data.userId;
-      console.log(`User ${userId} initiating ${data.callType} call in room ${data.roomId}`);
-      console.log(`[CallDebug] Participants received:`, data.participants);
-      console.log(
-        `[CallDebug] UserSockets map:`,
-        Array.from(this.userSockets.entries()).map(([id, sockets]) => ({
-          userId: id,
-          socketCount: sockets.length,
-        }))
-      );
 
       const call = await this.callService.createCall({
         roomId: data.roomId,
@@ -312,17 +294,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Track the initiator as the first participant in the call
       const participants = new Set<number>([userId]);
       this.callParticipants.set(data.roomId, participants);
-      console.log(
-        `[CallDebug] Call ${call.id} initiated with participants:`,
-        Array.from(participants)
-      );
 
       // Set timeout for missed call (30 seconds)
       const timeout = setTimeout(async () => {
         const stillActive = this.activeCalls.get(data.roomId);
         if (stillActive === call.id) {
-          console.log(`[CallTimeout] Call ${call.id} timed out - marking as missed`);
-
           try {
             await this.callService.markCallAsMissed(call.id);
             this.activeCalls.delete(data.roomId);
@@ -357,16 +333,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       data.participants.forEach((participantId) => {
         if (participantId !== userId) {
-          console.log(`[CallDebug] Notifying participant ${participantId}`);
           const targetSockets = this.userSockets.get(participantId);
-          console.log(
-            `[CallDebug] Target sockets for user ${participantId}:`,
-            targetSockets || 'none'
-          );
 
           if (targetSockets && targetSockets.length > 0) {
             targetSockets.forEach((socketId) => {
-              console.log(`[CallDebug] Emitting call:incoming to socket ${socketId}`);
               this.server.to(socketId).emit('call:incoming', {
                 callId: call.id,
                 callerId: userId,
@@ -375,10 +345,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
                 initiatorName: `${call.initiator.firstName} ${call.initiator.lastName}`,
               });
             });
-          } else {
-            console.warn(
-              `[CallDebug] No sockets found for participant ${participantId} - user may be offline`
-            );
           }
         }
       });
@@ -401,7 +367,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   ) {
     const userId = client.data.userId;
-    console.log(`User ${userId} sending offer to ${data.targetUserId} in room ${data.roomId}`);
 
     const targetSockets = this.userSockets.get(data.targetUserId);
     targetSockets?.forEach((socketId) => {
@@ -426,7 +391,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   ) {
     const userId = client.data.userId;
-    console.log(`User ${userId} sending answer to ${data.targetUserId} in room ${data.roomId}`);
 
     const targetSockets = this.userSockets.get(data.targetUserId);
     targetSockets?.forEach((socketId) => {
@@ -476,7 +440,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       const userId = client.data.userId;
-      console.log(`User ${userId} accepted call from ${data.callerId} in room ${data.roomId}`);
 
       const callId = data.callId || this.activeCalls.get(data.roomId);
       if (callId) {
@@ -487,18 +450,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         if (timeout) {
           clearTimeout(timeout);
           this.callTimeouts.delete(data.roomId);
-          console.log(`[CallDebug] Cleared timeout for accepted call ${callId}`);
         }
       }
+
+      // Get user info for the newly joined user
+      const newUserInfo = await this.chatService.getUserById(userId);
+      const newUserName = newUserInfo
+        ? `${newUserInfo.firstName} ${newUserInfo.lastName}`
+        : `User ${userId}`;
 
       // Add this user to the active call participants
       const participants = this.callParticipants.get(data.roomId);
       if (participants) {
         participants.add(userId);
-        console.log(
-          `[CallDebug] User ${userId} joined call. Current participants:`,
-          Array.from(participants)
-        );
       }
 
       // Notify the caller that their call was accepted
@@ -507,8 +471,32 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.server.to(socketId).emit('call:accepted', {
           acceptedBy: userId,
           roomId: data.roomId,
+          userName: newUserName,
         });
       });
+
+      // Send existing participants info to the newly joined user
+      // This creates a mesh network where everyone connects to everyone
+      if (participants && participants.size > 1) {
+        const existingParticipants = Array.from(participants)
+          .filter((pId) => pId !== userId)
+          .map(async (pId) => {
+            const user = await this.chatService.getUserById(pId);
+            return {
+              userId: pId,
+              userName: user ? `${user.firstName} ${user.lastName}` : `User ${pId}`,
+            };
+          });
+
+        const participantsInfo = await Promise.all(existingParticipants);
+
+        const newUserSockets = this.userSockets.get(userId);
+        newUserSockets?.forEach((socketId) => {
+          this.server.to(socketId).emit('call:existing-participants', {
+            participants: participantsInfo,
+          });
+        });
+      }
 
       // Notify ALL other active participants that a new user joined
       // This is crucial for group calls - existing participants need to establish connections
@@ -520,6 +508,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
               this.server.to(socketId).emit('call:user-joined', {
                 userId,
                 roomId: data.roomId,
+                userName: newUserName,
               });
             });
           }
@@ -545,37 +534,47 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       const userId = client.data.userId;
-      console.log(`User ${userId} rejected call from ${data.callerId} in room ${data.roomId}`);
 
       const callId = data.callId || this.activeCalls.get(data.roomId);
+      const participants = this.callParticipants.get(data.roomId);
+
       if (callId) {
-        // Clear timeout
-        const timeout = this.callTimeouts.get(data.roomId);
-        if (timeout) {
-          clearTimeout(timeout);
-          this.callTimeouts.delete(data.roomId);
+        // Check if other people have already joined the call
+        const hasOtherParticipants = participants && participants.size > 1;
+
+        if (!hasOtherParticipants) {
+          // No one else has joined yet - end the entire call
+          const timeout = this.callTimeouts.get(data.roomId);
+          if (timeout) {
+            clearTimeout(timeout);
+            this.callTimeouts.delete(data.roomId);
+          }
+
+          const call = await this.callService.markCallAsRejected(callId);
+          this.activeCalls.delete(data.roomId);
+          this.callParticipants.delete(data.roomId);
+
+          // Create a system message for the rejected call - sent from the initiator
+          const callMessage = await this.chatService.sendMessage(call.initiatorId, {
+            roomId: data.roomId,
+            content: `${call.callType === 'video' ? 'Appel vidéo' : 'Appel vocal'} refusé`,
+            type: 'call',
+            callId: call.id,
+          });
+
+          this.server.to(`room:${data.roomId}`).emit('message:new', callMessage);
         }
-
-        const call = await this.callService.markCallAsRejected(callId);
-        this.activeCalls.delete(data.roomId);
-        this.callParticipants.delete(data.roomId);
-
-        // Create a system message for the rejected call
-        const callMessage = await this.chatService.sendMessage(data.callerId, {
-          roomId: data.roomId,
-          content: `${call.callType === 'video' ? 'Appel vidéo' : 'Appel vocal'} refusé`,
-          type: 'call',
-          callId: call.id,
-        });
-
-        this.server.to(`room:${data.roomId}`).emit('message:new', callMessage);
       }
 
+      // Notify the caller that this user rejected
       const callerSockets = this.userSockets.get(data.callerId);
+      const hasOtherParticipants = participants && participants.size > 1;
+
       callerSockets?.forEach((socketId) => {
         this.server.to(socketId).emit('call:rejected', {
           rejectedBy: userId,
           roomId: data.roomId,
+          callEnded: !hasOtherParticipants,
         });
       });
 
@@ -599,7 +598,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       const userId = client.data.userId;
-      console.log(`User ${userId} ending call in room ${data.roomId}`);
 
       const callId = data.callId || this.activeCalls.get(data.roomId);
       if (callId) {
@@ -614,14 +612,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.activeCalls.delete(data.roomId);
         this.callParticipants.delete(data.roomId);
 
-        // Create a system message for the completed call
+        // Create a system message for the completed call - sent from the initiator
         const duration = data.duration || 0;
         const minutes = Math.floor(duration / 60);
         const seconds = duration % 60;
         const durationText =
           duration > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : '0:00';
 
-        const callMessage = await this.chatService.sendMessage(userId, {
+        const callMessage = await this.chatService.sendMessage(call.initiatorId, {
           roomId: data.roomId,
           content: `${call.callType === 'video' ? 'Appel vidéo' : 'Appel vocal'} - ${durationText}`,
           type: 'call',

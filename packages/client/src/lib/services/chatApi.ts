@@ -116,11 +116,19 @@ export interface GetRoomsResponse {
 }
 
 export interface GetRoomsParams {
-  /** Role code to filter the other participant by. Not the same as the tab label. */
+  /** Array of role codes to filter by (OR logic) */
+  categories?: string[];
+  /** Legacy single category support (deprecated) */
   category?: string;
+  /** Search term for participant names and messages */
   search?: string;
-  date?: string; // YYYY-MM-DD
+  /** Filter by date (YYYY-MM-DD) */
+  date?: string;
+  /** Show only unread conversations */
+  unreadOnly?: boolean;
+  /** Page number for pagination */
   page?: number;
+  /** Number of results per page */
   pageSize?: number;
 }
 
@@ -235,9 +243,13 @@ export const chatApi = createApi({
     getUserRooms: builder.query<GetRoomsResponse, GetRoomsParams | undefined>({
       query: (params) => {
         const qs = new URLSearchParams();
+        if (params?.categories && params.categories.length > 0) {
+          params.categories.forEach((cat) => qs.append("categories", cat));
+        }
         if (params?.category) qs.set("category", params.category);
         if (params?.search) qs.set("search", params.search);
         if (params?.date) qs.set("date", params.date);
+        if (params?.unreadOnly) qs.set("unreadOnly", "true");
         if (params?.page !== undefined) qs.set("page", String(params.page));
         if (params?.pageSize !== undefined)
           qs.set("pageSize", String(params.pageSize));

@@ -261,9 +261,11 @@ export const documentsApi = createApi({
         parentId?: number | null;
         category?: string;
         clientCompanyId?: number | null;
+        /** Nom affiché du document (champ `name` côté API) */
+        name?: string | null;
       }
     >({
-      query: ({ file, parentId, category, clientCompanyId }) => {
+      query: ({ file, parentId, category, clientCompanyId, name }) => {
         const formData = new FormData();
         formData.append("file", file);
         if (parentId != null) formData.append("parentId", String(parentId));
@@ -271,6 +273,8 @@ export const documentsApi = createApi({
         if (clientCompanyId != null) {
           formData.append("clientCompanyId", String(clientCompanyId));
         }
+        const trimmedName = name?.trim();
+        if (trimmedName) formData.append("name", trimmedName);
         return {
           url: "/documents/upload",
           method: "POST",

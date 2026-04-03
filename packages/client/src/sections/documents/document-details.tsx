@@ -484,14 +484,11 @@ export default function DocumentDetailsView() {
       file: payload.file,
       parentId: payload.parentId ?? undefined,
       category: payload.category,
+      name: payload.documentName?.trim() || undefined,
       clientCompanyId:
         payload.clientCompanyId ??
         (!isMySpace && clientId ? Number(clientId) : undefined),
     }).unwrap();
-    if (payload.documentName && payload.documentName !== payload.file.name) {
-      // Optional: rename after upload when backend supports it or we get doc id from response
-      // For now the server uses file.originalname; skip rename.
-    }
   };
 
   const handleRenameFolder = async (newName: string) => {

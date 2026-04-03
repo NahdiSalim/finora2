@@ -633,8 +633,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       // Explicitly join the new room's socket channel so real-time works immediately
       joinRoom(newRoom.id);
       setOpenCreateGroupModal(false);
-    } catch (error) {
-      console.error("[handleCreateGroup] Failed to create group:", error);
+    } catch {
+      /* ignored */
     }
   };
 
@@ -680,8 +680,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       dispatch(
         chatApi.util.invalidateTags([{ type: "ChatRooms", id: "LIST" }]),
       );
-    } catch (error) {
-      console.error("[handleUpdateGroup] Failed to update group:", error);
+    } catch {
+      /* ignored */
     }
   };
 
@@ -1033,8 +1033,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
         else setDesktopView("chat");
 
         return;
-      } catch (error) {
-        console.error("Failed to create room:", error);
+      } catch {
         return;
       }
     }
@@ -1324,8 +1323,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
           delete updated[roomId];
           return updated;
         });
-      } catch (err) {
-        console.error("[MessagesView] file send failed:", err);
+      } catch {
+        /* ignored */
       }
     } else if (request) {
       try {
@@ -1355,8 +1354,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
           delete updated[roomId];
           return updated;
         });
-      } catch (err) {
-        console.error("[MessagesView] request attachment send failed:", err);
+      } catch {
+        /* ignored */
       }
     } else if (task) {
       try {
@@ -1386,8 +1385,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
           delete updated[roomId];
           return updated;
         });
-      } catch (err) {
-        console.error("[MessagesView] task attachment send failed:", err);
+      } catch {
+        /* ignored */
       }
     } else if (appointment) {
       try {
@@ -1417,11 +1416,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
           delete updated[roomId];
           return updated;
         });
-      } catch (err) {
-        console.error(
-          "[MessagesView] appointment attachment send failed:",
-          err,
-        );
+      } catch {
+        /* ignored */
       }
     }
   };

@@ -96,8 +96,7 @@ export default function AudioRecorder({
           return newTime;
         });
       }, 1000);
-    } catch (err) {
-      console.error("Error accessing microphone:", err);
+    } catch {
       setError(
         "Impossible d'accéder au microphone. Veuillez vérifier les permissions.",
       );

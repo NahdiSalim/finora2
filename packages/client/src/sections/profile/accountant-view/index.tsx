@@ -14,6 +14,8 @@ import ImageCropModal, {
   type CropType,
 } from "src/components/profile/ImageCropModal";
 import type { ProfileInfosFormState } from "src/layouts/components/profile-infos-tab";
+import { canFetchMyAccountantProfile } from "src/constants/roles";
+import { useVerifyUserQuery } from "src/lib/services/authApi";
 import { useGetMyAccountantProfileQuery } from "src/lib/services/accountantProfileApi";
 import { useUpdateCompleteProfileMutation } from "src/lib/services/usersApi";
 
@@ -50,11 +52,18 @@ export default function AccountantView() {
   const profileInfosFormRef = useRef<Partial<ProfileInfosFormState>>({});
   const contactFormRef = useRef<Partial<ContactFormState>>({});
 
+  const { data: me } = useVerifyUserQuery();
+  const roleCode =
+    typeof me?.role === "object" ? me?.role?.code : (me?.role ?? null);
+  const fetchAccountantMe = canFetchMyAccountantProfile(roleCode);
+
   const {
     data,
     isLoading,
     refetch: refetchProfile,
-  } = useGetMyAccountantProfileQuery();
+  } = useGetMyAccountantProfileQuery(undefined, {
+    skip: !fetchAccountantMe,
+  });
   const [updateCompleteProfile, { isLoading: isUpdatingProfile }] =
     useUpdateCompleteProfileMutation();
 

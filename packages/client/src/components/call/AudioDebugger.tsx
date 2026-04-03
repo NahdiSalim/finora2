@@ -64,8 +64,8 @@ export default function AudioDebugger({
             new Map(prev).set(rs.userId, Math.round(average)),
           );
         }, 100);
-      } catch (err) {
-        console.error("[AudioDebugger] Error analyzing remote stream:", err);
+      } catch {
+        /* ignored */
       }
     });
 

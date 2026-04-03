@@ -521,12 +521,6 @@ export const chatApi = createApi({
         };
 
         socket.on("message:new", onNewMessage);
-        socket.on("connect", () =>
-          console.log("[chatApi] Socket connected for recent messages"),
-        );
-        socket.on("disconnect", (reason) =>
-          console.log("[chatApi] Socket disconnected:", reason),
-        );
 
         await cacheEntryRemoved;
         socket.off("message:new", onNewMessage);

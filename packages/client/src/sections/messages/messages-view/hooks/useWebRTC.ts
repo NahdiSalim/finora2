@@ -85,8 +85,8 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
           );
           try {
             pc.restartIce();
-          } catch (error) {
-            console.error("[useWebRTC] Error restarting ICE:", error);
+          } catch {
+            /* ignored */
           }
         }
 
@@ -119,7 +119,6 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
         }
 
         if (pc.connectionState === "failed") {
-          console.error("[useWebRTC] Peer connection failed for user:", userId);
           setConnectionErrors((prev) =>
             new Map(prev).set(userId, "Peer connection failed"),
           );
@@ -157,8 +156,7 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
           next.delete(userId);
           return next;
         });
-      } catch (error) {
-        console.error("[useWebRTC] Error creating offer:", error);
+      } catch {
         setConnectionErrors((prev) =>
           new Map(prev).set(userId, "Failed to create connection offer"),
         );
@@ -197,17 +195,14 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
           for (const candidate of pendingCandidates) {
             try {
               await pc.addIceCandidate(new RTCIceCandidate(candidate));
-            } catch (error) {
-              console.error(
-                "[useWebRTC] Error adding pending ICE candidate:",
-                error,
-              );
+            } catch {
+              /* ignored */
             }
           }
           pendingIceCandidatesRef.current.delete(userId);
         }
-      } catch (error) {
-        console.error("[useWebRTC] Error handling offer:", error);
+      } catch {
+        /* ignored */
       }
     },
     [createPeerConnection, roomId, socket],
@@ -227,17 +222,14 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
             for (const candidate of pendingCandidates) {
               try {
                 await pc.addIceCandidate(new RTCIceCandidate(candidate));
-              } catch (error) {
-                console.error(
-                  "[useWebRTC] Error adding pending ICE candidate:",
-                  error,
-                );
+              } catch {
+                /* ignored */
               }
             }
             pendingIceCandidatesRef.current.delete(userId);
           }
-        } catch (error) {
-          console.error("[useWebRTC] Error handling answer:", error);
+        } catch {
+          /* ignored */
         }
       }
     },
@@ -252,8 +244,8 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
         if (pc.remoteDescription) {
           try {
             await pc.addIceCandidate(new RTCIceCandidate(candidate));
-          } catch (error) {
-            console.error("[useWebRTC] Error adding ICE candidate:", error);
+          } catch {
+            /* ignored */
           }
         } else {
           const pending = pendingIceCandidatesRef.current.get(userId) || [];
@@ -307,8 +299,8 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
       if (audioTrack) {
         const audioSender = senders.find((s) => s.track?.kind === "audio");
         if (audioSender) {
-          audioSender.replaceTrack(audioTrack).catch((err) => {
-            console.error("[useWebRTC] Error replacing audio track:", err);
+          audioSender.replaceTrack(audioTrack).catch(() => {
+            /* ignored */
           });
         } else {
           pc.addTrack(audioTrack, localStream);
@@ -318,8 +310,8 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
       if (videoTrack) {
         const videoSender = senders.find((s) => s.track?.kind === "video");
         if (videoSender) {
-          videoSender.replaceTrack(videoTrack).catch((err) => {
-            console.error("[useWebRTC] Error replacing video track:", err);
+          videoSender.replaceTrack(videoTrack).catch(() => {
+            /* ignored */
           });
         } else {
           pc.addTrack(videoTrack, localStream);

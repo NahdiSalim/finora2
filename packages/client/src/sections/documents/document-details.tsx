@@ -1065,7 +1065,7 @@ export default function DocumentDetailsView() {
               forceVisible="y"
               sx={{ maxHeight: 320, pr: 0.5, overflowX: "hidden" }}
             >
-              <Grid container spacing={3}>
+              <Grid container spacing={4}>
                 {!isLoading &&
                   !isError &&
                   folders.map((folder) => (

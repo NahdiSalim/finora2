@@ -39,7 +39,7 @@ import {
   Archive,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Dayjs } from "dayjs";
 import { useParams, useLocation } from "react-router-dom";
 import { useDashboardBase } from "src/hooks/useDashboardBase";
@@ -162,32 +162,72 @@ export default function DocumentDetailsView() {
   const theme = useTheme();
   const foldersScrollRef = useRef<HTMLDivElement | null>(null);
   const filesScrollRef = useRef<HTMLDivElement | null>(null);
-  const [page, setPage] = useState(1);
-  const [accumulatedItems, setAccumulatedItems] = useState<DocumentItem[]>([]);
-  const isLoadingNextPageRef = useRef(false);
+  const [folderPage, setFolderPage] = useState(1);
+  const [filePage, setFilePage] = useState(1);
+  const [accumulatedFolders, setAccumulatedFolders] = useState<DocumentItem[]>(
+    [],
+  );
+  const [accumulatedFiles, setAccumulatedFiles] = useState<DocumentItem[]>([]);
+  const isLoadingNextFolderPageRef = useRef(false);
+  const isLoadingNextFilePageRef = useRef(false);
 
   const hasSearchOrFilter = Boolean(
     searchValue.trim() || category || startDate || endDate,
   );
 
-  const { data, isLoading, isFetching, isError, refetch } =
-    useGetDocumentsQuery({
+  const documentsQueryBase = useMemo(
+    () => ({
       clientId: !isMySpace && clientId ? Number(clientId) : undefined,
       parentId: parentId ?? undefined,
-      page,
-      limit: 10,
-      status: "active",
+      status: "active" as const,
       search: searchValue || undefined,
       category: category || undefined,
       startDate: startDate ? startDate.format("YYYY-MM-DD") : undefined,
       endDate: endDate ? endDate.format("YYYY-MM-DD") : undefined,
-    });
+      limit: SCROLL_PAGE_SIZE,
+    }),
+    [isMySpace, clientId, parentId, searchValue, category, startDate, endDate],
+  );
+
+  const {
+    data: foldersData,
+    isLoading: isFoldersLoading,
+    isFetching: isFoldersFetching,
+    isError: isFoldersError,
+    refetch: refetchFolders,
+  } = useGetDocumentsQuery({
+    ...documentsQueryBase,
+    itemType: "folder",
+    page: folderPage,
+  });
+
+  const {
+    data: filesData,
+    isLoading: isFilesLoading,
+    isFetching: isFilesFetching,
+    isError: isFilesError,
+    refetch: refetchFiles,
+  } = useGetDocumentsQuery({
+    ...documentsQueryBase,
+    itemType: "file",
+    page: filePage,
+  });
+
+  const isLoading = isFoldersLoading || isFilesLoading;
+  const isFetching = isFoldersFetching || isFilesFetching;
+  const isError = isFoldersError || isFilesError;
+  const refetch = useCallback(() => {
+    void refetchFolders();
+    void refetchFiles();
+  }, [refetchFolders, refetchFiles]);
+
   const { data: moveFoldersData } = useGetDocumentsQuery(
     {
       clientId: !isMySpace && clientId ? Number(clientId) : undefined,
       parentId: undefined,
       limit: 200,
       status: "active",
+      itemType: "folder",
     },
     { skip: !moveItem },
   );
@@ -215,85 +255,117 @@ export default function DocumentDetailsView() {
     useDownloadDocumentMutation();
   const [archiveDocument] = useArchiveDocumentMutation();
 
-  const rawItems: DocumentItem[] = accumulatedItems;
-  const foldersFromApi: FolderItem[] = rawItems
-    .filter((d) => d.isFolder)
-    .map((d) => ({
-      id: d.id,
-      name: d.name,
-      description: "",
-      state: docToFolderState(d),
-      fileCount:
-        typeof d.filesCount === "number" && Number.isFinite(d.filesCount)
-          ? d.filesCount
-          : 0,
-      updatedAt: d.updatedAt ?? null,
-    }));
+  const folders: FolderItem[] = accumulatedFolders.map((d) => ({
+    id: d.id,
+    name: d.name,
+    description: "",
+    state: docToFolderState(d),
+    fileCount:
+      typeof d.filesCount === "number" && Number.isFinite(d.filesCount)
+        ? d.filesCount
+        : 0,
+    updatedAt: d.updatedAt ?? null,
+  }));
 
-  const folders: FolderItem[] = foldersFromApi;
+  const fileItems: FileItem[] = accumulatedFiles.map((d) => ({
+    id: d.id,
+    name: d.name,
+    type: docToFileType(d.type, d.mimeType),
+    size: formatSize(d.size),
+    mimeType: d.mimeType ?? undefined,
+  }));
 
-  const fileItems: FileItem[] = rawItems
-    .filter((d) => !d.isFolder)
-    .map((d) => ({
-      id: d.id,
-      name: d.name,
-      type: docToFileType(d.type, d.mimeType),
-      size: formatSize(d.size),
-      mimeType: d.mimeType ?? undefined,
-    }));
+  const folderTotalPages = foldersData?.pagination?.totalPages ?? 1;
+  const folderCurrentPage = foldersData?.pagination?.currentPage ?? folderPage;
+  const hasMoreFolderPages = folderCurrentPage < folderTotalPages;
 
-  const totalPages = data?.pagination?.totalPages ?? 1;
-  const currentPage = data?.pagination?.currentPage ?? page;
-  const hasMoreApiPages = currentPage < totalPages;
-  const shouldShowFoldersScrollHint = hasMoreApiPages && folders.length > 0;
-  const shouldShowFilesScrollHint = hasMoreApiPages && fileItems.length > 0;
+  const fileTotalPages = filesData?.pagination?.totalPages ?? 1;
+  const fileCurrentPage = filesData?.pagination?.currentPage ?? filePage;
+  const hasMoreFilePages = fileCurrentPage < fileTotalPages;
+
+  const shouldShowFoldersScrollHint = hasMoreFolderPages && folders.length > 0;
+  const shouldShowFilesScrollHint = hasMoreFilePages && fileItems.length > 0;
 
   useEffect(() => {
-    setPage(1);
-    setAccumulatedItems([]);
-    isLoadingNextPageRef.current = false;
+    setFolderPage(1);
+    setFilePage(1);
+    setAccumulatedFolders([]);
+    setAccumulatedFiles([]);
+    isLoadingNextFolderPageRef.current = false;
+    isLoadingNextFilePageRef.current = false;
     if (foldersScrollRef.current) foldersScrollRef.current.scrollTop = 0;
     if (filesScrollRef.current) filesScrollRef.current.scrollTop = 0;
   }, [parentId, searchValue, category, startDate, endDate]);
 
   useEffect(() => {
-    const incoming = data?.data ?? [];
-    const incomingPage = data?.pagination?.currentPage ?? page;
+    const incoming = foldersData?.data ?? [];
+    const incomingPage = foldersData?.pagination?.currentPage ?? folderPage;
     if (incomingPage === 1) {
-      setAccumulatedItems(incoming);
+      setAccumulatedFolders(incoming);
     } else if (incoming.length > 0) {
-      setAccumulatedItems((prev) => {
+      setAccumulatedFolders((prev) => {
         const existingIds = new Set(prev.map((item) => item.id));
         const appended = incoming.filter((item) => !existingIds.has(item.id));
         return appended.length > 0 ? [...prev, ...appended] : prev;
       });
     }
-    isLoadingNextPageRef.current = false;
-  }, [data, page]);
+    isLoadingNextFolderPageRef.current = false;
+  }, [foldersData, folderPage]);
 
-  const loadNextPage = useCallback(() => {
-    if (!hasMoreApiPages || isFetching || isLoadingNextPageRef.current) return;
-    isLoadingNextPageRef.current = true;
-    setPage((prev) => prev + 1);
-  }, [hasMoreApiPages, isFetching]);
+  useEffect(() => {
+    const incoming = filesData?.data ?? [];
+    const incomingPage = filesData?.pagination?.currentPage ?? filePage;
+    if (incomingPage === 1) {
+      setAccumulatedFiles(incoming);
+    } else if (incoming.length > 0) {
+      setAccumulatedFiles((prev) => {
+        const existingIds = new Set(prev.map((item) => item.id));
+        const appended = incoming.filter((item) => !existingIds.has(item.id));
+        return appended.length > 0 ? [...prev, ...appended] : prev;
+      });
+    }
+    isLoadingNextFilePageRef.current = false;
+  }, [filesData, filePage]);
+
+  const loadNextFolderPage = useCallback(() => {
+    if (
+      !hasMoreFolderPages ||
+      isFoldersFetching ||
+      isLoadingNextFolderPageRef.current
+    )
+      return;
+    isLoadingNextFolderPageRef.current = true;
+    setFolderPage((prev) => prev + 1);
+  }, [hasMoreFolderPages, isFoldersFetching]);
+
+  const loadNextFilePage = useCallback(() => {
+    if (
+      !hasMoreFilePages ||
+      isFilesFetching ||
+      isLoadingNextFilePageRef.current
+    )
+      return;
+    isLoadingNextFilePageRef.current = true;
+    setFilePage((prev) => prev + 1);
+  }, [hasMoreFilePages, isFilesFetching]);
 
   const handleFoldersScroll = useCallback(() => {
     const el = foldersScrollRef.current;
     if (!el) return;
     const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
     if (nearBottom) {
-      loadNextPage();
+      loadNextFolderPage();
     }
-  }, [loadNextPage]);
+  }, [loadNextFolderPage]);
 
   const handleFilesScroll = useCallback(() => {
     const el = filesScrollRef.current;
     if (!el) return;
     const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
     if (nearBottom) {
-      loadNextPage();
+      loadNextFilePage();
     }
-  }, [loadNextPage]);
+  }, [loadNextFilePage]);
 
   useEffect(() => {
     const node = foldersScrollRef.current;
@@ -316,12 +388,27 @@ export default function DocumentDetailsView() {
   useEffect(() => {
     const el = foldersScrollRef.current;
     if (!el) return;
-    if (isFetching || !hasMoreApiPages) return;
+    if (isFoldersFetching || !hasMoreFolderPages) return;
     const hasVerticalOverflow = el.scrollHeight > el.clientHeight + 1;
     if (!hasVerticalOverflow) {
-      loadNextPage();
+      loadNextFolderPage();
     }
-  }, [folders.length, hasMoreApiPages, isFetching, loadNextPage]);
+  }, [
+    folders.length,
+    hasMoreFolderPages,
+    isFoldersFetching,
+    loadNextFolderPage,
+  ]);
+
+  useEffect(() => {
+    const el = filesScrollRef.current;
+    if (!el) return;
+    if (isFilesFetching || !hasMoreFilePages) return;
+    const hasVerticalOverflow = el.scrollHeight > el.clientHeight + 1;
+    if (!hasVerticalOverflow) {
+      loadNextFilePage();
+    }
+  }, [fileItems.length, hasMoreFilePages, isFilesFetching, loadNextFilePage]);
 
   const fileCardMenuOptionsBase: {
     label: string;

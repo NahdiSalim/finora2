@@ -92,6 +92,8 @@ export const documentsApi = createApi({
         category?: string;
         startDate?: string;
         endDate?: string;
+        /** API query `type`: folders only or files only */
+        itemType?: "folder" | "file";
       }
     >({
       query: ({
@@ -104,6 +106,7 @@ export const documentsApi = createApi({
         category,
         startDate,
         endDate,
+        itemType,
       } = {}) => {
         const params = new URLSearchParams();
         if (clientId != null) params.append("clientId", String(clientId));
@@ -116,29 +119,25 @@ export const documentsApi = createApi({
           params.append("category", category.trim());
         if (startDate) params.append("startDate", startDate);
         if (endDate) params.append("endDate", endDate);
+        if (itemType) params.append("type", itemType);
         return {
           url: `/documents/client?${params.toString()}`,
           method: "GET",
         };
       },
-      providesTags: (result, _err, arg) =>
-        result
+      providesTags: (result, _err, arg) => {
+        const listScope = arg.itemType ?? "all";
+        const listId = `list-${arg.clientId ?? "me"}-${arg.parentId ?? "root"}-${listScope}`;
+        return result
           ? [
               ...result.data.map((d) => ({
                 type: "Documents" as const,
                 id: d.id,
               })),
-              {
-                type: "Documents",
-                id: `list-${arg.clientId ?? "me"}-${arg.parentId ?? "root"}`,
-              },
+              { type: "Documents", id: listId },
             ]
-          : [
-              {
-                type: "Documents",
-                id: `list-${arg.clientId ?? "me"}-${arg.parentId ?? "root"}`,
-              },
-            ],
+          : [{ type: "Documents", id: listId }];
+      },
     }),
 
     getArchivedDocuments: builder.query<

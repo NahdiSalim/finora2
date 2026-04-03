@@ -87,6 +87,62 @@ function isInvoiceCategory(v: string): boolean {
   return s === "facture" || s === "invoice";
 }
 
+/** RTK/socket may expose `data` as object or JSON string — normalize for matching. */
+function parseNotificationPayloadData(raw: unknown): Record<string, unknown> {
+  if (!raw) return {};
+  if (typeof raw === "object") return raw as Record<string, unknown>;
+  if (typeof raw === "string") {
+    try {
+      const p = JSON.parse(raw) as unknown;
+      return p && typeof p === "object" ? (p as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function readIdFromPayload(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim()) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function isInvoiceExtractionSuccessNotification(n: {
+  type?: string;
+  title?: string;
+  message?: string;
+}): boolean {
+  const title = String(n.title ?? "").toLowerCase();
+  const message = String(n.message ?? "").toLowerCase();
+  if (title.includes("échou") || message.includes("échou")) return false;
+  return (
+    title.includes("extraction termin") ||
+    message.includes("terminée avec succès") ||
+    message.includes("extraction termin")
+  );
+}
+
+/** Dialogs must sit above `Drawer` (`modal + 10`). */
+const sxDialogAboveFileDrawer = {
+  sx: { zIndex: (t: { zIndex: { modal: number } }) => t.zIndex.modal + 100 },
+  slotProps: {
+    backdrop: {
+      sx: { zIndex: (t: { zIndex: { modal: number } }) => t.zIndex.modal + 99 },
+    },
+    paper: {
+      sx: {
+        zIndex: (t: { zIndex: { modal: number } }) => t.zIndex.modal + 100,
+        borderRadius: 3,
+        overflow: "hidden",
+      },
+    },
+  },
+} as const;
+
 // ─── Folder tree item (for destination picker) ───────────────────────────────
 
 function FolderTreeItem({
@@ -110,7 +166,13 @@ function FolderTreeItem({
 }) {
   const isExpanded = expandedIds.has(folderId);
   const { data } = useGetDocumentsQuery(
-    { clientId, parentId: folderId, limit: 500, status: "active" },
+    {
+      clientId,
+      parentId: folderId,
+      limit: 500,
+      status: "active",
+      itemType: "folder",
+    },
     { skip: !isExpanded },
   );
   const childFolders =
@@ -403,6 +465,25 @@ function DocumentDetailsPanel({
     "Autre";
   const processingStatus =
     (document?.processingStatus as ProcessingStatus | undefined) || "pending";
+  /** GET /invoices/metadata exposes extractionStatus on `data` even when document RTK cache is stale. */
+  const invoiceListExtractionStatus = useMemo(() => {
+    const raw = metadataResponse?.data as Record<string, unknown> | undefined;
+    if (!raw || typeof raw !== "object") return "";
+    return String(raw.extractionStatus ?? "").toLowerCase();
+  }, [metadataResponse]);
+
+  const invoiceMetadataSaysExtractionDone =
+    isInvoiceDocument &&
+    (invoiceListExtractionStatus === "done" ||
+      invoiceListExtractionStatus === "failed");
+
+  const workflowProcessingStatus: ProcessingStatus =
+    isInvoiceDocument &&
+    processingStatus === "pending" &&
+    invoiceMetadataSaysExtractionDone
+      ? "traite"
+      : processingStatus;
+
   const breadcrumb = breadcrumbResponse?.data ?? [];
   const invoiceMetadata = useMemo(() => {
     if (!hasMetadata || !metadataResponse?.data) return null;
@@ -572,6 +653,8 @@ function DocumentDetailsPanel({
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const hasRunInitialPendingCheckRef = useRef(false);
   const hasHandledPendingNotificationRef = useRef(false);
+  /** Baseline notification list length while this invoice is pending — detect only increases (new push). */
+  const pendingNotifBaselineLenRef = useRef<number | null>(null);
 
   // Initialize editable table rows right after extraction
   useEffect(() => {
@@ -658,13 +741,12 @@ function DocumentDetailsPanel({
       parentId: undefined,
       limit: 500,
       status: "active",
+      itemType: "folder",
     },
     { skip: !destinationDialogOpen },
   );
   const rootFolders =
-    rootFoldersResponse?.data
-      ?.filter((d) => d.isFolder)
-      .map((d) => ({ id: d.id, name: d.name })) ?? [];
+    rootFoldersResponse?.data?.map((d) => ({ id: d.id, name: d.name })) ?? [];
 
   const handleToggleExpand = (id: number) => {
     setExpandedIds((prev) => {
@@ -903,44 +985,36 @@ function DocumentDetailsPanel({
   const isViewMode =
     !isEditing &&
     (forceViewMode ||
-      processingStatus === "enregistre" ||
-      processingStatus === "synchronise");
+      workflowProcessingStatus === "enregistre" ||
+      workflowProcessingStatus === "synchronise");
 
   useEffect(() => {
     hasRunInitialPendingCheckRef.current = false;
     hasHandledPendingNotificationRef.current = false;
+    pendingNotifBaselineLenRef.current = null;
   }, [documentId]);
 
-  // Listen extraction completion via realtime notifications.
+  // Listen extraction completion via realtime notifications (parse `data` string or object).
   useEffect(() => {
     if (!hasDocumentId || !isInvoiceDocument) return undefined;
     if (processingStatus !== "pending") return undefined;
     if (hasHandledPendingNotificationRef.current) return undefined;
     const list = notificationsData?.notifications ?? [];
+    const docName = String(document?.name || file.name || "").toLowerCase();
     const match = list.some((n) => {
-      const nType = String(n.type ?? "").toLowerCase();
-      const nTitle = String(n.title ?? "").toLowerCase();
-      const nMessage = String(n.message ?? "").toLowerCase();
-      const nData =
-        n.data && typeof n.data === "object"
-          ? (n.data as Record<string, unknown>)
-          : {};
-      const nDocumentId = Number(nData.documentId);
-      const extractionStatus = String(
-        nData.extractionStatus ?? "",
-      ).toLowerCase();
-      const sameDoc =
-        Number.isFinite(nDocumentId) && nDocumentId === documentId;
-      const isExtractionDoneEvent =
-        extractionStatus === "completed" ||
-        extractionStatus === "success" ||
-        nType.includes("invoice") ||
-        nTitle.includes("extraction termin") ||
-        nMessage.includes("extraction termin");
-      return sameDoc && isExtractionDoneEvent;
+      if (!isInvoiceExtractionSuccessNotification(n)) return false;
+      const nData = parseNotificationPayloadData(n.data);
+      const nDocumentId = readIdFromPayload(nData.documentId);
+      const sameId = nDocumentId != null && nDocumentId === documentId;
+      const msg = String(n.message ?? "").toLowerCase();
+      const looseNameMatch = docName.length > 1 && msg.includes(docName);
+      return sameId || looseNameMatch;
     });
     if (!match) return undefined;
     hasHandledPendingNotificationRef.current = true;
+    dispatch(
+      documentsApi.util.invalidateTags([{ type: "Documents", id: documentId }]),
+    );
     void refetchDocument();
     void refetchMetadata();
     return undefined;
@@ -950,8 +1024,75 @@ function DocumentDetailsPanel({
     processingStatus,
     notificationsData,
     documentId,
+    document?.name,
+    file.name,
     refetchDocument,
     refetchMetadata,
+    dispatch,
+  ]);
+
+  // New notification row while still "pending" → refetch document + metadata (without refetch on first paint).
+  useEffect(() => {
+    if (
+      !hasDocumentId ||
+      !isInvoiceDocument ||
+      processingStatus !== "pending"
+    ) {
+      pendingNotifBaselineLenRef.current = null;
+      return;
+    }
+    const len = notificationsData?.notifications?.length ?? 0;
+    if (pendingNotifBaselineLenRef.current === null) {
+      pendingNotifBaselineLenRef.current = len;
+      return;
+    }
+    if (len > pendingNotifBaselineLenRef.current) {
+      pendingNotifBaselineLenRef.current = len;
+      if (documentId != null) {
+        dispatch(
+          documentsApi.util.invalidateTags([
+            { type: "Documents", id: documentId },
+          ]),
+        );
+      }
+      void refetchDocument();
+      void refetchMetadata();
+    }
+  }, [
+    hasDocumentId,
+    isInvoiceDocument,
+    processingStatus,
+    notificationsData?.notifications?.length,
+    refetchDocument,
+    refetchMetadata,
+    dispatch,
+  ]);
+
+  // Metadata API reflects document.extractionStatus before RTK document cache updates — resync.
+  useEffect(() => {
+    if (!hasDocumentId || !isInvoiceDocument) return;
+    if (processingStatus !== "pending") return;
+    const raw = metadataResponse?.data;
+    if (!raw || typeof raw !== "object") return;
+    const ext = String(
+      (raw as Record<string, unknown>).extractionStatus ?? "",
+    ).toLowerCase();
+    if (ext === "done" || ext === "failed") {
+      dispatch(
+        documentsApi.util.invalidateTags([
+          { type: "Documents", id: documentId! },
+        ]),
+      );
+      void refetchDocument();
+    }
+  }, [
+    hasDocumentId,
+    isInvoiceDocument,
+    processingStatus,
+    metadataResponse,
+    documentId,
+    refetchDocument,
+    dispatch,
   ]);
 
   // One-shot verification on first pending render only.
@@ -1077,9 +1218,45 @@ function DocumentDetailsPanel({
           onClose={() => setDestinationDialogOpen(false)}
           maxWidth="sm"
           fullWidth
+          {...sxDialogAboveFileDrawer}
         >
-          <DialogTitle>Choisir la destination du document</DialogTitle>
-          <DialogContent dividers>
+          <DialogTitle
+            sx={{
+              pb: 1.5,
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+            }}
+          >
+            <Box
+              sx={{
+                width: 28,
+                height: 28,
+                borderRadius: 1.5,
+                bgcolor: alpha(theme.palette.primary.main, 0.08),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <FolderOpen size={16} color={theme.palette.primary.main} />
+            </Box>
+            <Typography variant="subtitle1" fontWeight={600}>
+              Choisir la destination du document
+            </Typography>
+          </DialogTitle>
+
+          <DialogContent dividers sx={{ pt: 2 }}>
+            <CustomInput
+              fullWidth
+              size="small"
+              label="Chemin"
+              placeholder="Ex: Banque > QNB > Factures"
+              value={destinationPath}
+              onChange={(e) => setDestinationPath(e.target.value)}
+              sx={{ mb: 2 }}
+            />
             <Box
               sx={{
                 border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
@@ -1101,6 +1278,11 @@ function DocumentDetailsPanel({
                     parentId === null
                       ? alpha(theme.palette.primary.main, 0.08)
                       : "transparent",
+                  "&:hover": {
+                    bgcolor: alpha(theme.palette.action.hover, 0.8),
+                  },
+                  transition: "background-color 0.15s ease",
+                  borderBottom: `1px solid ${alpha(theme.palette.divider, 0.4)}`,
                 }}
               >
                 <ChevronRight size={18} color="transparent" />
@@ -1127,7 +1309,8 @@ function DocumentDetailsPanel({
               ))}
             </Box>
           </DialogContent>
-          <DialogActions>
+
+          <DialogActions sx={{ px: 2.5, py: 1.75, gap: 1 }}>
             <CustomButton
               variant="outlined"
               onClick={() => setDestinationDialogOpen(false)}
@@ -1150,8 +1333,12 @@ function DocumentDetailsPanel({
     );
   }
 
-  // Facture: extraction workflow and processing states
-  if (processingStatus === "pending" || isExtracting) {
+  // Facture: extraction workflow and processing states (metadata can show done before document refetch)
+  const showInvoiceExtractionLottie =
+    isExtracting ||
+    (processingStatus === "pending" && !invoiceMetadataSaysExtractionDone);
+
+  if (showInvoiceExtractionLottie) {
     return (
       <Box sx={{ py: 4, px: 2, textAlign: "center" }}>
         <Box
@@ -1182,7 +1369,9 @@ function DocumentDetailsPanel({
   }
 
   if (
-    ["traite", "enregistre", "synchronise"].includes(processingStatus) &&
+    ["traite", "enregistre", "synchronise"].includes(
+      workflowProcessingStatus,
+    ) &&
     !hasPersistedMetadataData
   ) {
     return (
@@ -1342,7 +1531,7 @@ function DocumentDetailsPanel({
             >
               Niveau de traitement
             </Typography>
-            <ProcessingLevelChips status={processingStatus} />
+            <ProcessingLevelChips status={workflowProcessingStatus} />
           </Box>
           <Divider />
         </Box>
@@ -1350,7 +1539,9 @@ function DocumentDetailsPanel({
 
       {/* ── Main form (shown after successful extraction) ── */}
       {isInvoiceDocument &&
-        ["traite", "enregistre", "synchronise"].includes(processingStatus) && (
+        ["traite", "enregistre", "synchronise"].includes(
+          workflowProcessingStatus,
+        ) && (
           <>
             {/* ── Section: Informations de base ── */}
             <Box>
@@ -1678,7 +1869,7 @@ function DocumentDetailsPanel({
                 justifyContent: "flex-end",
               }}
             >
-              {processingStatus === "traite" && hasDocumentId && (
+              {workflowProcessingStatus === "traite" && hasDocumentId && (
                 <CustomButton
                   variant="contained"
                   color="primary"
@@ -1690,8 +1881,8 @@ function DocumentDetailsPanel({
                 </CustomButton>
               )}
 
-              {(processingStatus === "enregistre" ||
-                processingStatus === "synchronise") && (
+              {(workflowProcessingStatus === "enregistre" ||
+                workflowProcessingStatus === "synchronise") && (
                 <>
                   {!isEditing ? (
                     <CustomButton
@@ -1733,7 +1924,7 @@ function DocumentDetailsPanel({
                   )}
 
                   {!isEditing &&
-                    processingStatus === "enregistre" &&
+                    workflowProcessingStatus === "enregistre" &&
                     hasDocumentId && (
                       <CustomButton
                         variant="contained"
@@ -1755,17 +1946,7 @@ function DocumentDetailsPanel({
               onClose={() => setDestinationDialogOpen(false)}
               maxWidth="sm"
               fullWidth
-              sx={{ zIndex: (t) => t.zIndex.modal + 50 }}
-              slotProps={{
-                backdrop: { sx: { zIndex: (t) => t.zIndex.modal + 49 } },
-                paper: {
-                  sx: {
-                    zIndex: (t) => t.zIndex.modal + 50,
-                    borderRadius: 3,
-                    overflow: "hidden",
-                  },
-                },
-              }}
+              {...sxDialogAboveFileDrawer}
             >
               <DialogTitle
                 sx={{
@@ -1928,7 +2109,13 @@ function EditFileModal({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      {...sxDialogAboveFileDrawer}
+    >
       <DialogTitle>
         <Typography variant="h6">Modifier votre fichier</Typography>
         <Typography variant="caption" color="text.secondary">

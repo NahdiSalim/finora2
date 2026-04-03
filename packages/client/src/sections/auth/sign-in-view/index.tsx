@@ -20,7 +20,6 @@ import {
   type SignInFormData,
 } from "src/validations/Auth/auth-validation";
 
-import { useAlert } from "src/contexts/AlertContext";
 import { useAppSelector } from "src/hooks/use-redux";
 import {
   useLoginInternalMutation,
@@ -31,7 +30,6 @@ import PasswordField from "src/components/common/PasswordField";
 
 export function SignInView() {
   const router = useRouter();
-  const { showAlert } = useAlert();
   const [login, { isLoading }] = useLoginInternalMutation();
 
   const { isLoading: loadingVerif } = useVerifyUserQuery();
@@ -59,15 +57,8 @@ export function SignInView() {
       localStorage.setItem("refresh_token", result.data.refreshToken);
 
       router.push("/dashboard");
-    } catch (error: unknown) {
-      const message =
-        (typeof error === "object" &&
-          error !== null &&
-          "data" in error &&
-          (error as { data?: { message?: string } })?.data?.message) ||
-        "Échec de la connexion. Vérifiez vos identifiants.";
-
-      showAlert(message, "error");
+    } catch {
+      /* Toast d’erreur : `baseQueryWithReauth` + message backend */
     }
   };
 

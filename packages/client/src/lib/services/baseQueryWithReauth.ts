@@ -1,4 +1,5 @@
 import type {
+  BaseQueryApi,
   BaseQueryFn,
   FetchArgs,
   FetchBaseQueryError,
@@ -6,10 +7,11 @@ import type {
 import { fetchBaseQuery } from "@reduxjs/toolkit/query";
 import { reconnectSocketWithFreshToken } from "../socket";
 import { reconnectNotificationsSocketWithFreshToken } from "../notificationsSocket";
+import { applyApiResultToasts, peelToastFlags } from "./apiToast";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-const baseQuery = fetchBaseQuery({
+const rawBaseQuery = fetchBaseQuery({
   baseUrl: API_URL,
   prepareHeaders: (headers) => {
     const token = localStorage.getItem("token");
@@ -20,18 +22,16 @@ const baseQuery = fetchBaseQuery({
   },
 });
 
-export const baseQueryWithReauth: BaseQueryFn<
-  string | FetchArgs,
-  unknown,
-  FetchBaseQueryError
-> = async (args, api, extraOptions) => {
-  const result = await baseQuery(args, api, extraOptions);
-
-  console.log("🔍 Vérification des headers de réponse...", {
-    hasMeta: !!result.meta,
-    hasResponse: !!result.meta?.response,
-    hasHeaders: !!result.meta?.response?.headers,
-  });
+async function runBaseQueryWithReauth(
+  args: string | FetchArgs,
+  api: BaseQueryApi,
+  extraOptions: Record<string, unknown> | undefined,
+) {
+  const result = await rawBaseQuery(
+    args,
+    api,
+    extraOptions as Parameters<typeof rawBaseQuery>[2],
+  );
 
   if (result.meta?.response?.headers) {
     const headers = result.meta.response.headers;
@@ -39,18 +39,14 @@ export const baseQueryWithReauth: BaseQueryFn<
     const newAccessToken = headers.get("X-Access-Token");
     const newRefreshToken = headers.get("X-Refresh-Token");
 
-    console.log("📋 Headers reçus:", {
-      tokenRefreshed,
-      hasAccessToken: !!newAccessToken,
-      hasRefreshToken: !!newRefreshToken,
-    });
-
-    if (tokenRefreshed === "true" && newAccessToken && newRefreshToken) {
-      console.log("🔄 Tokens rafraîchis automatiquement par le backend");
-
+    if (
+      tokenRefreshed === "true" &&
+      newAccessToken &&
+      newRefreshToken &&
+      api.dispatch
+    ) {
       localStorage.setItem("token", newAccessToken);
       localStorage.setItem("refresh_token", newRefreshToken);
-      console.log("✅ Nouveaux tokens sauvegardés dans localStorage");
 
       api.dispatch({
         type: "auth/setTokens",
@@ -60,22 +56,31 @@ export const baseQueryWithReauth: BaseQueryFn<
         },
       });
 
-      // Socket may be disconnected or retrying with the old expired token.
-      // Force a reconnect now that localStorage has the fresh token so the
-      // next handshake succeeds immediately instead of waiting for retries.
-      console.log("[socket] reconnecting socket after token refresh");
       reconnectSocketWithFreshToken();
       reconnectNotificationsSocketWithFreshToken();
     }
   }
 
-  if (result.error && result.error.status === 401) {
-    console.log("❌ Session expirée, déconnexion...");
+  if (result.error && result.error.status === 401 && api.dispatch) {
     localStorage.removeItem("token");
     localStorage.removeItem("refresh_token");
-    console.log("🗑️ Tokens supprimés du localStorage");
     api.dispatch({ type: "auth/logout" });
   }
 
+  return result;
+}
+
+export const baseQueryWithReauth: BaseQueryFn<
+  string | FetchArgs,
+  unknown,
+  FetchBaseQueryError
+> = async (args, api, extraOptions) => {
+  const { arg: fetchArg, flags } = peelToastFlags(args);
+  const result = await runBaseQueryWithReauth(
+    fetchArg,
+    api,
+    extraOptions as Record<string, unknown> | undefined,
+  );
+  applyApiResultToasts(result, api, flags);
   return result;
 };

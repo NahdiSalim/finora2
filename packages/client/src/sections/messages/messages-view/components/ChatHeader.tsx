@@ -58,7 +58,6 @@ export default function ChatHeader({
     }
 
     if (participants.length === 0) {
-      console.error("[ChatHeader] No participants found for call");
       return;
     }
 

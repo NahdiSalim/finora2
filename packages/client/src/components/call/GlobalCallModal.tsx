@@ -52,6 +52,7 @@ export default function GlobalCallModal() {
   } = useGlobalCall();
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const localVideoPipRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
   const remoteAudioRefs = useRef<Map<number, HTMLAudioElement>>(new Map());
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
@@ -95,7 +96,7 @@ export default function GlobalCallModal() {
         audioElementRef.current = audio;
       }
     } catch (error) {
-      console.error("[GlobalCallModal] Error playing ringtone:", error);
+      // Failed to play ringtone
     }
   };
 
@@ -111,6 +112,9 @@ export default function GlobalCallModal() {
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
+    }
+    if (localVideoPipRef.current && localStream) {
+      localVideoPipRef.current.srcObject = localStream;
     }
   }, [localStream]);
 
@@ -137,12 +141,8 @@ export default function GlobalCallModal() {
 
       if (rs.stream) {
         audioElement.srcObject = rs.stream;
-        audioElement.play().catch((err) => {
-          console.error(
-            "[GlobalCallModal] Error playing remote audio for user:",
-            rs.userId,
-            err,
-          );
+        audioElement.play().catch(() => {
+          // Failed to play audio
         });
       }
     });
@@ -792,7 +792,7 @@ export default function GlobalCallModal() {
                       }}
                     >
                       <video
-                        ref={localVideoRef}
+                        ref={localVideoPipRef}
                         autoPlay
                         playsInline
                         muted

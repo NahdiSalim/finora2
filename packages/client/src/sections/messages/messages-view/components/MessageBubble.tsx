@@ -22,7 +22,9 @@ import {
   Video,
   PhoneMissed,
   PhoneOff,
+  Users,
 } from "lucide-react";
+import { useGlobalCall } from "src/contexts/GlobalCallContext";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useDashboardBase } from "../../../../hooks/useDashboardBase";
@@ -92,6 +94,7 @@ export default function MessageBubble({
   const dashboardBase = useDashboardBase();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [imageError, setImageError] = useState(false);
+  const { joinCall, callState, roomId: activeCallRoomId } = useGlobalCall();
 
   const isFileMessage = message.type === "file" && !!message.file;
   const isRequestMessage = message.type === "request" && !!message.request;
@@ -473,122 +476,351 @@ export default function MessageBubble({
             ) : isCallMessage ? (
               <>
                 {/* ── Call bubble ────────────────────────────────────────── */}
-                <Box
-                  sx={{
-                    width: "fit-content",
-                    maxWidth: isMobile ? "100%" : 280,
-                    borderRadius: isMobile ? "12px" : "14px",
-                    backgroundColor:
-                      message.call?.status === "missed"
-                        ? "#FEF3F2"
-                        : message.call?.status === "rejected"
-                          ? "#FEF3F2"
-                          : "#F0FDF4",
-                    border:
-                      message.call?.status === "missed"
-                        ? "1px solid #FEE4E2"
-                        : message.call?.status === "rejected"
-                          ? "1px solid #FEE4E2"
-                          : "1px solid #D1FAE5",
-                    px: isMobile ? 1.25 : 1.5,
-                    py: isMobile ? 1 : 1.25,
-                  }}
-                >
+                {message.call?.status === "ongoing" && conversation?.isGroup ? (
+                  /* ── ONGOING CALL - Big & Animated ── */
                   <Box
                     sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: isMobile ? 1 : 1.25,
+                      width: "fit-content",
+                      maxWidth: isMobile ? "100%" : 360,
+                      minWidth: isMobile ? 280 : 320,
+                      borderRadius: isMobile ? "16px" : "18px",
+                      background: `linear-gradient(135deg, ${message.call?.callType === "video" ? alpha(theme.palette.info.main, 0.12) : alpha(theme.palette.success.main, 0.12)} 0%, ${message.call?.callType === "video" ? alpha(theme.palette.info.main, 0.04) : alpha(theme.palette.success.main, 0.04)} 100%)`,
+                      border: `2px solid ${message.call?.callType === "video" ? theme.palette.info.main : theme.palette.success.main}`,
+                      px: isMobile ? 2 : 2.5,
+                      py: isMobile ? 1.75 : 2,
+                      position: "relative",
+                      overflow: "hidden",
+                      animation: "pulse-border 2s ease-in-out infinite",
+                      "@keyframes pulse-border": {
+                        "0%, 100%": {
+                          borderColor:
+                            message.call?.callType === "video"
+                              ? theme.palette.info.main
+                              : theme.palette.success.main,
+                          boxShadow: `0 0 0 0 ${alpha(message.call?.callType === "video" ? theme.palette.info.main : theme.palette.success.main, 0.4)}`,
+                        },
+                        "50%": {
+                          borderColor:
+                            message.call?.callType === "video"
+                              ? theme.palette.info.dark
+                              : theme.palette.success.dark,
+                          boxShadow: `0 0 0 8px ${alpha(message.call?.callType === "video" ? theme.palette.info.main : theme.palette.success.main, 0)}`,
+                        },
+                      },
                     }}
                   >
+                    {/* Animated background */}
                     <Box
                       sx={{
-                        width: isMobile ? 36 : 40,
-                        height: isMobile ? 36 : 40,
-                        borderRadius: "10px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor:
-                          message.call?.status === "missed"
-                            ? alpha("#F04438", 0.08)
-                            : message.call?.status === "rejected"
-                              ? alpha("#F04438", 0.08)
-                              : alpha("#10B981", 0.08),
-                        color:
-                          message.call?.status === "missed"
-                            ? "#F04438"
-                            : message.call?.status === "rejected"
-                              ? "#F04438"
-                              : "#10B981",
-                        flexShrink: 0,
+                        position: "absolute",
+                        top: -50,
+                        right: -50,
+                        width: 150,
+                        height: 150,
+                        borderRadius: "50%",
+                        background: `radial-gradient(circle, ${alpha(message.call?.callType === "video" ? theme.palette.info.main : theme.palette.success.main, 0.15)} 0%, transparent 70%)`,
+                        animation: "pulse-glow 3s ease-in-out infinite",
+                        "@keyframes pulse-glow": {
+                          "0%, 100%": { opacity: 0.5, transform: "scale(1)" },
+                          "50%": { opacity: 0.8, transform: "scale(1.1)" },
+                        },
                       }}
-                    >
-                      {message.call?.status === "missed" ? (
-                        <PhoneMissed size={isMobile ? 18 : 20} />
-                      ) : message.call?.status === "rejected" ? (
-                        <PhoneOff size={isMobile ? 18 : 20} />
-                      ) : message.call?.callType === "video" ? (
-                        <Video size={isMobile ? 18 : 20} />
-                      ) : (
-                        <Phone size={isMobile ? 18 : 20} />
-                      )}
-                    </Box>
+                    />
 
-                    <Box sx={{ minWidth: 0, flex: 1 }}>
-                      <Typography
-                        sx={{
-                          fontSize: isMobile ? "13px" : "14px",
-                          fontWeight: 600,
-                          lineHeight: 1.4,
-                          color: theme.palette.text.primary,
-                          wordBreak: "break-word",
-                          mb: 0.25,
-                        }}
-                      >
-                        {message.call?.status === "missed"
-                          ? message.mine
-                            ? "Appel non répondu"
-                            : "Appel manqué"
-                          : message.call?.status === "rejected"
-                            ? "Appel refusé"
-                            : message.call?.callType === "video"
-                              ? "Appel vidéo"
-                              : "Appel audio"}
-                      </Typography>
-
+                    <Box sx={{ position: "relative", zIndex: 1 }}>
                       <Box
                         sx={{
                           display: "flex",
                           alignItems: "center",
-                          gap: 0.5,
+                          gap: isMobile ? 1.5 : 2,
+                          mb: 1.5,
                         }}
                       >
-                        <Clock
-                          size={isMobile ? 12 : 13}
-                          color={theme.palette.text.secondary}
-                        />
-                        <Typography
+                        <Box
                           sx={{
-                            fontSize: isMobile ? "11px" : "12px",
-                            lineHeight: 1.4,
-                            color: theme.palette.text.secondary,
-                            fontWeight: 400,
+                            width: isMobile ? 48 : 56,
+                            height: isMobile ? 48 : 56,
+                            borderRadius: "14px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backgroundColor:
+                              message.call?.callType === "video"
+                                ? theme.palette.info.main
+                                : theme.palette.success.main,
+                            color: "white",
+                            flexShrink: 0,
+                            animation: "bounce-icon 2s ease-in-out infinite",
+                            "@keyframes bounce-icon": {
+                              "0%, 100%": { transform: "translateY(0)" },
+                              "50%": { transform: "translateY(-4px)" },
+                            },
                           }}
                         >
-                          {message.call?.status === "completed" &&
-                          message.call?.duration
-                            ? `${Math.floor(message.call.duration / 60)}:${String(message.call.duration % 60).padStart(2, "0")}`
-                            : message.call?.status === "missed"
-                              ? "Non répondu"
+                          {message.call?.callType === "video" ? (
+                            <Video size={isMobile ? 24 : 28} />
+                          ) : (
+                            <Phone size={isMobile ? 24 : 28} />
+                          )}
+                        </Box>
+
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          <Typography
+                            sx={{
+                              fontSize: isMobile ? "15px" : "17px",
+                              fontWeight: 700,
+                              lineHeight: 1.3,
+                              color: theme.palette.text.primary,
+                              wordBreak: "break-word",
+                              mb: 0.5,
+                            }}
+                          >
+                            {message.call?.callType === "video"
+                              ? "Appel vidéo en cours"
+                              : "Appel audio en cours"}
+                          </Typography>
+
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1,
+                            }}
+                          >
+                            {conversation?.isGroup && (
+                              <>
+                                <Users
+                                  size={isMobile ? 14 : 16}
+                                  color={theme.palette.text.secondary}
+                                />
+                                <Typography
+                                  sx={{
+                                    fontSize: isMobile ? "12px" : "13px",
+                                    lineHeight: 1.4,
+                                    color: theme.palette.text.secondary,
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  Appel de groupe
+                                </Typography>
+                              </>
+                            )}
+                          </Box>
+                        </Box>
+                      </Box>
+
+                      {/* Join button */}
+                      {callState === "idle" ||
+                      (callState === "active" &&
+                        activeCallRoomId !== conversation?.id) ? (
+                        <Box
+                          onClick={() => {
+                            if (message.call?.id && conversation?.id) {
+                              joinCall(
+                                conversation.id,
+                                message.call.id,
+                                conversation.isGroup,
+                              );
+                            }
+                          }}
+                          sx={{
+                            width: "100%",
+                            py: isMobile ? 1.25 : 1.5,
+                            px: 2,
+                            borderRadius: "12px",
+                            backgroundColor:
+                              message.call?.callType === "video"
+                                ? theme.palette.info.main
+                                : theme.palette.success.main,
+                            color: "white",
+                            textAlign: "center",
+                            cursor: "pointer",
+                            fontWeight: 600,
+                            fontSize: isMobile ? "14px" : "15px",
+                            transition: "all 0.2s",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 1,
+                            "&:hover": {
+                              backgroundColor:
+                                message.call?.callType === "video"
+                                  ? theme.palette.info.dark
+                                  : theme.palette.success.dark,
+                              transform: "translateY(-2px)",
+                              boxShadow: theme.shadows[4],
+                            },
+                            "&:active": {
+                              transform: "translateY(0)",
+                            },
+                          }}
+                        >
+                          {message.call?.callType === "video" ? (
+                            <Video size={18} />
+                          ) : (
+                            <Phone size={18} />
+                          )}
+                          Rejoindre l&apos;appel
+                        </Box>
+                      ) : (
+                        <Box
+                          sx={{
+                            width: "100%",
+                            py: isMobile ? 1 : 1.25,
+                            px: 2,
+                            borderRadius: "12px",
+                            backgroundColor: alpha(
+                              theme.palette.success.main,
+                              0.15,
+                            ),
+                            border: `1px solid ${alpha(theme.palette.success.main, 0.3)}`,
+                            color: theme.palette.success.dark,
+                            textAlign: "center",
+                            fontWeight: 600,
+                            fontSize: isMobile ? "13px" : "14px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 0.75,
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: "50%",
+                              backgroundColor: theme.palette.success.main,
+                              animation: "blink 1.5s ease-in-out infinite",
+                              "@keyframes blink": {
+                                "0%, 100%": { opacity: 1 },
+                                "50%": { opacity: 0.3 },
+                              },
+                            }}
+                          />
+                          Vous êtes dans l&apos;appel
+                        </Box>
+                      )}
+                    </Box>
+                  </Box>
+                ) : (
+                  /* ── ENDED/MISSED/REJECTED CALL - Regular size ── */
+                  <Box
+                    sx={{
+                      width: "fit-content",
+                      maxWidth: isMobile ? "100%" : 280,
+                      borderRadius: isMobile ? "12px" : "14px",
+                      backgroundColor:
+                        message.call?.status === "missed"
+                          ? "#FEF3F2"
+                          : message.call?.status === "rejected"
+                            ? "#FEF3F2"
+                            : "#F0FDF4",
+                      border:
+                        message.call?.status === "missed"
+                          ? "1px solid #FEE4E2"
+                          : message.call?.status === "rejected"
+                            ? "1px solid #FEE4E2"
+                            : "1px solid #D1FAE5",
+                      px: isMobile ? 1.25 : 1.5,
+                      py: isMobile ? 1 : 1.25,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: isMobile ? 1 : 1.25,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: isMobile ? 36 : 40,
+                          height: isMobile ? 36 : 40,
+                          borderRadius: "10px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor:
+                            message.call?.status === "missed"
+                              ? alpha("#F04438", 0.08)
                               : message.call?.status === "rejected"
-                                ? "Refusé"
-                                : "Terminé"}
+                                ? alpha("#F04438", 0.08)
+                                : alpha("#10B981", 0.08),
+                          color:
+                            message.call?.status === "missed"
+                              ? "#F04438"
+                              : message.call?.status === "rejected"
+                                ? "#F04438"
+                                : "#10B981",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {message.call?.status === "missed" ? (
+                          <PhoneMissed size={isMobile ? 18 : 20} />
+                        ) : message.call?.status === "rejected" ? (
+                          <PhoneOff size={isMobile ? 18 : 20} />
+                        ) : message.call?.callType === "video" ? (
+                          <Video size={isMobile ? 18 : 20} />
+                        ) : (
+                          <Phone size={isMobile ? 18 : 20} />
+                        )}
+                      </Box>
+
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography
+                          sx={{
+                            fontSize: isMobile ? "13px" : "14px",
+                            fontWeight: 600,
+                            lineHeight: 1.4,
+                            color: theme.palette.text.primary,
+                            wordBreak: "break-word",
+                            mb: 0.25,
+                          }}
+                        >
+                          {message.call?.status === "missed"
+                            ? message.mine
+                              ? "Appel non répondu"
+                              : "Appel manqué"
+                            : message.call?.status === "rejected"
+                              ? "Appel refusé"
+                              : message.call?.callType === "video"
+                                ? "Appel vidéo"
+                                : "Appel audio"}
                         </Typography>
+
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 0.5,
+                          }}
+                        >
+                          <Clock
+                            size={isMobile ? 12 : 13}
+                            color={theme.palette.text.secondary}
+                          />
+                          <Typography
+                            sx={{
+                              fontSize: isMobile ? "11px" : "12px",
+                              lineHeight: 1.4,
+                              color: theme.palette.text.secondary,
+                              fontWeight: 400,
+                            }}
+                          >
+                            {message.call?.status === "completed" &&
+                            message.call?.duration
+                              ? `${Math.floor(message.call.duration / 60)}:${String(message.call.duration % 60).padStart(2, "0")}`
+                              : message.call?.status === "missed"
+                                ? "Non répondu"
+                                : message.call?.status === "rejected"
+                                  ? "Refusé"
+                                  : "Terminé"}
+                          </Typography>
+                        </Box>
                       </Box>
                     </Box>
                   </Box>
-                </Box>
+                )}
               </>
             ) : isAppointmentMessage ? (
               <>
@@ -721,97 +953,173 @@ export default function MessageBubble({
                 )}
               </>
             ) : isImageFile ? (
-              // ── Image thumbnail bubble ──────────────────────────────────
-              <Box
-                sx={{
-                  position: "relative",
-                  width: "fit-content",
-                  maxWidth: isMobile ? 200 : 280,
-                  borderRadius: message.mine
-                    ? isMobile
-                      ? "16px 16px 6px 16px"
-                      : "18px 18px 6px 18px"
-                    : isMobile
-                      ? "16px 16px 16px 6px"
-                      : "18px 18px 18px 6px",
-                  overflow: "hidden",
-                  cursor: "pointer",
-                  backgroundColor: "#D1D5DB",
-                  border: `1px solid ${message.mine ? "transparent" : theme.palette.grey[300]}`,
-                }}
-                onClick={handleOpenFile}
-              >
-                {!imageError && message.file!.url ? (
-                  <Box
-                    component="img"
-                    src={message.file!.url}
-                    alt={message.file!.name}
-                    onError={() => setImageError(true)}
-                    sx={{
-                      display: "block",
-                      width: "100%",
-                      maxHeight: isMobile ? 180 : 220,
-                      objectFit: "cover",
-                    }}
-                  />
-                ) : (
-                  <Box
-                    sx={{
-                      width: isMobile ? 160 : 220,
-                      height: isMobile ? 100 : 140,
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 0.75,
-                    }}
-                  >
-                    <ImageOutlinedIcon
-                      sx={{ fontSize: 28, color: "#94A3B8" }}
-                    />
-                    <Typography
-                      sx={{ fontSize: isMobile ? 10 : 11, color: "#94A3B8" }}
-                    >
-                      Image non disponible
-                    </Typography>
-                  </Box>
-                )}
-
-                {/* Semi-transparent footer: filename + download */}
+              <>
                 <Box
                   sx={{
-                    px: isMobile ? 1 : 1.25,
-                    py: isMobile ? 0.5 : 0.625,
-                    backgroundColor: "rgba(0,0,0,0.38)",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 0.5,
+                    position: "relative",
+                    width: "fit-content",
+                    maxWidth: isMobile ? 200 : 280,
+                    borderRadius: message.mine
+                      ? isMobile
+                        ? "16px 16px 6px 16px"
+                        : "18px 18px 6px 18px"
+                      : isMobile
+                        ? "16px 16px 16px 6px"
+                        : "18px 18px 18px 6px",
+                    overflow: "hidden",
+                    cursor: "pointer",
+                    backgroundColor: "#D1D5DB",
+                    border: `1px solid ${message.mine ? "transparent" : theme.palette.grey[300]}`,
                   }}
+                  onClick={handleOpenFile}
                 >
-                  <Typography
-                    noWrap
+                  {!imageError && message.file!.url ? (
+                    <Box
+                      component="img"
+                      src={message.file!.url}
+                      alt={message.file!.name}
+                      onError={() => setImageError(true)}
+                      sx={{
+                        display: "block",
+                        width: "100%",
+                        maxHeight: isMobile ? 180 : 220,
+                        objectFit: "cover",
+                      }}
+                    />
+                  ) : (
+                    <Box
+                      sx={{
+                        width: isMobile ? 160 : 220,
+                        height: isMobile ? 100 : 140,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 0.75,
+                      }}
+                    >
+                      <ImageOutlinedIcon
+                        sx={{ fontSize: 28, color: "#94A3B8" }}
+                      />
+                      <Typography
+                        sx={{ fontSize: isMobile ? 10 : 11, color: "#94A3B8" }}
+                      >
+                        Image non disponible
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* Semi-transparent footer: filename + download */}
+                  <Box
                     sx={{
-                      flex: 1,
-                      fontSize: isMobile ? 10 : 11,
-                      fontWeight: 500,
-                      color: "#FFFFFF",
-                      lineHeight: 1.3,
+                      px: isMobile ? 1 : 1.25,
+                      py: isMobile ? 0.5 : 0.625,
+                      backgroundColor: "rgba(0,0,0,0.38)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.5,
                     }}
                   >
-                    {message.file!.name}
-                  </Typography>
+                    <Typography
+                      noWrap
+                      sx={{
+                        flex: 1,
+                        fontSize: isMobile ? 10 : 11,
+                        fontWeight: 500,
+                        color: "#FFFFFF",
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {message.file!.name}
+                    </Typography>
 
-                  <IconButton
-                    size="small"
-                    onClick={handleDownloadFile}
-                    sx={{ color: "#FFFFFF", p: 0.25, flexShrink: 0 }}
-                  >
-                    <DownloadOutlinedIcon
-                      sx={{ fontSize: isMobile ? 13 : 14 }}
-                    />
-                  </IconButton>
+                    <IconButton
+                      size="small"
+                      onClick={handleDownloadFile}
+                      sx={{ color: "#FFFFFF", p: 0.25, flexShrink: 0 }}
+                    >
+                      <DownloadOutlinedIcon
+                        sx={{ fontSize: isMobile ? 13 : 14 }}
+                      />
+                    </IconButton>
+                  </Box>
                 </Box>
-              </Box>
+
+                {/* Show text message below image if text exists */}
+                {(message.text || message.html) && (
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      mt: 1,
+                      py: isMobile ? "8px" : "10px",
+                      px: isMobile ? "12px" : "16px",
+                      maxWidth: isMobile ? 250 : 360,
+                      borderRadius: message.mine
+                        ? isMobile
+                          ? "16px 16px 6px 16px"
+                          : "18px 18px 6px 18px"
+                        : isMobile
+                          ? "16px 16px 16px 6px"
+                          : "18px 18px 18px 6px",
+                      backgroundColor: message.mine
+                        ? theme.palette.primary.main
+                        : theme.palette.info.lighter,
+                      color: message.mine
+                        ? theme.palette.primary.contrastText
+                        : (theme.palette.grey as any)[1000],
+                      border: message.mine
+                        ? "none"
+                        : `1px solid ${theme.palette.grey[300]}`,
+                      boxShadow: "none",
+                    }}
+                  >
+                    {message.html ? (
+                      <Box
+                        sx={{
+                          fontSize: isMobile ? "13px" : "14px",
+                          lineHeight: isMobile ? "20px" : "22px",
+                          fontWeight: 400,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          "& img[data-flag-image]": {
+                            width: 18,
+                            height: 18,
+                            borderRadius: "50%",
+                            objectFit: "cover",
+                            verticalAlign: "middle",
+                            display: "inline-block",
+                          },
+                          "& span[data-flag-code]": {
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: 18,
+                            height: 18,
+                            margin: "0 2px",
+                            verticalAlign: "middle",
+                          },
+                        }}
+                        dangerouslySetInnerHTML={{ __html: message.html }}
+                      />
+                    ) : (
+                      <Typography
+                        sx={{
+                          fontSize: isMobile ? "13px" : "14px",
+                          lineHeight: isMobile ? "20px" : "22px",
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          fontWeight: 400,
+                          color: "inherit",
+                          fontFamily:
+                            '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji","Segoe UI Symbol",sans-serif',
+                        }}
+                      >
+                        {message.text}
+                      </Typography>
+                    )}
+                  </Paper>
+                )}
+              </>
             ) : (
               // ── Text / non-image file bubble ────────────────────────────
               <Paper
@@ -864,76 +1172,138 @@ export default function MessageBubble({
                 onClick={isFileMessage ? handleOpenFile : undefined}
               >
                 {isFileMessage ? (
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: isMobile ? 1 : 1.25,
-                    }}
-                  >
+                  <>
                     <Box
                       sx={{
-                        width: isMobile ? 32 : 36,
-                        height: isMobile ? 32 : 36,
-                        borderRadius: isMobile ? "8px" : "10px",
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: fileIconBg,
-                        flexShrink: 0,
+                        gap: isMobile ? 1 : 1.25,
                       }}
                     >
-                      <FileIconComponent
+                      <Box
                         sx={{
-                          fontSize: isMobile ? 18 : 20,
-                          color: fileIconColor,
-                        }}
-                      />
-                    </Box>
-
-                    <Box sx={{ minWidth: 0, flex: 1 }}>
-                      <Typography
-                        noWrap
-                        sx={{
-                          fontSize: isMobile ? "12px" : "13px",
-                          fontWeight: 600,
-                          lineHeight: isMobile ? "17px" : "18px",
-                          color: "inherit",
+                          width: isMobile ? 32 : 36,
+                          height: isMobile ? 32 : 36,
+                          borderRadius: isMobile ? "8px" : "10px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: fileIconBg,
+                          flexShrink: 0,
                         }}
                       >
-                        {message.file?.name}
-                      </Typography>
+                        <FileIconComponent
+                          sx={{
+                            fontSize: isMobile ? 18 : 20,
+                            color: fileIconColor,
+                          }}
+                        />
+                      </Box>
 
-                      <Typography
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography
+                          noWrap
+                          sx={{
+                            fontSize: isMobile ? "12px" : "13px",
+                            fontWeight: 600,
+                            lineHeight: isMobile ? "17px" : "18px",
+                            color: "inherit",
+                          }}
+                        >
+                          {message.file?.name}
+                        </Typography>
+
+                        <Typography
+                          sx={{
+                            mt: 0.25,
+                            fontSize: isMobile ? "10px" : "11px",
+                            lineHeight: isMobile ? "14px" : "16px",
+                            color: message.mine
+                              ? alpha(theme.palette.common.white, 0.78)
+                              : theme.palette.info.light,
+                          }}
+                        >
+                          {fileSubLabel}
+                        </Typography>
+                      </Box>
+
+                      <IconButton
+                        size="small"
+                        onClick={handleDownloadFile}
                         sx={{
-                          mt: 0.25,
-                          fontSize: isMobile ? "10px" : "11px",
-                          lineHeight: isMobile ? "14px" : "16px",
                           color: message.mine
-                            ? alpha(theme.palette.common.white, 0.78)
-                            : theme.palette.info.light,
+                            ? theme.palette.common.white
+                            : theme.palette.primary.main,
+                          flexShrink: 0,
+                          p: 0.5,
                         }}
                       >
-                        {fileSubLabel}
-                      </Typography>
+                        <DownloadOutlinedIcon
+                          sx={{ fontSize: isMobile ? 15 : 16 }}
+                        />
+                      </IconButton>
                     </Box>
 
-                    <IconButton
-                      size="small"
-                      onClick={handleDownloadFile}
-                      sx={{
-                        color: message.mine
-                          ? theme.palette.common.white
-                          : theme.palette.primary.main,
-                        flexShrink: 0,
-                        p: 0.5,
-                      }}
-                    >
-                      <DownloadOutlinedIcon
-                        sx={{ fontSize: isMobile ? 15 : 16 }}
-                      />
-                    </IconButton>
-                  </Box>
+                    {/* Show text content if it exists alongside the file */}
+                    {(message.text || message.html) && (
+                      <Box
+                        sx={{
+                          mt: 1.5,
+                          pt: 1.5,
+                          borderTop: `1px solid ${
+                            message.mine
+                              ? alpha(theme.palette.common.white, 0.2)
+                              : theme.palette.grey[200]
+                          }`,
+                        }}
+                      >
+                        {message.html ? (
+                          <Box
+                            sx={{
+                              fontSize: isMobile ? "13px" : "14px",
+                              lineHeight: isMobile ? "20px" : "22px",
+                              fontWeight: 400,
+                              whiteSpace: "pre-wrap",
+                              wordBreak: "break-word",
+                              "& img[data-flag-image]": {
+                                width: 18,
+                                height: 18,
+                                borderRadius: "50%",
+                                objectFit: "cover",
+                                verticalAlign: "middle",
+                                display: "inline-block",
+                              },
+                              "& span[data-flag-code]": {
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                width: 18,
+                                height: 18,
+                                margin: "0 2px",
+                                verticalAlign: "middle",
+                              },
+                            }}
+                            dangerouslySetInnerHTML={{ __html: message.html }}
+                          />
+                        ) : (
+                          <Typography
+                            sx={{
+                              fontSize: isMobile ? "13px" : "14px",
+                              lineHeight: isMobile ? "20px" : "22px",
+                              whiteSpace: "pre-wrap",
+                              wordBreak: "break-word",
+                              fontWeight: 400,
+                              color: "inherit",
+                              fontFamily:
+                                '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji","Segoe UI Symbol",sans-serif',
+                            }}
+                          >
+                            {message.text}
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+                  </>
                 ) : message.html ? (
                   <Box
                     sx={{

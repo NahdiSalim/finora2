@@ -158,4 +158,27 @@ export class CallService {
       },
     });
   }
+
+  async getCallById(callId: number) {
+    return this.prisma.call.findUnique({
+      where: { id: callId },
+      include: {
+        initiator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        room: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
+      },
+    });
+  }
 }

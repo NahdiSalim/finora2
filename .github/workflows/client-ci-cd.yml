@@ -97,7 +97,7 @@ jobs:
             echo "Starting new container..."
             docker run -d --restart unless-stopped \
               --name "$CONTAINER" \
-              -p 80:80 \
+              -p 3224:80 \
               "$IMAGE:$TAG"
 
             echo "Done. Running containers:"

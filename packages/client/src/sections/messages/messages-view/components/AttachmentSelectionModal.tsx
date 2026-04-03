@@ -102,19 +102,13 @@ export default function AttachmentSelectionModal<T extends { id: number }>({
           px: { xs: 2, sm: 3 },
           py: 2,
           borderBottom: `1px solid ${theme.palette.divider}`,
-          flexShrink: 0, // header never shrinks
+          flexShrink: 0,
+          fontWeight: 700,
+          fontSize: { xs: 16, sm: 18 },
+          color: theme.palette.text.primary,
         }}
       >
-        <Typography
-          variant="h6"
-          sx={{
-            fontWeight: 700,
-            fontSize: { xs: 16, sm: 18 },
-            color: theme.palette.text.primary,
-          }}
-        >
-          {title}
-        </Typography>
+        {title}
         <IconButton
           onClick={onClose}
           size="small"

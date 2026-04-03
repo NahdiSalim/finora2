@@ -64,15 +64,6 @@ function mapRoomToConversation(
           p.email ||
           "?";
 
-        // Log raw role data to diagnose mapping issues
-        console.log("[mapRoom:group] raw participant:", {
-          id: p.id,
-          name: fullName,
-          "role.code": p.role?.code ?? "MISSING",
-          "role.nameFr": p.role?.nameFr ?? "MISSING",
-          role: p.role,
-        });
-
         const rawCode = p.role?.code ?? "";
         const roleCode = rawCode.toUpperCase();
 
@@ -87,20 +78,8 @@ function mapRoomToConversation(
         ) {
           memberRole = "collaborateur";
         } else {
-          console.warn(
-            "[mapRoom:group] UNKNOWN role.code:",
-            rawCode,
-            "→ defaulting to collaborateur",
-          );
           memberRole = "collaborateur";
         }
-
-        console.log("[mapRoom:group] mapped:", {
-          id: p.id,
-          name: fullName,
-          rawCode,
-          memberRole,
-        });
 
         return {
           id: Number(p.id),
@@ -153,14 +132,6 @@ function mapRoomToConversation(
       toActivityDate(room.lastActivity) ??
       toActivityDate(room.lastMessage?.createdAt) ??
       null;
-
-    console.debug("[mapRoom:group]", {
-      roomId: room.id,
-      lastActivity: room.lastActivity,
-      lastMessageCreatedAt: room.lastMessage?.createdAt,
-      updatedAt: room.updatedAt,
-      resolved: groupLastDate,
-    });
 
     return {
       id: room.id,
@@ -259,14 +230,6 @@ function mapRoomToConversation(
     toActivityDate(room.lastActivity) ??
     toActivityDate(room.lastMessage?.createdAt) ??
     null;
-
-  console.debug("[mapRoom:direct]", {
-    roomId: room.id,
-    lastActivity: room.lastActivity,
-    lastMessageCreatedAt: room.lastMessage?.createdAt,
-    updatedAt: room.updatedAt,
-    resolved: lastDate,
-  });
 
   return {
     id: room.id,

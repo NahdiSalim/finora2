@@ -651,6 +651,26 @@ export const chatApi = createApi({
       keepUnusedDataFor: 0,
     }),
 
+    getAllClientRequests: builder.query<
+      {
+        success: boolean;
+        data: ChatMessageRequest[];
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+        };
+      },
+      { clientId: number; page: number; limit: number }
+    >({
+      query: ({ clientId, page, limit }) => ({
+        url: `/requests/chat-all/${clientId}?page=${page}&limit=${limit}`,
+        method: "GET",
+      }),
+      keepUnusedDataFor: 0,
+    }),
+
     getChatAccessibleTasks: builder.query<
       {
         success: boolean;
@@ -690,6 +710,66 @@ export const chatApi = createApi({
       }),
       keepUnusedDataFor: 0,
     }),
+
+    getMyRequests: builder.query<
+      {
+        success: boolean;
+        data: ChatMessageRequest[];
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+        };
+      },
+      { page: number; limit: number }
+    >({
+      query: ({ page, limit }) => ({
+        url: `/requests/my-requests?page=${page}&limit=${limit}`,
+        method: "GET",
+      }),
+      keepUnusedDataFor: 0,
+    }),
+
+    getMyAppointments: builder.query<
+      {
+        success: boolean;
+        data: ChatMessageAppointment[];
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+        };
+      },
+      { page: number; limit: number }
+    >({
+      query: ({ page, limit }) => ({
+        url: `/appointments/my-appointments?page=${page}&limit=${limit}`,
+        method: "GET",
+      }),
+      keepUnusedDataFor: 0,
+    }),
+
+    getMyTasks: builder.query<
+      {
+        success: boolean;
+        data: ChatMessageTask[];
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+        };
+      },
+      { page: number; limit: number }
+    >({
+      query: ({ page, limit }) => ({
+        url: `/tasks/my-tasks?page=${page}&limit=${limit}`,
+        method: "GET",
+      }),
+      keepUnusedDataFor: 0,
+    }),
   }),
 });
 
@@ -715,6 +795,10 @@ export const {
   useGetSharedDocumentsQuery,
   useGetUserRequestsQuery,
   useGetChatAccessibleRequestsQuery,
+  useGetAllClientRequestsQuery,
   useGetChatAccessibleTasksQuery,
   useGetChatAccessibleAppointmentsQuery,
+  useGetMyRequestsQuery,
+  useGetMyAppointmentsQuery,
+  useGetMyTasksQuery,
 } = chatApi;

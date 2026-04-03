@@ -318,6 +318,44 @@ export class RequestController {
   }
 
   /**
+   * Get all requests for a client - both assigned and unassigned (for messagerie attachments)
+   */
+  @Get('chat-all/:clientId')
+  @UseGuards(RolesGuard)
+  @Roles('ACCOUNTANT')
+  @ApiOperation({
+    summary:
+      '[Accountant] Get all requests for a client - assigned and unassigned (chat attachments)',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: 'number',
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: 'number',
+    description: 'Items per page (default: 5)',
+  })
+  @ApiResponse({ status: 200, description: 'Paginated list of all client requests' })
+  async getAllClientRequests(
+    @Param('clientId', ParseIntPipe) clientId: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Req() req?: AuthRequest
+  ) {
+    const accountantId = req!.user!.id;
+    return this.requestService.getAllClientRequests(
+      clientId,
+      accountantId,
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 5
+    );
+  }
+
+  /**
    * Get chat-accessible requests by client ID (for messagerie attachments)
    */
   @Get('chat-accessible/:clientId')

@@ -46,7 +46,6 @@ import {
   chatApi,
   type GetRoomsParams,
 } from "src/lib/services/chatApi";
-import { isSocketConnected } from "src/lib/socket";
 
 import type { RootState } from "src/lib/store";
 import type { Role } from "src/types/auth";
@@ -280,18 +279,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     const clients: GroupMember[] = [];
     const collabs: GroupMember[] = [];
 
-    console.log(
-      "[groupModal] participantProfiles raw:",
-      rooms.flatMap((r) =>
-        (r.participantProfiles ?? []).map((p) => ({
-          id: p.id,
-          name:
-            [p.firstName, p.lastName].filter(Boolean).join(" ") || p.username,
-          roleCode: p.role?.code,
-        })),
-      ),
-    );
-
     for (const room of rooms) {
       for (const p of room.participantProfiles ?? []) {
         const pid = Number(p.id);
@@ -411,10 +398,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       // refetches and the UI is up to date.
       const roomId = selectedConversationRef.current;
       if (roomId) {
-        console.log(
-          "[MessagesView] socket reconnected, refetching messages for room:",
-          roomId,
-        );
         dispatch(
           chatApi.util.invalidateTags([{ type: "ChatMessages", id: roomId }]),
         );
@@ -424,47 +407,19 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       const isMine = msg.senderId === currentUid;
       const activeRoomId = selectedConversationRef.current;
 
-      console.log("[MessagesView] message:new received:", {
-        msgId: msg.id,
-        msgRoomId: msg.roomId,
-        activeRoomId,
-        currentUid,
-        socketConnected: isSocketConnected(),
-      });
-
-      console.log(
-        "[onMessageNew] id:",
-        msg.id,
-        "| roomId:",
-        msg.roomId,
-        "| senderId:",
-        msg.senderId,
-        "| currentUid:",
-        currentUid,
-        "| isMine:",
-        isMine,
-      );
+      if (isMine) {
+        return;
+      }
 
       // 1. Inject into getRoomMessages cache for that room
       // Only update messages for the currently visible conversation.
       if (activeRoomId && msg.roomId === activeRoomId) {
-        console.log("[MessagesView] updating cache for active conversation:", {
-          roomId: msg.roomId,
-          msgId: msg.id,
-        });
         dispatch(
           chatApi.util.updateQueryData(
             "getRoomMessages",
             { roomId: msg.roomId, page: 1, limit: MESSAGES_PAGE_SIZE },
             (draft) => {
               if (draft.messages.some((m) => m.id === msg.id)) {
-                console.log(
-                  "[MessagesView] message already in cache; skipping:",
-                  {
-                    roomId: msg.roomId,
-                    msgId: msg.id,
-                  },
-                );
                 return;
               }
               draft.messages.push({
@@ -489,26 +444,12 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                 call: msg.call ?? undefined,
               });
               draft.total += 1;
-              console.log("[MessagesView] cache updated:", {
-                roomId: msg.roomId,
-                msgId: msg.id,
-              });
             },
           ),
         );
       } else {
-        // Cache might not exist yet because useRoomMessages is skipped until roomId is non-zero.
-        // Buffer it and flush when/if the user opens that room.
         const existing = pendingRealtimeByRoomRef.current.get(msg.roomId) ?? [];
         pendingRealtimeByRoomRef.current.set(msg.roomId, [...existing, msg]);
-        console.log(
-          "[MessagesView] buffering message:new (room not active yet):",
-          {
-            msgId: msg.id,
-            msgRoomId: msg.roomId,
-            activeRoomId,
-          },
-        );
       }
 
       // 2. Update rooms list preview + reorder + unread count
@@ -564,11 +505,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
 
     onMessageUpdated: (msg: SocketMessage) => {
       const activeRoomId = selectedConversationRef.current;
-      console.log("[MessagesView] message:updated received:", {
-        msgId: msg.id,
-        msgRoomId: msg.roomId,
-        activeRoomId,
-      });
       if (activeRoomId && msg.roomId === activeRoomId) {
         dispatch(
           chatApi.util.updateQueryData(
@@ -579,13 +515,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
               if (existing) {
                 existing.content = msg.content;
                 existing.edited = true;
-                console.log(
-                  "[MessagesView] cache updated for message:updated:",
-                  {
-                    roomId: msg.roomId,
-                    msgId: msg.id,
-                  },
-                );
               }
             },
           ),
@@ -597,11 +526,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       if (!roomId) return;
 
       const activeRoomId = selectedConversationRef.current;
-      console.log("[MessagesView] message:deleted received:", {
-        msgId: messageId,
-        msgRoomId: roomId,
-        activeRoomId,
-      });
       if (!activeRoomId || roomId !== activeRoomId) return;
 
       dispatch(
@@ -645,11 +569,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
 
     const pending = pendingRealtimeByRoomRef.current.get(roomId);
     if (!pending || pending.length === 0) return;
-
-    console.log("[MessagesView] flushing buffered realtime messages:", {
-      roomId,
-      count: pending.length,
-    });
 
     pendingRealtimeByRoomRef.current.delete(roomId);
 
@@ -698,14 +617,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const [selectedGroupForManagement, setSelectedGroupForManagement] = useState<
     number | null
   >(null);
-
-  // Debug modal state
-  useEffect(() => {
-    console.log("[MessagesView] Modal state changed:", {
-      openCreateGroupModal,
-      openManageGroupModal,
-    });
-  }, [openCreateGroupModal, openManageGroupModal]);
 
   // Handlers for group operations
   const handleCreateGroup = async (groupName: string, memberIds: number[]) => {
@@ -915,11 +826,49 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     const olderFiltered = older.filter((m) => !page1Ids.has(m.id));
     const localFiltered = local.filter((lm) => {
       if (page1Ids.has(lm.id)) return false;
+
       if (lm.type === "text" && lm.text) {
         return !page1.some(
           (am) => am.mine && am.type === "text" && am.text === lm.text,
         );
       }
+
+      if (lm.type === "file" && lm.file) {
+        return !page1.some(
+          (am) =>
+            am.mine &&
+            am.type === "file" &&
+            am.file?.name === lm.file?.name &&
+            Math.abs(
+              new Date(am.date).getTime() - new Date(lm.date).getTime(),
+            ) < 5000,
+        );
+      }
+
+      if (lm.type === "request" && lm.request) {
+        return !page1.some(
+          (am) =>
+            am.mine &&
+            am.type === "request" &&
+            am.request?.id === lm.request?.id,
+        );
+      }
+
+      if (lm.type === "task" && lm.task) {
+        return !page1.some(
+          (am) => am.mine && am.type === "task" && am.task?.id === lm.task?.id,
+        );
+      }
+
+      if (lm.type === "appointment" && lm.appointment) {
+        return !page1.some(
+          (am) =>
+            am.mine &&
+            am.type === "appointment" &&
+            am.appointment?.id === lm.appointment?.id,
+        );
+      }
+
       return true;
     });
 
@@ -940,18 +889,53 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       if (!prev[selectedConversation]?.length) return prev;
 
       const confirmed = prev[selectedConversation].filter((lm) => {
-        // Match by type + text content against API-confirmed messages from this user
         if (lm.type === "text" && lm.text) {
           return apiMessages.some(
             (am) => am.mine && am.type === "text" && am.text === lm.text,
           );
         }
-        // Non-text (file/request/task/appointment) optimistic messages:
-        // keep until the room cache refreshes (socket will add the confirmed msg)
+
+        if (lm.type === "file" && lm.file) {
+          return apiMessages.some(
+            (am) =>
+              am.mine &&
+              am.type === "file" &&
+              am.file?.name === lm.file?.name &&
+              Math.abs(
+                new Date(am.date).getTime() - new Date(lm.date).getTime(),
+              ) < 5000,
+          );
+        }
+
+        if (lm.type === "request" && lm.request) {
+          return apiMessages.some(
+            (am) =>
+              am.mine &&
+              am.type === "request" &&
+              am.request?.id === lm.request?.id,
+          );
+        }
+
+        if (lm.type === "task" && lm.task) {
+          return apiMessages.some(
+            (am) =>
+              am.mine && am.type === "task" && am.task?.id === lm.task?.id,
+          );
+        }
+
+        if (lm.type === "appointment" && lm.appointment) {
+          return apiMessages.some(
+            (am) =>
+              am.mine &&
+              am.type === "appointment" &&
+              am.appointment?.id === lm.appointment?.id,
+          );
+        }
+
         return false;
       });
 
-      if (confirmed.length === 0) return prev; // nothing to clear
+      if (confirmed.length === 0) return prev;
 
       const remaining = prev[selectedConversation].filter(
         (lm) => !confirmed.includes(lm),
@@ -1157,11 +1141,35 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     // Send to API (text messages only; file handling stays in ChatWindow)
     if (lastMessage.type === "text" && lastMessage.text) {
       try {
-        await triggerSendMessage({
+        const saved = await triggerSendMessage({
           roomId: selectedConversation,
           content: lastMessage.text,
           type: "text",
         }).unwrap();
+
+        dispatch(
+          chatApi.util.updateQueryData(
+            "getRoomMessages",
+            {
+              roomId: selectedConversation,
+              page: 1,
+              limit: MESSAGES_PAGE_SIZE,
+            },
+            (draft) => {
+              if (draft.messages.some((m) => m.id === saved.id)) {
+                return;
+              }
+              draft.messages.push(saved);
+              draft.total += 1;
+            },
+          ),
+        );
+
+        setLocalMessages((prev) => {
+          const updated = { ...prev };
+          delete updated[selectedConversation];
+          return updated;
+        });
       } catch {
         // Keep optimistic message visible even on error
       }
@@ -1265,14 +1273,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     // Send via API
     if (file) {
       const messageType = file.type?.startsWith("image/") ? "image" : "file";
-      console.log("[MessagesView] sending file via REST:", {
-        roomId,
-        fileName: file.name,
-        mimeType: file.type,
-        size: file.size,
-        messageType,
-        messageContent,
-      });
 
       try {
         const saved = await uploadFileWithProgress(
@@ -1285,45 +1285,138 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
           appointment?.id,
         );
 
-        console.log("[MessagesView] file saved + message:new expected:", {
-          messageId: saved.id,
-          savedType: saved.type,
-          hasFileUrl: !!saved.fileUrl,
-          fileUrlPreview: saved.fileUrl ? saved.fileUrl.slice(0, 40) : null,
+        dispatch(
+          chatApi.util.updateQueryData(
+            "getRoomMessages",
+            { roomId, page: 1, limit: MESSAGES_PAGE_SIZE },
+            (draft) => {
+              if (draft.messages.some((m) => m.id === saved.id)) {
+                return;
+              }
+              draft.messages.push({
+                id: saved.id,
+                roomId: saved.roomId,
+                senderId: saved.senderId,
+                content: saved.content,
+                type: saved.type,
+                createdAt: saved.createdAt,
+                deleted: false,
+                edited: false,
+                fileUrl: saved.fileUrl ?? null,
+                attachments: saved.attachments,
+                sender: saved.sender,
+                requestId: saved.requestId ?? undefined,
+                taskId: saved.taskId ?? undefined,
+                appointmentId: saved.appointmentId ?? undefined,
+                callId: saved.callId ?? undefined,
+                request: saved.request ?? undefined,
+                task: saved.task ?? undefined,
+                appointment: saved.appointment ?? undefined,
+                call: saved.call ?? undefined,
+              });
+              draft.total += 1;
+            },
+          ),
+        );
+
+        setLocalMessages((prev) => {
+          const updated = { ...prev };
+          delete updated[roomId];
+          return updated;
         });
       } catch (err) {
         console.error("[MessagesView] file send failed:", err);
       }
     } else if (request) {
       try {
-        await triggerSendMessage({
+        const saved = await triggerSendMessage({
           roomId,
           content: messageContent,
           type: "text",
           requestId: request.id,
         }).unwrap();
+
+        dispatch(
+          chatApi.util.updateQueryData(
+            "getRoomMessages",
+            { roomId, page: 1, limit: MESSAGES_PAGE_SIZE },
+            (draft) => {
+              if (draft.messages.some((m) => m.id === saved.id)) {
+                return;
+              }
+              draft.messages.push(saved);
+              draft.total += 1;
+            },
+          ),
+        );
+
+        setLocalMessages((prev) => {
+          const updated = { ...prev };
+          delete updated[roomId];
+          return updated;
+        });
       } catch (err) {
         console.error("[MessagesView] request attachment send failed:", err);
       }
     } else if (task) {
       try {
-        await triggerSendMessage({
+        const saved = await triggerSendMessage({
           roomId,
           content: messageContent,
           type: "text",
           taskId: task.id,
         }).unwrap();
+
+        dispatch(
+          chatApi.util.updateQueryData(
+            "getRoomMessages",
+            { roomId, page: 1, limit: MESSAGES_PAGE_SIZE },
+            (draft) => {
+              if (draft.messages.some((m) => m.id === saved.id)) {
+                return;
+              }
+              draft.messages.push(saved);
+              draft.total += 1;
+            },
+          ),
+        );
+
+        setLocalMessages((prev) => {
+          const updated = { ...prev };
+          delete updated[roomId];
+          return updated;
+        });
       } catch (err) {
         console.error("[MessagesView] task attachment send failed:", err);
       }
     } else if (appointment) {
       try {
-        await triggerSendMessage({
+        const saved = await triggerSendMessage({
           roomId,
           content: messageContent,
           type: "text",
           appointmentId: appointment.id,
         }).unwrap();
+
+        dispatch(
+          chatApi.util.updateQueryData(
+            "getRoomMessages",
+            { roomId, page: 1, limit: MESSAGES_PAGE_SIZE },
+            (draft) => {
+              if (draft.messages.some((m) => m.id === saved.id)) {
+                return;
+              }
+              draft.messages.push(saved);
+              draft.total += 1;
+            },
+          ),
+        );
+
+        setLocalMessages((prev) => {
+          const updated = { ...prev };
+          delete updated[roomId];
+          return updated;
+        });
       } catch (err) {
         console.error(
           "[MessagesView] appointment attachment send failed:",
@@ -1341,25 +1434,8 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   // Backend now handles all filtering (search, categories, unread, date),
   // so just use apiConversations directly
   const filteredConversations = useMemo(() => {
-    console.log(
-      `[FILTERS-DEBUG] filters=${JSON.stringify(activeFilters)} | rawRooms=${rawRooms.length} | apiConversations=${apiConversations.length}` +
-        (apiConversations.length === 0 && rawRooms.length === 0
-          ? " → VIDE NORMAL (aucune room reçue du backend)"
-          : apiConversations.length === 0 && rawRooms.length > 0
-            ? ` → VIDE ANORMAL — rawRooms reçues mais filtrées. Catégories reçues: [${
-                [
-                  ...new Set(
-                    apiConversations.map(
-                      (c) => `${c.category}${c.isGroup ? "(group)" : ""}`,
-                    ),
-                  ),
-                ].join(", ") || "aucune"
-              }]`
-            : ""),
-    );
-
     return apiConversations;
-  }, [apiConversations, activeFilters, rawRooms.length]);
+  }, [apiConversations]);
 
   useEffect(() => {
     if (filteredConversations.length === 0) return;
@@ -1401,19 +1477,38 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     const profiles = currentRoom.participantProfiles ?? [];
     const otherParticipant = profiles.find((p) => Number(p.id) !== currentUid);
 
-    if (!otherParticipant) return { recipientType: null, recipientId: null };
+    const currentUserIsClient = isClientRole(myRoleCode);
+    const currentUserIsCollaborator = isCollaborateurRole(myRoleCode);
 
-    const roleCode = (otherParticipant.role?.code ?? "").toLowerCase();
-    const recipientType: "client" | "collaborator" =
-      roleCode === "client" || roleCode.startsWith("client_")
-        ? "client"
-        : "collaborator";
+    let recipientType: "client" | "collaborator";
+    let recipientId: number | null;
+
+    if (currentUserIsClient) {
+      recipientType = "client";
+      recipientId = currentUid;
+    } else if (currentUserIsCollaborator) {
+      const otherRoleCode = (otherParticipant?.role?.code ?? "").toLowerCase();
+      if (otherRoleCode === "client" || otherRoleCode.startsWith("client_")) {
+        recipientType = "client";
+        recipientId = otherParticipant?.id ?? null;
+      } else {
+        recipientType = "collaborator";
+        recipientId = currentUid;
+      }
+    } else {
+      const otherRoleCode = (otherParticipant?.role?.code ?? "").toLowerCase();
+      recipientType =
+        otherRoleCode === "client" || otherRoleCode.startsWith("client_")
+          ? "client"
+          : "collaborator";
+      recipientId = otherParticipant?.id ?? null;
+    }
 
     return {
       recipientType,
-      recipientId: otherParticipant.id,
+      recipientId,
     };
-  }, [currentRoom, currentUid]);
+  }, [currentRoom, currentUid, myRoleCode]);
 
   const isRemoteTyping = typingRooms.has(selectedConversation);
 

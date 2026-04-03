@@ -50,9 +50,7 @@ export function SignInView() {
 
   const onSubmit = async (data: SignInFormData) => {
     try {
-      console.log("data", data);
       const result = await login(data).unwrap();
-      console.log("result", result);
       localStorage.setItem("token", result.data.accessToken);
       localStorage.setItem("refresh_token", result.data.refreshToken);
 

@@ -92,8 +92,8 @@ export default function ProfileFeedTab({
         images: newImages.length ? newImages : undefined,
       }).unwrap();
       handleCloseNewPost();
-    } catch (err) {
-      console.error("Create post failed", err);
+    } catch {
+      /* ignored */
     }
   };
 
@@ -132,8 +132,8 @@ export default function ProfileFeedTab({
         keepImageUrls: editAttachments.map((a) => a.url),
       }).unwrap();
       handleCloseEditPost();
-    } catch (err) {
-      console.error("Update post failed", err);
+    } catch {
+      /* ignored */
     }
   };
 
@@ -142,8 +142,8 @@ export default function ProfileFeedTab({
     try {
       await deletePost(selectedPost.id).unwrap();
       handleCloseEditPost();
-    } catch (err) {
-      console.error("Delete post failed", err);
+    } catch {
+      /* ignored */
     }
   };
 

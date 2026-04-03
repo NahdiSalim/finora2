@@ -95,8 +95,8 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
         currentUserIdRef.current = payload.sub || 0;
-      } catch (error) {
-        console.error("[GlobalCallContext] Error parsing token:", error);
+      } catch {
+        /* ignored */
       }
     }
   }, []);
@@ -357,11 +357,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
 
       try {
         await startStream(type);
-      } catch (error) {
-        console.error(
-          "[GlobalCallContext] Failed to start media stream:",
-          error,
-        );
+      } catch {
         resetCallState();
         alert(
           "Impossible d'accéder au microphone/caméra. Veuillez autoriser l'accès dans les paramètres du navigateur.",
@@ -383,10 +379,6 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
           if (response?.success && response?.callId) {
             callIdRef.current = response.callId;
           } else {
-            console.error(
-              "[GlobalCallContext] Failed to initiate call:",
-              response,
-            );
             resetCallState();
             alert(
               "Erreur lors de l'initiation de l'appel. Veuillez réessayer.",
@@ -420,8 +412,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
 
     try {
       await startStream(incomingType);
-    } catch (error) {
-      console.error("[GlobalCallContext] Failed to start media stream:", error);
+    } catch {
       resetCallState();
       alert("Impossible d'accéder au microphone/caméra.");
       return;
@@ -480,9 +471,6 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
   // Toggle audio
   const toggleAudio = useCallback(() => {
     if (!localStream) {
-      console.error(
-        "[GlobalCallContext] Cannot toggle audio - no local stream!",
-      );
       return;
     }
 

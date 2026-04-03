@@ -62,12 +62,10 @@ export default function DocumentsView() {
 
   const handleChat = (clientName: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    console.log(`Chat with ${clientName}`);
   };
 
   const handleDeactivate = (clientName: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    console.log(`Deactivate ${clientName}`);
   };
 
   const dashboardBase = useDashboardBase();

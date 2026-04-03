@@ -20,7 +20,6 @@ export class InvoiceExtractionService {
   ) {}
 
   async extractInvoiceMetadata(documentId: number, companyId: number) {
-    console.log('qqq');
     // 1. Get document directly by ID (only accountants can extract)
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },

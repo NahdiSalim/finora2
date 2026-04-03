@@ -206,23 +206,61 @@ export class RequestService {
       if (attachmentUrls.length > 0) {
         console.log('Creating folder and document entries...');
 
-        // 1. Create the folder for this request
+        // 1. Find or create the root "Demandes" folder for this company
+        let demandesRootFolder = await this.prisma.document.findFirst({
+          where: {
+            companyId: client.companyId,
+            ownerId: clientId,
+            isFolder: true,
+            name: 'Demandes',
+            parentId: null,
+            status: 'active',
+          },
+        });
+
+        if (!demandesRootFolder) {
+          demandesRootFolder = await this.prisma.document.create({
+            data: {
+              name: 'Demandes',
+              url: `requests/root`,
+              type: 'folder',
+              status: 'active',
+              ownerId: clientId,
+              companyId: client.companyId,
+              isFolder: true,
+              size: 0,
+              permissions: [],
+              children: [],
+            },
+          });
+          console.log('Root "Demandes" folder created');
+        }
+
+        // 2. Create the folder for this specific request inside "Demandes"
         const requestFolder = await this.prisma.document.create({
           data: {
             name: `Demande ${request.id} - ${dto.subject}`,
-            url: `requests/${requestFolderName}`, // Folder path in MinIO
+            url: `requests/${requestFolderName}`,
             type: 'folder',
             status: 'active',
             ownerId: clientId,
             companyId: client.companyId,
             requestId: request.id,
             isFolder: true,
+            parentId: demandesRootFolder.id,
             size: 0,
             permissions: [],
-            children: [], // Will be updated with child document IDs
+            children: [],
           },
         });
         console.log(`Folder created: ${requestFolder.name}`);
+
+        // Update root folder children
+        const rootChildren = [...(demandesRootFolder.children || []), requestFolder.id.toString()];
+        await this.prisma.document.update({
+          where: { id: demandesRootFolder.id },
+          data: { children: rootChildren },
+        });
 
         const childIds: string[] = [];
 

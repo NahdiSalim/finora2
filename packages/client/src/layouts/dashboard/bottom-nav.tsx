@@ -6,11 +6,11 @@ import {
   Paper,
 } from "@mui/material";
 import {
-  LayoutGrid,
   MessageSquareMore,
   Calendar,
   Users,
   User,
+  FileText,
 } from "lucide-react";
 import { useTheme, alpha } from "@mui/material/styles";
 import { useAppSelector } from "src/hooks/use-redux";
@@ -26,9 +26,9 @@ function useDashboardTabs() {
 
   const SUPERADMIN_TABS = [
     {
-      label: "Dashboard",
-      path: `${base}/dashboard`,
-      icon: <LayoutGrid size={20} />,
+      label: "Documents",
+      path: `${base}/Documents`,
+      icon: <FileText size={20} />,
     },
     {
       label: "Collaborateurs",
@@ -50,9 +50,9 @@ function useDashboardTabs() {
 
   const DEFAULT_TABS = [
     {
-      label: "Dashboard",
-      path: `${base}/dashboard`,
-      icon: <LayoutGrid size={20} />,
+      label: "Documents",
+      path: `${base}/Documents`,
+      icon: <FileText size={20} />,
     },
     {
       label: "Messagerie",

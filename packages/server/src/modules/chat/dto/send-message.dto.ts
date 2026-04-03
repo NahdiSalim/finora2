@@ -20,10 +20,10 @@ export class SendMessageDto {
 
   @ApiProperty({
     description: 'Type de message',
-    enum: ['text', 'file', 'image', 'system'],
+    enum: ['text', 'file', 'image', 'system', 'call'],
     default: 'text',
   })
-  @IsEnum(['text', 'file', 'image', 'system'])
+  @IsEnum(['text', 'file', 'image', 'system', 'call'])
   type: string = 'text';
 
   @ApiPropertyOptional({
@@ -63,6 +63,12 @@ export class SendMessageDto {
   @Type(() => Number)
   @IsNumber()
   appointmentId?: number;
+
+  @ApiPropertyOptional({ description: "ID de l'appel lié", type: 'number' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  callId?: number;
 
   @ApiPropertyOptional({
     description: 'Fichiers attachés (max 10)',

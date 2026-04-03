@@ -82,14 +82,19 @@ export default function AppointmentCard({
         cursor: "pointer",
         bgcolor: theme.palette.grey[50],
         "&:hover": { bgcolor: "action.hover" },
+        // Responsive : empiler verticalement sur petits écrans
+        flexDirection: { xs: "column", sm: "row" },
+        gap: { xs: 1.5, sm: 0 },
       }}
     >
+      {/* Partie gauche : informations principales */}
       <Box
         sx={{
           display: "flex",
           alignItems: "center",
           gap: 1.5,
-          width: "50%",
+          // Prend toute la largeur sur mobile, moitié sur desktop
+          width: { xs: "100%", sm: "50%" },
         }}
       >
         <Avatar sx={{ width: 36, height: 36 }}>
@@ -97,26 +102,42 @@ export default function AppointmentCard({
         </Avatar>
 
         <Box sx={{ width: "100%" }}>
-          <Typography variant="body2" noWrap fontWeight={600}>
+          <Typography
+            variant="body2"
+            noWrap
+            overflow="hidden"
+            textOverflow="ellipsis"
+            width="90%"
+            fontWeight={600}
+          >
             {appointment.title}
           </Typography>
 
+          {/* Détails : wrap sur petits écrans */}
           <Box
             sx={{
               display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
               color: theme.palette.info.main,
-              width: "100%",
+              gap: { xs: 0.5, sm: 0 },
             }}
           >
-            {/* Full name */}
+            {/* Nom complet */}
             <Box
               sx={{
-                width: 120,
                 display: "flex",
                 alignItems: "center",
                 gap: 0.5,
-                borderRight: `1px solid ${theme.palette.info.lighter}`,
-                pr: 1,
+                // Sur mobile, pas de bordure à droite, sur desktop oui
+                borderRight: {
+                  xs: "none",
+                  sm: `1px solid ${theme.palette.info.lighter}`,
+                },
+                pr: { xs: 0, sm: 1 },
+                // Pour éviter que le nom ne s'étire trop
+                maxWidth: { xs: "100%", sm: 120 },
+                minWidth: 0, // permet le text-overflow
               }}
             >
               <Tooltip title={fullName} arrow>
@@ -140,8 +161,11 @@ export default function AppointmentCard({
                   display: "flex",
                   alignItems: "center",
                   gap: 0.5,
-                  px: 1,
-                  borderRight: `1px solid ${theme.palette.info.lighter}`,
+                  px: { xs: 0, sm: 1 },
+                  borderRight: {
+                    xs: "none",
+                    sm: `1px solid ${theme.palette.info.lighter}`,
+                  },
                 }}
               >
                 <Calendar size={12} />
@@ -160,14 +184,17 @@ export default function AppointmentCard({
               </Box>
             )}
 
-            {/* Time */}
+            {/* Heure */}
             <Box
               sx={{
                 display: "flex",
                 alignItems: "center",
                 gap: 0.5,
-                borderRight: `1px solid ${theme.palette.info.lighter}`,
-                px: 1,
+                px: { xs: 0, sm: 1 },
+                borderRight: {
+                  xs: "none",
+                  sm: `1px solid ${theme.palette.info.lighter}`,
+                },
               }}
             >
               <Clock3 size={12} />
@@ -176,13 +203,13 @@ export default function AppointmentCard({
               </Typography>
             </Box>
 
-            {/* Location */}
+            {/* Lieu */}
             <Box
               sx={{
                 display: "flex",
                 alignItems: "center",
                 gap: 0.5,
-                px: 1,
+                px: { xs: 0, sm: 1 },
               }}
             >
               {getLocationIcon(appointment.location)}
@@ -201,11 +228,15 @@ export default function AppointmentCard({
         </Box>
       </Box>
 
+      {/* Partie droite : actions */}
       <Box
         sx={{
           display: "flex",
           alignItems: "center",
           gap: 1,
+          // Centrer les actions sur mobile, aligner à droite sur desktop
+          justifyContent: { xs: "center", sm: "flex-end" },
+          width: { xs: "100%", sm: "auto" },
         }}
       >
         <AppointmentStatusChip status={appointment.status} />
@@ -215,7 +246,7 @@ export default function AppointmentCard({
           canConfirmReject &&
           onConfirm &&
           onReject && (
-            <Box sx={{ display: "flex", gap: 1, ml: 1 }}>
+            <Box sx={{ display: "flex", gap: 1, ml: { xs: 0, sm: 1 } }}>
               <CustomButton
                 variant="outlined"
                 color="error"
@@ -240,7 +271,7 @@ export default function AppointmentCard({
 
         {/* Confirmed — Reporter */}
         {appointment.status === "confirmed" && (
-          <Box sx={{ display: "flex", gap: 1, ml: 1 }}>
+          <Box sx={{ display: "flex", gap: 1, ml: { xs: 0, sm: 1 } }}>
             {onReschedule && (
               <CustomButton
                 variant="contained"

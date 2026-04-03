@@ -5,7 +5,7 @@ import { useVerifyUserQuery } from "src/lib/services/authApi";
 import { useAppDispatch } from "src/hooks/use-redux";
 import { logout } from "src/lib/slices/authSlice";
 import { CONFIG } from "src/config-global";
-import { VisitorView } from "src/sections/visitor";
+import FinoraLandingPage from "src/sections/landing";
 
 /**
  * Entry point at "/": public for everyone.
@@ -28,7 +28,7 @@ export default function EntryPoint() {
     return (
       <>
         <title>{`Visiteur - ${CONFIG.appName}`}</title>
-        <VisitorView />
+        <FinoraLandingPage />
       </>
     );
   }
@@ -53,7 +53,7 @@ export default function EntryPoint() {
     return (
       <>
         <title>{`Visiteur - ${CONFIG.appName}`}</title>
-        <VisitorView />
+        <FinoraLandingPage />
       </>
     );
   }
@@ -65,7 +65,7 @@ export default function EntryPoint() {
   return (
     <>
       <title>{`Visiteur - ${CONFIG.appName}`}</title>
-      <VisitorView />
+      <FinoraLandingPage />
     </>
   );
 }

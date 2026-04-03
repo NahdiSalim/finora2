@@ -24,6 +24,44 @@ const getRoleCode = (user: User | null): string => {
   return typeof user.role === "string" ? user.role : (user.role?.code ?? "");
 };
 
+const employeeCountToCollaboratorsCount = (
+  value: number | string | null | undefined,
+): string => {
+  if (value == null || value === "") return "";
+  const n = typeof value === "string" ? parseInt(value, 10) : value;
+  if (Number.isNaN(n)) return "";
+  if (n <= 5) return "1-5 collaborateurs";
+  if (n <= 10) return "6-10 collaborateurs";
+  return "+ 10 collaborateurs";
+};
+
+type NamedSector = { name?: string | null };
+type CompanyLike = {
+  name?: string | null;
+  address?: string | null;
+  city?: string | null;
+  siret?: string | null;
+  vatNumber?: string | null;
+  legalForm?: string | null;
+  country?: string | null;
+  postalCode?: string | null;
+  patentFileUrl?: string | null;
+  rneFileUrl?: string | null;
+  patenteFileUrl?: string | null;
+  patentFile?: string | null;
+  patenteFile?: string | null;
+  employeeCount?: number | string | null;
+  experience?: string | null;
+  description?: string | null;
+  sector?: string | null;
+  specialties?: string[] | null;
+  sectors?: NamedSector[] | null;
+  phone?: string | null;
+  numWhatsapp?: string | null;
+  website?: string | null;
+  email?: string | null;
+};
+
 export default function UserDetailsModal({ open, user, onClose }: Props) {
   const roleCode = getRoleCode(user).toUpperCase();
 
@@ -33,8 +71,11 @@ export default function UserDetailsModal({ open, user, onClose }: Props) {
       [user?.client?.gender].filter(Boolean).join(" ").trim() ||
       user?.email?.split("@")[0] ||
       "Client";
-    const rawCompany: any =
-      (user as any)?.company ?? (user as any)?.organization ?? {};
+    const userRecord = (user as unknown as Record<string, unknown>) ?? {};
+    const rawCompany =
+      (userRecord.company as CompanyLike | undefined) ??
+      (userRecord.organization as CompanyLike | undefined) ??
+      ({} as CompanyLike);
     const clientLike = user
       ? {
           id: user.id,
@@ -64,14 +105,23 @@ export default function UserDetailsModal({ open, user, onClose }: Props) {
     const names = (user?.full_name ?? "").trim().split(/\s+/);
     const firstName = names[0] ?? "";
     const lastName = names.slice(1).join(" ");
+    const userRecord = (user as unknown as Record<string, unknown>) ?? {};
+    const position =
+      typeof userRecord.position === "string" && userRecord.position.trim()
+        ? userRecord.position
+        : "-";
+    const department =
+      typeof userRecord.department === "string" && userRecord.department.trim()
+        ? userRecord.department
+        : "-";
     const collaboratorLike = user
       ? {
           firstName,
           lastName,
           email: user.email ?? "",
           phone: user.phone ?? "",
-          position: "-",
-          department: "-",
+          position,
+          department,
         }
       : null;
 
@@ -85,36 +135,38 @@ export default function UserDetailsModal({ open, user, onClose }: Props) {
   }
 
   if (roleCode === "ACCOUNTANT" || roleCode === "COMPTABLE") {
-    const company: any =
-      (user as any)?.company ?? (user as any)?.organization ?? {};
+    const userRecord = (user as unknown as Record<string, unknown>) ?? {};
+    const company =
+      (userRecord.company as CompanyLike | undefined) ??
+      (userRecord.organization as CompanyLike | undefined) ??
+      ({} as CompanyLike);
+    const companySpecialties: string[] = Array.isArray(company?.specialties)
+      ? company.specialties.filter(Boolean)
+      : Array.isArray(company?.sectors)
+        ? (company.sectors.map((s) => s?.name).filter(Boolean) as string[])
+        : [];
     const profileInfosData = {
       cabinetName: company?.name ?? "",
-      sector:
-        Array.isArray(company?.sectors) && company.sectors.length > 0
-          ? (company.sectors[0]?.name ?? "")
-          : "",
-      collaboratorsCount:
-        company?.employeeCount != null ? String(company.employeeCount) : "",
+      sector: company?.sector ?? "",
+      collaboratorsCount: employeeCountToCollaboratorsCount(
+        company?.employeeCount,
+      ),
       experience: company?.experience ?? "",
       description: company?.description ?? "",
-      specialties: Array.isArray(company?.sectors)
-        ? company.sectors.map((s: any) => s?.name).filter(Boolean)
-        : [],
+      specialties: companySpecialties,
       patentFileUrl: company?.patentFileUrl ?? null,
       rneFileUrl: company?.rneFileUrl ?? null,
     };
 
     const contactData = {
       phone: company?.phone || user?.phone || "",
-      email: user?.email || "",
+      email: company?.email || user?.email || "",
       address:
         company?.address ||
         [company?.postalCode, company?.city].filter(Boolean).join(" "),
       whatsapp: company?.numWhatsapp ?? "",
       website: company?.website ?? "",
-      specialties: Array.isArray(company?.sectors)
-        ? company.sectors.map((s: any) => s?.name).filter(Boolean)
-        : [],
+      specialties: companySpecialties,
     };
 
     return (

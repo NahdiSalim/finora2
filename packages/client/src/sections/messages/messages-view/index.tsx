@@ -12,6 +12,8 @@ import { useAppDispatch } from "src/hooks/use-redux";
 import ConversationsList from "./views/ConversationsList";
 import ChatWindow from "./views/ChatWindow";
 import SharedMediaView from "./views/SharedMediaView";
+import CreateGroupModal from "./components/CreateGroupModal";
+import GroupManagementModal from "./components/GroupManagementModal";
 
 import { useChatSocket } from "./hooks/useChatSocket";
 import type { SocketMessage } from "./hooks/useChatSocket";
@@ -20,6 +22,7 @@ import {
   useConversations,
   useRoomMessages,
   mapApiMessageToMessage,
+  mapRoomToConversation,
 } from "./hooks/useChatData";
 import type {
   MessageRequest,
@@ -28,16 +31,22 @@ import type {
   Conversation,
   ConversationCategory,
   Message,
+  GroupMember,
 } from "./data/types";
 import {
   useSendMessageMutation,
   useGetUserRoomsQuery,
   useLazyGetRoomMessagesQuery,
   useMarkRoomAsReadMutation,
+  useFindOrCreateDirectRoomMutation,
+  useCreateRoomMutation,
+  useUpdateRoomMutation,
+  useAddParticipantMutation,
+  useRemoveParticipantMutation,
   chatApi,
   type GetRoomsParams,
 } from "src/lib/services/chatApi";
-import { disconnectSocket, isSocketConnected } from "src/lib/socket";
+import { isSocketConnected } from "src/lib/socket";
 
 import type { RootState } from "src/lib/store";
 import type { Role } from "src/types/auth";
@@ -71,27 +80,37 @@ function isClientRole(code: string): boolean {
   return code === "client" || code.startsWith("client_");
 }
 
+// True if the role code belongs to the "collaborateur / collaborator" group.
+function isCollaborateurRole(code: string): boolean {
+  return (
+    code === "collaborateur" ||
+    code === "collaborator" ||
+    code.includes("collaborateur") ||
+    code.includes("collaborator")
+  );
+}
+
 /**
- * Map the selected UI tab + the viewer's role to the actual role-code that
- * the backend should filter participant profiles by.
+ * Map the selected UI tab to the category string sent to the backend.
  *
- * Tab "client"       (only Comptables can see it) → filter by CLIENT participants
- * Tab "collaborateur" + viewer is Comptable        → filter by COLLABORATOR participants
- * Tab "collaborateur" + viewer is Client/Collaborateur → filter by COMPTABLE participants
+ * Tab "client"        → filter by CLIENT participants       (Comptable viewer)
+ * Tab "comptable"     → filter by ACCOUNTANT participants   (Client / Collaborateur viewer)
+ * Tab "collaborateur" → filter by COLLABORATOR participants (Comptable / Collaborateur viewer)
  */
 function resolveApiCategory(
   tab: ConversationCategory,
-  myRoleCode: string,
+  _myRoleCode: string,
 ): string {
   if (tab === "client") return "client";
-  // "collaborateur" tab
-  if (isComptableRole(myRoleCode)) return "collaborateur";
-  return "comptable"; // Client/Collaborateur users chat with Comptables
+  if (tab === "comptable") return "comptable";
+  if (tab === "collaborateur") return "collaborateur";
+  return tab;
 }
 
 export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const isMedium = useMediaQuery(theme.breakpoints.between("md", "lg"));
   const dispatch = useAppDispatch();
   const [searchParams] = useSearchParams();
 
@@ -103,27 +122,36 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     rawUserRole as Role | string | null | undefined,
   );
   const iAmComptable = isComptableRole(myRoleCode);
+  const iAmClient = isClientRole(myRoleCode);
+  const iAmCollaborateur = isCollaborateurRole(myRoleCode);
 
-  // Only Comptables see both tabs; everyone else sees only "Collaborateurs"
-  const visibleTabs = useMemo(
-    () =>
-      iAmComptable
-        ? [
-            { label: "Clients", value: "client" as const },
-            { label: "Collaborateurs", value: "collaborateur" as const },
-          ]
-        : [{ label: "Collaborateurs", value: "collaborateur" as const }],
-    [iAmComptable],
-  );
+  // Determine user role for filters
+  const userRoleForFilters: "comptable" | "client" | "collaborateur" | "other" =
+    iAmComptable
+      ? "comptable"
+      : iAmClient
+        ? "client"
+        : iAmCollaborateur
+          ? "collaborateur"
+          : "other";
 
   // ── All local state declared first so roomsParams can reference them ───────
-  const [activeTab, setActiveTab] = useState<ConversationCategory>(() => {
-    const cat = searchParams.get("category");
-    return cat === "client" ? "client" : "collaborateur";
+  const [activeFilters, setActiveFilters] = useState<
+    (ConversationCategory | "unread")[]
+  >(() => {
+    // Default filters per role - show all categories by default
+    if (iAmComptable) return ["client", "collaborateur", "group"];
+    if (iAmClient) return ["comptable", "group"];
+    if (iAmCollaborateur) return ["comptable", "collaborateur", "group"];
+    return ["collaborateur", "group"];
   });
-  const [roomsPage] = useState(1);
-  const ROOMS_PAGE_SIZE = 50;
+
+  const ROOMS_PAGE_SIZE = 10;
   const MESSAGES_PAGE_SIZE = 20;
+  const [conversationsPage, setConversationsPage] = useState<number>(1);
+  const [hasMoreConversations, setHasMoreConversations] =
+    useState<boolean>(true);
+
   const [selectedConversation, setSelectedConversation] = useState<number>(
     () => {
       const rid = Number(searchParams.get("roomId"));
@@ -131,6 +159,11 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     },
   );
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState<string>("");
+  const searchDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
   const [selectedDateFilter, setSelectedDateFilter] = useState<Dayjs | null>(
     null,
   );
@@ -143,26 +176,54 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const selectedConversationRef = useRef(selectedConversation);
   selectedConversationRef.current = selectedConversation;
 
-  // Debounce search so the API is only called 300 ms after the user stops typing
-  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
+  // Search debouncing: update debouncedSearchTerm after 500ms of no typing
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300);
-    return () => clearTimeout(timer);
+    if (searchDebounceTimer.current) {
+      clearTimeout(searchDebounceTimer.current);
+    }
+
+    searchDebounceTimer.current = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setConversationsPage(1); // Reset to first page on search
+    }, 500);
+
+    return () => {
+      if (searchDebounceTimer.current) {
+        clearTimeout(searchDebounceTimer.current);
+      }
+    };
   }, [searchTerm]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setConversationsPage(1);
+  }, [activeFilters, selectedDateFilter]);
 
   // ── API query params (drives the rooms list query) ─────────────────────────
   const roomsParams = useMemo<GetRoomsParams>(() => {
+    const categoryFilters = activeFilters.filter(
+      (f) => f !== "unread",
+    ) as ConversationCategory[];
+    const hasUnreadFilter = activeFilters.includes("unread");
+
     const p: GetRoomsParams = {
-      // Translate the UI tab + viewer role into the actual participant role code
-      // the backend should filter by (see resolveApiCategory above).
-      category: resolveApiCategory(activeTab, myRoleCode),
-      page: roomsPage,
+      page: conversationsPage,
       pageSize: ROOMS_PAGE_SIZE,
+      categories: categoryFilters.length > 0 ? categoryFilters : undefined,
+      search: debouncedSearchTerm || undefined,
+      date: selectedDateFilter
+        ? selectedDateFilter.format("YYYY-MM-DD")
+        : undefined,
+      unreadOnly: hasUnreadFilter || undefined,
     };
-    if (debouncedSearch) p.search = debouncedSearch;
-    if (selectedDateFilter) p.date = selectedDateFilter.format("YYYY-MM-DD");
+
     return p;
-  }, [activeTab, myRoleCode, roomsPage, debouncedSearch, selectedDateFilter]);
+  }, [
+    activeFilters,
+    conversationsPage,
+    debouncedSearchTerm,
+    selectedDateFilter,
+  ]);
 
   // Keep a ref so socket callbacks can always read the current params
   const roomsParamsRef = useRef(roomsParams);
@@ -176,9 +237,150 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     () => roomsResponse?.data ?? [],
     [roomsResponse?.data],
   );
+
+  // Update hasMore when response changes
+  useEffect(() => {
+    if (roomsResponse) {
+      setHasMoreConversations(roomsResponse.page < roomsResponse.totalPages);
+    }
+  }, [roomsResponse]);
+
+  // Fetch all rooms (no filters) for badge counts and group modal contacts
+  const allRoomsParams = useMemo<GetRoomsParams>(
+    () => ({
+      page: 1,
+      pageSize: 500,
+      categories: iAmComptable
+        ? ["client", "collaborateur", "group"]
+        : iAmClient
+          ? ["comptable", "group"]
+          : iAmCollaborateur
+            ? ["comptable", "collaborateur", "group"]
+            : ["collaborateur", "group"],
+    }),
+    [iAmComptable, iAmClient, iAmCollaborateur],
+  );
+
+  const allRoomsParamsRef = useRef(allRoomsParams);
+  allRoomsParamsRef.current = allRoomsParams;
+
+  const { data: allRoomsResponse } = useGetUserRoomsQuery(allRoomsParams, {
+    refetchOnMountOrArgChange: true,
+  });
+
+  // Use allRoomsResponse for both badge counts and group modal contacts
+  const allContactsResponse = useMemo(() => {
+    return { data: allRoomsResponse?.data ?? [] };
+  }, [allRoomsResponse]);
+
+  // Derive real contacts for the group creation modal, filtered by current user's role
+  const { groupModalClients, groupModalCollaborators } = useMemo(() => {
+    const rooms = allContactsResponse?.data ?? [];
+    const seen = new Set<number>();
+    const clients: GroupMember[] = [];
+    const collabs: GroupMember[] = [];
+
+    console.log(
+      "[groupModal] participantProfiles raw:",
+      rooms.flatMap((r) =>
+        (r.participantProfiles ?? []).map((p) => ({
+          id: p.id,
+          name:
+            [p.firstName, p.lastName].filter(Boolean).join(" ") || p.username,
+          roleCode: p.role?.code,
+        })),
+      ),
+    );
+
+    for (const room of rooms) {
+      for (const p of room.participantProfiles ?? []) {
+        const pid = Number(p.id);
+        if (pid === currentUid || seen.has(pid)) continue;
+        seen.add(pid);
+
+        const fullName =
+          [p.firstName, p.lastName].filter(Boolean).join(" ") ||
+          p.username ||
+          p.email ||
+          "?";
+        const avatar = fullName
+          .split(" ")
+          .map((w) => w[0])
+          .filter(Boolean)
+          .join("")
+          .slice(0, 2)
+          .toUpperCase();
+        const roleCode = (p.role?.code ?? "").toLowerCase();
+
+        if (roleCode === "client" || roleCode.startsWith("client_")) {
+          clients.push({ id: pid, name: fullName, role: "client", avatar });
+        } else if (
+          roleCode === "accountant" ||
+          roleCode === "comptable" ||
+          roleCode.includes("accountant") ||
+          roleCode.includes("comptable")
+        ) {
+          collabs.push({ id: pid, name: fullName, role: "comptable", avatar });
+        } else {
+          collabs.push({
+            id: pid,
+            name: fullName,
+            role: "collaborateur",
+            avatar,
+          });
+        }
+      }
+    }
+
+    // ACCOUNTANT: can add both clients and collaborateurs
+    // CLIENT / COLLABORATOR: can only add collaborateurs (their accountant/colleagues)
+    return {
+      groupModalClients: iAmComptable ? clients : [],
+      groupModalCollaborators: collabs,
+    };
+  }, [allContactsResponse, currentUid, iAmComptable]);
+
+  // Calculate badge counts from all rooms
+  const badgeCounts = useMemo(() => {
+    const allConversations = (allRoomsResponse?.data ?? []).map((room) =>
+      mapRoomToConversation(room, currentUid),
+    );
+
+    const counts: Record<string, number> = {
+      client: 0,
+      comptable: 0,
+      collaborateur: 0,
+      group: 0,
+      unread: 0,
+    };
+
+    allConversations.forEach((conv) => {
+      if (conv.unreadCount > 0) {
+        counts.unread += conv.unreadCount;
+      }
+
+      if (conv.category && counts[conv.category] !== undefined) {
+        counts[conv.category] += conv.unreadCount;
+      }
+    });
+
+    return counts;
+  }, [allRoomsResponse, currentUid]);
+
+  // Load more conversations (infinite scroll)
+  const handleLoadMoreConversations = useCallback(() => {
+    if (!hasMoreConversations || roomsLoading) return;
+    setConversationsPage((prev) => prev + 1);
+  }, [hasMoreConversations, roomsLoading]);
+
   const [triggerSendMessage] = useSendMessageMutation();
   const [triggerGetOlderMessages] = useLazyGetRoomMessagesQuery();
   const [triggerMarkRoomAsRead] = useMarkRoomAsReadMutation();
+  const [triggerFindOrCreateDirectRoom] = useFindOrCreateDirectRoomMutation();
+  const [createRoom] = useCreateRoomMutation();
+  const [updateGroupRoom] = useUpdateRoomMutation();
+  const [addParticipant] = useAddParticipantMutation();
+  const [removeParticipant] = useRemoveParticipantMutation();
 
   // Older messages accumulation per room (scroll-based infinite loading)
   const [olderMessagesByRoom, setOlderMessagesByRoom] = useState<
@@ -280,9 +482,11 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                 requestId: msg.requestId ?? undefined,
                 taskId: msg.taskId ?? undefined,
                 appointmentId: msg.appointmentId ?? undefined,
+                callId: msg.callId ?? undefined,
                 request: msg.request ?? undefined,
                 task: msg.task ?? undefined,
                 appointment: msg.appointment ?? undefined,
+                call: msg.call ?? undefined,
               });
               draft.total += 1;
               console.log("[MessagesView] cache updated:", {
@@ -307,22 +511,19 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
         );
       }
 
-      // 2. Update rooms list preview + reorder
-      dispatch(
-        chatApi.util.updateQueryData(
-          "getUserRooms",
-          roomsParamsRef.current,
-          (draft) => {
+      // 2. Update rooms list preview + reorder + unread count
+      const isActiveRoom = msg.roomId === selectedConversationRef.current;
+
+      // Helper that patches a getUserRooms cache entry
+      const patchRoomsCache = (params: typeof roomsParamsRef.current) => {
+        dispatch(
+          chatApi.util.updateQueryData("getUserRooms", params, (draft) => {
             const room = draft.data.find((r) => r.id === msg.roomId);
-            if (!room) {
-              return;
-            }
+            if (!room) return;
 
             room.lastMessage = {
               id: msg.id,
               roomId: msg.roomId,
-              // Store raw content. The "Vous :" prefix must be derived in
-              // mapRoomToConversation() based on (lastMessage.senderId === currentUserId).
               content: msg.content,
               type: msg.type,
               senderId: msg.senderId,
@@ -330,19 +531,26 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
             };
             room.lastActivity = msg.createdAt;
 
+            // Increment unread count only for rooms that are NOT currently open
+            if (!isActiveRoom) {
+              room.unreadCount = (room.unreadCount ?? 0) + 1;
+            }
+
             // Bubble room to top
             const idx = draft.data.findIndex((r) => r.id === msg.roomId);
             if (idx > 0) {
               const [moved] = draft.data.splice(idx, 1);
               draft.data.unshift(moved);
             }
-            console.log(
-              "[cache getUserRooms] updated preview:",
-              room.lastMessage.content,
-            );
-          },
-        ),
-      );
+          }),
+        );
+      };
+
+      // Patch the active tab's cache (used for the conversation list)
+      patchRoomsCache(roomsParamsRef.current);
+
+      // Also patch all rooms cache for badge counts
+      patchRoomsCache(allRoomsParamsRef.current);
 
       // Prevent stale optimistic preview overrides from overriding the
       // computed preview for the current authenticated user.
@@ -472,28 +680,131 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     });
   }, [selectedConversation, dispatch]);
 
-  // Disconnect socket when leaving the messages page
-  // Use disconnectSocket (not destroySocket) so the singleton survives StrictMode double-mount
-  useEffect(
-    () => () => {
-      disconnectSocket();
-    },
-    [],
-  );
+  // Note: Socket connection is managed globally now
+  // Don't disconnect when leaving messages page since calls work everywhere
 
   // Local overrides for optimistic UI (preview text, unread counts)
   const [conversationOverrides, setConversationOverrides] = useState<
     Record<number, Partial<Conversation>>
   >({});
 
-  const allConversations: Conversation[] = useMemo(
-    () =>
-      apiConversations.map((c) => ({
-        ...c,
-        ...(conversationOverrides[c.id] ?? {}),
-      })),
-    [apiConversations, conversationOverrides],
-  );
+  // Upload progress tracking
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+
+  // Group chat state
+  const [openCreateGroupModal, setOpenCreateGroupModal] = useState(false);
+  const [openManageGroupModal, setOpenManageGroupModal] = useState(false);
+  const [selectedGroupForManagement, setSelectedGroupForManagement] = useState<
+    number | null
+  >(null);
+
+  // Debug modal state
+  useEffect(() => {
+    console.log("[MessagesView] Modal state changed:", {
+      openCreateGroupModal,
+      openManageGroupModal,
+    });
+  }, [openCreateGroupModal, openManageGroupModal]);
+
+  // Handlers for group operations
+  const handleCreateGroup = async (groupName: string, memberIds: number[]) => {
+    try {
+      const newRoom = await createRoom({
+        type: "group",
+        name: groupName,
+        participants: memberIds,
+      }).unwrap();
+
+      // createRoom mutation already invalidates ChatRooms LIST — the list will
+      // refetch automatically and include the new group.
+      setSelectedConversation(newRoom.id);
+      // Explicitly join the new room's socket channel so real-time works immediately
+      joinRoom(newRoom.id);
+      setOpenCreateGroupModal(false);
+    } catch (error) {
+      console.error("[handleCreateGroup] Failed to create group:", error);
+    }
+  };
+
+  const handleUpdateGroup = async (
+    groupName: string,
+    members: GroupMember[],
+  ) => {
+    if (!selectedGroupForManagement) return;
+
+    // Capture before any async gap — the modal closes immediately after calling
+    // onUpdate(), so selectedGroupForManagement will be null by the time awaits resolve.
+    const roomId = selectedGroupForManagement;
+
+    // Compute diff between current and new member lists.
+    const currentGroup = allConversations.find((c) => c.id === roomId);
+    const currentMemberIds = new Set(
+      (currentGroup?.members ?? []).map((m) => m.id),
+    );
+    const newMemberIds = new Set(members.map((m) => m.id));
+
+    const added = members.filter((m) => !currentMemberIds.has(m.id));
+    const removed = (currentGroup?.members ?? []).filter(
+      (m) => !newMemberIds.has(m.id),
+    );
+
+    try {
+      await Promise.all([
+        // Rename if the name changed (PATCH /chat/rooms/:id)
+        ...(currentGroup?.name !== groupName
+          ? [updateGroupRoom({ roomId, name: groupName }).unwrap()]
+          : []),
+        // Add new participants
+        ...added.map((m) =>
+          addParticipant({ roomId, participantId: m.id }).unwrap(),
+        ),
+        // Remove departed participants
+        ...removed.map((m) =>
+          removeParticipant({ roomId, participantId: m.id }).unwrap(),
+        ),
+      ]);
+      // Invalidate the rooms LIST so getUserRooms refetches and apiConversations
+      // reflects the updated name and participant count.
+      dispatch(
+        chatApi.util.invalidateTags([{ type: "ChatRooms", id: "LIST" }]),
+      );
+    } catch (error) {
+      console.error("[handleUpdateGroup] Failed to update group:", error);
+    }
+  };
+
+  const handleManageGroup = (groupId: number) => {
+    setSelectedGroupForManagement(groupId);
+    setOpenManageGroupModal(true);
+  };
+
+  // True if the current user is an admin of the group being managed
+  const selectedGroupIsAdmin = useMemo(() => {
+    if (!selectedGroupForManagement) return false;
+    // Search in rawRooms (current tab) then in allContactsResponse (all rooms)
+    const allRooms = [...rawRooms, ...(allContactsResponse?.data ?? [])];
+    const room = allRooms.find((r) => r.id === selectedGroupForManagement);
+    if (!room) return false;
+    return room.admins?.includes(String(currentUid)) ?? false;
+  }, [selectedGroupForManagement, rawRooms, allContactsResponse, currentUid]);
+
+  // Since backend now handles all filtering, just apply conversation overrides
+  const allConversations: Conversation[] = useMemo(() => {
+    return apiConversations.map((c) => ({
+      ...c,
+      ...(conversationOverrides[c.id] ?? {}),
+    }));
+  }, [apiConversations, conversationOverrides]);
+
+  const allConversationsForBadges: Conversation[] = useMemo(() => {
+    const allRooms = allContactsResponse?.data ?? [];
+    const result = allRooms.map((room) => {
+      const mapped = mapRoomToConversation(room, currentUid);
+      return { ...mapped, ...(conversationOverrides[mapped.id] ?? {}) };
+    });
+    return result;
+  }, [allContactsResponse, currentUid, conversationOverrides]);
 
   // Auto-select first conversation when rooms load (only if no room was pre-selected via URL)
   useEffect(() => {
@@ -501,6 +812,22 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       setSelectedConversation(allConversations[0].id);
     }
   }, [allConversations, selectedConversation]);
+
+  // When a tab switch is triggered by the popover, the target room may not yet
+  // be in allConversations (it loads after the tab change). This ref holds the
+  // roomId we want to select once it becomes available.
+  const pendingRoomIdRef = useRef<number>(0);
+
+  // Once allConversations updates after a tab switch, resolve the pending room.
+  useEffect(() => {
+    const pending = pendingRoomIdRef.current;
+    if (!pending) return;
+    const found = allConversations.find((c) => Number(c.id) === pending);
+    if (found) {
+      pendingRoomIdRef.current = 0;
+      setSelectedConversation(found.id);
+    }
+  }, [allConversations]);
 
   // On mobile, navigate straight to chat if a roomId was passed via URL param
   useEffect(() => {
@@ -516,24 +843,41 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   // only run on first mount so they miss subsequent URL changes).
   useEffect(() => {
     const rid = Number(searchParams.get("roomId"));
-    const cat = searchParams.get("category") as ConversationCategory | null;
-    if (rid > 0) {
-      if (cat === "client" || cat === "collaborateur") {
-        setActiveTab(cat);
-      }
+    if (rid <= 0) return;
+
+    // Mark room as read
+    setConversationOverrides((prev) => ({
+      ...prev,
+      [rid]: { ...(prev[rid] ?? {}), unreadCount: 0 },
+    }));
+    triggerMarkRoomAsRead(rid);
+
+    // Reset unreadCount in RTK Query caches so badge counts update immediately
+    const resetUnreadUrl = (params: typeof roomsParamsRef.current) => {
+      dispatch(
+        chatApi.util.updateQueryData("getUserRooms", params, (draft) => {
+          const room = draft.data.find((r) => r.id === rid);
+          if (room) room.unreadCount = 0;
+        }),
+      );
+    };
+    resetUnreadUrl(roomsParamsRef.current);
+    resetUnreadUrl(allRoomsParamsRef.current);
+
+    // Check if the target room is already visible in allConversations.
+    // If not (tab just changed, list not yet loaded), store as pending.
+    const alreadyVisible = allConversations.find((c) => Number(c.id) === rid);
+    if (alreadyVisible) {
+      pendingRoomIdRef.current = 0;
       setSelectedConversation(rid);
-      // Clear the unread badge for this room in the left panel — mirrors what
-      // handleSelectConversation does when the user clicks directly in the list.
-      setConversationOverrides((prev) => ({
-        ...prev,
-        [rid]: { ...(prev[rid] ?? {}), unreadCount: 0 },
-      }));
-      // Persist read state to backend
-      triggerMarkRoomAsRead(rid);
-      if (isMobile) setMobileView("chat");
-      else setDesktopView("chat");
+    } else {
+      pendingRoomIdRef.current = rid;
+      setSelectedConversation(rid); // Start loading messages immediately
     }
-  }, [searchParams, isMobile]);
+
+    if (isMobile) setMobileView("chat");
+    else setDesktopView("chat");
+  }, [searchParams, isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset older messages accumulation when switching conversations
   useEffect(() => {
@@ -546,11 +890,11 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   }, [selectedConversation]);
 
   // ── Messages for selected room ────────────────────────────────────────────
-  const { messages: apiMessages, totalMessages } = useRoomMessages(
-    selectedConversation,
-    1,
-    MESSAGES_PAGE_SIZE,
-  );
+  const {
+    messages: apiMessages,
+    totalMessages,
+    isFetching: messagesFetching,
+  } = useRoomMessages(selectedConversation, 1, MESSAGES_PAGE_SIZE);
 
   // Optimistic local messages for messages sent by the current user
   const [localMessages, setLocalMessages] = useState<Record<number, Message[]>>(
@@ -558,26 +902,66 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   );
 
   const currentMessages: Message[] = useMemo(() => {
-    const page1 = apiMessages;
+    // CRITICAL: always filter by selectedConversation to prevent cross-room contamination.
+    // RTK Query may serve stale cache from a previously selected room while fetching
+    // the new room's messages. We guard against this by checking each message's roomId.
+    // apiMessages come from mapApiMessageToMessage which doesn't carry roomId, so we
+    // use the raw data from the query to cross-check.
+    const page1 = messagesFetching ? [] : apiMessages;
     const older = olderMessagesByRoom[selectedConversation] ?? [];
     const local = localMessages[selectedConversation] ?? [];
 
     const page1Ids = new Set(page1.map((m) => m.id));
     const olderFiltered = older.filter((m) => !page1Ids.has(m.id));
-    const localFiltered = local.filter((m) => !page1Ids.has(m.id));
+    const localFiltered = local.filter((lm) => {
+      if (page1Ids.has(lm.id)) return false;
+      if (lm.type === "text" && lm.text) {
+        return !page1.some(
+          (am) => am.mine && am.type === "text" && am.text === lm.text,
+        );
+      }
+      return true;
+    });
 
-    // oldest (older pages) → page 1 (recent) → optimistic local
     return [...olderFiltered, ...page1, ...localFiltered];
-  }, [apiMessages, olderMessagesByRoom, localMessages, selectedConversation]);
+  }, [
+    apiMessages,
+    messagesFetching,
+    olderMessagesByRoom,
+    localMessages,
+    selectedConversation,
+  ]);
 
-  // Clear optimistic messages once API confirms them
+  // Clear optimistic local messages once their content has been confirmed by the API.
+  // Do NOT clear just because any apiMessages update arrived (another user's message
+  // would trigger the old logic and prematurely erase the user's unconfirmed message).
   useEffect(() => {
-    if (apiMessages.length === 0) return;
-
     setLocalMessages((prev) => {
       if (!prev[selectedConversation]?.length) return prev;
+
+      const confirmed = prev[selectedConversation].filter((lm) => {
+        // Match by type + text content against API-confirmed messages from this user
+        if (lm.type === "text" && lm.text) {
+          return apiMessages.some(
+            (am) => am.mine && am.type === "text" && am.text === lm.text,
+          );
+        }
+        // Non-text (file/request/task/appointment) optimistic messages:
+        // keep until the room cache refreshes (socket will add the confirmed msg)
+        return false;
+      });
+
+      if (confirmed.length === 0) return prev; // nothing to clear
+
+      const remaining = prev[selectedConversation].filter(
+        (lm) => !confirmed.includes(lm),
+      );
       const updated = { ...prev };
-      delete updated[selectedConversation];
+      if (remaining.length === 0) {
+        delete updated[selectedConversation];
+      } else {
+        updated[selectedConversation] = remaining;
+      }
       return updated;
     });
   }, [apiMessages, selectedConversation]);
@@ -648,7 +1032,30 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   ]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-  const handleSelectConversation = (id: number) => {
+  const handleSelectConversation = async (id: number) => {
+    // If it's a virtual room (negative ID), create the real room first
+    if (id < 0) {
+      const targetUserId = Math.abs(id);
+      try {
+        const result = await triggerFindOrCreateDirectRoom({
+          targetUserId,
+        }).unwrap();
+        const realRoomId = result.id;
+
+        // Now select the real room
+        setSelectedConversation(realRoomId);
+
+        if (isMobile) setMobileView("chat");
+        else setDesktopView("chat");
+
+        return;
+      } catch (error) {
+        console.error("Failed to create room:", error);
+        return;
+      }
+    }
+
+    // Normal room selection
     setSelectedConversation(id);
 
     if (isMobile) setMobileView("chat");
@@ -659,6 +1066,18 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       [id]: { ...(prev[id] ?? {}), unreadCount: 0 },
     }));
 
+    // Reset unreadCount in RTK Query caches so badge counts update immediately
+    const resetUnread = (params: typeof roomsParamsRef.current) => {
+      dispatch(
+        chatApi.util.updateQueryData("getUserRooms", params, (draft) => {
+          const room = draft.data.find((r) => r.id === id);
+          if (room) room.unreadCount = 0;
+        }),
+      );
+    };
+    resetUnread(roomsParamsRef.current);
+    resetUnread(allRoomsParamsRef.current);
+
     // Persist read state to backend so it survives page reload
     triggerMarkRoomAsRead(id);
   };
@@ -666,17 +1085,22 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const handleSearchChange = (value: string) => setSearchTerm(value);
   const handleDateFilterChange = (value: Dayjs | null) =>
     setSelectedDateFilter(value);
-  const handleTabChange = useCallback(
-    (tab: ConversationCategory) => {
-      setActiveTab(tab);
-      setSearchTerm("");
-      setSelectedDateFilter(null);
+
+  const handleFiltersChange = useCallback(
+    (filters: (ConversationCategory | "unread")[]) => {
+      setActiveFilters(filters);
       setSelectedConversation(0);
       if (isMobile) setMobileView("list");
       else setDesktopView("chat");
     },
     [isMobile],
   );
+
+  const handleMarkCurrentRoomAsRead = useCallback(() => {
+    if (selectedConversation > 0) {
+      triggerMarkRoomAsRead(selectedConversation);
+    }
+  }, [selectedConversation, triggerMarkRoomAsRead]);
 
   const handleMessagesChange = async (updatedMessages: Message[]) => {
     const lastMessage = updatedMessages[updatedMessages.length - 1];
@@ -744,6 +1168,78 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     }
   };
 
+  // Custom upload with progress tracking
+  const uploadFileWithProgress = async (
+    roomId: number,
+    file: File,
+    messageContent: string,
+    messageType: string,
+    requestId?: number,
+    taskId?: number,
+    appointmentId?: number,
+  ): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append("roomId", String(roomId));
+      formData.append("content", messageContent);
+      formData.append("type", messageType);
+      if (requestId) formData.append("requestId", String(requestId));
+      if (taskId) formData.append("taskId", String(taskId));
+      if (appointmentId)
+        formData.append("appointmentId", String(appointmentId));
+      formData.append("attachments", file);
+
+      const xhr = new XMLHttpRequest();
+      const token = localStorage.getItem("token");
+      const apiUrl =
+        import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          const percentComplete = Math.round((e.loaded / e.total) * 100);
+          setUploadProgress(percentComplete);
+        }
+      });
+
+      xhr.addEventListener("load", () => {
+        setIsUploading(false);
+        setUploadProgress(0);
+
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const response = JSON.parse(xhr.responseText);
+            resolve(response);
+          } catch (err) {
+            reject(new Error("Failed to parse response"));
+          }
+        } else {
+          reject(new Error(`Upload failed with status ${xhr.status}`));
+        }
+      });
+
+      xhr.addEventListener("error", () => {
+        setIsUploading(false);
+        setUploadProgress(0);
+        reject(new Error("Network error during upload"));
+      });
+
+      xhr.addEventListener("abort", () => {
+        setIsUploading(false);
+        setUploadProgress(0);
+        reject(new Error("Upload cancelled"));
+      });
+
+      xhr.open("POST", `${apiUrl}/chat/messages`);
+      if (token) {
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      }
+
+      setIsUploading(true);
+      setUploadProgress(0);
+      xhr.send(formData);
+    });
+  };
+
   const handleSendFile = async (
     messageHtml: string,
     file?: File,
@@ -766,6 +1262,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       appointment?.title ||
       "";
 
+    // Send via API
     if (file) {
       const messageType = file.type?.startsWith("image/") ? "image" : "file";
       console.log("[MessagesView] sending file via REST:", {
@@ -778,15 +1275,15 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
       });
 
       try {
-        const saved = await triggerSendMessage({
+        const saved = await uploadFileWithProgress(
           roomId,
-          content: messageContent,
-          type: messageType,
-          attachments: [file],
-          requestId: request?.id,
-          taskId: task?.id,
-          appointmentId: appointment?.id,
-        }).unwrap();
+          file,
+          messageContent,
+          messageType,
+          request?.id,
+          task?.id,
+          appointment?.id,
+        );
 
         console.log("[MessagesView] file saved + message:new expected:", {
           messageId: saved.id,
@@ -839,7 +1336,30 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   // ── Derived state ─────────────────────────────────────────────────────────
   // Filtering (category, search, date) is handled server-side via roomsParams.
   // allConversations already contains only the relevant subset from the API.
-  const filteredConversations = allConversations;
+  // Client-side filtering: search by name, optional date filter.
+  // No backend search — the full list is loaded upfront (ROOMS_PAGE_SIZE = 500).
+  // Backend now handles all filtering (search, categories, unread, date),
+  // so just use apiConversations directly
+  const filteredConversations = useMemo(() => {
+    console.log(
+      `[FILTERS-DEBUG] filters=${JSON.stringify(activeFilters)} | rawRooms=${rawRooms.length} | apiConversations=${apiConversations.length}` +
+        (apiConversations.length === 0 && rawRooms.length === 0
+          ? " → VIDE NORMAL (aucune room reçue du backend)"
+          : apiConversations.length === 0 && rawRooms.length > 0
+            ? ` → VIDE ANORMAL — rawRooms reçues mais filtrées. Catégories reçues: [${
+                [
+                  ...new Set(
+                    apiConversations.map(
+                      (c) => `${c.category}${c.isGroup ? "(group)" : ""}`,
+                    ),
+                  ),
+                ].join(", ") || "aucune"
+              }]`
+            : ""),
+    );
+
+    return apiConversations;
+  }, [apiConversations, activeFilters, rawRooms.length]);
 
   useEffect(() => {
     if (filteredConversations.length === 0) return;
@@ -1026,12 +1546,20 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                   selectedConversation={selectedConversation}
                   searchTerm={searchTerm}
                   selectedDateFilter={selectedDateFilter}
-                  tabs={visibleTabs}
-                  activeTab={activeTab}
-                  onTabChange={handleTabChange}
+                  activeFilters={activeFilters}
+                  onFiltersChange={handleFiltersChange}
                   onSearchChange={handleSearchChange}
                   onDateFilterChange={handleDateFilterChange}
                   onSelect={handleSelectConversation}
+                  showCreateGroupButton={iAmComptable}
+                  onCreateGroup={() => setOpenCreateGroupModal(true)}
+                  showManageGroupButton={iAmComptable}
+                  onManageGroup={handleManageGroup}
+                  badgeCounts={badgeCounts}
+                  userRole={userRoleForFilters}
+                  onLoadMore={handleLoadMoreConversations}
+                  hasMore={hasMoreConversations}
+                  isLoadingMore={roomsLoading && conversationsPage > 1}
                 />
               </Box>
             </Box>
@@ -1057,6 +1585,7 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
               <Box sx={{ flex: 1, minHeight: 0 }} />
             ) : (
               <ChatWindow
+                key={selectedConversation}
                 conversationId={selectedConversation}
                 conversation={currentConversation}
                 messages={currentMessages}
@@ -1072,6 +1601,9 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                 onLoadMore={handleLoadOlderMessages}
                 hasMore={hasMoreOlderMessages}
                 isLoadingMore={isLoadingOlder}
+                onMarkAsRead={handleMarkCurrentRoomAsRead}
+                uploadProgress={uploadProgress}
+                isUploading={isUploading}
                 onOpenMedia={() => {
                   setMobileView("media");
                   onOpenMedia?.();
@@ -1104,138 +1636,218 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
             )}
           </Box>
         )}
+
+        {/* Group Modals - Rendered outside main container for proper z-index */}
+        <CreateGroupModal
+          open={openCreateGroupModal}
+          onClose={() => setOpenCreateGroupModal(false)}
+          onCreate={handleCreateGroup}
+          clients={groupModalClients}
+          collaborators={groupModalCollaborators}
+        />
+
+        {selectedGroupForManagement && (
+          <GroupManagementModal
+            open={openManageGroupModal}
+            onClose={() => {
+              setOpenManageGroupModal(false);
+              setSelectedGroupForManagement(null);
+            }}
+            groupId={selectedGroupForManagement}
+            initialGroupName={
+              allConversations.find((c) => c.id === selectedGroupForManagement)
+                ?.name || ""
+            }
+            initialMembers={
+              allConversations.find((c) => c.id === selectedGroupForManagement)
+                ?.members || []
+            }
+            isAdmin={selectedGroupIsAdmin}
+            clients={groupModalClients}
+            collaborators={groupModalCollaborators}
+            onUpdate={handleUpdateGroup}
+          />
+        )}
       </>
     );
   }
 
   return (
-    <Box
-      sx={{
-        height: "calc(100vh - 120px)",
-        minHeight: 0,
-        width: "100%",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      }}
-    >
+    <>
       <Box
         sx={{
-          flex: 1,
+          height: isMedium
+            ? `calc(100vh - 120px - ${MOBILE_BOTTOM_NAV_HEIGHT}px)`
+            : "calc(100vh - 120px)",
           minHeight: 0,
+          width: "100%",
           display: "flex",
           flexDirection: "column",
-          width: "100%",
           overflow: "hidden",
         }}
       >
-        {renderContentHeader()}
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+            width: "100%",
+            overflow: "hidden",
+          }}
+        >
+          {renderContentHeader()}
 
-        {desktopView === "media" ? (
-          <Box
-            sx={{
-              flex: 1,
-              minHeight: 0,
-              width: "100%",
-              display: "flex",
-              overflow: "hidden",
-            }}
-          >
-            {renderMediaPanel(
-              <SharedMediaView
-                conversationId={selectedConversation}
-                onBack={() => setDesktopView("chat")}
-              />,
-            )}
-          </Box>
-        ) : (
-          <Box
-            sx={{
-              flex: 1,
-              minHeight: 0,
-              display: "flex",
-              gap: 2,
-              width: "100%",
-              overflow: "hidden",
-            }}
-          >
-            <Paper
-              elevation={0}
-              sx={{
-                width: 360,
-                p: 1.75,
-                display: "flex",
-                flexDirection: "column",
-                borderRadius: "20px",
-                border: "1px solid",
-                borderColor: theme.palette.grey[200],
-                backgroundColor: theme.palette.common.white,
-                flexShrink: 0,
-                minHeight: 0,
-                overflow: "hidden",
-              }}
-            >
-              <ConversationsList
-                conversations={filteredConversations}
-                selectedConversation={selectedConversation}
-                searchTerm={searchTerm}
-                selectedDateFilter={selectedDateFilter}
-                tabs={visibleTabs}
-                activeTab={activeTab}
-                onTabChange={handleTabChange}
-                onSearchChange={handleSearchChange}
-                onDateFilterChange={handleDateFilterChange}
-                onSelect={handleSelectConversation}
-              />
-            </Paper>
-
-            <Paper
-              elevation={0}
+          {desktopView === "media" ? (
+            <Box
               sx={{
                 flex: 1,
-                minWidth: 0,
                 minHeight: 0,
-                px: 2.5,
-                pt: 2,
-                pb: 1.75,
+                width: "100%",
                 display: "flex",
-                flexDirection: "column",
-                borderRadius: "20px",
-                border: "1px solid",
-                borderColor: theme.palette.grey[200],
-                backgroundColor: theme.palette.common.white,
                 overflow: "hidden",
               }}
             >
-              {showEmptyState ? (
-                <Box sx={{ flex: 1, minHeight: 0 }} />
-              ) : (
-                <ChatWindow
+              {renderMediaPanel(
+                <SharedMediaView
                   conversationId={selectedConversation}
-                  conversation={currentConversation}
-                  messages={currentMessages}
-                  isCommunicationConfirmed
-                  isRemoteTyping={isRemoteTyping}
-                  recipientType={recipientInfo.recipientType}
-                  recipientId={recipientInfo.recipientId}
-                  onTypingChange={(typing) =>
-                    emitTyping(selectedConversation, typing)
-                  }
-                  onMessagesChange={handleMessagesChange}
-                  onSendFile={handleSendFile}
-                  onLoadMore={handleLoadOlderMessages}
-                  hasMore={hasMoreOlderMessages}
-                  isLoadingMore={isLoadingOlder}
-                  onOpenMedia={() => {
-                    setDesktopView("media");
-                    onOpenMedia?.();
-                  }}
-                />
+                  onBack={() => setDesktopView("chat")}
+                />,
               )}
-            </Paper>
-          </Box>
-        )}
+            </Box>
+          ) : (
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                display: "flex",
+                gap: 2,
+                width: "100%",
+                overflow: "hidden",
+              }}
+            >
+              <Paper
+                elevation={0}
+                sx={{
+                  width: 360,
+                  p: 1.75,
+                  display: "flex",
+                  flexDirection: "column",
+                  borderRadius: "20px",
+                  border: "1px solid",
+                  borderColor: theme.palette.grey[200],
+                  backgroundColor: theme.palette.common.white,
+                  flexShrink: 0,
+                  minHeight: 0,
+                  overflow: "hidden",
+                }}
+              >
+                <ConversationsList
+                  conversations={filteredConversations}
+                  selectedConversation={selectedConversation}
+                  searchTerm={searchTerm}
+                  selectedDateFilter={selectedDateFilter}
+                  activeFilters={activeFilters}
+                  onFiltersChange={handleFiltersChange}
+                  onSearchChange={handleSearchChange}
+                  onDateFilterChange={handleDateFilterChange}
+                  onSelect={handleSelectConversation}
+                  showCreateGroupButton={iAmComptable}
+                  onCreateGroup={() => setOpenCreateGroupModal(true)}
+                  showManageGroupButton={iAmComptable}
+                  onManageGroup={handleManageGroup}
+                  badgeCounts={badgeCounts}
+                  userRole={userRoleForFilters}
+                  onLoadMore={handleLoadMoreConversations}
+                  hasMore={hasMoreConversations}
+                  isLoadingMore={roomsLoading && conversationsPage > 1}
+                />
+              </Paper>
+
+              <Paper
+                elevation={0}
+                sx={{
+                  flex: 1,
+                  minWidth: 0,
+                  minHeight: 0,
+                  px: 2.5,
+                  pt: 2,
+                  pb: 1.75,
+                  display: "flex",
+                  flexDirection: "column",
+                  borderRadius: "20px",
+                  border: "1px solid",
+                  borderColor: theme.palette.grey[200],
+                  backgroundColor: theme.palette.common.white,
+                  overflow: "hidden",
+                }}
+              >
+                {showEmptyState ? (
+                  <Box sx={{ flex: 1, minHeight: 0 }} />
+                ) : (
+                  <ChatWindow
+                    key={selectedConversation}
+                    conversationId={selectedConversation}
+                    conversation={currentConversation}
+                    messages={currentMessages}
+                    isCommunicationConfirmed
+                    isRemoteTyping={isRemoteTyping}
+                    recipientType={recipientInfo.recipientType}
+                    recipientId={recipientInfo.recipientId}
+                    onTypingChange={(typing) =>
+                      emitTyping(selectedConversation, typing)
+                    }
+                    onMessagesChange={handleMessagesChange}
+                    onSendFile={handleSendFile}
+                    onLoadMore={handleLoadOlderMessages}
+                    hasMore={hasMoreOlderMessages}
+                    isLoadingMore={isLoadingOlder}
+                    onMarkAsRead={handleMarkCurrentRoomAsRead}
+                    uploadProgress={uploadProgress}
+                    isUploading={isUploading}
+                    onOpenMedia={() => {
+                      setDesktopView("media");
+                      onOpenMedia?.();
+                    }}
+                  />
+                )}
+              </Paper>
+            </Box>
+          )}
+        </Box>
       </Box>
-    </Box>
+
+      {/* Group Modals - Rendered outside main container for proper z-index */}
+      <CreateGroupModal
+        open={openCreateGroupModal}
+        onClose={() => setOpenCreateGroupModal(false)}
+        onCreate={handleCreateGroup}
+        clients={groupModalClients}
+        collaborators={groupModalCollaborators}
+      />
+
+      {selectedGroupForManagement && (
+        <GroupManagementModal
+          open={openManageGroupModal}
+          onClose={() => {
+            setOpenManageGroupModal(false);
+            setSelectedGroupForManagement(null);
+          }}
+          groupId={selectedGroupForManagement}
+          initialGroupName={
+            allConversations.find((c) => c.id === selectedGroupForManagement)
+              ?.name || ""
+          }
+          initialMembers={
+            allConversations.find((c) => c.id === selectedGroupForManagement)
+              ?.members || []
+          }
+          isAdmin={selectedGroupIsAdmin}
+          clients={groupModalClients}
+          collaborators={groupModalCollaborators}
+          onUpdate={handleUpdateGroup}
+        />
+      )}
+    </>
   );
 }

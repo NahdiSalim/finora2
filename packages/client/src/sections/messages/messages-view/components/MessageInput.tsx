@@ -39,6 +39,7 @@ type MessageInputProps = {
   disabled?: boolean;
   recipientType?: "client" | "collaborator" | null;
   recipientId?: number | null;
+  onFocus?: () => void;
 };
 
 const FLAG_SPAN_CLASS = "finora-flag-chip";
@@ -88,6 +89,7 @@ export default function MessageInput({
   disabled = false,
   recipientType,
   recipientId,
+  onFocus,
 }: MessageInputProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -104,6 +106,15 @@ export default function MessageInput({
   const [openTaskModal, setOpenTaskModal] = useState(false);
   const [openAppointmentModal, setOpenAppointmentModal] = useState(false);
   const editorRef = useRef<HTMLDivElement | null>(null);
+
+  const MAX_CHARS = 1000;
+
+  const currentCharCount = useMemo(() => {
+    return getEditorPlainText(value).length;
+  }, [value]);
+
+  const isOverLimit = currentCharCount > MAX_CHARS;
+  const isNearLimit = currentCharCount > MAX_CHARS * 0.8; // 80% of limit
 
   const hasContent = useMemo(() => {
     return (
@@ -261,6 +272,7 @@ export default function MessageInput({
 
   const handleSend = () => {
     if (disabled) return;
+    if (isOverLimit) return; // Prevent sending if over character limit
 
     const hasAttachments =
       selectedFile || selectedRequest || selectedTask || selectedAppointment;
@@ -706,6 +718,7 @@ export default function MessageInput({
             suppressContentEditableWarning
             onInput={handleEditorInput}
             onKeyDown={handleEditorKeyDown}
+            onFocus={onFocus}
             data-placeholder="Saisir un message ..."
             sx={{
               flex: 1,
@@ -761,7 +774,7 @@ export default function MessageInput({
           variant="contained"
           color="secondary"
           onClick={handleSend}
-          disabled={disabled || !hasContent}
+          disabled={disabled || !hasContent || isOverLimit}
           sx={{
             minWidth: isMobile ? 38 : 40,
             width: isMobile ? 38 : 40,
@@ -774,6 +787,33 @@ export default function MessageInput({
           <SendIcon sx={{ fontSize: isMobile ? 17 : 18 }} />
         </CustomButton>
       </Box>
+
+      {/* Character counter */}
+      {currentCharCount > 0 && (
+        <Box
+          sx={{
+            mt: 0.5,
+            px: 0.5,
+            display: "flex",
+            justifyContent: "flex-end",
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: 11,
+              fontWeight: 500,
+              color: isOverLimit
+                ? theme.palette.error.main
+                : isNearLimit
+                  ? theme.palette.warning.main
+                  : theme.palette.text.disabled,
+            }}
+          >
+            {currentCharCount}/{MAX_CHARS}
+            {isOverLimit && " (limite dépassée)"}
+          </Typography>
+        </Box>
+      )}
 
       <RequestSelectionModal
         open={openRequestModal}

@@ -33,7 +33,7 @@ import UserDetailsModal from "src/sections/user/components/UserDetailsModal";
 import UserRowActions from "src/sections/user/components/UserRowActions";
 
 type RoleTab = "all" | "client" | "accountant" | "collaborator";
-type StatusFilter = "all" | "active" | "pending" | "suspended";
+type StatusTab = "all" | "active" | "pending" | "suspended";
 const ROWS_PER_PAGE = 5;
 
 const ROLE_TABS: Array<{ id: RoleTab; label: string; apiRoleCode?: string }> = [
@@ -56,8 +56,17 @@ const resolveRoleTabCountsFromApi = (
   apiData: unknown,
 ): Partial<Record<RoleTab, number>> => {
   const root = (apiData ?? {}) as Record<string, unknown>;
+  const nestedData =
+    root.data && typeof root.data === "object"
+      ? (root.data as Record<string, unknown>)
+      : {};
+  const pagination =
+    root.pagination && typeof root.pagination === "object"
+      ? (root.pagination as Record<string, unknown>)
+      : {};
   const countsSource =
     (root.counts as Record<string, unknown> | undefined) ??
+    (nestedData.counts as Record<string, unknown> | undefined) ??
     (root.roleCounts as Record<string, unknown> | undefined) ??
     {};
 
@@ -71,8 +80,8 @@ const resolveRoleTabCountsFromApi = (
 
   return {
     all:
-      read("all", "total", "users", "allUsers") ??
-      toSafeNumber((root.pagination as any)?.total) ??
+      read("all", "ALL", "total", "TOTAL", "users", "USERS", "allUsers") ??
+      toSafeNumber(pagination.total) ??
       undefined,
     client: read("client", "clients", "CLIENT") ?? undefined,
     accountant:
@@ -80,6 +89,19 @@ const resolveRoleTabCountsFromApi = (
     collaborator:
       read("collaborator", "collaborators", "COLLABORATOR") ?? undefined,
   };
+};
+
+type UserListApiRole = string | { code?: string };
+type UserListApiItem = {
+  id: string | number;
+  firstName?: string | null;
+  lastName?: string | null;
+  username?: string | null;
+  email?: string | null;
+  role?: UserListApiRole;
+  status?: string;
+  isActive?: boolean;
+  [key: string]: unknown;
 };
 
 const getRoleCode = (user: User): string =>
@@ -109,7 +131,7 @@ export default function UsersView() {
 
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<RoleTab>("all");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [statusTab, setStatusTab] = useState<StatusTab>("all");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   const canWrite =
@@ -129,11 +151,13 @@ export default function UsersView() {
     limit: ROWS_PER_PAGE,
     search: searchTerm || undefined,
     role: apiRoleCode,
-    status: statusFilter === "all" ? undefined : statusFilter,
+    status: statusTab === "all" ? undefined : statusTab,
   });
 
   const users = useMemo(() => {
-    const rawUsers = ((data as any)?.data ?? []) as any[];
+    const rawUsers = Array.isArray(data?.data)
+      ? (data.data as unknown as UserListApiItem[])
+      : [];
     return rawUsers.map((u) => {
       const fullName = [u.firstName, u.lastName]
         .filter(Boolean)
@@ -168,9 +192,22 @@ export default function UsersView() {
     skip: !id,
   });
 
-  const modalUser = id
-    ? (users.find((u) => String(u.id) === String(id)) ?? userById ?? null)
-    : selectedUser;
+  const modalUser = useMemo(() => {
+    if (!id) return selectedUser;
+    const fromList = users.find((u) => String(u.id) === String(id)) ?? null;
+    if (!userById) return fromList;
+    if (!fromList) return userById;
+    const roleFromDetails =
+      typeof userById.role === "string"
+        ? userById.role
+        : (userById.role?.code ?? "");
+    const hasRoleInDetails = Boolean(String(roleFromDetails).trim());
+    return {
+      ...fromList,
+      ...userById,
+      role: hasRoleInDetails ? userById.role : fromList.role,
+    };
+  }, [id, selectedUser, users, userById]);
 
   const roleTabCounts = useMemo(() => {
     const counts: Record<RoleTab, number> = {
@@ -347,29 +384,48 @@ export default function UsersView() {
           }}
         />
 
-        <CustomInput
-          fullWidth
-          placeholder="Rechercher un utilisateur..."
-          startIcon={<Search size={20} />}
-          sx={{ mt: 1.5, mb: 1.5 }}
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            table.onResetPage();
+        <Box
+          sx={{
+            mt: 1.5,
+            mb: 1.5,
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            flexWrap: "wrap",
           }}
-        />
-        <Box sx={{ mb: 1.5, width: { xs: "100%", sm: 260 } }}>
+        >
+          <Box sx={{ flex: 1, minWidth: 260 }}>
+            <CustomInput
+              fullWidth
+              placeholder="Rechercher un utilisateur..."
+              startIcon={<Search size={20} />}
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                table.onResetPage();
+              }}
+            />
+          </Box>
           <CustomSelect
-            fullWidth
-            size="small"
-            label="Statut"
-            value={statusFilter}
+            value={statusTab}
             onChange={(e) => {
-              setStatusFilter(e.target.value as StatusFilter);
+              setStatusTab((e.target.value as StatusTab) || "all");
               table.onResetPage();
             }}
+            displayEmpty
+            sx={{ width: { xs: "100%", sm: 190 } }}
+            renderValue={(value) => {
+              const status = String(value ?? "");
+              if (!status || status === "all") return "Statut";
+              if (status === "active") return "Actif";
+              if (status === "pending") return "En attente";
+              if (status === "suspended") return "Suspendu";
+              return "Statut";
+            }}
           >
-            <MenuItem value="all">Tous</MenuItem>
+            <MenuItem value="all">
+              <em>Tous les statuts</em>
+            </MenuItem>
             <MenuItem value="active">Actif</MenuItem>
             <MenuItem value="pending">En attente</MenuItem>
             <MenuItem value="suspended">Suspendu</MenuItem>

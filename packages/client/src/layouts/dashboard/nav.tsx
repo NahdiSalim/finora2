@@ -28,6 +28,7 @@ export type NavContentProps = {
     bottomArea?: React.ReactNode;
   };
   sx?: SxProps<Theme>;
+  searchTerm?: string; // Add optional searchTerm prop
 };
 
 export function NavDesktop({
@@ -37,6 +38,7 @@ export function NavDesktop({
   layoutQuery,
 }: NavContentProps & { layoutQuery: Breakpoint }) {
   const theme = useTheme();
+  const [searchTerm, setSearchTerm] = useState("");
 
   return (
     <Box
@@ -67,8 +69,10 @@ export function NavDesktop({
         startIcon={<Search size={16} />}
         border={false}
         placeholder="Rechercher..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
       />
-      <NavContent data={data} slots={slots} />
+      <NavContent data={data} slots={slots} searchTerm={searchTerm} />
     </Box>
   );
 }
@@ -105,14 +109,20 @@ export function NavMobile({
         },
       }}
     >
-      <NavContent data={data} slots={slots} />
+      {/* Pass empty searchTerm to avoid search on mobile */}
+      <NavContent data={data} slots={slots} searchTerm="" />
     </Drawer>
   );
 }
 
 // ----------------------------------------------------------------------
 
-export function NavContent({ data, slots, sx }: NavContentProps) {
+export function NavContent({
+  data,
+  slots,
+  sx,
+  searchTerm = "",
+}: NavContentProps) {
   const pathname = usePathname();
   const location = useLocation();
   const theme = useTheme();
@@ -155,6 +165,39 @@ export function NavContent({ data, slots, sx }: NavContentProps) {
     }));
   };
 
+  // Filter nav items based on search term
+  const filterNavItems = (items: NavItem[], term: string): NavItem[] => {
+    if (!term) return items;
+
+    const lowerTerm = term.toLowerCase();
+    return items.reduce<NavItem[]>((acc, item) => {
+      // Check if item title matches
+      const titleMatches = item.title.toLowerCase().includes(lowerTerm);
+
+      // If title matches, include the item with all its children (if any)
+      if (titleMatches) {
+        acc.push({ ...item, children: item.children });
+        return acc;
+      }
+
+      // If item has children, filter them
+      if (item.children) {
+        const filteredChildren = item.children.filter((child) =>
+          child.title.toLowerCase().includes(lowerTerm),
+        );
+        if (filteredChildren.length > 0) {
+          // Include parent with only matching children
+          acc.push({ ...item, children: filteredChildren });
+        }
+      }
+
+      return acc;
+    }, []);
+  };
+
+  const filteredData = filterNavItems(data, searchTerm);
+  const isSearchActive = searchTerm.length > 0;
+
   return (
     <>
       <Box
@@ -188,7 +231,7 @@ export function NavContent({ data, slots, sx }: NavContentProps) {
               flexDirection: "column",
             }}
           >
-            {data.map((item) => {
+            {filteredData.map((item) => {
               // Check if any child is active (more precise check)
               const hasActiveChild = item.children?.some((child) => {
                 const [basePath, queryString] = child.path.split("?");
@@ -213,8 +256,18 @@ export function NavContent({ data, slots, sx }: NavContentProps) {
 
               // Parent is only active if pathname exactly matches the parent path AND no child is active
               const isActived = !hasActiveChild && item.path === pathname;
-              const isExpanded = expandedItems[item.title] ?? false;
-              const hasChildren = item.children && item.children.length > 0;
+              const hasVisibleChildren =
+                item.children && item.children.length > 0;
+
+              // Determine if this item should be expanded:
+              // - If search is active and it has visible children, expand it automatically
+              // - Otherwise use the user-controlled expanded state
+              const isExpanded =
+                isSearchActive && hasVisibleChildren
+                  ? true
+                  : (expandedItems[item.title] ?? false);
+
+              const hasChildren = hasVisibleChildren;
 
               return (
                 <Box key={item.title}>

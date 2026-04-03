@@ -26,6 +26,8 @@ import { NotificationsPopover } from "../components/notifications-popover";
 import { MessagesPopover } from "../components/messages-popover";
 import Logo from "src/components/common/Logo";
 import { GlobalFileDrawer } from "src/components/common/FileDrawer";
+import { GlobalCallHandler } from "../components/GlobalCallHandler";
+import { GlobalCallProvider } from "src/contexts/GlobalCallContext";
 
 // ----------------------------------------------------------------------
 
@@ -186,32 +188,37 @@ export function DashboardLayout({
     <MainSection {...slotProps?.main}>
       {children}
       <GlobalFileDrawer />
+      <GlobalCallHandler />
     </MainSection>
   );
 
   return (
-    <LayoutSection
-      headerSection={renderHeader()}
-      sidebarSection={<NavDesktop data={navItems} layoutQuery={layoutQuery} />}
-      footerSection={renderFooter()}
-      cssVars={{ ...dashboardLayoutVars(theme), ...cssVars }}
-      sx={[
-        {
-          [`& .${layoutClasses.sidebarContainer}`]: {
-            [theme.breakpoints.up(layoutQuery)]: {
-              pl: "var(--layout-nav-vertical-width)",
-              pt: "calc(var(--layout-header-desktop-height) + 24px)",
-              transition: theme.transitions.create(["padding-left"], {
-                easing: "var(--layout-transition-easing)",
-                duration: "var(--layout-transition-duration)",
-              }),
+    <GlobalCallProvider>
+      <LayoutSection
+        headerSection={renderHeader()}
+        sidebarSection={
+          <NavDesktop data={navItems} layoutQuery={layoutQuery} />
+        }
+        footerSection={renderFooter()}
+        cssVars={{ ...dashboardLayoutVars(theme), ...cssVars }}
+        sx={[
+          {
+            [`& .${layoutClasses.sidebarContainer}`]: {
+              [theme.breakpoints.up(layoutQuery)]: {
+                pl: "var(--layout-nav-vertical-width)",
+                pt: "calc(var(--layout-header-desktop-height) + 24px)",
+                transition: theme.transitions.create(["padding-left"], {
+                  easing: "var(--layout-transition-easing)",
+                  duration: "var(--layout-transition-duration)",
+                }),
+              },
             },
           },
-        },
-        ...(Array.isArray(sx) ? sx : [sx]),
-      ]}
-    >
-      {renderMain()}
-    </LayoutSection>
+          ...(Array.isArray(sx) ? sx : [sx]),
+        ]}
+      >
+        {renderMain()}
+      </LayoutSection>
+    </GlobalCallProvider>
   );
 }

@@ -1,6 +1,14 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsDateString, IsInt, Min } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  IsOptional,
+  IsString,
+  IsDateString,
+  IsInt,
+  Min,
+  IsArray,
+  IsBoolean,
+} from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 
 export class GetRoomsDto {
   @ApiPropertyOptional({
@@ -17,12 +25,36 @@ export class GetRoomsDto {
 
   @ApiPropertyOptional({
     description:
-      'Role code to filter other participants by. ' +
-      'Accepts: client, collaborateur, collaborator, comptable, accountant (case-insensitive).',
+      'Array of role codes to filter by (OR logic). ' +
+      'Accepts: client, collaborateur, collaborator, comptable, accountant, group (case-insensitive).',
+    type: [String],
+    example: ['client', 'group'],
+  })
+  @IsOptional()
+  @IsArray()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value.split(',').map((v) => v.trim());
+    }
+    return value;
+  })
+  categories?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Legacy single category support (deprecated, use categories instead)',
   })
   @IsOptional()
   @IsString()
   category?: string;
+
+  @ApiPropertyOptional({
+    description: 'Show only unread conversations',
+    default: false,
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  unreadOnly?: boolean;
 
   @ApiPropertyOptional({ description: 'Numéro de page', default: 1, type: 'number' })
   @IsOptional()

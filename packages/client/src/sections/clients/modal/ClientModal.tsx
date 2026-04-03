@@ -102,6 +102,34 @@ export default function ClientModal({ open, onClose, client }: Props) {
     setValue("city", "");
   }, [countryCode, setValue]);
 
+  const getCountryIso = (country: unknown): string => {
+    if (!country || typeof country !== "object") return "";
+    const c = country as Record<string, unknown>;
+    const raw =
+      c.isoCode ??
+      c.iso_code ??
+      c.code ??
+      c.countryCode ??
+      c.country_code ??
+      c.iso2 ??
+      c.alpha2Code;
+    return typeof raw === "string" ? raw : "";
+  };
+
+  const getCountryLabel = (country: unknown): string => {
+    if (!country || typeof country !== "object") return "";
+    const c = country as Record<string, unknown>;
+    const raw =
+      c.name ??
+      c.name_fr ??
+      c.nameFr ??
+      c.name_en ??
+      c.nameEn ??
+      c.label ??
+      c.value;
+    return typeof raw === "string" ? raw : "";
+  };
+
   useEffect(() => {
     if (client) {
       const [firstName, ...lastName] = client.fullName.split(" ");
@@ -150,9 +178,34 @@ export default function ClientModal({ open, onClose, client }: Props) {
     if (!client || !countries.length) return;
     const countryName: string | undefined = client.company?.country;
     if (!countryName) return;
-    const match = countries.find((c) => c.name === countryName);
+    const normalize = (v: string) =>
+      v
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase();
+
+    const normalizedCountryName = normalize(countryName);
+
+    const aliases: Record<string, string[]> = {
+      tunisie: ["tunisia", "tn", "republique tunisienne"],
+      tunisia: ["tunisie", "tn", "republic of tunisia"],
+    };
+
+    const match = countries.find((c) => {
+      const label = getCountryLabel(c);
+      const normalizedCandidate = normalize(label);
+      if (normalizedCandidate === normalizedCountryName) return true;
+
+      const directAliases = aliases[normalizedCountryName] ?? [];
+      if (directAliases.includes(normalizedCandidate)) return true;
+
+      const reverseAliases = aliases[normalizedCandidate] ?? [];
+      return reverseAliases.includes(normalizedCountryName);
+    });
     if (match) {
-      setValue("countryCode", match.isoCode);
+      const iso = getCountryIso(match);
+      if (iso) setValue("countryCode", iso);
     }
   }, [client, countries, setValue]);
 
@@ -365,18 +418,24 @@ export default function ClientModal({ open, onClose, client }: Props) {
                 helperText={errors.countryCode?.message}
                 disabled={isViewMode}
                 renderValue={(v): ReactNode => {
-                  if (!v) return "Sélectionner un pays";
-                  return (
-                    countries.find((c) => c.isoCode === v)?.name ?? String(v)
+                  if (!v) {
+                    if (isViewMode && client?.company?.country) {
+                      return client.company.country;
+                    }
+                    return "Sélectionner un pays";
+                  }
+                  const selected = countries.find(
+                    (c) => getCountryIso(c) === v,
                   );
+                  return selected ? getCountryLabel(selected) : String(v);
                 }}
               >
                 <MenuItem value="">
                   <em>Sélectionner un pays</em>
                 </MenuItem>
                 {countries.map((c) => (
-                  <MenuItem key={c.isoCode} value={c.isoCode}>
-                    {c.name}
+                  <MenuItem key={getCountryIso(c)} value={getCountryIso(c)}>
+                    {getCountryLabel(c)}
                   </MenuItem>
                 ))}
               </CustomSelect>

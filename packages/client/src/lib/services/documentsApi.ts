@@ -14,6 +14,8 @@ export interface DocumentItem {
   status: string;
   createdAt: string;
   updatedAt: string;
+  foldersCount?: number;
+  filesCount?: number;
   owner?: { id: number; username?: string; email?: string };
 }
 
@@ -70,6 +72,7 @@ export interface CreateFolderResponse {
 export interface UpdateDocumentInput {
   name?: string;
   parentId?: number | null;
+  category?: string;
 }
 
 export const documentsApi = createApi({

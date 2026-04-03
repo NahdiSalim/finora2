@@ -86,6 +86,8 @@ export function NotificationsPopover({
   const [respondToInvitation] = useRespondToInvitationMutation();
   const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
   const seenNotificationIdsRef = useRef<Set<number>>(new Set());
+  /** Avoid treating transient empty lists / refetches as a second "first load" (that path skips the beep). */
+  const notificationsHydratedRef = useRef(false);
   const suppressNextBeepRef = useRef(false);
 
   const playNotificationBeep = useCallback(() => {
@@ -112,14 +114,23 @@ export function NotificationsPopover({
   }, []);
 
   useEffect(() => {
-    const list = notificationsData?.notifications ?? [];
+    if (notificationsData === undefined) {
+      return;
+    }
+
+    const list = notificationsData.notifications ?? [];
     const currentIds = list
       .map((n) => Number(n.id))
       .filter((id) => Number.isFinite(id));
 
-    // First hydration: mark existing ids as seen without playing sound.
-    if (seenNotificationIdsRef.current.size === 0) {
+    if (!notificationsHydratedRef.current) {
+      notificationsHydratedRef.current = true;
       seenNotificationIdsRef.current = new Set(currentIds);
+      return;
+    }
+
+    // Skip transient empty snapshot so we don't clear "seen" then re-hydrate silently (no beep).
+    if (currentIds.length === 0 && seenNotificationIdsRef.current.size > 0) {
       return;
     }
 

@@ -5,6 +5,7 @@ import type {
 } from "@reduxjs/toolkit/query";
 import { fetchBaseQuery } from "@reduxjs/toolkit/query";
 import { reconnectSocketWithFreshToken } from "../socket";
+import { reconnectNotificationsSocketWithFreshToken } from "../notificationsSocket";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -64,6 +65,7 @@ export const baseQueryWithReauth: BaseQueryFn<
       // next handshake succeeds immediately instead of waiting for retries.
       console.log("[socket] reconnecting socket after token refresh");
       reconnectSocketWithFreshToken();
+      reconnectNotificationsSocketWithFreshToken();
     }
   }
 

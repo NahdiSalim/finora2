@@ -19,7 +19,15 @@ export function formatSize(bytes: number | null | undefined): string {
 
 export function docToFolderState(item: DocumentItem): FolderItem["state"] {
   if (item.status === "archived") return "archived";
-  return "empty";
+  const filesCount =
+    typeof item.filesCount === "number" && Number.isFinite(item.filesCount)
+      ? item.filesCount
+      : 0;
+  const foldersCount =
+    typeof item.foldersCount === "number" && Number.isFinite(item.foldersCount)
+      ? item.foldersCount
+      : 0;
+  return filesCount + foldersCount > 0 ? "hasFiles" : "empty";
 }
 
 export function docToFileType(

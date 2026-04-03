@@ -8,6 +8,8 @@ import {
   useUpdatePostMutation,
   useDeletePostMutation,
 } from "src/lib/services/postsApi";
+import { useVerifyUserQuery } from "src/lib/services/authApi";
+import { canFetchMyAccountantProfile } from "src/constants/roles";
 import { useGetMyAccountantProfileQuery } from "src/lib/services/accountantProfileApi";
 
 import { EditPostDialog } from "./profile-feed/EditPostDialog";
@@ -27,10 +29,16 @@ export default function ProfileFeedTab({
   readOnly = false,
   companyId: companyIdProp,
 }: ProfileFeedTabProps = {}) {
+  const { data: me } = useVerifyUserQuery();
+  const roleCode =
+    typeof me?.role === "object" ? me?.role?.code : (me?.role ?? null);
+  const fetchAccountantMe = canFetchMyAccountantProfile(roleCode);
+
   const { data: profile } = useGetMyAccountantProfileQuery(undefined, {
-    skip: companyIdProp != null,
+    skip: companyIdProp != null || !fetchAccountantMe,
   });
-  const companyId = companyIdProp ?? profile?.company?.id ?? undefined;
+  const companyId =
+    companyIdProp ?? profile?.company?.id ?? me?.company?.id ?? undefined;
   const { data: postsResponse, isLoading } = useGetPostsQuery(
     { companyId, limit: 20 },
     { skip: companyId == null },

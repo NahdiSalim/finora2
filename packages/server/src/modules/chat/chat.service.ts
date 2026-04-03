@@ -770,7 +770,7 @@ export class ChatService {
       });
 
       if (!user?.companyId) {
-        throw new Error('User company not found');
+        throw new BadRequestException('User company not found');
       }
 
       for (const file of files) {

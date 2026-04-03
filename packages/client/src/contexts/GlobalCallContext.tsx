@@ -113,18 +113,6 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
     isVideoEnabled,
   } = useMediaStream(callType);
 
-  // Debug: Log when local stream changes
-  useEffect(() => {
-    console.log("[GlobalCallContext] Local stream changed:", {
-      exists: !!localStream,
-      id: localStream?.id,
-      audioTracks: localStream?.getAudioTracks().length,
-      videoTracks: localStream?.getVideoTracks().length,
-      callState,
-      callType,
-    });
-  }, [localStream, callState, callType]);
-
   const {
     remoteStreams,
     connectionErrors,
@@ -138,7 +126,6 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
 
   // Reset all call state
   const resetCallState = useCallback(() => {
-    console.log("[GlobalCallContext] Resetting call state");
     setCallState("idle");
     setIsMinimized(false);
     setCallType(null);
@@ -172,7 +159,6 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
   // Socket event listeners
   useEffect(() => {
     const socketInstance = getSocket();
-    console.log("[GlobalCallContext] Setting up socket listeners");
 
     // Incoming call
     socketInstance.on(
@@ -184,7 +170,6 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
         callType: CallType;
         initiatorName: string;
       }) => {
-        console.log("[GlobalCallContext] Incoming call:", data);
         setIncomingCallData({
           callId: data.callId,
           callerId: data.callerId,
@@ -204,7 +189,6 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
         roomId: number;
         offer: RTCSessionDescriptionInit;
       }) => {
-        console.log("[GlobalCallContext] Received offer from:", data.callerId);
         await handleOffer(data.callerId, data.offer);
       },
     );
@@ -216,7 +200,6 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
         roomId: number;
         answer: RTCSessionDescriptionInit;
       }) => {
-        console.log("[GlobalCallContext] Received answer from:", data.callerId);
         await handleAnswer(data.callerId, data.answer);
       },
     );
@@ -228,10 +211,6 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
         roomId: number;
         candidate: RTCIceCandidateInit;
       }) => {
-        console.log(
-          "[GlobalCallContext] Received ICE candidate from:",
-          data.callerId,
-        );
         await handleIceCandidate(data.callerId, data.candidate);
       },
     );
@@ -239,15 +218,11 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
     socketInstance.on(
       "call:accepted",
       (data: { acceptedBy: number; roomId: number; userName?: string }) => {
-        console.log("[GlobalCallContext] Call accepted by:", data.acceptedBy);
-
-        // Only set state if we're the initiator waiting for acceptance
         if (callState !== "active") {
           setCallState("active");
           callStartTimeRef.current = Date.now();
         }
 
-        // Add to participants list if not already there
         setParticipants((prev) => {
           if (prev.some((p) => p.id === data.acceptedBy)) {
             return prev;
@@ -261,7 +236,6 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
           ];
         });
 
-        // Create offer to the user who just accepted
         makeOffer(data.acceptedBy);
       },
     );
@@ -269,20 +243,12 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
     socketInstance.on(
       "call:user-joined",
       (data: { userId: number; roomId: number; userName?: string }) => {
-        console.log("[GlobalCallContext] User joined call:", data.userId);
-
-        // If we're already in an active call and someone else joins, create offer to them
         if (
           callState === "active" &&
           data.userId !== currentUserIdRef.current
         ) {
-          console.log(
-            "[GlobalCallContext] Creating offer to newly joined user:",
-            data.userId,
-          );
           makeOffer(data.userId);
 
-          // Add to participants list if not already there
           setParticipants((prev) => {
             if (prev.some((p) => p.id === data.userId)) {
               return prev;
@@ -303,20 +269,8 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
     socketInstance.on(
       "call:existing-participants",
       (data: { participants: Array<{ userId: number; userName: string }> }) => {
-        console.log(
-          "[GlobalCallContext] Received existing participants:",
-          data.participants,
-        );
-
-        // Add existing participants to the list
-        // Don't create offers here - existing participants will offer to us
         data.participants.forEach((participant) => {
           if (participant.userId !== currentUserIdRef.current) {
-            console.log(
-              "[GlobalCallContext] Adding existing participant:",
-              participant.userId,
-            );
-
             setParticipants((prev) => {
               if (prev.some((p) => p.id === participant.userId)) {
                 return prev;
@@ -337,16 +291,8 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
     socketInstance.on(
       "call:rejected",
       (data: { rejectedBy: number; roomId: number; callEnded?: boolean }) => {
-        console.log("[GlobalCallContext] Call rejected by:", data.rejectedBy);
-
-        // Only end the call if explicitly told to (no other participants accepted)
         if (data.callEnded) {
           resetCallState();
-        } else {
-          // Call continues with other participants - just log the rejection
-          console.log(
-            "[GlobalCallContext] Call continues with other participants",
-          );
         }
       },
     );
@@ -354,7 +300,6 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
     socketInstance.on(
       "call:ended",
       (data: { endedBy: number; roomId: number }) => {
-        console.log("[GlobalCallContext] Call ended by:", data.endedBy);
         resetCallState();
       },
     );
@@ -362,12 +307,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
     socketInstance.on(
       "call:user-left",
       (data: { userId: number; roomId: number }) => {
-        console.log("[GlobalCallContext] User left call:", data.userId);
-
-        // Remove participant from list
         setParticipants((prev) => prev.filter((p) => p.id !== data.userId));
-
-        // Close peer connection to this user
         closePeerConnection(data.userId);
       },
     );
@@ -403,13 +343,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
       rName?: string,
       isGrp?: boolean,
     ) => {
-      console.log("[GlobalCallContext] Initiating call:", { rid, type, parts });
-
-      // Don't allow starting a call if already in one
       if (callState !== "idle") {
-        console.warn(
-          "[GlobalCallContext] Cannot initiate call - already in a call",
-        );
         return;
       }
 
@@ -422,12 +356,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
       callStartTimeRef.current = Date.now();
 
       try {
-        console.log(
-          "[GlobalCallContext] Requesting media stream for type:",
-          type,
-        );
         await startStream(type);
-        console.log("[GlobalCallContext] Media stream started successfully");
       } catch (error) {
         console.error(
           "[GlobalCallContext] Failed to start media stream:",
@@ -453,10 +382,6 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
         (response: any) => {
           if (response?.success && response?.callId) {
             callIdRef.current = response.callId;
-            console.log(
-              "[GlobalCallContext] Call initiated with ID:",
-              response.callId,
-            );
           } else {
             console.error(
               "[GlobalCallContext] Failed to initiate call:",
@@ -476,11 +401,8 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
   // Accept incoming call
   const acceptCall = useCallback(async () => {
     if (!incomingCallData) {
-      console.warn("[GlobalCallContext] No incoming call to accept");
       return;
     }
-
-    console.log("[GlobalCallContext] Accepting call:", incomingCallData);
 
     const incomingType = incomingCallData.callType;
     setCallType(incomingType);
@@ -488,7 +410,6 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
     setCallState("active");
     callStartTimeRef.current = Date.now();
 
-    // Set caller as participant
     setParticipants([
       {
         id: incomingCallData.callerId,
@@ -498,12 +419,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
     ]);
 
     try {
-      console.log(
-        "[GlobalCallContext] Requesting media stream for incoming call type:",
-        incomingType,
-      );
       await startStream(incomingType);
-      console.log("[GlobalCallContext] Media stream started for incoming call");
     } catch (error) {
       console.error("[GlobalCallContext] Failed to start media stream:", error);
       resetCallState();
@@ -528,8 +444,6 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
   const rejectCall = useCallback(() => {
     if (!incomingCallData) return;
 
-    console.log("[GlobalCallContext] Rejecting call:", incomingCallData);
-
     const socketInstance = getSocket();
     socketInstance.emit("call:reject", {
       roomId: incomingCallData.roomId,
@@ -543,11 +457,6 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
   // End active call
   const endCall = useCallback(() => {
     if (!roomId) return;
-
-    console.log("[GlobalCallContext] Ending call:", {
-      roomId,
-      callId: callIdRef.current,
-    });
 
     const duration = Math.floor((Date.now() - callStartTimeRef.current) / 1000);
     const participantIds = participants.map((p) => p.id);
@@ -570,10 +479,6 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
 
   // Toggle audio
   const toggleAudio = useCallback(() => {
-    console.log("[GlobalCallContext] toggleAudio called");
-    console.log("[GlobalCallContext] localStream exists:", !!localStream);
-    console.log("[GlobalCallContext] Current isAudioEnabled:", isAudioEnabled);
-
     if (!localStream) {
       console.error(
         "[GlobalCallContext] Cannot toggle audio - no local stream!",
@@ -581,40 +486,13 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const newState = toggleAudioStream();
-    console.log("[GlobalCallContext] Audio toggled to:", newState);
-
-    // Log current track states
-    const audioTracks = localStream.getAudioTracks();
-    console.log(
-      "[GlobalCallContext] Audio tracks after toggle:",
-      audioTracks.map((t) => ({
-        id: t.id,
-        enabled: t.enabled,
-        label: t.label,
-        readyState: t.readyState,
-      })),
-    );
-  }, [toggleAudioStream, localStream, isAudioEnabled]);
+    toggleAudioStream();
+  }, [toggleAudioStream, localStream]);
 
   // Toggle video
   const toggleVideo = useCallback(() => {
-    const newState = toggleVideoStream();
-    console.log("[GlobalCallContext] Video toggled to:", newState);
-
-    // Log current track states
-    if (localStream) {
-      const videoTracks = localStream.getVideoTracks();
-      console.log(
-        "[GlobalCallContext] Video tracks after toggle:",
-        videoTracks.map((t) => ({
-          id: t.id,
-          enabled: t.enabled,
-          label: t.label,
-        })),
-      );
-    }
-  }, [toggleVideoStream, localStream]);
+    toggleVideoStream();
+  }, [toggleVideoStream]);
 
   const value = useMemo<GlobalCallContextValue>(
     () => ({

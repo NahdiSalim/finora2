@@ -88,34 +88,17 @@ export function useChatSocket(options: UseChatSocketOptions = {}) {
     const onConnect = () => {
       const isReconnect = hasConnectedRef.current;
       hasConnectedRef.current = true;
-      console.log("[useChatSocket] connected:", {
-        socketId: socket.id,
-        isReconnect,
-      });
 
-      // Rejoin the active room on every (re)connect — covers token-refresh
-      // reconnects where selectedConversation hasn't changed so the effect
-      // in the parent component doesn't fire again.
       const roomId = optsRef.current.activeRoomId;
       if (roomId) {
-        console.log("[useChatSocket] rejoining room after connect:", {
-          roomId,
-          socketId: socket.id,
-        });
         socket.emit("room:join", { roomId });
       }
 
-      // Notify parent on reconnects so it can refetch missed messages.
       if (isReconnect) {
-        console.log("[useChatSocket] reconnect detected, calling onReconnect");
         optsRef.current.onReconnect?.();
       }
     };
-    const onDisconnect = (reason: string) =>
-      console.warn("[useChatSocket] disconnected:", {
-        reason,
-        socketId: socket.id,
-      });
+    const onDisconnect = () => {};
     const onConnectError = (err: Error) =>
       console.error("[useChatSocket] connect_error:", err.message);
 
@@ -157,18 +140,10 @@ export function useChatSocket(options: UseChatSocketOptions = {}) {
   // causing a constant room:leave → room:join cycle and missed messages.
 
   const joinRoom = useCallback((roomId: number) => {
-    console.log("[useChatSocket] room:join emit:", {
-      roomId,
-      socketId: getSocket().id,
-    });
     getSocket().emit("room:join", { roomId });
   }, []);
 
   const leaveRoom = useCallback((roomId: number) => {
-    console.log("[useChatSocket] room:leave emit:", {
-      roomId,
-      socketId: getSocket().id,
-    });
     getSocket().emit("room:leave", { roomId });
   }, []);
 

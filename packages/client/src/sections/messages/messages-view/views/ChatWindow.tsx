@@ -264,12 +264,6 @@ export default function ChatWindow({
     }
 
     if (file) {
-      console.log("[ChatWindow] file selected; sending callback:", {
-        fileName: file.name,
-        mimeType: file.type,
-        size: file.size,
-        conversationId,
-      });
       onSendFile?.(messageHtml, file);
 
       const newMessage: Message = {
@@ -553,6 +547,7 @@ export default function ChatWindow({
           disabled={!isCommunicationConfirmed || isUploading}
           recipientType={recipientType}
           recipientId={recipientId}
+          isGroup={conversation?.isGroup}
           onFocus={onMarkAsRead}
         />
       </Box>

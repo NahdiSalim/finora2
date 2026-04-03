@@ -216,17 +216,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const userId = client.data.userId;
 
-      // Récupérer le message avant de le supprimer pour avoir le roomId
-      const message = await this.chatService.editMessage(data.messageId, userId, '');
-      await this.chatService.deleteMessage(data.messageId, userId);
+      const result = await this.chatService.deleteMessage(data.messageId, userId);
 
-      // Notifier tous les participants de la salle
-      if (message.roomId) {
-        this.server.to(`room:${message.roomId}`).emit('message:deleted', {
-          messageId: data.messageId,
-          roomId: message.roomId,
-        });
-      }
+      this.server.to(`room:${result.roomId}`).emit('message:deleted', {
+        messageId: data.messageId,
+        roomId: result.roomId,
+      });
 
       return { success: true };
     } catch (error) {

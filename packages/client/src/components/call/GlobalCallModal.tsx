@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import { useGlobalCall } from "src/contexts/GlobalCallContext";
 import AudioVisualizer from "src/components/call/AudioVisualizer";
-import AudioDebugger from "src/components/call/AudioDebugger";
 import { RINGTONE_CONFIG } from "src/components/call/ringtone-config";
 import { generateRingtoneDataUrl } from "src/components/call/ringtone-generator";
 
@@ -57,39 +56,6 @@ export default function GlobalCallModal() {
   const remoteAudioRefs = useRef<Map<number, HTMLAudioElement>>(new Map());
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const isRingingRef = useRef(false);
-
-  // Debug logging for audio state
-  useEffect(() => {
-    if (callState === "active") {
-      console.log("[GlobalCallModal] === AUDIO DEBUG ===");
-      console.log(
-        "[GlobalCallModal] Local stream:",
-        localStream ? "exists" : "null",
-      );
-      if (localStream) {
-        const audioTracks = localStream.getAudioTracks();
-        console.log(
-          "[GlobalCallModal] Local audio tracks:",
-          audioTracks.length,
-        );
-        audioTracks.forEach((track, idx) => {
-          console.log(`[GlobalCallModal] Track ${idx}:`, {
-            id: track.id,
-            label: track.label,
-            enabled: track.enabled,
-            muted: track.muted,
-            readyState: track.readyState,
-          });
-        });
-      }
-      console.log("[GlobalCallModal] isAudioEnabled:", isAudioEnabled);
-      console.log("[GlobalCallModal] Remote streams:", remoteStreams.length);
-      console.log(
-        "[GlobalCallModal] Remote audio elements:",
-        remoteAudioRefs.current.size,
-      );
-    }
-  }, [callState, localStream, isAudioEnabled, remoteStreams]);
 
   // Format call duration
   const formatDuration = (seconds: number) => {
@@ -159,11 +125,6 @@ export default function GlobalCallModal() {
 
   // Attach audio streams (crucial for audio calls)
   useEffect(() => {
-    console.log(
-      "[GlobalCallModal] Attaching remote audio streams:",
-      remoteStreams.length,
-    );
-
     remoteStreams.forEach((rs) => {
       let audioElement = remoteAudioRefs.current.get(rs.userId);
 
@@ -172,76 +133,31 @@ export default function GlobalCallModal() {
         audioElement.autoplay = true;
         audioElement.volume = 1.0;
         remoteAudioRefs.current.set(rs.userId, audioElement);
-        console.log(
-          "[GlobalCallModal] Created audio element for user:",
-          rs.userId,
-        );
       }
 
       if (rs.stream) {
-        const audioTracks = rs.stream.getAudioTracks();
-        console.log(
-          "[GlobalCallModal] Remote stream audio tracks for user",
-          rs.userId,
-          ":",
-          audioTracks.map((t) => ({
-            id: t.id,
-            enabled: t.enabled,
-            label: t.label,
-            muted: t.muted,
-            readyState: t.readyState,
-          })),
-        );
-
-        if (audioTracks.length === 0) {
-          console.warn(
-            "[GlobalCallModal] No audio tracks in remote stream for user:",
-            rs.userId,
-          );
-        }
-
         audioElement.srcObject = rs.stream;
-        audioElement
-          .play()
-          .then(() => {
-            console.log(
-              "[GlobalCallModal] Successfully playing audio for user:",
-              rs.userId,
-              "volume:",
-              audioElement.volume,
-            );
-          })
-          .catch((err) => {
-            console.error(
-              "[GlobalCallModal] Error playing remote audio for user:",
-              rs.userId,
-              err,
-            );
-          });
+        audioElement.play().catch((err) => {
+          console.error(
+            "[GlobalCallModal] Error playing remote audio for user:",
+            rs.userId,
+            err,
+          );
+        });
       }
     });
 
-    // Cleanup removed streams
     const currentUserIds = new Set(remoteStreams.map((rs) => rs.userId));
     remoteAudioRefs.current.forEach((audio, userId) => {
       if (!currentUserIds.has(userId)) {
         audio.pause();
         audio.srcObject = null;
         remoteAudioRefs.current.delete(userId);
-        console.log(
-          "[GlobalCallModal] Removed audio element for user:",
-          userId,
-        );
       }
     });
 
     return () => {
-      console.log("[GlobalCallModal] Cleaning up all audio elements");
-      remoteAudioRefs.current.forEach((audio, userId) => {
-        console.log(
-          "[GlobalCallModal] Pausing audio element for user:",
-          userId,
-        );
+      remoteAudioRefs.current.forEach((audio) => {
         audio.pause();
         audio.srcObject = null;
       });
@@ -526,20 +442,6 @@ export default function GlobalCallModal() {
               </Typography>
               <Typography variant="caption" color="rgba(255,255,255,0.7)">
                 {formatDuration(callDuration)}
-              </Typography>
-              {/* Debug info */}
-              <Typography
-                variant="caption"
-                sx={{
-                  display: "block",
-                  color: "rgba(255,255,255,0.5)",
-                  fontSize: 10,
-                }}
-              >
-                Mic: {isAudioEnabled ? "ON" : "OFF"} | Stream:{" "}
-                {localStream ? "✓" : "✗"} | Local audio:{" "}
-                {localStream?.getAudioTracks()[0]?.enabled ? "✓" : "✗"} |
-                Remote: {remoteStreams.length}
               </Typography>
             </Box>
           </Box>
@@ -987,35 +889,7 @@ export default function GlobalCallModal() {
             title={isAudioEnabled ? "Couper le micro" : "Activer le micro"}
           >
             <IconButton
-              onClick={() => {
-                console.log(
-                  "[GlobalCallModal] Microphone button clicked! Current state:",
-                  isAudioEnabled,
-                );
-                console.log(
-                  "[GlobalCallModal] Local stream exists:",
-                  !!localStream,
-                );
-                if (localStream) {
-                  console.log(
-                    "[GlobalCallModal] Audio tracks before toggle:",
-                    localStream
-                      .getAudioTracks()
-                      .map((t) => ({ enabled: t.enabled, id: t.id })),
-                  );
-                }
-                toggleAudio();
-                setTimeout(() => {
-                  if (localStream) {
-                    console.log(
-                      "[GlobalCallModal] Audio tracks after toggle:",
-                      localStream
-                        .getAudioTracks()
-                        .map((t) => ({ enabled: t.enabled, id: t.id })),
-                    );
-                  }
-                }, 100);
-              }}
+              onClick={toggleAudio}
               sx={{
                 width: 56,
                 height: 56,
@@ -1081,14 +955,6 @@ export default function GlobalCallModal() {
             </IconButton>
           </Tooltip>
         </Box>
-
-        {/* Audio Debug Monitor */}
-        <AudioDebugger
-          localStream={localStream}
-          remoteStreams={remoteStreams}
-          isAudioEnabled={isAudioEnabled}
-          isVideoEnabled={isVideoEnabled}
-        />
       </Box>
     );
   }

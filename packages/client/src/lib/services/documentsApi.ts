@@ -14,6 +14,8 @@ export interface DocumentItem {
   status: string;
   createdAt: string;
   updatedAt: string;
+  foldersCount?: number;
+  filesCount?: number;
   owner?: { id: number; username?: string; email?: string };
 }
 
@@ -70,6 +72,7 @@ export interface CreateFolderResponse {
 export interface UpdateDocumentInput {
   name?: string;
   parentId?: number | null;
+  category?: string;
 }
 
 export const documentsApi = createApi({
@@ -89,6 +92,8 @@ export const documentsApi = createApi({
         category?: string;
         startDate?: string;
         endDate?: string;
+        /** API query `type`: folders only or files only */
+        itemType?: "folder" | "file";
       }
     >({
       query: ({
@@ -101,6 +106,7 @@ export const documentsApi = createApi({
         category,
         startDate,
         endDate,
+        itemType,
       } = {}) => {
         const params = new URLSearchParams();
         if (clientId != null) params.append("clientId", String(clientId));
@@ -113,29 +119,25 @@ export const documentsApi = createApi({
           params.append("category", category.trim());
         if (startDate) params.append("startDate", startDate);
         if (endDate) params.append("endDate", endDate);
+        if (itemType) params.append("type", itemType);
         return {
           url: `/documents/client?${params.toString()}`,
           method: "GET",
         };
       },
-      providesTags: (result, _err, arg) =>
-        result
+      providesTags: (result, _err, arg) => {
+        const listScope = arg.itemType ?? "all";
+        const listId = `list-${arg.clientId ?? "me"}-${arg.parentId ?? "root"}-${listScope}`;
+        return result
           ? [
               ...result.data.map((d) => ({
                 type: "Documents" as const,
                 id: d.id,
               })),
-              {
-                type: "Documents",
-                id: `list-${arg.clientId ?? "me"}-${arg.parentId ?? "root"}`,
-              },
+              { type: "Documents", id: listId },
             ]
-          : [
-              {
-                type: "Documents",
-                id: `list-${arg.clientId ?? "me"}-${arg.parentId ?? "root"}`,
-              },
-            ],
+          : [{ type: "Documents", id: listId }];
+      },
     }),
 
     getArchivedDocuments: builder.query<
@@ -259,9 +261,11 @@ export const documentsApi = createApi({
         parentId?: number | null;
         category?: string;
         clientCompanyId?: number | null;
+        /** Nom affiché du document (champ `name` côté API) */
+        name?: string | null;
       }
     >({
-      query: ({ file, parentId, category, clientCompanyId }) => {
+      query: ({ file, parentId, category, clientCompanyId, name }) => {
         const formData = new FormData();
         formData.append("file", file);
         if (parentId != null) formData.append("parentId", String(parentId));
@@ -269,6 +273,8 @@ export const documentsApi = createApi({
         if (clientCompanyId != null) {
           formData.append("clientCompanyId", String(clientCompanyId));
         }
+        const trimmedName = name?.trim();
+        if (trimmedName) formData.append("name", trimmedName);
         return {
           url: "/documents/upload",
           method: "POST",

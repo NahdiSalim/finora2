@@ -60,12 +60,10 @@ export default function ArchiveView() {
   const totalCount = data?.pagination?.total ?? 0;
 
   const handleRestore = (clientId: string | number, clientName: string) => {
-    console.log(`Restore client: ${clientName} (${clientId})`);
     // TODO: dispatch restore action / call API
   };
 
   const handleDelete = (clientId: string | number, clientName: string) => {
-    console.log(`Permanently delete client: ${clientName} (${clientId})`);
     // TODO: dispatch delete action / call API
   };
 

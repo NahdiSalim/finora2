@@ -94,8 +94,8 @@ export default function GlobalCallModal() {
         await audio.play().catch(() => {});
         audioElementRef.current = audio;
       }
-    } catch (error) {
-      console.error("[GlobalCallModal] Error playing ringtone:", error);
+    } catch {
+      /* ignored */
     }
   };
 
@@ -137,12 +137,8 @@ export default function GlobalCallModal() {
 
       if (rs.stream) {
         audioElement.srcObject = rs.stream;
-        audioElement.play().catch((err) => {
-          console.error(
-            "[GlobalCallModal] Error playing remote audio for user:",
-            rs.userId,
-            err,
-          );
+        audioElement.play().catch(() => {
+          /* ignored */
         });
       }
     });

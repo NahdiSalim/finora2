@@ -18,3 +18,9 @@ export const ROLE_TYPE_CODES = {
 export const isSuperAdminRole = (roleCode?: string | null): boolean => {
   return roleCode === ROLE_CODES.SUPER_ADMIN;
 };
+
+/** Aligné sur le serveur : GET /accountant/profile/me exige RoleCode.ACCOUNTANT uniquement. */
+export function canFetchMyAccountantProfile(roleCode?: string | null): boolean {
+  const code = roleCode?.toUpperCase() ?? "";
+  return code === ROLE_CODES.ACCOUNTANT || code === "COMPTABLE";
+}

@@ -112,8 +112,6 @@ export function useNavigation() {
           icon: config.icon,
           children,
         });
-      } else {
-        console.warn(`No navigation config found for path: ${path}`);
       }
     });
 

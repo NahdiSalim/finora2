@@ -50,13 +50,12 @@ function FolderTreeItem({
       parentId: folderId,
       limit: 500,
       status: "active",
+      itemType: "folder",
     },
     { skip: !isExpanded },
   );
   const childFolders =
-    data?.data
-      ?.filter((d) => d.isFolder)
-      .map((d) => ({ id: d.id, name: d.name })) ?? [];
+    data?.data?.map((d) => ({ id: d.id, name: d.name })) ?? [];
 
   return (
     <>
@@ -153,13 +152,12 @@ export function ImportDocumentModal({
       parentId: undefined,
       limit: 500,
       status: "active",
+      itemType: "folder",
     },
     { skip: !open },
   );
   const rootFolders =
-    data?.data
-      ?.filter((d) => d.isFolder)
-      .map((d) => ({ id: d.id, name: d.name })) ?? [];
+    data?.data?.map((d) => ({ id: d.id, name: d.name })) ?? [];
 
   useEffect(() => {
     if (!open) {

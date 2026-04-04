@@ -77,6 +77,7 @@ export const authApi = createApi({
         headers: {
           Authorization: "",
         },
+        skipToast: true,
       }),
     }),
   }),

@@ -58,8 +58,6 @@ export function useMediaStream(callType: CallType | null) {
         setAudioEnabled(true);
         setVideoEnabled(typeToUse === "video");
       } catch (err: any) {
-        console.error("[useMediaStream] Error getting media:", err);
-
         let errorMessage =
           "Erreur lors de l'accès aux périphériques multimédias.";
 

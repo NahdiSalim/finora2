@@ -1,6 +1,9 @@
 import { createApi } from "@reduxjs/toolkit/query/react";
 import { baseQueryWithReauth } from "./baseQueryWithReauth";
-import { io } from "socket.io-client";
+import {
+  acquireNotificationsSocket,
+  releaseNotificationsSocket,
+} from "../notificationsSocket";
 
 export interface NotificationDto {
   id: number;
@@ -49,43 +52,19 @@ export const notificationsApi = createApi({
       ) {
         await cacheDataLoaded;
 
-        const token = localStorage.getItem("token");
-        const apiUrl = import.meta.env.VITE_API_URL ?? "";
-        if (!token || !apiUrl) return;
+        if (!localStorage.getItem("token")) {
+          await cacheEntryRemoved;
+          return;
+        }
 
-        const origin = new URL(apiUrl).origin;
-        const socket = io(`${origin}/notifications`, {
-          auth: { token },
-          transports: ["websocket", "polling"],
-          reconnection: true,
-        });
+        const socket = acquireNotificationsSocket();
 
         const onNotification = (payload: any) => {
           if (!payload || payload.id == null) return;
-          updateCachedData((draft) => {
-            const exists = draft.notifications.some(
-              (n) => String(n.id) === String(payload.id),
-            );
-            if (exists) return;
-            draft.notifications.unshift({
-              id: Number(payload.id),
-              recipientId: Number(payload.recipientId ?? 0),
-              type: String(payload.type ?? "notification"),
-              title: String(payload.title ?? "Notification"),
-              message: String(payload.message ?? ""),
-              data: payload.data ?? null,
-              read: false,
-              createdAt: String(payload.createdAt ?? new Date().toISOString()),
-              updatedAt: payload.updatedAt
-                ? String(payload.updatedAt)
-                : undefined,
-            });
-            draft.total += 1;
-            draft.unreadCount += 1;
-          });
-
+          // Refetch list from API so UI always matches DB (avoids stale RTK draft edge cases).
           dispatch(
             notificationsApi.util.invalidateTags([
+              { type: "Notifications", id: "LIST" },
               { type: "Notifications", id: "UNREAD_COUNT" },
             ]),
           );
@@ -94,6 +73,7 @@ export const notificationsApi = createApi({
         const onNotificationUpdate = (payload: any) => {
           if (!payload) return;
           updateCachedData((draft) => {
+            if (!draft?.notifications) return;
             if (payload.allRead) {
               draft.notifications = draft.notifications.map((n) => ({
                 ...n,
@@ -114,16 +94,13 @@ export const notificationsApi = createApi({
           });
         };
 
-        socket.on("connect", () => {
-          socket.emit("subscribe");
-        });
         socket.on("notification", onNotification);
         socket.on("notificationUpdate", onNotificationUpdate);
 
         await cacheEntryRemoved;
         socket.off("notification", onNotification);
         socket.off("notificationUpdate", onNotificationUpdate);
-        socket.disconnect();
+        releaseNotificationsSocket();
       },
     }),
 

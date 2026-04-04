@@ -9,17 +9,11 @@ export function useSocketTest(): void {
   useEffect(() => {
     const socket = getSocket();
 
-    const onConnect = () => {
-      console.log("[socket-test] ✅ connected — id:", socket.id);
-    };
+    const onConnect = () => {};
 
-    const onDisconnect = (reason: string) => {
-      console.log("[socket-test] ❌ disconnected — reason:", reason);
-    };
+    const onDisconnect = (_reason: string) => {};
 
-    const onConnectError = (err: Error) => {
-      console.error("[socket-test] 🔴 connect_error —", err.message);
-    };
+    const onConnectError = (_err: Error) => {};
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);

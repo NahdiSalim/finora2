@@ -1,9 +1,16 @@
-import type { AlertProps } from '@mui/material/Alert';
-import type { ReactNode } from 'react';
+import type { AlertProps } from "@mui/material/Alert";
+import type { ReactNode } from "react";
 
-import { createContext, useContext, useState, useEffect } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 
-import { CustomSnackbar } from 'src/components/common/snackbar';
+import { CustomSnackbar } from "src/components/common/snackbar";
+import { setApiToastHandler } from "src/lib/services/apiToastBridge";
 
 type ActionButton = {
   label: string;
@@ -11,11 +18,15 @@ type ActionButton = {
 };
 
 type AlertContextType = {
-  showAlert: (message: string, severity?: AlertProps['severity'], title?: string) => void;
+  showAlert: (
+    message: string,
+    severity?: AlertProps["severity"],
+    title?: string,
+  ) => void;
   showConfirm: (
     message: string,
     onConfirm: () => void | Promise<void>,
-    onCancel?: () => void
+    onCancel?: () => void,
   ) => void;
   hideAlert: () => void;
 };
@@ -24,30 +35,41 @@ const AlertContext = createContext<AlertContextType | undefined>(undefined);
 
 export function AlertProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [message, setMessage] = useState('');
-  const [severity, setSeverity] = useState<AlertProps['severity'] | 'default'>('info');
-  const [actionButtons, setActionButtons] = useState<ActionButton[] | undefined>(undefined);
+  const [message, setMessage] = useState("");
+  const [severity, setSeverity] = useState<AlertProps["severity"] | "default">(
+    "info",
+  );
+  const [actionButtons, setActionButtons] = useState<
+    ActionButton[] | undefined
+  >(undefined);
   const [autoHideDuration, setAutoHideDuration] = useState<number | null>(5000);
 
-  const showAlert = (msg: string, sev: AlertProps['severity'] = 'info') => {
-    setMessage(msg);
-    setSeverity(sev);
-    setActionButtons(undefined);
-    setAutoHideDuration(5000);
-    setOpen(true);
-  };
+  const hideAlert = useCallback(() => {
+    setOpen(false);
+  }, []);
+
+  const showAlert = useCallback(
+    (msg: string, sev: AlertProps["severity"] = "info") => {
+      setMessage(msg);
+      setSeverity(sev);
+      setActionButtons(undefined);
+      setAutoHideDuration(5000);
+      setOpen(true);
+    },
+    [],
+  );
 
   const showConfirm = (
     msg: string,
     onConfirm: () => void | Promise<void>,
-    onCancel?: () => void
+    onCancel?: () => void,
   ) => {
     setMessage(msg);
-    setSeverity('default');
+    setSeverity("default");
     setAutoHideDuration(null);
     setActionButtons([
       {
-        label: 'Oui',
+        label: "Oui",
         onClick: async () => {
           await onConfirm();
           setTimeout(() => {
@@ -56,7 +78,7 @@ export function AlertProvider({ children }: { children: ReactNode }) {
         },
       },
       {
-        label: 'Non',
+        label: "Non",
         onClick: () => {
           if (onCancel) onCancel();
           hideAlert();
@@ -66,9 +88,12 @@ export function AlertProvider({ children }: { children: ReactNode }) {
     setOpen(true);
   };
 
-  const hideAlert = () => {
-    setOpen(false);
-  };
+  useEffect(() => {
+    setApiToastHandler((toastMessage, toastSeverity) => {
+      showAlert(toastMessage, toastSeverity);
+    });
+    return () => setApiToastHandler(null);
+  }, [showAlert]);
 
   useEffect(() => {
     if (open && autoHideDuration !== null) {
@@ -91,7 +116,7 @@ export function AlertProvider({ children }: { children: ReactNode }) {
         autoHideDuration={autoHideDuration}
         onClose={hideAlert}
         actionButtons={actionButtons}
-        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
       />
     </AlertContext.Provider>
   );
@@ -100,7 +125,7 @@ export function AlertProvider({ children }: { children: ReactNode }) {
 export function useAlert() {
   const context = useContext(AlertContext);
   if (!context) {
-    throw new Error('useAlert must be used within AlertProvider');
+    throw new Error("useAlert must be used within AlertProvider");
   }
   return context;
 }

@@ -83,8 +83,7 @@ export default function UserFormRouter() {
           `User ${newStatus ? "activated" : "blocked"} successfully!`,
           "success",
         );
-      } catch (error) {
-        console.error("Error changing user status:", error);
+      } catch {
         showAlert("Error changing status", "error");
         setIsActive(!newStatus);
       }

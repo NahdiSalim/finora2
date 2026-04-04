@@ -191,6 +191,13 @@ export class DocumentController {
     description: 'Filter by end date (Format: YYYY-MM-DD)',
   })
   @ApiQuery({
+    name: 'type',
+    required: false,
+    type: String,
+    enum: ['folder', 'file'],
+    description: 'Filter by type: "folder" to get folders only, "file" to get files only',
+  })
+  @ApiQuery({
     name: 'status',
     required: false,
     type: String,
@@ -207,7 +214,8 @@ export class DocumentController {
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Query('status') status?: string
+    @Query('status') status?: string,
+    @Query('type') type?: 'folder' | 'file'
   ) {
     const userId = req.user!.id;
     const userCompanyId = req.user!.companyId;
@@ -262,7 +270,8 @@ export class DocumentController {
       endDateObj,
       status || 'active',
       search,
-      category
+      category,
+      type
     );
   }
 

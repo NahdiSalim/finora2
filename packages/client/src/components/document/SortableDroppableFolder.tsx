@@ -3,7 +3,6 @@ import { useDroppable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Folder } from "src/components/common/folder";
-import { useGetDocumentsQuery } from "src/lib/services/documentsApi";
 import type { FolderItem } from "../../types/document-details-types";
 
 /** Préfixe des droppables pour déposer un document dans un dossier (évite conflit avec sortable). */
@@ -88,32 +87,16 @@ function SortableDroppableFolderInner({
   );
 }
 
-/** Folder with child count (fetches count from API so "hasFiles" is correct). */
+/** Folder wrapper without extra per-folder API call. */
 export function FolderWithCount({
   folder,
   onOpen,
   onMenuAction,
-  clientCompanyId,
   menuOptions,
 }: SortableDroppableFolderProps) {
-  const { data } = useGetDocumentsQuery(
-    {
-      clientId: clientCompanyId,
-      parentId: folder.id,
-      limit: 500,
-      status: "active",
-    },
-    { skip: folder.id == null },
-  );
-  const fileCount = data?.data?.filter((d) => d.type !== "folder").length ?? 0;
-  const folderWithCount: FolderItem = {
-    ...folder,
-    fileCount,
-    state: fileCount > 0 ? "hasFiles" : "empty",
-  };
   return (
     <SortableDroppableFolderInner
-      folder={folderWithCount}
+      folder={folder}
       onOpen={onOpen}
       onMenuAction={onMenuAction}
       menuOptions={menuOptions}

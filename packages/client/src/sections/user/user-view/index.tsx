@@ -116,8 +116,7 @@ export default function UserView() {
 
         table.onSelectAllRows(false, []);
         showAlert("Users deleted successfully", "success");
-      } catch (error) {
-        console.error("Error deleting users:", error);
+      } catch {
         showAlert("Error deleting users", "error");
       }
     });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import {
   Box,
   Drawer,
@@ -47,8 +47,10 @@ import {
   useGetDocumentQuery,
   useGetBreadcrumbQuery,
   useGetDocumentsQuery,
+  useUpdateDocumentMutation,
 } from "src/lib/services/documentsApi";
 import { relationshipsApi } from "src/lib/services/relationshipsApi";
+import { useGetNotificationsQuery } from "src/lib/services/notificationsApi";
 import {
   useGetInvoiceMetadataQuery,
   useExtractInvoiceMutation,
@@ -80,6 +82,67 @@ function normalizeCategoryValue(v: string): string {
   return "autre";
 }
 
+function isInvoiceCategory(v: string): boolean {
+  const s = (v || "").trim().toLowerCase();
+  return s === "facture" || s === "invoice";
+}
+
+/** RTK/socket may expose `data` as object or JSON string — normalize for matching. */
+function parseNotificationPayloadData(raw: unknown): Record<string, unknown> {
+  if (!raw) return {};
+  if (typeof raw === "object") return raw as Record<string, unknown>;
+  if (typeof raw === "string") {
+    try {
+      const p = JSON.parse(raw) as unknown;
+      return p && typeof p === "object" ? (p as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function readIdFromPayload(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim()) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function isInvoiceExtractionSuccessNotification(n: {
+  type?: string;
+  title?: string;
+  message?: string;
+}): boolean {
+  const title = String(n.title ?? "").toLowerCase();
+  const message = String(n.message ?? "").toLowerCase();
+  if (title.includes("échou") || message.includes("échou")) return false;
+  return (
+    title.includes("extraction termin") ||
+    message.includes("terminée avec succès") ||
+    message.includes("extraction termin")
+  );
+}
+
+/** Dialogs must sit above `Drawer` (`modal + 10`). */
+const sxDialogAboveFileDrawer = {
+  sx: { zIndex: (t: { zIndex: { modal: number } }) => t.zIndex.modal + 100 },
+  slotProps: {
+    backdrop: {
+      sx: { zIndex: (t: { zIndex: { modal: number } }) => t.zIndex.modal + 99 },
+    },
+    paper: {
+      sx: {
+        zIndex: (t: { zIndex: { modal: number } }) => t.zIndex.modal + 100,
+        borderRadius: 3,
+        overflow: "hidden",
+      },
+    },
+  },
+} as const;
+
 // ─── Folder tree item (for destination picker) ───────────────────────────────
 
 function FolderTreeItem({
@@ -103,7 +166,13 @@ function FolderTreeItem({
 }) {
   const isExpanded = expandedIds.has(folderId);
   const { data } = useGetDocumentsQuery(
-    { clientId, parentId: folderId, limit: 500, status: "active" },
+    {
+      clientId,
+      parentId: folderId,
+      limit: 500,
+      status: "active",
+      itemType: "folder",
+    },
     { skip: !isExpanded },
   );
   const childFolders =
@@ -334,13 +403,13 @@ function ProcessingLevelChips({
 interface DocumentDetailsPanelProps {
   file: FileItem;
   documentId: number | null;
-  onOpenEditModal: () => void;
+  onCloseDrawer: () => void;
 }
 
 function DocumentDetailsPanel({
   file,
   documentId,
-  onOpenEditModal,
+  onCloseDrawer,
 }: DocumentDetailsPanelProps) {
   const theme = useTheme();
   const dispatch = useAppDispatch();
@@ -362,6 +431,10 @@ function DocumentDetailsPanel({
     isFetching: isFetchingMetadata,
     refetch: refetchMetadata,
   } = useGetInvoiceMetadataQuery(documentId!, { skip: !hasDocumentId });
+  const { data: notificationsData } = useGetNotificationsQuery(
+    { limit: 50, offset: 0 },
+    { refetchOnFocus: false, refetchOnReconnect: false },
+  );
 
   const [extractInvoice, { isLoading: isExtracting }] =
     useExtractInvoiceMutation();
@@ -369,10 +442,48 @@ function DocumentDetailsPanel({
     useSaveInvoiceMetadataMutation();
   const [synchronizeDoc, { isLoading: isSyncing }] =
     useSynchronizeDocumentMutation();
+  const [updateDocument, { isLoading: isUpdatingDocument }] =
+    useUpdateDocumentMutation();
 
   const document = docResponse?.data;
+  const documentRecord =
+    (document as unknown as Record<string, unknown> | undefined) ?? {};
+  const rawDocumentCategory = String(
+    documentRecord.category ??
+      documentRecord.documentCategory ??
+      documentRecord.documentType ??
+      documentRecord.type ??
+      "",
+  );
+  const normalizedDocumentCategory =
+    normalizeCategoryValue(rawDocumentCategory);
+  const isInvoiceDocument = isInvoiceCategory(normalizedDocumentCategory);
+  const categoryLabel =
+    DOCUMENT_CATEGORIES.find((c) => c.value === normalizedDocumentCategory)
+      ?.label ??
+    rawDocumentCategory ??
+    "Autre";
   const processingStatus =
     (document?.processingStatus as ProcessingStatus | undefined) || "pending";
+  /** GET /invoices/metadata exposes extractionStatus on `data` even when document RTK cache is stale. */
+  const invoiceListExtractionStatus = useMemo(() => {
+    const raw = metadataResponse?.data as Record<string, unknown> | undefined;
+    if (!raw || typeof raw !== "object") return "";
+    return String(raw.extractionStatus ?? "").toLowerCase();
+  }, [metadataResponse]);
+
+  const invoiceMetadataSaysExtractionDone =
+    isInvoiceDocument &&
+    (invoiceListExtractionStatus === "done" ||
+      invoiceListExtractionStatus === "failed");
+
+  const workflowProcessingStatus: ProcessingStatus =
+    isInvoiceDocument &&
+    processingStatus === "pending" &&
+    invoiceMetadataSaysExtractionDone
+      ? "traite"
+      : processingStatus;
+
   const breadcrumb = breadcrumbResponse?.data ?? [];
   const invoiceMetadata = useMemo(() => {
     if (!hasMetadata || !metadataResponse?.data) return null;
@@ -530,6 +641,8 @@ function DocumentDetailsPanel({
   >([]);
   const [forceViewMode, setForceViewMode] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isBasicEditing, setIsBasicEditing] = useState(false);
+  const [basicFileName, setBasicFileName] = useState(file.name || "");
   const [categoryValue, setCategoryValue] = useState("");
   const [destinationPath, setDestinationPath] = useState("");
   const [vendorValue, setVendorValue] = useState("");
@@ -538,6 +651,10 @@ function DocumentDetailsPanel({
   const [destinationDialogOpen, setDestinationDialogOpen] = useState(false);
   const [parentId, setParentId] = useState<number | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const hasRunInitialPendingCheckRef = useRef(false);
+  const hasHandledPendingNotificationRef = useRef(false);
+  /** Baseline notification list length while this invoice is pending — detect only increases (new push). */
+  const pendingNotifBaselineLenRef = useRef<number | null>(null);
 
   // Initialize editable table rows right after extraction
   useEffect(() => {
@@ -560,6 +677,7 @@ function DocumentDetailsPanel({
   }, [breadcrumb, extractedObject]);
 
   useEffect(() => {
+    if (!isInvoiceDocument) return;
     if (isEditing) return;
     const overrideCategory =
       extractedObject?.ui_overrides?.category &&
@@ -572,9 +690,10 @@ function DocumentDetailsPanel({
         : "";
     const normalized = normalizeCategoryValue(overrideCategory || fallbackType);
     setCategoryValue(normalized);
-  }, [extractedObject, isEditing]);
+  }, [extractedObject, isEditing, isInvoiceDocument]);
 
   useEffect(() => {
+    if (!isInvoiceDocument) return;
     if (isEditing) return;
     const overrides = extractedObject?.ui_overrides ?? {};
     setVendorValue(
@@ -598,6 +717,22 @@ function DocumentDetailsPanel({
     derivedClient,
     derivedTotals.tvaPercent,
     isEditing,
+    isInvoiceDocument,
+  ]);
+
+  useEffect(() => {
+    if (!document) return;
+    setBasicFileName(document.name || file.name || "");
+    if (!isInvoiceDocument) {
+      setCategoryValue(normalizedDocumentCategory || "autre");
+    }
+    setParentId(document.parentId ?? null);
+  }, [
+    document,
+    file.name,
+    isInvoiceDocument,
+    normalizedDocumentCategory,
+    setBasicFileName,
   ]);
 
   const { data: rootFoldersResponse } = useGetDocumentsQuery(
@@ -606,13 +741,12 @@ function DocumentDetailsPanel({
       parentId: undefined,
       limit: 500,
       status: "active",
+      itemType: "folder",
     },
     { skip: !destinationDialogOpen },
   );
   const rootFolders =
-    rootFoldersResponse?.data
-      ?.filter((d) => d.isFolder)
-      .map((d) => ({ id: d.id, name: d.name })) ?? [];
+    rootFoldersResponse?.data?.map((d) => ({ id: d.id, name: d.name })) ?? [];
 
   const handleToggleExpand = (id: number) => {
     setExpandedIds((prev) => {
@@ -829,7 +963,7 @@ function DocumentDetailsPanel({
 
   const breadcrumbText = breadcrumb.map((item) => item.name).join(" / ");
 
-  const loading = isExtracting || isSaving || isSyncing;
+  const loading = isExtracting || isSaving || isSyncing || isUpdatingDocument;
   const hasPersistedMetadataData = useMemo(() => {
     if (!invoiceMetadata || typeof invoiceMetadata !== "object") return false;
     if (
@@ -851,42 +985,360 @@ function DocumentDetailsPanel({
   const isViewMode =
     !isEditing &&
     (forceViewMode ||
-      processingStatus === "enregistre" ||
-      processingStatus === "synchronise");
+      workflowProcessingStatus === "enregistre" ||
+      workflowProcessingStatus === "synchronise");
 
-  // Poll document status when extraction is running server-side (upload-time)
   useEffect(() => {
-    if (!hasDocumentId) return undefined;
+    hasRunInitialPendingCheckRef.current = false;
+    hasHandledPendingNotificationRef.current = false;
+    pendingNotifBaselineLenRef.current = null;
+  }, [documentId]);
+
+  // Listen extraction completion via realtime notifications (parse `data` string or object).
+  useEffect(() => {
+    if (!hasDocumentId || !isInvoiceDocument) return undefined;
     if (processingStatus !== "pending") return undefined;
-    const id = window.setInterval(() => {
-      void refetchDocument();
-    }, 2000);
-    return () => window.clearInterval(id);
-  }, [hasDocumentId, processingStatus, refetchDocument]);
-
-  // After status changes from pending, wait until metadata is persisted
-  // before showing saved information to avoid empty inputs flash.
-  useEffect(() => {
-    if (!hasDocumentId) return undefined;
-    if (!["traite", "enregistre", "synchronise"].includes(processingStatus))
-      return undefined;
-    if (hasPersistedMetadataData) return undefined;
-
-    const id = window.setInterval(() => {
-      void refetchMetadata();
-      void refetchDocument();
-    }, 1500);
-    return () => window.clearInterval(id);
+    if (hasHandledPendingNotificationRef.current) return undefined;
+    const list = notificationsData?.notifications ?? [];
+    const docName = String(document?.name || file.name || "").toLowerCase();
+    const match = list.some((n) => {
+      if (!isInvoiceExtractionSuccessNotification(n)) return false;
+      const nData = parseNotificationPayloadData(n.data);
+      const nDocumentId = readIdFromPayload(nData.documentId);
+      const sameId = nDocumentId != null && nDocumentId === documentId;
+      const msg = String(n.message ?? "").toLowerCase();
+      const looseNameMatch = docName.length > 1 && msg.includes(docName);
+      return sameId || looseNameMatch;
+    });
+    if (!match) return undefined;
+    hasHandledPendingNotificationRef.current = true;
+    dispatch(
+      documentsApi.util.invalidateTags([{ type: "Documents", id: documentId }]),
+    );
+    void refetchDocument();
+    void refetchMetadata();
+    return undefined;
   }, [
     hasDocumentId,
+    isInvoiceDocument,
     processingStatus,
-    hasPersistedMetadataData,
-    refetchMetadata,
+    notificationsData,
+    documentId,
+    document?.name,
+    file.name,
     refetchDocument,
+    refetchMetadata,
+    dispatch,
   ]);
 
-  // État "Extraction en cours"
-  if (processingStatus === "pending" || isExtracting) {
+  // New notification row while still "pending" → refetch document + metadata (without refetch on first paint).
+  useEffect(() => {
+    if (
+      !hasDocumentId ||
+      !isInvoiceDocument ||
+      processingStatus !== "pending"
+    ) {
+      pendingNotifBaselineLenRef.current = null;
+      return;
+    }
+    const len = notificationsData?.notifications?.length ?? 0;
+    if (pendingNotifBaselineLenRef.current === null) {
+      pendingNotifBaselineLenRef.current = len;
+      return;
+    }
+    if (len > pendingNotifBaselineLenRef.current) {
+      pendingNotifBaselineLenRef.current = len;
+      if (documentId != null) {
+        dispatch(
+          documentsApi.util.invalidateTags([
+            { type: "Documents", id: documentId },
+          ]),
+        );
+      }
+      void refetchDocument();
+      void refetchMetadata();
+    }
+  }, [
+    hasDocumentId,
+    isInvoiceDocument,
+    processingStatus,
+    notificationsData?.notifications?.length,
+    refetchDocument,
+    refetchMetadata,
+    dispatch,
+  ]);
+
+  // Metadata API reflects document.extractionStatus before RTK document cache updates — resync.
+  useEffect(() => {
+    if (!hasDocumentId || !isInvoiceDocument) return;
+    if (processingStatus !== "pending") return;
+    const raw = metadataResponse?.data;
+    if (!raw || typeof raw !== "object") return;
+    const ext = String(
+      (raw as Record<string, unknown>).extractionStatus ?? "",
+    ).toLowerCase();
+    if (ext === "done" || ext === "failed") {
+      dispatch(
+        documentsApi.util.invalidateTags([
+          { type: "Documents", id: documentId! },
+        ]),
+      );
+      void refetchDocument();
+    }
+  }, [
+    hasDocumentId,
+    isInvoiceDocument,
+    processingStatus,
+    metadataResponse,
+    documentId,
+    refetchDocument,
+    dispatch,
+  ]);
+
+  // One-shot verification on first pending render only.
+  useEffect(() => {
+    if (!hasDocumentId || !isInvoiceDocument) return undefined;
+    if (processingStatus !== "pending") return undefined;
+    if (hasRunInitialPendingCheckRef.current) return undefined;
+    hasRunInitialPendingCheckRef.current = true;
+    void refetchDocument();
+    void refetchMetadata();
+    return undefined;
+  }, [
+    hasDocumentId,
+    isInvoiceDocument,
+    processingStatus,
+    refetchDocument,
+    refetchMetadata,
+  ]);
+
+  // No repeating polling: UI advances from socket notification + one-shot check.
+
+  const handleSaveBasicDetails = async () => {
+    if (!documentId) return;
+    try {
+      await updateDocument({
+        id: documentId,
+        dto: {
+          name: basicFileName,
+          parentId,
+          category: categoryValue || "autre",
+        },
+      }).unwrap();
+      await refetchDocument();
+      await refetchBreadcrumb();
+      setIsBasicEditing(false);
+    } catch {
+      // handled by API layer
+    }
+  };
+
+  // Non-facture: simple details only.
+  if (!isInvoiceDocument) {
+    return (
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <CustomInput
+          fullWidth
+          size="small"
+          label="Nom du document"
+          value={basicFileName}
+          onChange={(e) => setBasicFileName(e.target.value)}
+          InputProps={{ readOnly: !isBasicEditing }}
+        />
+        {isBasicEditing ? (
+          <CustomSelect
+            label="Catégorie"
+            value={categoryValue || "autre"}
+            onChange={(e) =>
+              setCategoryValue(String(e.target.value ?? "autre"))
+            }
+            displayEmpty
+          >
+            {DOCUMENT_CATEGORIES.map((c) => (
+              <MenuItem key={c.value} value={c.value}>
+                {c.label}
+              </MenuItem>
+            ))}
+          </CustomSelect>
+        ) : (
+          <CustomInput
+            fullWidth
+            size="small"
+            label="Catégorie"
+            value={categoryLabel}
+            InputProps={{ readOnly: true }}
+          />
+        )}
+        <CustomInput
+          fullWidth
+          size="small"
+          label="Emplacement"
+          value={destinationPath || breadcrumbText}
+          onClick={() => isBasicEditing && setDestinationDialogOpen(true)}
+          InputProps={{ readOnly: true }}
+        />
+        <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
+          {!isBasicEditing ? (
+            <>
+              <CustomButton
+                variant="outlined"
+                onClick={() => setIsBasicEditing(true)}
+              >
+                Modifier
+              </CustomButton>
+              <CustomButton variant="contained" onClick={onCloseDrawer}>
+                Fermer
+              </CustomButton>
+            </>
+          ) : (
+            <>
+              <CustomButton
+                variant="outlined"
+                onClick={() => {
+                  setIsBasicEditing(false);
+                  setBasicFileName(document?.name || file.name || "");
+                  setCategoryValue(normalizedDocumentCategory || "autre");
+                  setParentId(document?.parentId ?? null);
+                }}
+              >
+                Annuler
+              </CustomButton>
+              <CustomButton
+                variant="contained"
+                onClick={handleSaveBasicDetails}
+                disabled={isUpdatingDocument}
+              >
+                Enregistrer
+              </CustomButton>
+            </>
+          )}
+        </Box>
+        <Dialog
+          open={destinationDialogOpen}
+          onClose={() => setDestinationDialogOpen(false)}
+          maxWidth="sm"
+          fullWidth
+          {...sxDialogAboveFileDrawer}
+        >
+          <DialogTitle
+            sx={{
+              pb: 1.5,
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+            }}
+          >
+            <Box
+              sx={{
+                width: 28,
+                height: 28,
+                borderRadius: 1.5,
+                bgcolor: alpha(theme.palette.primary.main, 0.08),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <FolderOpen size={16} color={theme.palette.primary.main} />
+            </Box>
+            <Typography variant="subtitle1" fontWeight={600}>
+              Choisir la destination du document
+            </Typography>
+          </DialogTitle>
+
+          <DialogContent dividers sx={{ pt: 2 }}>
+            <CustomInput
+              fullWidth
+              size="small"
+              label="Chemin"
+              placeholder="Ex: Banque > QNB > Factures"
+              value={destinationPath}
+              onChange={(e) => setDestinationPath(e.target.value)}
+              sx={{ mb: 2 }}
+            />
+            <Box
+              sx={{
+                border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
+                borderRadius: 2,
+                maxHeight: 240,
+                overflow: "auto",
+              }}
+            >
+              <Box
+                onClick={() => setParentId(null)}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                  px: 2,
+                  py: 1.25,
+                  cursor: "pointer",
+                  bgcolor:
+                    parentId === null
+                      ? alpha(theme.palette.primary.main, 0.08)
+                      : "transparent",
+                  "&:hover": {
+                    bgcolor: alpha(theme.palette.action.hover, 0.8),
+                  },
+                  transition: "background-color 0.15s ease",
+                  borderBottom: `1px solid ${alpha(theme.palette.divider, 0.4)}`,
+                }}
+              >
+                <ChevronRight size={18} color="transparent" />
+                <Folder size={16} color={theme.palette.text.secondary} />
+                <Typography
+                  variant="body2"
+                  fontWeight={parentId === null ? 600 : 400}
+                >
+                  Racine
+                </Typography>
+              </Box>
+              {rootFolders.map((folder) => (
+                <FolderTreeItem
+                  key={folder.id}
+                  folderId={folder.id}
+                  folderName={folder.name}
+                  depth={0}
+                  expandedIds={expandedIds}
+                  onToggleExpand={handleToggleExpand}
+                  selectedId={parentId}
+                  onSelect={setParentId}
+                  clientId={clientCompanyIdForDocs}
+                />
+              ))}
+            </Box>
+          </DialogContent>
+
+          <DialogActions sx={{ px: 2.5, py: 1.75, gap: 1 }}>
+            <CustomButton
+              variant="outlined"
+              onClick={() => setDestinationDialogOpen(false)}
+            >
+              Annuler
+            </CustomButton>
+            <CustomButton
+              variant="contained"
+              onClick={() => {
+                if (selectedDestinationPath)
+                  setDestinationPath(selectedDestinationPath);
+                setDestinationDialogOpen(false);
+              }}
+            >
+              Valider
+            </CustomButton>
+          </DialogActions>
+        </Dialog>
+      </Box>
+    );
+  }
+
+  // Facture: extraction workflow and processing states (metadata can show done before document refetch)
+  const showInvoiceExtractionLottie =
+    isExtracting ||
+    (processingStatus === "pending" && !invoiceMetadataSaysExtractionDone);
+
+  if (showInvoiceExtractionLottie) {
     return (
       <Box sx={{ py: 4, px: 2, textAlign: "center" }}>
         <Box
@@ -917,7 +1369,9 @@ function DocumentDetailsPanel({
   }
 
   if (
-    ["traite", "enregistre", "synchronise"].includes(processingStatus) &&
+    ["traite", "enregistre", "synchronise"].includes(
+      workflowProcessingStatus,
+    ) &&
     !hasPersistedMetadataData
   ) {
     return (
@@ -1055,7 +1509,7 @@ function DocumentDetailsPanel({
                 Catégorie
               </Typography>
               <Typography variant="body2" fontWeight={500}>
-                Facture
+                {categoryLabel}
               </Typography>
             </Box>
           </Box>
@@ -1077,268 +1531,29 @@ function DocumentDetailsPanel({
             >
               Niveau de traitement
             </Typography>
-            <ProcessingLevelChips status={processingStatus} />
+            <ProcessingLevelChips status={workflowProcessingStatus} />
           </Box>
           <Divider />
         </Box>
       )}
 
       {/* ── Main form (shown after successful extraction) ── */}
-      {["traite", "enregistre", "synchronise"].includes(processingStatus) && (
-        <>
-          {/* ── Section: Informations de base ── */}
-          <Box>
-            {/* Section header */}
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-                mb: 2,
-                pb: 1.25,
-                borderBottom: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
-              }}
-            >
-              <Box
-                sx={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 1.5,
-                  background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.15)}, ${alpha(theme.palette.primary.main, 0.05)})`,
-                  border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <FileText size={15} color={theme.palette.primary.main} />
-              </Box>
-              <Typography
-                variant="caption"
-                sx={{
-                  fontWeight: 650,
-                  letterSpacing: "-0.01em",
-                  lineHeight: 1.2,
-                }}
-              >
-                Informations de base
-              </Typography>
-            </Box>
-
-            <Grid container spacing={1.5}>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <CustomInput
-                  fullWidth
-                  size="small"
-                  label="Numéro de facture"
-                  value={derivedInvoiceNumber}
-                  InputProps={{ readOnly: true }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <CustomInput
-                  fullWidth
-                  size="small"
-                  label="Date de facture"
-                  placeholder="jj/mm/aaaa"
-                  value={derivedInvoiceDate}
-                  InputProps={{ readOnly: true }}
-                />
-              </Grid>
-              {isEditing && (
-                <>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <CustomSelect
-                      label="Catégorie"
-                      value={categoryValue}
-                      onChange={(e) =>
-                        setCategoryValue(String(e.target.value ?? ""))
-                      }
-                      displayEmpty
-                      disabled={isViewMode}
-                      MenuProps={{
-                        disablePortal: true,
-                        disableScrollLock: true,
-                      }}
-                      renderValue={(v) =>
-                        typeof v === "string" && v
-                          ? (DOCUMENT_CATEGORIES.find((c) => c.value === v)
-                              ?.label ?? "")
-                          : "Sélectionnez une catégorie"
-                      }
-                    >
-                      <MenuItem value="">
-                        <em>Sélectionnez une catégorie</em>
-                      </MenuItem>
-                      {DOCUMENT_CATEGORIES.map((c) => (
-                        <MenuItem key={c.value} value={c.value}>
-                          {c.label}
-                        </MenuItem>
-                      ))}
-                    </CustomSelect>
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <CustomInput
-                      fullWidth
-                      size="small"
-                      label="Chemin de destination"
-                      placeholder="Choisir la destination"
-                      value={destinationPath}
-                      onClick={() =>
-                        !isViewMode && setDestinationDialogOpen(true)
-                      }
-                      InputProps={{ readOnly: true }}
-                      disabled={isViewMode}
-                    />
-                  </Grid>
-                </>
-              )}
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <CustomInput
-                  fullWidth
-                  size="small"
-                  label="Date de livraison"
-                  placeholder="jj/mm/aaaa"
-                  InputProps={{ readOnly: true }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <CustomInput
-                  fullWidth
-                  size="small"
-                  label="Total de la facture"
-                  value={financialTotals.ttc || "0.00"}
-                  InputProps={{ readOnly: true }}
-                />
-              </Grid>
-            </Grid>
-          </Box>
-
-          {/* ── Section: Détails financiers ── */}
-          <Box>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-                mb: 2,
-                pb: 1.25,
-                borderBottom: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
-              }}
-            >
-              <Box
-                sx={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 1.5,
-                  background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.15)}, ${alpha(theme.palette.primary.main, 0.05)})`,
-                  border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <Calculator size={15} color={theme.palette.primary.main} />
-              </Box>
-              <Typography
-                variant="caption"
-                sx={{
-                  fontWeight: 650,
-                  letterSpacing: "-0.01em",
-                  lineHeight: 1.2,
-                }}
-              >
-                Détails financiers
-              </Typography>
-            </Box>
-
-            <Grid container spacing={1.5}>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <CustomInput
-                  fullWidth
-                  size="small"
-                  label="Total HT"
-                  value={financialTotals.ht || "0.00"}
-                  InputProps={{ readOnly: true }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <CustomInput
-                  fullWidth
-                  size="small"
-                  label="Total TVA"
-                  value={financialTotals.tva || "0.00"}
-                  InputProps={{ readOnly: true }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <CustomInput
-                  fullWidth
-                  size="small"
-                  label="Total TTC"
-                  value={financialTotals.ttc || "0.00"}
-                  InputProps={{ readOnly: true }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <CustomInput
-                  fullWidth
-                  size="small"
-                  label="TVA (%)"
-                  value={tvaPercentValue}
-                  onChange={(e) => setTvaPercentValue(e.target.value)}
-                  disabled={isViewMode}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <CustomInput
-                  fullWidth
-                  size="small"
-                  label="Devise"
-                  value={derivedCurrency}
-                  InputProps={{ readOnly: true }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <CustomInput
-                  fullWidth
-                  size="small"
-                  label="Fournisseur"
-                  placeholder="Nom du fournisseur"
-                  value={vendorValue}
-                  onChange={(e) => setVendorValue(e.target.value)}
-                  disabled={isViewMode}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <CustomInput
-                  fullWidth
-                  size="small"
-                  label="Client"
-                  placeholder="Nom du client"
-                  value={clientValue}
-                  onChange={(e) => setClientValue(e.target.value)}
-                  disabled={isViewMode}
-                />
-              </Grid>
-            </Grid>
-          </Box>
-
-          {/* ── Section: Liste des articles ── */}
-          <Box>
+      {isInvoiceDocument &&
+        ["traite", "enregistre", "synchronise"].includes(
+          workflowProcessingStatus,
+        ) && (
+          <>
+            {/* ── Section: Informations de base ── */}
             <Box>
+              {/* Section header */}
               <Box
                 sx={{
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "space-between",
                   gap: 1,
                   mb: 2,
                   pb: 1.25,
-                  borderBottom: (theme2) =>
-                    `1px solid ${theme2.palette.divider}`,
+                  borderBottom: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
                 }}
               >
                 <Box
@@ -1346,266 +1561,504 @@ function DocumentDetailsPanel({
                     width: 30,
                     height: 30,
                     borderRadius: 1.5,
-                    background: (theme2) =>
-                      `linear-gradient(135deg, ${alpha(theme2.palette.primary.main, 0.12)}, ${alpha(theme2.palette.primary.main, 0.04)})`,
-                    border: (theme2) =>
-                      `1px solid ${alpha(theme2.palette.primary.main, 0.2)}`,
+                    background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.15)}, ${alpha(theme.palette.primary.main, 0.05)})`,
+                    border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     flexShrink: 0,
                   }}
                 >
-                  <List size={15} color={theme.palette.primary.main} />
+                  <FileText size={15} color={theme.palette.primary.main} />
                 </Box>
-                <Typography variant="caption" sx={{ fontWeight: 600, flex: 1 }}>
-                  Liste des articles{" "}
-                  <Box component="span" sx={{ color: theme.palette.info.main }}>
-                    ({lineItems.length} article
-                    {lineItems.length !== 1 ? "s" : ""})
-                  </Box>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 650,
+                    letterSpacing: "-0.01em",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  Informations de base
                 </Typography>
-                {!isViewMode && (
-                  <CustomButton
-                    variant="outlined"
-                    size="small"
-                    onClick={addLineItem}
-                    sx={{ flexShrink: 0 }}
-                  >
-                    + Ajouter
-                  </CustomButton>
-                )}
               </Box>
-            </Box>
 
-            <Box
-              sx={{
-                border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
-                borderRadius: 2,
-                overflow: "hidden",
-              }}
-            >
-              <ItemsTable
-                lineItems={lineItems}
-                isViewMode={isViewMode}
-                updateLineItem={updateLineItem}
-                removeLineItem={removeLineItem}
-              />
-            </Box>
-          </Box>
-
-          {/* ── Action buttons ── */}
-          <Box
-            sx={{
-              display: "flex",
-              gap: 1,
-              flexWrap: "wrap",
-              pt: 1,
-              mt: 0.5,
-              borderTop: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
-              justifyContent: "flex-end",
-            }}
-          >
-            {processingStatus === "traite" && hasDocumentId && (
-              <CustomButton
-                variant="contained"
-                color="primary"
-                startIcon={<Check size={16} />}
-                onClick={handleSave}
-                disabled={loading}
-              >
-                Enregistrer
-              </CustomButton>
-            )}
-
-            {(processingStatus === "enregistre" ||
-              processingStatus === "synchronise") && (
-              <>
-                {!isEditing ? (
-                  <CustomButton
-                    variant="outlined"
-                    startIcon={<Pencil size={16} />}
-                    onClick={() => setIsEditing(true)}
-                    disabled={loading}
-                  >
-                    Modifier
-                  </CustomButton>
-                ) : (
+              <Grid container spacing={1.5}>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <CustomInput
+                    fullWidth
+                    size="small"
+                    label="Numéro de facture"
+                    value={derivedInvoiceNumber}
+                    InputProps={{ readOnly: true }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <CustomInput
+                    fullWidth
+                    size="small"
+                    label="Date de facture"
+                    placeholder="jj/mm/aaaa"
+                    value={derivedInvoiceDate}
+                    InputProps={{ readOnly: true }}
+                  />
+                </Grid>
+                {isEditing && (
                   <>
-                    <CustomButton
-                      variant="outlined"
-                      onClick={() => {
-                        setIsEditing(false);
-                        setLineItems(derivedLineItems);
-                        setCategoryValue("");
-                        setDestinationPath(
-                          breadcrumb.length > 0
-                            ? breadcrumb.map((b) => b.name).join(" > ")
-                            : "",
-                        );
-                      }}
-                      disabled={loading}
-                    >
-                      Annuler
-                    </CustomButton>
-                    <CustomButton
-                      variant="contained"
-                      color="primary"
-                      startIcon={<Check size={16} />}
-                      onClick={handleSave}
-                      disabled={loading}
-                    >
-                      Enregistrer
-                    </CustomButton>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <CustomSelect
+                        label="Catégorie"
+                        value={categoryValue}
+                        onChange={(e) =>
+                          setCategoryValue(String(e.target.value ?? ""))
+                        }
+                        displayEmpty
+                        disabled={isViewMode}
+                        MenuProps={{
+                          disablePortal: true,
+                          disableScrollLock: true,
+                        }}
+                        renderValue={(v) =>
+                          typeof v === "string" && v
+                            ? (DOCUMENT_CATEGORIES.find((c) => c.value === v)
+                                ?.label ?? "")
+                            : "Sélectionnez une catégorie"
+                        }
+                      >
+                        <MenuItem value="">
+                          <em>Sélectionnez une catégorie</em>
+                        </MenuItem>
+                        {DOCUMENT_CATEGORIES.map((c) => (
+                          <MenuItem key={c.value} value={c.value}>
+                            {c.label}
+                          </MenuItem>
+                        ))}
+                      </CustomSelect>
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <CustomInput
+                        fullWidth
+                        size="small"
+                        label="Chemin de destination"
+                        placeholder="Choisir la destination"
+                        value={destinationPath}
+                        onClick={() =>
+                          !isViewMode && setDestinationDialogOpen(true)
+                        }
+                        InputProps={{ readOnly: true }}
+                        disabled={isViewMode}
+                      />
+                    </Grid>
                   </>
                 )}
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <CustomInput
+                    fullWidth
+                    size="small"
+                    label="Date de livraison"
+                    placeholder="jj/mm/aaaa"
+                    InputProps={{ readOnly: true }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <CustomInput
+                    fullWidth
+                    size="small"
+                    label="Total de la facture"
+                    value={financialTotals.ttc || "0.00"}
+                    InputProps={{ readOnly: true }}
+                  />
+                </Grid>
+              </Grid>
+            </Box>
 
-                {!isEditing &&
-                  processingStatus === "enregistre" &&
-                  hasDocumentId && (
-                    <CustomButton
-                      variant="contained"
-                      color="primary"
-                      startIcon={<RefreshCw size={16} />}
-                      onClick={handleSynchronize}
-                      disabled={loading}
-                    >
-                      Synchroniser
-                    </CustomButton>
-                  )}
-              </>
-            )}
-          </Box>
-
-          {/* ── Destination dialog ── */}
-          <Dialog
-            open={destinationDialogOpen}
-            onClose={() => setDestinationDialogOpen(false)}
-            maxWidth="sm"
-            fullWidth
-            sx={{ zIndex: (t) => t.zIndex.modal + 50 }}
-            slotProps={{
-              backdrop: { sx: { zIndex: (t) => t.zIndex.modal + 49 } },
-              paper: {
-                sx: {
-                  zIndex: (t) => t.zIndex.modal + 50,
-                  borderRadius: 3,
-                  overflow: "hidden",
-                },
-              },
-            }}
-          >
-            <DialogTitle
-              sx={{
-                pb: 1.5,
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-                borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
-              }}
-            >
+            {/* ── Section: Détails financiers ── */}
+            <Box>
               <Box
                 sx={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 1.5,
-                  bgcolor: alpha(theme.palette.primary.main, 0.08),
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
+                  gap: 1,
+                  mb: 2,
+                  pb: 1.25,
+                  borderBottom: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
                 }}
               >
-                <FolderOpen size={16} color={theme.palette.primary.main} />
+                <Box
+                  sx={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 1.5,
+                    background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.15)}, ${alpha(theme.palette.primary.main, 0.05)})`,
+                    border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Calculator size={15} color={theme.palette.primary.main} />
+                </Box>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 650,
+                    letterSpacing: "-0.01em",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  Détails financiers
+                </Typography>
               </Box>
-              <Typography variant="subtitle1" fontWeight={600}>
-                Choisir la destination du document
-              </Typography>
-            </DialogTitle>
 
-            <DialogContent dividers sx={{ pt: 2 }}>
-              <CustomInput
-                fullWidth
-                size="small"
-                label="Chemin"
-                placeholder="Ex: Banque > QNB > Factures"
-                value={destinationPath}
-                onChange={(e) => setDestinationPath(e.target.value)}
-                sx={{ mb: 2 }}
-              />
+              <Grid container spacing={1.5}>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <CustomInput
+                    fullWidth
+                    size="small"
+                    label="Total HT"
+                    value={financialTotals.ht || "0.00"}
+                    InputProps={{ readOnly: true }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <CustomInput
+                    fullWidth
+                    size="small"
+                    label="Total TVA"
+                    value={financialTotals.tva || "0.00"}
+                    InputProps={{ readOnly: true }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <CustomInput
+                    fullWidth
+                    size="small"
+                    label="Total TTC"
+                    value={financialTotals.ttc || "0.00"}
+                    InputProps={{ readOnly: true }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <CustomInput
+                    fullWidth
+                    size="small"
+                    label="TVA (%)"
+                    value={tvaPercentValue}
+                    onChange={(e) => setTvaPercentValue(e.target.value)}
+                    disabled={isViewMode}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <CustomInput
+                    fullWidth
+                    size="small"
+                    label="Devise"
+                    value={derivedCurrency}
+                    InputProps={{ readOnly: true }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <CustomInput
+                    fullWidth
+                    size="small"
+                    label="Fournisseur"
+                    placeholder="Nom du fournisseur"
+                    value={vendorValue}
+                    onChange={(e) => setVendorValue(e.target.value)}
+                    disabled={isViewMode}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <CustomInput
+                    fullWidth
+                    size="small"
+                    label="Client"
+                    placeholder="Nom du client"
+                    value={clientValue}
+                    onChange={(e) => setClientValue(e.target.value)}
+                    disabled={isViewMode}
+                  />
+                </Grid>
+              </Grid>
+            </Box>
+
+            {/* ── Section: Liste des articles ── */}
+            <Box>
+              <Box>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 1,
+                    mb: 2,
+                    pb: 1.25,
+                    borderBottom: (theme2) =>
+                      `1px solid ${theme2.palette.divider}`,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 1.5,
+                      background: (theme2) =>
+                        `linear-gradient(135deg, ${alpha(theme2.palette.primary.main, 0.12)}, ${alpha(theme2.palette.primary.main, 0.04)})`,
+                      border: (theme2) =>
+                        `1px solid ${alpha(theme2.palette.primary.main, 0.2)}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <List size={15} color={theme.palette.primary.main} />
+                  </Box>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 600, flex: 1 }}
+                  >
+                    Liste des articles{" "}
+                    <Box
+                      component="span"
+                      sx={{ color: theme.palette.info.main }}
+                    >
+                      ({lineItems.length} article
+                      {lineItems.length !== 1 ? "s" : ""})
+                    </Box>
+                  </Typography>
+                  {!isViewMode && (
+                    <CustomButton
+                      variant="outlined"
+                      size="small"
+                      onClick={addLineItem}
+                      sx={{ flexShrink: 0 }}
+                    >
+                      + Ajouter
+                    </CustomButton>
+                  )}
+                </Box>
+              </Box>
+
               <Box
                 sx={{
                   border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
                   borderRadius: 2,
-                  maxHeight: 240,
-                  overflow: "auto",
+                  overflow: "hidden",
+                }}
+              >
+                <ItemsTable
+                  lineItems={lineItems}
+                  isViewMode={isViewMode}
+                  updateLineItem={updateLineItem}
+                  removeLineItem={removeLineItem}
+                />
+              </Box>
+            </Box>
+
+            {/* ── Action buttons ── */}
+            <Box
+              sx={{
+                display: "flex",
+                gap: 1,
+                flexWrap: "wrap",
+                pt: 1,
+                mt: 0.5,
+                borderTop: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+                justifyContent: "flex-end",
+              }}
+            >
+              {workflowProcessingStatus === "traite" && hasDocumentId && (
+                <CustomButton
+                  variant="contained"
+                  color="primary"
+                  startIcon={<Check size={16} />}
+                  onClick={handleSave}
+                  disabled={loading}
+                >
+                  Enregistrer
+                </CustomButton>
+              )}
+
+              {(workflowProcessingStatus === "enregistre" ||
+                workflowProcessingStatus === "synchronise") && (
+                <>
+                  {!isEditing ? (
+                    <CustomButton
+                      variant="outlined"
+                      startIcon={<Pencil size={16} />}
+                      onClick={() => setIsEditing(true)}
+                      disabled={loading}
+                    >
+                      Modifier
+                    </CustomButton>
+                  ) : (
+                    <>
+                      <CustomButton
+                        variant="outlined"
+                        onClick={() => {
+                          setIsEditing(false);
+                          setLineItems(derivedLineItems);
+                          setCategoryValue("");
+                          setDestinationPath(
+                            breadcrumb.length > 0
+                              ? breadcrumb.map((b) => b.name).join(" > ")
+                              : "",
+                          );
+                        }}
+                        disabled={loading}
+                      >
+                        Annuler
+                      </CustomButton>
+                      <CustomButton
+                        variant="contained"
+                        color="primary"
+                        startIcon={<Check size={16} />}
+                        onClick={handleSave}
+                        disabled={loading}
+                      >
+                        Enregistrer
+                      </CustomButton>
+                    </>
+                  )}
+
+                  {!isEditing &&
+                    workflowProcessingStatus === "enregistre" &&
+                    hasDocumentId && (
+                      <CustomButton
+                        variant="contained"
+                        color="primary"
+                        startIcon={<RefreshCw size={16} />}
+                        onClick={handleSynchronize}
+                        disabled={loading}
+                      >
+                        Synchroniser
+                      </CustomButton>
+                    )}
+                </>
+              )}
+            </Box>
+
+            {/* ── Destination dialog ── */}
+            <Dialog
+              open={destinationDialogOpen}
+              onClose={() => setDestinationDialogOpen(false)}
+              maxWidth="sm"
+              fullWidth
+              {...sxDialogAboveFileDrawer}
+            >
+              <DialogTitle
+                sx={{
+                  pb: 1.5,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                  borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
                 }}
               >
                 <Box
-                  onClick={() => setParentId(null)}
                   sx={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 1.5,
+                    bgcolor: alpha(theme.palette.primary.main, 0.08),
                     display: "flex",
                     alignItems: "center",
-                    gap: 1,
-                    px: 2,
-                    py: 1.25,
-                    cursor: "pointer",
-                    bgcolor:
-                      parentId === null
-                        ? alpha(theme.palette.primary.main, 0.08)
-                        : "transparent",
-                    "&:hover": {
-                      bgcolor: alpha(theme.palette.action.hover, 0.8),
-                    },
-                    transition: "background-color 0.15s ease",
-                    borderBottom: `1px solid ${alpha(theme.palette.divider, 0.4)}`,
+                    justifyContent: "center",
                   }}
                 >
-                  <ChevronRight size={18} color="transparent" />
-                  <Folder size={16} color={theme.palette.text.secondary} />
-                  <Typography
-                    variant="body2"
-                    fontWeight={parentId === null ? 600 : 400}
-                  >
-                    Racine
-                  </Typography>
+                  <FolderOpen size={16} color={theme.palette.primary.main} />
                 </Box>
-                {rootFolders.map((folder) => (
-                  <FolderTreeItem
-                    key={folder.id}
-                    folderId={folder.id}
-                    folderName={folder.name}
-                    depth={0}
-                    expandedIds={expandedIds}
-                    onToggleExpand={handleToggleExpand}
-                    selectedId={parentId}
-                    onSelect={setParentId}
-                    clientId={clientCompanyIdForDocs}
-                  />
-                ))}
-              </Box>
-            </DialogContent>
+                <Typography variant="subtitle1" fontWeight={600}>
+                  Choisir la destination du document
+                </Typography>
+              </DialogTitle>
 
-            <DialogActions sx={{ px: 2.5, py: 1.75, gap: 1 }}>
-              <CustomButton
-                variant="outlined"
-                onClick={() => setDestinationDialogOpen(false)}
-              >
-                Annuler
-              </CustomButton>
-              <CustomButton
-                variant="contained"
-                onClick={() => {
-                  if (selectedDestinationPath)
-                    setDestinationPath(selectedDestinationPath);
-                  setDestinationDialogOpen(false);
-                }}
-              >
-                Valider
-              </CustomButton>
-            </DialogActions>
-          </Dialog>
-        </>
-      )}
+              <DialogContent dividers sx={{ pt: 2 }}>
+                <CustomInput
+                  fullWidth
+                  size="small"
+                  label="Chemin"
+                  placeholder="Ex: Banque > QNB > Factures"
+                  value={destinationPath}
+                  onChange={(e) => setDestinationPath(e.target.value)}
+                  sx={{ mb: 2 }}
+                />
+                <Box
+                  sx={{
+                    border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
+                    borderRadius: 2,
+                    maxHeight: 240,
+                    overflow: "auto",
+                  }}
+                >
+                  <Box
+                    onClick={() => setParentId(null)}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      px: 2,
+                      py: 1.25,
+                      cursor: "pointer",
+                      bgcolor:
+                        parentId === null
+                          ? alpha(theme.palette.primary.main, 0.08)
+                          : "transparent",
+                      "&:hover": {
+                        bgcolor: alpha(theme.palette.action.hover, 0.8),
+                      },
+                      transition: "background-color 0.15s ease",
+                      borderBottom: `1px solid ${alpha(theme.palette.divider, 0.4)}`,
+                    }}
+                  >
+                    <ChevronRight size={18} color="transparent" />
+                    <Folder size={16} color={theme.palette.text.secondary} />
+                    <Typography
+                      variant="body2"
+                      fontWeight={parentId === null ? 600 : 400}
+                    >
+                      Racine
+                    </Typography>
+                  </Box>
+                  {rootFolders.map((folder) => (
+                    <FolderTreeItem
+                      key={folder.id}
+                      folderId={folder.id}
+                      folderName={folder.name}
+                      depth={0}
+                      expandedIds={expandedIds}
+                      onToggleExpand={handleToggleExpand}
+                      selectedId={parentId}
+                      onSelect={setParentId}
+                      clientId={clientCompanyIdForDocs}
+                    />
+                  ))}
+                </Box>
+              </DialogContent>
+
+              <DialogActions sx={{ px: 2.5, py: 1.75, gap: 1 }}>
+                <CustomButton
+                  variant="outlined"
+                  onClick={() => setDestinationDialogOpen(false)}
+                >
+                  Annuler
+                </CustomButton>
+                <CustomButton
+                  variant="contained"
+                  onClick={() => {
+                    if (selectedDestinationPath)
+                      setDestinationPath(selectedDestinationPath);
+                    setDestinationDialogOpen(false);
+                  }}
+                >
+                  Valider
+                </CustomButton>
+              </DialogActions>
+            </Dialog>
+          </>
+        )}
     </Box>
   );
 }
@@ -1656,7 +2109,13 @@ function EditFileModal({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      {...sxDialogAboveFileDrawer}
+    >
       <DialogTitle>
         <Typography variant="h6">Modifier votre fichier</Typography>
         <Typography variant="caption" color="text.secondary">
@@ -1894,7 +2353,7 @@ function FileDrawerContent({
             <DocumentDetailsPanel
               file={file}
               documentId={documentId}
-              onOpenEditModal={() => setEditModalOpen(true)}
+              onCloseDrawer={onClose}
             />
           }
         />

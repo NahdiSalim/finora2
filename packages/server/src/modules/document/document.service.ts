@@ -264,7 +264,8 @@ export class DocumentService {
     endDate?: Date,
     status: string = 'active',
     search?: string,
-    category?: string
+    category?: string,
+    type?: 'folder' | 'file'
   ) {
     const skip = (page - 1) * limit;
 
@@ -296,6 +297,13 @@ export class DocumentService {
         contains: category.trim(),
         mode: 'insensitive',
       };
+    }
+
+    // Filter by type: folder or file
+    if (type === 'folder') {
+      where.isFolder = true;
+    } else if (type === 'file') {
+      where.isFolder = false;
     }
 
     // Add date filters

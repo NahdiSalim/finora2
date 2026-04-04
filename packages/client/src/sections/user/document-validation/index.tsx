@@ -106,8 +106,6 @@ export default function DocumentValidationView() {
       const returnPage = getReturnPage(searchParams, isEdit);
       navigate(buildReturnUrl("/users", isEdit, returnPage));
     } catch (error) {
-      console.error("Error updating document status:", error);
-
       const errorMessage =
         (error as { data?: { message?: string }; message?: string })?.data
           ?.message ||

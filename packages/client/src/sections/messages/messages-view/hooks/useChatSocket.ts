@@ -107,8 +107,9 @@ export function useChatSocket(options: UseChatSocketOptions = {}) {
       }
     };
     const onDisconnect = () => {};
-    const onConnectError = (err: Error) =>
-      console.error("[useChatSocket] connect_error:", err.message);
+    const onConnectError = (_err: Error) => {
+      /* ignored */
+    };
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);

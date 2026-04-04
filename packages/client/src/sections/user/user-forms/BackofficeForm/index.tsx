@@ -85,8 +85,6 @@ export default function BackofficeForm({ roleCode }: BackofficeFormProps) {
       const returnPage = getReturnPage(searchParams, isEdit);
       navigate(buildReturnUrl("/users", isEdit, returnPage));
     } catch (err: unknown) {
-      console.error(`Error ${isEdit ? "updating" : "creating"} user:`, err);
-
       const errorMessage =
         (err instanceof Error ? err.message : undefined) ||
         (typeof err === "object" &&

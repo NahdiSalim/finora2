@@ -343,8 +343,8 @@ export function MessagesPopover({ sx, ...other }: MessagesPopoverProps) {
     try {
       await markAllAsRead().unwrap();
       refetch();
-    } catch (error) {
-      console.error("Failed to mark all as read:", error);
+    } catch {
+      /* ignored */
     }
   }, [markAllAsRead, refetch]);
 

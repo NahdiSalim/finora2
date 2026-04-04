@@ -39,12 +39,13 @@ import {
   Archive,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Dayjs } from "dayjs";
 import { useParams, useLocation } from "react-router-dom";
 import { useDashboardBase } from "src/hooks/useDashboardBase";
 import { Folder } from "src/components/common/folder";
 import { PageHeader } from "src/layouts/components/page-header";
+import { Scrollbar } from "src/components/scrollbar";
 import CustomInput from "src/components/common/CustomInput";
 import CustomSelect from "src/components/common/CustomSelect";
 import MenuItem from "@mui/material/MenuItem";
@@ -91,6 +92,7 @@ const DEFAULT_INVOICE_STATS = {
   pending: 0,
   total: 0,
 };
+const SCROLL_PAGE_SIZE = 10;
 
 export default function DocumentDetailsView() {
   const { clientId } = useParams<{ clientId?: string }>();
@@ -158,27 +160,74 @@ export default function DocumentDetailsView() {
     type: "file" | "folder";
   } | null>(null);
   const theme = useTheme();
+  const foldersScrollRef = useRef<HTMLDivElement | null>(null);
+  const filesScrollRef = useRef<HTMLDivElement | null>(null);
+  const [folderPage, setFolderPage] = useState(1);
+  const [filePage, setFilePage] = useState(1);
+  const [accumulatedFolders, setAccumulatedFolders] = useState<DocumentItem[]>(
+    [],
+  );
+  const [accumulatedFiles, setAccumulatedFiles] = useState<DocumentItem[]>([]);
+  const isLoadingNextFolderPageRef = useRef(false);
+  const isLoadingNextFilePageRef = useRef(false);
 
   const hasSearchOrFilter = Boolean(
     searchValue.trim() || category || startDate || endDate,
   );
 
-  const { data, isLoading, isError, refetch } = useGetDocumentsQuery({
-    clientId: !isMySpace && clientId ? Number(clientId) : undefined,
-    parentId: parentId ?? undefined,
-    limit: 100,
-    status: "active",
-    search: searchValue || undefined,
-    category: category || undefined,
-    startDate: startDate ? startDate.format("YYYY-MM-DD") : undefined,
-    endDate: endDate ? endDate.format("YYYY-MM-DD") : undefined,
+  const documentsQueryBase = useMemo(
+    () => ({
+      clientId: !isMySpace && clientId ? Number(clientId) : undefined,
+      parentId: parentId ?? undefined,
+      status: "active" as const,
+      search: searchValue || undefined,
+      category: category || undefined,
+      startDate: startDate ? startDate.format("YYYY-MM-DD") : undefined,
+      endDate: endDate ? endDate.format("YYYY-MM-DD") : undefined,
+      limit: SCROLL_PAGE_SIZE,
+    }),
+    [isMySpace, clientId, parentId, searchValue, category, startDate, endDate],
+  );
+
+  const {
+    data: foldersData,
+    isLoading: isFoldersLoading,
+    isFetching: isFoldersFetching,
+    isError: isFoldersError,
+    refetch: refetchFolders,
+  } = useGetDocumentsQuery({
+    ...documentsQueryBase,
+    itemType: "folder",
+    page: folderPage,
   });
+
+  const {
+    data: filesData,
+    isLoading: isFilesLoading,
+    isFetching: isFilesFetching,
+    isError: isFilesError,
+    refetch: refetchFiles,
+  } = useGetDocumentsQuery({
+    ...documentsQueryBase,
+    itemType: "file",
+    page: filePage,
+  });
+
+  const isLoading = isFoldersLoading || isFilesLoading;
+  const isFetching = isFoldersFetching || isFilesFetching;
+  const isError = isFoldersError || isFilesError;
+  const refetch = useCallback(() => {
+    void refetchFolders();
+    void refetchFiles();
+  }, [refetchFolders, refetchFiles]);
+
   const { data: moveFoldersData } = useGetDocumentsQuery(
     {
       clientId: !isMySpace && clientId ? Number(clientId) : undefined,
       parentId: undefined,
       limit: 200,
       status: "active",
+      itemType: "folder",
     },
     { skip: !moveItem },
   );
@@ -206,29 +255,160 @@ export default function DocumentDetailsView() {
     useDownloadDocumentMutation();
   const [archiveDocument] = useArchiveDocumentMutation();
 
-  const rawItems: DocumentItem[] = data?.data ?? [];
-  const foldersFromApi: FolderItem[] = rawItems
-    .filter((d) => d.isFolder)
-    .map((d) => ({
-      id: d.id,
-      name: d.name,
-      description: "",
-      state: docToFolderState(d),
-      fileCount: 0,
-      updatedAt: d.updatedAt ?? null,
-    }));
+  const folders: FolderItem[] = accumulatedFolders.map((d) => ({
+    id: d.id,
+    name: d.name,
+    description: "",
+    state: docToFolderState(d),
+    fileCount:
+      typeof d.filesCount === "number" && Number.isFinite(d.filesCount)
+        ? d.filesCount
+        : 0,
+    updatedAt: d.updatedAt ?? null,
+  }));
 
-  const folders: FolderItem[] = foldersFromApi;
+  const fileItems: FileItem[] = accumulatedFiles.map((d) => ({
+    id: d.id,
+    name: d.name,
+    type: docToFileType(d.type, d.mimeType),
+    size: formatSize(d.size),
+    mimeType: d.mimeType ?? undefined,
+  }));
 
-  const fileItems: FileItem[] = rawItems
-    .filter((d) => !d.isFolder)
-    .map((d) => ({
-      id: d.id,
-      name: d.name,
-      type: docToFileType(d.type, d.mimeType),
-      size: formatSize(d.size),
-      mimeType: d.mimeType ?? undefined,
-    }));
+  const folderTotalPages = foldersData?.pagination?.totalPages ?? 1;
+  const folderCurrentPage = foldersData?.pagination?.currentPage ?? folderPage;
+  const hasMoreFolderPages = folderCurrentPage < folderTotalPages;
+
+  const fileTotalPages = filesData?.pagination?.totalPages ?? 1;
+  const fileCurrentPage = filesData?.pagination?.currentPage ?? filePage;
+  const hasMoreFilePages = fileCurrentPage < fileTotalPages;
+
+  const shouldShowFoldersScrollHint = hasMoreFolderPages && folders.length > 0;
+  const shouldShowFilesScrollHint = hasMoreFilePages && fileItems.length > 0;
+
+  useEffect(() => {
+    setFolderPage(1);
+    setFilePage(1);
+    setAccumulatedFolders([]);
+    setAccumulatedFiles([]);
+    isLoadingNextFolderPageRef.current = false;
+    isLoadingNextFilePageRef.current = false;
+    if (foldersScrollRef.current) foldersScrollRef.current.scrollTop = 0;
+    if (filesScrollRef.current) filesScrollRef.current.scrollTop = 0;
+  }, [parentId, searchValue, category, startDate, endDate]);
+
+  useEffect(() => {
+    const incoming = foldersData?.data ?? [];
+    const incomingPage = foldersData?.pagination?.currentPage ?? folderPage;
+    if (incomingPage === 1) {
+      setAccumulatedFolders(incoming);
+    } else if (incoming.length > 0) {
+      setAccumulatedFolders((prev) => {
+        const existingIds = new Set(prev.map((item) => item.id));
+        const appended = incoming.filter((item) => !existingIds.has(item.id));
+        return appended.length > 0 ? [...prev, ...appended] : prev;
+      });
+    }
+    isLoadingNextFolderPageRef.current = false;
+  }, [foldersData, folderPage]);
+
+  useEffect(() => {
+    const incoming = filesData?.data ?? [];
+    const incomingPage = filesData?.pagination?.currentPage ?? filePage;
+    if (incomingPage === 1) {
+      setAccumulatedFiles(incoming);
+    } else if (incoming.length > 0) {
+      setAccumulatedFiles((prev) => {
+        const existingIds = new Set(prev.map((item) => item.id));
+        const appended = incoming.filter((item) => !existingIds.has(item.id));
+        return appended.length > 0 ? [...prev, ...appended] : prev;
+      });
+    }
+    isLoadingNextFilePageRef.current = false;
+  }, [filesData, filePage]);
+
+  const loadNextFolderPage = useCallback(() => {
+    if (
+      !hasMoreFolderPages ||
+      isFoldersFetching ||
+      isLoadingNextFolderPageRef.current
+    )
+      return;
+    isLoadingNextFolderPageRef.current = true;
+    setFolderPage((prev) => prev + 1);
+  }, [hasMoreFolderPages, isFoldersFetching]);
+
+  const loadNextFilePage = useCallback(() => {
+    if (
+      !hasMoreFilePages ||
+      isFilesFetching ||
+      isLoadingNextFilePageRef.current
+    )
+      return;
+    isLoadingNextFilePageRef.current = true;
+    setFilePage((prev) => prev + 1);
+  }, [hasMoreFilePages, isFilesFetching]);
+
+  const handleFoldersScroll = useCallback(() => {
+    const el = foldersScrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
+    if (nearBottom) {
+      loadNextFolderPage();
+    }
+  }, [loadNextFolderPage]);
+
+  const handleFilesScroll = useCallback(() => {
+    const el = filesScrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
+    if (nearBottom) {
+      loadNextFilePage();
+    }
+  }, [loadNextFilePage]);
+
+  useEffect(() => {
+    const node = foldersScrollRef.current;
+    if (!node) return undefined;
+    const onScroll = () => handleFoldersScroll();
+    node.addEventListener("scroll", onScroll);
+    return () => node.removeEventListener("scroll", onScroll);
+  }, [handleFoldersScroll]);
+
+  useEffect(() => {
+    const node = filesScrollRef.current;
+    if (!node) return undefined;
+    const onScroll = () => handleFilesScroll();
+    node.addEventListener("scroll", onScroll);
+    return () => node.removeEventListener("scroll", onScroll);
+  }, [handleFilesScroll]);
+
+  // If the folder container doesn't overflow (no vertical scroll yet),
+  // keep loading next pages until it overflows or we reach last page.
+  useEffect(() => {
+    const el = foldersScrollRef.current;
+    if (!el) return;
+    if (isFoldersFetching || !hasMoreFolderPages) return;
+    const hasVerticalOverflow = el.scrollHeight > el.clientHeight + 1;
+    if (!hasVerticalOverflow) {
+      loadNextFolderPage();
+    }
+  }, [
+    folders.length,
+    hasMoreFolderPages,
+    isFoldersFetching,
+    loadNextFolderPage,
+  ]);
+
+  useEffect(() => {
+    const el = filesScrollRef.current;
+    if (!el) return;
+    if (isFilesFetching || !hasMoreFilePages) return;
+    const hasVerticalOverflow = el.scrollHeight > el.clientHeight + 1;
+    if (!hasVerticalOverflow) {
+      loadNextFilePage();
+    }
+  }, [fileItems.length, hasMoreFilePages, isFilesFetching, loadNextFilePage]);
 
   const fileCardMenuOptionsBase: {
     label: string;
@@ -304,14 +484,11 @@ export default function DocumentDetailsView() {
       file: payload.file,
       parentId: payload.parentId ?? undefined,
       category: payload.category,
+      name: payload.documentName?.trim() || undefined,
       clientCompanyId:
         payload.clientCompanyId ??
         (!isMySpace && clientId ? Number(clientId) : undefined),
     }).unwrap();
-    if (payload.documentName && payload.documentName !== payload.file.name) {
-      // Optional: rename after upload when backend supports it or we get doc id from response
-      // For now the server uses file.originalname; skip rename.
-    }
   };
 
   const handleRenameFolder = async (newName: string) => {
@@ -878,45 +1055,65 @@ export default function DocumentDetailsView() {
             items={folders.map((f) => f.id)}
             strategy={rectSortingStrategy}
           >
-            <Grid container spacing={3}>
-              {!isLoading &&
-                !isError &&
-                folders.map((folder) => (
-                  <Grid key={folder.id}>
-                    <FolderWithCount
-                      folder={folder}
-                      clientCompanyId={
-                        !isMySpace && clientId ? Number(clientId) : undefined
-                      }
-                      menuOptions={folderMenuOptions}
-                      onOpen={() => {
-                        setFolderPath((prev) => [
-                          ...prev,
-                          { id: folder.id, name: folder.name },
-                        ]);
-                        setParentId(folder.id);
-                      }}
-                      onMenuAction={(action) => {
-                        if (action === "edit") {
-                          setRenameFolder({ id: folder.id, name: folder.name });
-                        } else if (action === "delete") {
-                          setDeleteConfirm({
-                            type: "folder",
-                            id: folder.id,
-                            name: folder.name,
-                          });
-                        } else if (action === "move" && hasSearchOrFilter) {
-                          setMoveItem({
-                            id: folder.id,
-                            name: folder.name,
-                            type: "folder",
-                          });
+            <Scrollbar
+              ref={foldersScrollRef}
+              fillContent={false}
+              autoHide={false}
+              forceVisible="y"
+              sx={{ maxHeight: 320, pr: 0.5, overflowX: "hidden" }}
+            >
+              <Grid container spacing={3}>
+                {!isLoading &&
+                  !isError &&
+                  folders.map((folder) => (
+                    <Grid key={folder.id}>
+                      <FolderWithCount
+                        folder={folder}
+                        clientCompanyId={
+                          !isMySpace && clientId ? Number(clientId) : undefined
                         }
-                      }}
-                    />
-                  </Grid>
-                ))}
-            </Grid>
+                        menuOptions={folderMenuOptions}
+                        onOpen={() => {
+                          setFolderPath((prev) => [
+                            ...prev,
+                            { id: folder.id, name: folder.name },
+                          ]);
+                          setParentId(folder.id);
+                        }}
+                        onMenuAction={(action) => {
+                          if (action === "edit") {
+                            setRenameFolder({
+                              id: folder.id,
+                              name: folder.name,
+                            });
+                          } else if (action === "delete") {
+                            setDeleteConfirm({
+                              type: "folder",
+                              id: folder.id,
+                              name: folder.name,
+                            });
+                          } else if (action === "move" && hasSearchOrFilter) {
+                            setMoveItem({
+                              id: folder.id,
+                              name: folder.name,
+                              type: "folder",
+                            });
+                          }
+                        }}
+                      />
+                    </Grid>
+                  ))}
+              </Grid>
+              {!isLoading && !isError && shouldShowFoldersScrollHint && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", textAlign: "center", py: 1 }}
+                >
+                  Faites défiler verticalement pour voir les dossiers.
+                </Typography>
+              )}
+            </Scrollbar>
           </SortableContext>
 
           {/* ── Documents (fichiers) : doit être dans DndContext pour le drag & drop ── */}
@@ -990,65 +1187,84 @@ export default function DocumentDetailsView() {
                 </Box>
               )}
 
-              <SortableContext
-                items={fileItems.map((f) => `${FILE_PREFIX}${f.id}`)}
-                strategy={rectSortingStrategy}
+              <Scrollbar
+                ref={filesScrollRef}
+                fillContent={false}
+                sx={{ maxHeight: 480, pr: 0.5, overflowX: "hidden" }}
               >
-                <Box
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(6, 1fr)",
-                    gap: 2,
-                  }}
+                <SortableContext
+                  items={fileItems.map((f) => `${FILE_PREFIX}${f.id}`)}
+                  strategy={rectSortingStrategy}
                 >
-                  {!isLoading &&
-                    !isError &&
-                    fileItems.map((file) => (
-                      <FileCardWithPreview
-                        key={file.id}
-                        file={file}
-                        selectable
-                        selected={selectedFiles.includes(file.id)}
-                        onSelect={(selected) => handleSelect(file.id, selected)}
-                        menuOptions={fileCardMenuOptions}
-                        onMenuAction={(action, fileItem) => {
-                          if (action === "delete") {
-                            setDeleteConfirm({
-                              type: "file",
-                              id: Number(fileItem.id),
-                              name: fileItem.name,
-                            });
-                          } else if (action === "rename") {
-                            setRenameFile({
-                              id: Number(fileItem.id),
-                              name: fileItem.name,
-                            });
-                          } else if (action === "download") {
-                            handleDownloadFile(
-                              Number(fileItem.id),
-                              fileItem.name,
-                            );
-                          } else if (action === "preview") {
-                            setPreviewFile({
-                              id: Number(fileItem.id),
-                              name: fileItem.name,
-                              type: fileItem.type,
-                              mimeType: fileItem.mimeType,
-                            });
-                          } else if (action === "move" && hasSearchOrFilter) {
-                            setMoveItem({
-                              id: Number(fileItem.id),
-                              name: fileItem.name,
-                              type: "file",
-                            });
-                          } else if (action === "archive") {
-                            archiveDocument(Number(fileItem.id));
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(200px, 1fr))",
+                      gap: 2,
+                      overflowX: "hidden",
+                    }}
+                  >
+                    {!isLoading &&
+                      !isError &&
+                      fileItems.map((file) => (
+                        <FileCardWithPreview
+                          key={file.id}
+                          file={file}
+                          selectable
+                          selected={selectedFiles.includes(file.id)}
+                          onSelect={(selected) =>
+                            handleSelect(file.id, selected)
                           }
-                        }}
-                      />
-                    ))}
-                </Box>
-              </SortableContext>
+                          menuOptions={fileCardMenuOptions}
+                          onMenuAction={(action, fileItem) => {
+                            if (action === "delete") {
+                              setDeleteConfirm({
+                                type: "file",
+                                id: Number(fileItem.id),
+                                name: fileItem.name,
+                              });
+                            } else if (action === "rename") {
+                              setRenameFile({
+                                id: Number(fileItem.id),
+                                name: fileItem.name,
+                              });
+                            } else if (action === "download") {
+                              handleDownloadFile(
+                                Number(fileItem.id),
+                                fileItem.name,
+                              );
+                            } else if (action === "preview") {
+                              setPreviewFile({
+                                id: Number(fileItem.id),
+                                name: fileItem.name,
+                                type: fileItem.type,
+                                mimeType: fileItem.mimeType,
+                              });
+                            } else if (action === "move" && hasSearchOrFilter) {
+                              setMoveItem({
+                                id: Number(fileItem.id),
+                                name: fileItem.name,
+                                type: "file",
+                              });
+                            } else if (action === "archive") {
+                              archiveDocument(Number(fileItem.id));
+                            }
+                          }}
+                        />
+                      ))}
+                  </Box>
+                </SortableContext>
+                {!isLoading && !isError && shouldShowFilesScrollHint && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", textAlign: "center", py: 1 }}
+                  >
+                    Faites défiler verticalement pour voir les documents.
+                  </Typography>
+                )}
+              </Scrollbar>
               {!isLoading && !isError && fileItems.length === 0 && (
                 <Box
                   sx={{

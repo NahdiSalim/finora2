@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import type { SubmitHandler, Resolver } from 'react-hook-form';
-import { useForm, Controller } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useState, useEffect } from "react";
+import type { SubmitHandler, Resolver } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import {
   Box,
@@ -13,22 +13,22 @@ import {
   MenuItem,
   Select,
   Typography,
-} from '@mui/material';
+} from "@mui/material";
 
-import CustomInput from 'src/components/common/CustomInput';
-import { FormButtons } from 'src/components/common/FormButtons';
-import { useAlert } from 'src/contexts/AlertContext';
-import { buildReturnUrl, getReturnPage } from 'src/utils/navigationHelpers';
+import CustomInput from "src/components/common/CustomInput";
+import { FormButtons } from "src/components/common/FormButtons";
+import { useAlert } from "src/contexts/AlertContext";
+import { buildReturnUrl, getReturnPage } from "src/utils/navigationHelpers";
 import {
   useCreateRoleMutation,
   useGetRoleByIdQuery,
   useGetRoleTypesInfiniteQuery,
   useUpdateRoleMutation,
-} from 'src/lib/services/roleApi';
-import type { RoleFormData } from 'src/types/roles';
-import { roleValidationSchema } from 'src/validations/roles/roles';
-import PermissionsSelector from '../PermissionSelector';
-import { ROLE_TYPE_CODES } from 'src/constants/roles';
+} from "src/lib/services/roleApi";
+import type { RoleFormData } from "src/types/roles";
+import { roleValidationSchema } from "src/validations/roles/roles";
+import PermissionsSelector from "../PermissionSelector";
+import { ROLE_TYPE_CODES } from "src/constants/roles";
 
 export default function RoleForm() {
   const navigate = useNavigate();
@@ -39,12 +39,16 @@ export default function RoleForm() {
 
   const [createRole, { isLoading: creating }] = useCreateRoleMutation();
   const [updateRole, { isLoading: updating }] = useUpdateRoleMutation();
-  const { data: roleData, isLoading: roleLoading } = useGetRoleByIdQuery(id!, { skip: !isEdit });
+  const { data: roleData, isLoading: roleLoading } = useGetRoleByIdQuery(id!, {
+    skip: !isEdit,
+  });
   const { data: roleTypesData } = useGetRoleTypesInfiniteQuery({});
 
   const roleTypes = roleTypesData?.pages?.flatMap((page) => page.results) || [];
 
-  const administratifRoleType = roleTypes.find((type) => type.code === ROLE_TYPE_CODES.ADMIN_TYPE);
+  const administratifRoleType = roleTypes.find(
+    (type) => type.code === ROLE_TYPE_CODES.ADMIN_TYPE,
+  );
 
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
   const [selectedPages, setSelectedPages] = useState<string[]>([]);
@@ -60,25 +64,25 @@ export default function RoleForm() {
   } = useForm<RoleFormData>({
     resolver: yupResolver(roleValidationSchema) as Resolver<RoleFormData>,
     defaultValues: {
-      name: '',
-      description: '',
-      roleTypeId: '',
+      name: "",
+      description: "",
+      roleTypeId: "",
       actionIds: [],
     },
   });
 
   useEffect(() => {
     if (administratifRoleType && !isEdit) {
-      setValue('roleTypeId', administratifRoleType.id);
+      setValue("roleTypeId", administratifRoleType.id);
     }
   }, [administratifRoleType, isEdit, setValue]);
 
   useEffect(() => {
     if (isEdit && roleData) {
       reset({
-        name: roleData.role?.name || '',
-        description: roleData.role?.description || '',
-        roleTypeId: roleData.role?.role_type?.id || '',
+        name: roleData.role?.name || "",
+        description: roleData.role?.description || "",
+        roleTypeId: roleData.role?.role_type?.id || "",
         actionIds: [],
       });
 
@@ -113,34 +117,34 @@ export default function RoleForm() {
 
       if (isEdit && id) {
         await updateRole({ id, ...payload }).unwrap();
-        showAlert('Role updated successfully!', 'success');
+        showAlert("Role updated successfully!", "success");
       } else {
         await createRole(payload).unwrap();
-        showAlert('Role created successfully!', 'success');
+        showAlert("Role created successfully!", "success");
       }
 
       const returnPage = getReturnPage(searchParams, isEdit);
-      navigate(buildReturnUrl('/roles', isEdit, returnPage));
+      navigate(buildReturnUrl("/roles", isEdit, returnPage));
     } catch (err: unknown) {
       const errorMessage =
-        (err as { data?: { message?: string }; message?: string })?.data?.message ||
+        (err as { data?: { message?: string }; message?: string })?.data
+          ?.message ||
         (err as { message?: string })?.message ||
-        `Error ${isEdit ? 'updating' : 'creating'} role`;
+        `Error ${isEdit ? "updating" : "creating"} role`;
 
-      console.error(`Error ${isEdit ? 'updating' : 'creating'} role:`, err);
-      showAlert(errorMessage, 'error');
+      showAlert(errorMessage, "error");
     }
   };
 
   const handleCancel = () => {
-    navigate('/roles');
+    navigate("/roles");
   };
 
   return (
     <>
       <Grid size={12}>
         <CustomInput
-          {...register('name')}
+          {...register("name")}
           fullWidth
           label="Role Name *"
           error={!!errors.name}
@@ -151,7 +155,7 @@ export default function RoleForm() {
 
       <Grid size={12}>
         <CustomInput
-          {...register('description')}
+          {...register("description")}
           fullWidth
           label="Description *"
           multiline

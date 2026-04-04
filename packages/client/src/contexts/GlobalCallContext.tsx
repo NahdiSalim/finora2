@@ -389,11 +389,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
 
       try {
         await startStream(type);
-      } catch (error) {
-        console.error(
-          "[GlobalCallContext] Failed to start media stream:",
-          error,
-        );
+      } catch {
         resetCallState();
         alert(
           "Impossible d'accéder au microphone/caméra. Veuillez autoriser l'accès dans les paramètres du navigateur.",
@@ -507,7 +503,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
 
     try {
       await startStream(incomingType);
-    } catch (error) {
+    } catch {
       resetCallState();
       alert("Impossible d'accéder au microphone/caméra.");
       return;

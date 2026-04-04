@@ -61,13 +61,12 @@ function FolderTreeItem({
       parentId: folderId,
       limit: 500,
       status: "active",
+      itemType: "folder",
     },
     { skip: !isExpanded },
   );
   const childFolders =
-    data?.data
-      ?.filter((d) => d.isFolder)
-      .map((d) => ({ id: d.id, name: d.name })) ?? [];
+    data?.data?.map((d) => ({ id: d.id, name: d.name })) ?? [];
 
   return (
     <>
@@ -171,24 +170,23 @@ export default function RequestModal({ open, onClose }: Props) {
       parentId: undefined,
       limit: 500,
       status: "active",
+      itemType: "folder",
     },
     { skip: !open || activeTab !== "select" },
   );
   const rootFolders =
-    rootData?.data
-      ?.filter((d) => d.isFolder)
-      .map((d) => ({ id: d.id, name: d.name })) ?? [];
+    rootData?.data?.map((d) => ({ id: d.id, name: d.name })) ?? [];
 
   const { data: currentFolderData } = useGetDocumentsQuery(
     {
       parentId: selectedFolderId ?? undefined,
       limit: 500,
       status: "active",
+      itemType: "file",
     },
     { skip: !open || activeTab !== "select" },
   );
-  const currentFiles =
-    currentFolderData?.data?.filter((d) => !d.isFolder) ?? [];
+  const currentFiles = currentFolderData?.data ?? [];
 
   useEffect(() => {
     if (!open) {

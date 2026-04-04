@@ -69,6 +69,14 @@ interface UseChatSocketOptions {
   onMessageUpdated?: (msg: SocketMessage) => void;
   onMessageDeleted?: (data: { messageId: number; roomId?: number }) => void;
   onTyping?: (data: TypingPayload) => void;
+  onCallMessageUpdated?: (data: {
+    messageId: number;
+    roomId: number;
+    callId: number;
+    status: string;
+    duration: number;
+    content: string;
+  }) => void;
 }
 
 // ── Hook ────────────────────────────────────────────────────────────────────
@@ -118,10 +126,22 @@ export function useChatSocket(options: UseChatSocketOptions = {}) {
 
     const onTyping = (data: TypingPayload) => optsRef.current.onTyping?.(data);
 
+    const onCallMessageUpdated = (data: {
+      messageId: number;
+      roomId: number;
+      callId: number;
+      status: string;
+      duration: number;
+      content: string;
+    }) => {
+      optsRef.current.onCallMessageUpdated?.(data);
+    };
+
     socket.on("message:new", onMessageNew);
     socket.on("message:updated", onMessageUpdated);
     socket.on("message:deleted", onMessageDeleted);
     socket.on("user:typing", onTyping);
+    socket.on("call:message-updated", onCallMessageUpdated);
 
     return () => {
       socket.off("connect", onConnect);
@@ -131,6 +151,7 @@ export function useChatSocket(options: UseChatSocketOptions = {}) {
       socket.off("message:updated", onMessageUpdated);
       socket.off("message:deleted", onMessageDeleted);
       socket.off("user:typing", onTyping);
+      socket.off("call:message-updated", onCallMessageUpdated);
     };
   }, []);
 

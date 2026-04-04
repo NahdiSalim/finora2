@@ -40,7 +40,14 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
       const pc = new RTCPeerConnection(ICE_SERVERS);
 
       if (localStream) {
-        localStream.getTracks().forEach((track) => {
+        const tracks = localStream.getTracks();
+
+        tracks.forEach((track) => {
+          // Ensure track is enabled
+          if (!track.enabled) {
+            track.enabled = true;
+          }
+
           pc.addTrack(track, localStream);
         });
       }
@@ -85,8 +92,8 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
           );
           try {
             pc.restartIce();
-          } catch {
-            /* ignored */
+          } catch (error) {
+            // ICE restart failed
           }
         }
 
@@ -136,6 +143,10 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
 
   const makeOffer = useCallback(
     async (userId: number, retryCount: number = 0) => {
+      if (!localStream) {
+        return;
+      }
+
       const pc = createPeerConnection(userId);
 
       try {
@@ -156,7 +167,7 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
           next.delete(userId);
           return next;
         });
-      } catch {
+      } catch (error) {
         setConnectionErrors((prev) =>
           new Map(prev).set(userId, "Failed to create connection offer"),
         );
@@ -171,16 +182,30 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
         }
       }
     },
-    [createPeerConnection, roomId, socket],
+    [createPeerConnection, roomId, socket, localStream],
   );
 
   const handleOffer = useCallback(
     async (userId: number, offer: RTCSessionDescriptionInit) => {
+      if (!localStream) {
+        // Wait a bit for localStream to be ready
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        if (!localStream) {
+          return;
+        }
+      }
+
       const pc = createPeerConnection(userId);
 
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await pc.createAnswer();
+
+        const answer = await pc.createAnswer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true,
+        });
+
         await pc.setLocalDescription(answer);
 
         socket.emit("call:answer", {
@@ -195,17 +220,17 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
           for (const candidate of pendingCandidates) {
             try {
               await pc.addIceCandidate(new RTCIceCandidate(candidate));
-            } catch {
-              /* ignored */
+            } catch (error) {
+              // Failed to add ICE candidate
             }
           }
           pendingIceCandidatesRef.current.delete(userId);
         }
-      } catch {
-        /* ignored */
+      } catch (error) {
+        // Failed to handle offer
       }
     },
-    [createPeerConnection, roomId, socket],
+    [createPeerConnection, roomId, socket, localStream],
   );
 
   const handleAnswer = useCallback(
@@ -226,11 +251,12 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
                 /* ignored */
               }
             }
-            pendingIceCandidatesRef.current.delete(userId);
           }
         } catch {
           /* ignored */
         }
+      } catch (error) {
+        // Failed to handle answer
       }
     },
     [],
@@ -289,9 +315,11 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
   }, []);
 
   useEffect(() => {
-    if (!localStream) return;
+    if (!localStream) {
+      return;
+    }
 
-    peersRef.current.forEach((pc) => {
+    peersRef.current.forEach((pc, userId) => {
       const senders = pc.getSenders();
       const audioTrack = localStream.getAudioTracks()[0];
       const videoTrack = localStream.getVideoTracks()[0];

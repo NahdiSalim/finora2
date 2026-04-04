@@ -69,7 +69,7 @@ export type MessageAppointment = {
 export type MessageCall = {
   id: number;
   callType: "audio" | "video";
-  status: "missed" | "completed" | "rejected" | "cancelled";
+  status: "missed" | "completed" | "rejected" | "cancelled" | "ongoing";
   duration?: number;
   initiatorId: number;
 };

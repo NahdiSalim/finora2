@@ -30,6 +30,7 @@ type IncomingCallData = {
   callerAvatar?: string;
   roomId: number;
   callType: CallType;
+  isGroup?: boolean;
 };
 
 type GlobalCallContextValue = {
@@ -58,6 +59,11 @@ type GlobalCallContextValue = {
     type: CallType,
     participants: CallParticipant[],
     roomName?: string,
+    isGroup?: boolean,
+  ) => Promise<void>;
+  joinCall: (
+    roomId: number,
+    callId: number,
     isGroup?: boolean,
   ) => Promise<void>;
   acceptCall: () => Promise<void>;
@@ -95,8 +101,8 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
         currentUserIdRef.current = payload.sub || 0;
-      } catch {
-        /* ignored */
+      } catch (error) {
+        // Token parse error
       }
     }
   }, []);
@@ -169,6 +175,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
         roomId: number;
         callType: CallType;
         initiatorName: string;
+        isGroup?: boolean;
       }) => {
         setIncomingCallData({
           callId: data.callId,
@@ -176,6 +183,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
           callerName: data.initiatorName,
           roomId: data.roomId,
           callType: data.callType,
+          isGroup: data.isGroup,
         });
         setCallState("incoming");
       },
@@ -243,11 +251,23 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
     socketInstance.on(
       "call:user-joined",
       (data: { userId: number; roomId: number; userName?: string }) => {
-        if (
-          callState === "active" &&
-          data.userId !== currentUserIdRef.current
-        ) {
-          makeOffer(data.userId);
+        if (data.userId !== currentUserIdRef.current) {
+          // Ensure localStream is ready before making offer
+          if (!localStream) {
+            // Wait for stream to be ready
+            const checkInterval = setInterval(() => {
+              if (localStream) {
+                clearInterval(checkInterval);
+                makeOffer(data.userId);
+              }
+            }, 100);
+
+            // Timeout after 3 seconds
+            setTimeout(() => clearInterval(checkInterval), 3000);
+          } else {
+            // Make offer immediately
+            makeOffer(data.userId);
+          }
 
           setParticipants((prev) => {
             if (prev.some((p) => p.id === data.userId)) {
@@ -269,38 +289,50 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
     socketInstance.on(
       "call:existing-participants",
       (data: { participants: Array<{ userId: number; userName: string }> }) => {
-        data.participants.forEach((participant) => {
-          if (participant.userId !== currentUserIdRef.current) {
-            setParticipants((prev) => {
-              if (prev.some((p) => p.id === participant.userId)) {
-                return prev;
-              }
-              return [
-                ...prev,
-                {
-                  id: participant.userId,
-                  name: participant.userName,
-                },
-              ];
-            });
-          }
-        });
+        // Wait a bit to ensure localStream is fully ready
+        setTimeout(() => {
+          data.participants.forEach((participant) => {
+            if (participant.userId !== currentUserIdRef.current) {
+              makeOffer(participant.userId);
+
+              setParticipants((prev) => {
+                if (prev.some((p) => p.id === participant.userId)) {
+                  return prev;
+                }
+                return [
+                  ...prev,
+                  {
+                    id: participant.userId,
+                    name: participant.userName,
+                  },
+                ];
+              });
+            }
+          });
+        }, 500);
       },
     );
 
     socketInstance.on(
       "call:rejected",
       (data: { rejectedBy: number; roomId: number; callEnded?: boolean }) => {
+        // Only reset if the call actually ended (1:1 calls only)
+        // For group calls, rejection doesn't end the call
         if (data.callEnded) {
           resetCallState();
         }
+        // For group calls, ignore rejections - call continues
       },
     );
 
     socketInstance.on(
       "call:ended",
-      (data: { endedBy: number; roomId: number }) => {
-        resetCallState();
+      (data: { endedBy: number; roomId: number; callEnded?: boolean }) => {
+        // Only reset if call actually ended (last person left)
+        // For group calls, individual leaves don't end the call
+        if (data.callEnded !== false) {
+          resetCallState();
+        }
       },
     );
 
@@ -374,6 +406,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
           roomId: rid,
           callType: type,
           participants: [currentUserIdRef.current, ...participantIds],
+          isGroup: isGrp,
         },
         (response: any) => {
           if (response?.success && response?.callId) {
@@ -390,6 +423,63 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
     [startStream, resetCallState, callState],
   );
 
+  // Join an ongoing call
+  const joinCall = useCallback(
+    async (rid: number, callId: number, isGrp: boolean = true) => {
+      if (callState !== "idle") {
+        return;
+      }
+
+      console.log("[GlobalCallContext] Joining call:", callId);
+
+      // CRITICAL FIX: Get call info first to know the call type
+      const socketInstance = getSocket();
+
+      // First, get the call type
+      socketInstance.emit(
+        "call:join",
+        {
+          roomId: rid,
+          callId,
+        },
+        async (response: any) => {
+          if (!response?.success) {
+            console.error("[GlobalCallContext] Failed to join call:", response);
+            alert("Impossible de rejoindre l'appel. Il est peut-être terminé.");
+            return;
+          }
+
+          const type: CallType = response.callType || "video";
+
+          setCallType(type);
+          setRoomId(rid);
+          setIsGroup(isGrp);
+          callIdRef.current = callId;
+
+          // Start media stream FIRST, before announcing we're ready
+          try {
+            await startStream(type);
+
+            // Only set state to active AFTER media is ready
+            setCallState("active");
+            callStartTimeRef.current = Date.now();
+
+            // Now announce we're ready
+            socketInstance.emit("call:ready", {
+              roomId: rid,
+              callId,
+            });
+          } catch (error) {
+            resetCallState();
+            alert("Impossible d'accéder au microphone/caméra.");
+            return;
+          }
+        },
+      );
+    },
+    [startStream, resetCallState, callState],
+  );
+
   // Accept incoming call
   const acceptCall = useCallback(async () => {
     if (!incomingCallData) {
@@ -399,6 +489,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
     const incomingType = incomingCallData.callType;
     setCallType(incomingType);
     setRoomId(incomingCallData.roomId);
+    setIsGroup(incomingCallData.isGroup || false);
     setCallState("active");
     callStartTimeRef.current = Date.now();
 
@@ -440,10 +531,21 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
       roomId: incomingCallData.roomId,
       callerId: incomingCallData.callerId,
       callId: incomingCallData.callId,
+      isGroup: incomingCallData.isGroup,
     });
 
-    resetCallState();
-  }, [incomingCallData, resetCallState]);
+    // For group calls, just dismiss the notification (don't reset if we're already in the call)
+    // For 1:1 calls, reset the state
+    if (!incomingCallData.isGroup) {
+      resetCallState();
+    } else {
+      // Just dismiss the incoming notification
+      setIncomingCallData(null);
+      if (callState === "incoming") {
+        setCallState("idle");
+      }
+    }
+  }, [incomingCallData, resetCallState, callState]);
 
   // End active call
   const endCall = useCallback(() => {
@@ -500,6 +602,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
       connectionErrors,
       callDuration,
       initiateCall,
+      joinCall,
       acceptCall,
       rejectCall,
       endCall,
@@ -524,6 +627,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
       connectionErrors,
       callDuration,
       initiateCall,
+      joinCall,
       acceptCall,
       rejectCall,
       endCall,

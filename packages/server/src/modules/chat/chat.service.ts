@@ -144,11 +144,8 @@ export class ChatService {
       try {
         await this.findOrCreateDirectRoom(userId, contactId);
         created++;
-      } catch (err) {
-        console.error(
-          `[backfillDirectRooms] failed for userId=${userId} contactId=${contactId}:`,
-          err
-        );
+      } catch {
+        // Error creating direct room
       }
     }
 
@@ -748,7 +745,7 @@ export class ChatService {
 
   async sendMessage(userId: number, dto: SendMessageDto, files?: Express.Multer.File[]) {
     // Vérifier que l'utilisateur est participant de la salle
-    const room = await this.getRoomById(dto.roomId, userId);
+    await this.getRoomById(dto.roomId, userId);
 
     const attachmentUrls: string[] = [];
 
@@ -790,8 +787,26 @@ export class ChatService {
     }
 
     // Créer le message
-    // For file messages: store objectName in content field (no attachments[] column in schema)
-    const messageContent = attachmentUrls.length > 0 ? attachmentUrls[0] : dto.content;
+    // Store file messages with proper handling of both text and file
+    let messageContent: string;
+    let fileObjectName: string | null = null;
+
+    if (attachmentUrls.length > 0) {
+      fileObjectName = attachmentUrls[0];
+      // If there's user text along with the file, store them together in JSON format
+      if (dto.content && dto.content.trim()) {
+        messageContent = JSON.stringify({
+          text: dto.content,
+          file: fileObjectName,
+        });
+      } else {
+        // No text, just store the file object name directly
+        messageContent = fileObjectName;
+      }
+    } else {
+      // No file, just text
+      messageContent = dto.content || '';
+    }
 
     const message = await this.prisma.chatMessage.create({
       data: {
@@ -845,10 +860,28 @@ export class ChatService {
       },
     });
 
+    // Generate presigned URL for the file
     let fileUrl: string | null = null;
-    if ((dto.type === 'file' || dto.type === 'image') && messageContent) {
+    let displayContent = message.content;
+    let fileName: string | null = null;
+
+    if ((dto.type === 'file' || dto.type === 'image') && fileObjectName) {
       try {
-        fileUrl = await this.minioService.getPresignedUrl(messageContent, 7 * 24 * 60 * 60);
+        fileUrl = await this.minioService.getPresignedUrl(fileObjectName, 7 * 24 * 60 * 60);
+        fileName = fileObjectName; // Store the file object name/path
+
+        // If content is JSON (has both text and file), extract the text for display
+        if (message.content.startsWith('{') && message.content.includes('"text"')) {
+          try {
+            const parsed = JSON.parse(message.content);
+            displayContent = parsed.text || '';
+          } catch {
+            // If JSON parse fails, keep original content
+          }
+        } else {
+          // If not JSON, content is the file path, so don't show it as text
+          displayContent = '';
+        }
       } catch {
         fileUrl = null;
       }
@@ -856,10 +889,31 @@ export class ChatService {
 
     return {
       ...message,
+      content: displayContent, // Return the text content without the JSON wrapper
       appointment: normalizeAppointment(message.appointment),
       attachments: attachmentUrls,
       fileUrl,
+      fileName, // Add filename for frontend to use
     };
+  }
+
+  async getRoomMessagesForCallUpdate(roomId: number, callId: number) {
+    // Simplified version for call updates - no permission check needed
+    const messages = await this.prisma.chatMessage.findMany({
+      where: {
+        roomId,
+        callId,
+        type: 'call',
+        deleted: false,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      include: {
+        call: true,
+      },
+    });
+
+    return messages;
   }
 
   async getRoomMessages(roomId: number, userId: number, limit: number = 50, page: number = 1) {
@@ -901,19 +955,46 @@ export class ChatService {
 
     const total = await this.prisma.chatMessage.count({ where: { roomId, deleted: false } });
 
-    // Generate presigned URLs for file messages (content = MinIO objectName)
+    // Generate presigned URLs for file messages
     const messages = await Promise.all(
       rawMessages.map(async (msg) => {
         const appointment = normalizeAppointment(msg.appointment);
+
         if ((msg.type === 'file' || msg.type === 'image') && msg.content) {
+          let fileObjectName = msg.content;
+          let displayContent: string;
+          let fileName: string;
+
+          // Check if content is JSON format (has both text and file)
+          if (msg.content.startsWith('{') && msg.content.includes('"file"')) {
+            try {
+              const parsed = JSON.parse(msg.content);
+              fileObjectName = parsed.file;
+              displayContent = parsed.text || '';
+              fileName = fileObjectName;
+            } catch {
+              // If JSON parse fails, treat content as file object name
+              fileName = msg.content;
+              displayContent = msg.content;
+            }
+          } else {
+            // If not JSON, content is the file path
+            fileName = msg.content;
+            displayContent = ''; // Don't show file path as text
+          }
+
           try {
-            const fileUrl = await this.minioService.getPresignedUrl(msg.content, 7 * 24 * 60 * 60);
-            return { ...msg, appointment, fileUrl };
+            const fileUrl = await this.minioService.getPresignedUrl(
+              fileObjectName,
+              7 * 24 * 60 * 60
+            );
+            return { ...msg, content: displayContent, appointment, fileUrl, fileName };
           } catch {
-            return { ...msg, appointment, fileUrl: null };
+            return { ...msg, content: displayContent, appointment, fileUrl: null, fileName };
           }
         }
-        return { ...msg, appointment, fileUrl: null };
+
+        return { ...msg, appointment, fileUrl: null, fileName: null };
       })
     );
 
@@ -1096,9 +1177,31 @@ export class ChatService {
 
         // Generate presigned URL for file messages
         let fileUrl: string | null = null;
+        let displayContent = msg.content;
+        let fileName: string | null = null;
+
         if ((msg.type === 'file' || msg.type === 'image') && msg.content) {
+          let fileObjectName = msg.content;
+
+          // Check if content is JSON format (has both text and file)
+          if (msg.content.startsWith('{') && msg.content.includes('"file"')) {
+            try {
+              const parsed = JSON.parse(msg.content);
+              fileObjectName = parsed.file;
+              displayContent = parsed.text || '';
+              fileName = fileObjectName;
+            } catch {
+              // If JSON parse fails, treat content as file object name
+              fileName = msg.content;
+            }
+          } else {
+            // If not JSON, content is the file path
+            fileName = msg.content;
+            displayContent = ''; // Don't show file path as text
+          }
+
           try {
-            fileUrl = await this.minioService.getPresignedUrl(msg.content, 7 * 24 * 60 * 60);
+            fileUrl = await this.minioService.getPresignedUrl(fileObjectName, 7 * 24 * 60 * 60);
           } catch {
             fileUrl = null;
           }
@@ -1108,7 +1211,7 @@ export class ChatService {
           id: msg.id,
           roomId: msg.roomId,
           senderId: msg.senderId,
-          content: msg.content,
+          content: displayContent,
           type: msg.type,
           createdAt: msg.createdAt,
           unread: isUnread,
@@ -1120,6 +1223,7 @@ export class ChatService {
             category,
           },
           fileUrl,
+          fileName,
           request: msg.request,
           task: msg.task,
           appointment: msg.appointment ? normalizeAppointment(msg.appointment) : null,
@@ -1239,6 +1343,27 @@ export class ChatService {
             lastName: true,
           },
         },
+      },
+    });
+
+    return updatedMessage;
+  }
+
+  async updateMessage(messageId: number, data: { content?: string; [key: string]: any }) {
+    const updatedMessage = await this.prisma.chatMessage.update({
+      where: { id: messageId },
+      data,
+      include: {
+        sender: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        call: true,
       },
     });
 

@@ -8,6 +8,7 @@ import useMediaQuery from "@mui/material/useMediaQuery";
 import type { Dayjs } from "dayjs";
 import { useSelector } from "react-redux";
 import { useAppDispatch } from "src/hooks/use-redux";
+import { PageHeader } from "src/layouts/components/page-header";
 
 import ConversationsList from "./views/ConversationsList";
 import ChatWindow from "./views/ChatWindow";
@@ -549,6 +550,47 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
         else next.delete(roomId);
         return next;
       });
+    },
+
+    onCallMessageUpdated: ({
+      messageId,
+      roomId,
+      callId,
+      status,
+      duration,
+      content,
+    }) => {
+      // Update the message in the cache - for ALL pages, not just active room
+      dispatch(
+        chatApi.util.updateQueryData(
+          "getRoomMessages",
+          { roomId, page: 1, limit: MESSAGES_PAGE_SIZE },
+          (draft) => {
+            const existing = draft.messages.find((m) => m.id === messageId);
+            if (existing && existing.call) {
+              existing.content = content;
+              existing.call.status = status;
+              existing.call.duration = duration;
+            }
+          },
+        ),
+      );
+
+      // Also update the preview in rooms list
+      const patchRoomsCache = (params: typeof roomsParamsRef.current) => {
+        dispatch(
+          chatApi.util.updateQueryData("getUserRooms", params, (draft) => {
+            const room = draft.data.find((r) => r.id === roomId);
+            if (room && room.lastMessage) {
+              room.lastMessage.content = content;
+              room.lastActivity = new Date().toISOString();
+            }
+          }),
+        );
+      };
+
+      patchRoomsCache(roomsParamsRef.current);
+      patchRoomsCache(allRoomsParamsRef.current);
     },
   });
 
@@ -1509,50 +1551,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
   const isRemoteTyping = typingRooms.has(selectedConversation);
 
   // ── Render helpers ────────────────────────────────────────────────────────
-  const renderContentHeader = () => (
-    <Box
-      sx={{
-        flexShrink: 0,
-        mb: isMobile ? 1.5 : 2,
-        px: isMobile ? 0.5 : 0.25,
-        pt: isMobile ? 0.5 : 0,
-      }}
-    >
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: isMobile ? "space-between" : "flex-start",
-          gap: isMobile ? 1 : 1.25,
-          mb: 0.75,
-          width: "100%",
-        }}
-      >
-        <Box
-          component="span"
-          sx={{
-            fontSize: isMobile ? 24 : 30,
-            fontWeight: 600,
-            lineHeight: 1.15,
-            color: (theme.palette.grey as any)[1000],
-            letterSpacing: "-0.02em",
-          }}
-        >
-          Messagerie
-        </Box>
-      </Box>
-
-      <Box
-        sx={{
-          fontSize: isMobile ? 13 : 14,
-          color: theme.palette.info.light,
-          lineHeight: 1.45,
-        }}
-      >
-        Un espace simple et sécurisé pour vos échanges.
-      </Box>
-    </Box>
-  );
 
   const renderMediaPanel = (content: React.ReactNode) => (
     <Paper
@@ -1594,21 +1592,20 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
 
   if (isMobile) {
     return (
-      <>
+      <PageHeader
+        title="Messagerie"
+        caption="Un espace simple et sécurisé pour vos échanges."
+      >
         {mobileView === "list" && (
           <Box
             sx={{
               width: "100%",
               minWidth: 0,
-              height: `calc(100dvh - ${MOBILE_HEADER_HEIGHT}px - ${MOBILE_BOTTOM_NAV_HEIGHT}px)`,
+              height: `calc(100dvh - ${MOBILE_HEADER_HEIGHT}px - ${MOBILE_BOTTOM_NAV_HEIGHT}px - 120px)`,
               minHeight: 0,
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
-              px: 1.5,
-              pt: 1.25,
-              pb: 0,
-              backgroundColor: theme.palette.common.white,
             }}
           >
             <Box
@@ -1620,8 +1617,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
                 overflow: "hidden",
               }}
             >
-              {renderContentHeader()}
-
               <Box
                 sx={{
                   flex: 1,
@@ -1759,17 +1754,20 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
             onUpdate={handleUpdateGroup}
           />
         )}
-      </>
+      </PageHeader>
     );
   }
 
   return (
-    <>
+    <PageHeader
+      title="Messagerie"
+      caption="Un espace simple et sécurisé pour vos échanges."
+    >
       <Box
         sx={{
           height: isMedium
-            ? `calc(100vh - 120px - ${MOBILE_BOTTOM_NAV_HEIGHT}px)`
-            : "calc(100vh - 120px)",
+            ? `calc(100vh - 300px - ${MOBILE_BOTTOM_NAV_HEIGHT}px)`
+            : "calc(100vh - 300px)",
           minHeight: 0,
           width: "100%",
           display: "flex",
@@ -1787,8 +1785,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
             overflow: "hidden",
           }}
         >
-          {renderContentHeader()}
-
           {desktopView === "media" ? (
             <Box
               sx={{
@@ -1939,6 +1935,6 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
           onUpdate={handleUpdateGroup}
         />
       )}
-    </>
+    </PageHeader>
   );
 }

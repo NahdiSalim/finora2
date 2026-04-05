@@ -236,24 +236,25 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
   const handleAnswer = useCallback(
     async (userId: number, answer: RTCSessionDescriptionInit) => {
       const pc = peersRef.current.get(userId);
+      try {
+        if (pc) {
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
-      if (pc) {
-        try {
-          await pc.setRemoteDescription(new RTCSessionDescription(answer));
-
-          const pendingCandidates =
-            pendingIceCandidatesRef.current.get(userId) || [];
-          if (pendingCandidates.length > 0) {
-            for (const candidate of pendingCandidates) {
-              try {
-                await pc.addIceCandidate(new RTCIceCandidate(candidate));
-              } catch {
-                /* ignored */
+            const pendingCandidates =
+              pendingIceCandidatesRef.current.get(userId) || [];
+            if (pendingCandidates.length > 0) {
+              for (const candidate of pendingCandidates) {
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch {
+                  /* ignored */
+                }
               }
             }
+          } catch {
+            /* ignored */
           }
-        } catch {
-          /* ignored */
         }
       } catch (error) {
         // Failed to handle answer

@@ -236,25 +236,25 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
   const handleAnswer = useCallback(
     async (userId: number, answer: RTCSessionDescriptionInit) => {
       const pc = peersRef.current.get(userId);
-
-      if (!pc) {
-        return;
-      }
-
       try {
-        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        if (pc) {
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
-        const pendingCandidates =
-          pendingIceCandidatesRef.current.get(userId) || [];
-        if (pendingCandidates.length > 0) {
-          for (const candidate of pendingCandidates) {
-            try {
-              await pc.addIceCandidate(new RTCIceCandidate(candidate));
-            } catch (error) {
-              // Failed to add ICE candidate
+            const pendingCandidates =
+              pendingIceCandidatesRef.current.get(userId) || [];
+            if (pendingCandidates.length > 0) {
+              for (const candidate of pendingCandidates) {
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch {
+                  /* ignored */
+                }
+              }
             }
+          } catch {
+            /* ignored */
           }
-          pendingIceCandidatesRef.current.delete(userId);
         }
       } catch (error) {
         // Failed to handle answer
@@ -271,8 +271,8 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
         if (pc.remoteDescription) {
           try {
             await pc.addIceCandidate(new RTCIceCandidate(candidate));
-          } catch (error) {
-            // Failed to add ICE candidate
+          } catch {
+            /* ignored */
           }
         } else {
           const pending = pendingIceCandidatesRef.current.get(userId) || [];
@@ -329,7 +329,7 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
         const audioSender = senders.find((s) => s.track?.kind === "audio");
         if (audioSender) {
           audioSender.replaceTrack(audioTrack).catch(() => {
-            // Failed to replace audio track
+            /* ignored */
           });
         } else {
           pc.addTrack(audioTrack, localStream);
@@ -340,7 +340,7 @@ export function useWebRTC(roomId: number, localStream: MediaStream | null) {
         const videoSender = senders.find((s) => s.track?.kind === "video");
         if (videoSender) {
           videoSender.replaceTrack(videoTrack).catch(() => {
-            // Failed to replace video track
+            /* ignored */
           });
         } else {
           pc.addTrack(videoTrack, localStream);

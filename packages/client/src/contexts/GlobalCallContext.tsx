@@ -507,7 +507,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
 
     try {
       await startStream(incomingType);
-    } catch (error) {
+    } catch {
       resetCallState();
       alert("Impossible d'accéder au microphone/caméra.");
       return;

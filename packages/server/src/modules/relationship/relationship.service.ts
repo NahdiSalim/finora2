@@ -121,21 +121,6 @@ export class RelationshipService {
       accountingFirmId = isClientToAccountant ? dto.targetCompanyId : user.companyId!;
     }
 
-    // Bloquer si le client a déjà une relation active avec un comptable
-    if (senderIsClient || (!senderIsAccountant && clientCompanyId === user.companyId)) {
-      const activeRelationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
-        where: {
-          clientCompanyId: user.companyId!,
-          status: 'active',
-        },
-      });
-      if (activeRelationship) {
-        throw new BadRequestException(
-          'Vous êtes déjà en relation avec un comptable. Vous ne pouvez pas envoyer une nouvelle invitation.'
-        );
-      }
-    }
-
     // Check if relationship already exists
     const existingRelationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
       where: {
@@ -184,6 +169,7 @@ export class RelationshipService {
         action: 'invitation_received',
         priority: 'high',
         actorName: senderName,
+        actorId: userId,
         data: {
           invitationId: invitation.id,
           companyName,
@@ -304,17 +290,18 @@ export class RelationshipService {
 
     const isAccepted = dto.response === InvitationResponse.ACCEPT;
 
-    // Si acceptée, annuler toutes les autres invitations pending du même client
+    // Si acceptée, rejeter toutes les autres relations du même client (pending ET active)
     if (isAccepted) {
       await this.prisma.clientAccountingFirmRelationship.updateMany({
         where: {
           clientCompanyId: invitation.clientCompanyId,
-          status: 'pending',
+          status: { in: ['pending', 'active'] },
           id: { not: invitationId },
         },
         data: {
           status: 'rejected',
-          rejectionReason: 'Annulée automatiquement : le client a accepté une autre invitation.',
+          rejectionReason:
+            'Annulée automatiquement : le client a établi une nouvelle relation avec un autre cabinet.',
           responseDate: new Date(),
         },
       });
@@ -337,12 +324,10 @@ export class RelationshipService {
 
       if (clientUser) {
         try {
-          console.log(invitation, 'ivnici');
           const firmCompany = await this.prisma.company.findUnique({
             where: { id: invitation.accountingFirmId },
             select: { name: true },
           });
-          console.log(firmCompany, 'firmCompany');
 
           await this.notificationService.notify({
             recipientId: clientUser.id,
@@ -350,6 +335,7 @@ export class RelationshipService {
             action: 'invitation_accepted',
             priority: 'normal',
             actorName: firmCompany?.name ?? invitation.accountingFirm.name,
+            actorId: userId,
             data: notificationData,
           });
         } catch (err) {

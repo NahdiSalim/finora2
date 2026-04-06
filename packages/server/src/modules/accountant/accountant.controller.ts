@@ -205,6 +205,7 @@ export class PublicAccountantsController {
     description: 'List of accountant profiles retrieved successfully',
   })
   async browseAccountants(
+    @Req() req: AuthRequest,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('location') location?: string,
@@ -213,6 +214,7 @@ export class PublicAccountantsController {
     @Query('reviewMin') reviewMin?: string,
     @Query('reviewMax') reviewMax?: string
   ) {
+    const clientCompanyId = req.user?.companyId ?? undefined;
     return await this.accountantService.browseAccountants({
       page: page ? parseInt(page) : 1,
       limit: limit ? parseInt(limit) : 20,
@@ -221,6 +223,7 @@ export class PublicAccountantsController {
       search,
       reviewMin: reviewMin ? parseFloat(reviewMin) : undefined,
       reviewMax: reviewMax ? parseFloat(reviewMax) : undefined,
+      clientCompanyId,
     });
   }
 

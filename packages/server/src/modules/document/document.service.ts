@@ -810,10 +810,25 @@ export class DocumentService {
     const updated = await this.prisma.document.update({
       where: { id },
       data: {
-        name: dto.name,
-        parentId: dto.parentId,
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.parentId !== undefined && { parentId: dto.parentId }),
+        ...(dto.category !== undefined && {
+          category: dto.category,
+          // Reset extraction status when category changes
+          extractionStatus: dto.category === 'facture' ? 'pending' : null,
+          processingStatus: dto.category === 'facture' ? 'pending' : document.processingStatus,
+        }),
       },
     });
+
+    // Trigger invoice extraction if category changed to 'facture' and it's a file
+    if (dto.category === 'facture' && !document.isFolder) {
+      const companyId = document.companyId!;
+      // Fire and forget — don't block the response
+      this.invoiceExtractionService
+        .extractAndSaveInvoice(id, companyId)
+        .catch((err) => console.error('[updateDocument] extraction error:', err?.message));
+    }
 
     return {
       status: 'success',

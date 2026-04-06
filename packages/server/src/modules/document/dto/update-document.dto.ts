@@ -11,4 +11,9 @@ export class UpdateDocumentDto {
   @IsOptional()
   @IsInt()
   parentId?: number;
+
+  @ApiPropertyOptional({ description: 'Document category (e.g. facture, contrat, rapport)' })
+  @IsOptional()
+  @IsString()
+  category?: string;
 }

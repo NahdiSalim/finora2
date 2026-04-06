@@ -610,6 +610,7 @@ export class AccountantService {
     search?: string;
     reviewMin?: number;
     reviewMax?: number;
+    clientCompanyId?: number;
   }) {
     const page = filters.page || 1;
     const limit = Math.min(filters.limit || 20, 50); // Max 50 per page
@@ -801,6 +802,43 @@ export class AccountantService {
         return true;
       });
 
+      // If client is connected, fetch their relationships with all these accountants
+      const relationshipMap: Map<
+        number,
+        { status: string; relationshipStart: Date | null; relationshipId: number }
+      > = new Map();
+      if (filters.clientCompanyId) {
+        const accountingFirmIds = completeProfiles
+          .map((a) => a.company?.id)
+          .filter((id): id is number => !!id);
+
+        if (accountingFirmIds.length > 0) {
+          const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
+            where: {
+              clientCompanyId: filters.clientCompanyId,
+              accountingFirmId: { in: accountingFirmIds },
+            },
+            select: {
+              id: true,
+              accountingFirmId: true,
+              status: true,
+              relationshipStart: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          for (const rel of relationships) {
+            if (!relationshipMap.has(rel.accountingFirmId)) {
+              relationshipMap.set(rel.accountingFirmId, {
+                relationshipId: rel.id,
+                status: rel.status,
+                relationshipStart: rel.relationshipStart,
+              });
+            }
+          }
+        }
+      }
+
       // Generate presigned URLs for all accountants with complete profiles
       const accountantsWithUrls = await Promise.all(
         completeProfiles.map(async (accountant) => {
@@ -856,6 +894,9 @@ export class AccountantService {
             department: accountant.department,
             cin: accountant.cin,
             diploma: accountant.diploma,
+            relationship: accountant.company?.id
+              ? (relationshipMap.get(accountant.company.id) ?? null)
+              : null,
             company: accountant.company
               ? {
                   id: accountant.company.id,

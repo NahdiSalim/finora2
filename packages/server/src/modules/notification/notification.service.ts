@@ -1,12 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { NotificationGateway } from './notification.gateway';
+import { MinioService } from '../../common/services/minio.service';
 
 @Injectable()
 export class NotificationService {
   constructor(
     private prisma: PrismaService,
-    private notificationGateway: NotificationGateway
+    private notificationGateway: NotificationGateway,
+    private minioService: MinioService
   ) {}
 
   /**
@@ -85,10 +87,48 @@ export class NotificationService {
       }),
     ]);
 
+    // Extraire les actorIds uniques depuis data JSON
+    const parsedNotifications = notifications.map((n) => ({
+      ...n,
+      data: n.data ? JSON.parse(n.data as string) : null,
+    }));
+
+    const actorIds = [
+      ...new Set(
+        parsedNotifications
+          .map((n) => n.data?.actorId)
+          .filter((id): id is number => typeof id === 'number')
+      ),
+    ];
+
+    // Récupérer les photos des acteurs
+    const actorPhotoMap = new Map<number, string | null>();
+    if (actorIds.length > 0) {
+      const actors = await this.prisma.user.findMany({
+        where: { id: { in: actorIds } },
+        select: { id: true, photo: true },
+      });
+
+      await Promise.all(
+        actors.map(async (actor) => {
+          if (actor.photo) {
+            try {
+              const url = await this.minioService.getPresignedUrl(actor.photo, 7 * 24 * 60 * 60);
+              actorPhotoMap.set(actor.id, url);
+            } catch {
+              actorPhotoMap.set(actor.id, actor.photo);
+            }
+          } else {
+            actorPhotoMap.set(actor.id, null);
+          }
+        })
+      );
+    }
+
     return {
-      notifications: notifications.map((n) => ({
+      notifications: parsedNotifications.map((n) => ({
         ...n,
-        data: n.data ? JSON.parse(n.data) : null,
+        actorPhotoUrl: n.data?.actorId ? (actorPhotoMap.get(n.data.actorId) ?? null) : null,
       })),
       total,
       unreadCount,
@@ -192,6 +232,7 @@ export class NotificationService {
     action: string;
     data?: any;
     actorName?: string;
+    actorId?: number;
     priority?: string;
   }) {
     const {
@@ -200,8 +241,12 @@ export class NotificationService {
       action,
       data = {},
       actorName = 'Système',
+      actorId,
       priority = 'normal',
     } = params;
+
+    // Inclure actorId dans data pour pouvoir récupérer la photo plus tard
+    const enrichedData = actorId ? { ...data, actorId } : data;
 
     // Templates de notifications
     const templates: Record<string, any> = {
@@ -368,7 +413,7 @@ export class NotificationService {
           type,
           title: template.title,
           message: template.message,
-          data,
+          data: enrichedData,
           actionUrl: template.actionUrl,
           priority: priority || template.priority,
         })

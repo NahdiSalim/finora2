@@ -137,6 +137,7 @@ export class AppointmentService {
                 'Votre comptable'
               : `${(appointment as any).client?.firstName ?? ''} ${(appointment as any).client?.lastName ?? ''}`.trim() ||
                 'Un client',
+            actorId: userId,
             data: { appointmentId: appointment.id },
           })
           .catch(() => {});
@@ -595,6 +596,7 @@ export class AppointmentService {
           type: 'appointment',
           action: isConfirmed ? 'confirmed' : 'rejected',
           actorName: isAccountant ? 'Votre comptable' : 'Le client',
+          actorId: userId,
           data: { appointmentId },
         })
         .catch(() => {});
@@ -689,6 +691,7 @@ export class AppointmentService {
           type: 'appointment',
           action: 'rescheduled',
           actorName: userId === appointment.clientId ? 'Le client' : 'Votre comptable',
+          actorId: userId,
           data: { appointmentId: newAppointment.id },
         })
         .catch(() => {});
@@ -745,6 +748,7 @@ export class AppointmentService {
           type: 'appointment',
           action: 'cancelled',
           actorName: userId === appointment.clientId ? 'Le client' : 'Votre comptable',
+          actorId: userId,
           data: { appointmentId },
         })
         .catch(() => {});

@@ -45,6 +45,7 @@ export interface Accountant {
   accountantId?: number;
   /** Company id (used for relationship invitation) */
   companyId?: number;
+  relationshipStatus?: string;
 }
 
 interface AccountantCardProps {
@@ -59,6 +60,10 @@ interface AccountantCardProps {
   scheduleButtonLabel?: string;
   /** Si fourni, le bouton Schedule appelle ce callback au lieu de naviguer vers le profil */
   onScheduleClick?: () => void;
+  /** Désactive le bouton principal (ex: invitation déjà envoyée) */
+  scheduleDisabled?: boolean;
+  /** Type d'action du bouton principal */
+  scheduleActionType?: "invite" | "schedule";
 }
 
 // ----------------------------------------------------------------------
@@ -108,6 +113,8 @@ export function AccountantCard({
   getProfilePath,
   scheduleButtonLabel = "Planifier",
   onScheduleClick,
+  scheduleDisabled = false,
+  scheduleActionType = "schedule",
 }: AccountantCardProps) {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -445,11 +452,17 @@ export function AccountantCard({
                 variant="contained"
                 color="primary"
                 fullWidth
+                disabled={scheduleDisabled}
                 startIcon={
-                  onScheduleClick ? <Handshake /> : <Calendar size={18} />
+                  scheduleActionType === "invite" ? (
+                    <Handshake />
+                  ) : (
+                    <Calendar size={18} />
+                  )
                 }
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (scheduleDisabled) return;
                   if (onScheduleClick) onScheduleClick();
                   else if (profilePath) navigate(profilePath);
                 }}

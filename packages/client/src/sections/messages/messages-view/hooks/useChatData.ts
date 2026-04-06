@@ -392,10 +392,11 @@ export function mapApiMessageToMessage(
   }
 
   if (msg.type === "file" || msg.type === "image") {
-    // content = user's message text or file name
+    // content = user's message text (can be empty if no text was provided)
+    // fileName = actual file object name/path from backend
     // fileUrl = presigned URL from backend for the actual file
     const url = msg.fileUrl || "";
-    const objectName = msg.content || "";
+    const objectName = (msg as any).fileName || msg.content || "";
     const fileName = objectName.split("/").pop() || objectName || "Fichier";
     // Derive category: trust server type hint ("image") first, then filename extension
     const lower = fileName.toLowerCase();
@@ -412,8 +413,8 @@ export function mapApiMessageToMessage(
     return {
       id: msg.id,
       type: "file" as const,
-      text: msg.content,
-      html: msg.content,
+      text: msg.content || "", // User's text message (empty if they didn't provide text)
+      html: msg.content || "",
       mine: isMine,
       time,
       date,

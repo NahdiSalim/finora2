@@ -286,13 +286,13 @@ export function MessagesPopover({ sx, ...other }: MessagesPopoverProps) {
     null,
   );
 
-  // Fetch recent messages with real-time updates
+  // Fetch recent messages with real-time updates via WebSocket
   const {
     data: recentMessagesData,
     isLoading,
     refetch,
   } = useGetRecentMessagesQuery(undefined, {
-    pollingInterval: 5000, // Poll every 5 seconds to ensure red dot stays in sync
+    // No polling - WebSocket handles real-time updates automatically
   });
 
   const [markAllAsRead, { isLoading: isMarkingAllAsRead }] =

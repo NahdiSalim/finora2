@@ -65,8 +65,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // Notifier les autres utilisateurs
       client.broadcast.emit('user:online', { userId });
-    } catch (error) {
-      console.error('Connection error:', error);
+    } catch {
       client.disconnect();
     }
   }
@@ -101,8 +100,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
             if (participants.size === 0) {
               const callId = this.activeCalls.get(roomId);
               if (callId) {
-                this.callService.endCall(callId, 0).catch((err) => {
-                  console.error('Error ending call on disconnect:', err);
+                this.callService.endCall(callId, 0).catch(() => {
+                  // Error ending call on disconnect
                 });
                 this.activeCalls.delete(roomId);
                 this.callParticipants.delete(roomId);
@@ -272,6 +271,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       roomId: number;
       callType: 'audio' | 'video';
       participants: number[];
+      isGroup?: boolean;
     }
   ) {
     try {
@@ -290,42 +290,77 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const participants = new Set<number>([userId]);
       this.callParticipants.set(data.roomId, participants);
 
-      // Set timeout for missed call (30 seconds)
+      // For group calls: set timeout to stop ringing (not end call)
+      // For 1:1 calls: set timeout to mark as missed and end call
+      const isGroupCall = data.isGroup || data.participants.length > 2;
+
+      // For group calls: immediately mark as ongoing and send message
+      if (isGroupCall) {
+        await this.callService.updateCallStatus(call.id, 'ongoing');
+
+        // Send "call started" message immediately
+        const callMessage = await this.chatService.sendMessage(userId, {
+          roomId: data.roomId,
+          content: `${call.callType === 'video' ? 'Appel vidéo' : 'Appel vocal'} en cours`,
+          type: 'call',
+          callId: call.id,
+        });
+
+        // Broadcast to room
+        this.server.to(`room:${data.roomId}`).emit('message:new', callMessage);
+
+        // Also send to the initiator (they're not in the room broadcast)
+        const initiatorSockets = this.userSockets.get(userId);
+        initiatorSockets?.forEach((socketId) => {
+          this.server.to(socketId).emit('message:new', callMessage);
+        });
+      }
+
       const timeout = setTimeout(async () => {
         const stillActive = this.activeCalls.get(data.roomId);
+        const currentParticipants = this.callParticipants.get(data.roomId);
+
         if (stillActive === call.id) {
           try {
-            await this.callService.markCallAsMissed(call.id);
-            this.activeCalls.delete(data.roomId);
-            this.callParticipants.delete(data.roomId);
+            if (isGroupCall) {
+              // Group call: just stop ringing, call continues
+            } else {
+              // 1:1 call: mark as missed and end if no one joined
+              if (!currentParticipants || currentParticipants.size <= 1) {
+                await this.callService.markCallAsMissed(call.id);
+                this.activeCalls.delete(data.roomId);
+                this.callParticipants.delete(data.roomId);
+
+                const missedCallMessage = await this.chatService.sendMessage(userId, {
+                  roomId: data.roomId,
+                  content: `${call.callType === 'video' ? 'Appel vidéo' : 'Appel vocal'} manqué`,
+                  type: 'call',
+                  callId: call.id,
+                });
+
+                this.server.to(`room:${data.roomId}`).emit('message:new', missedCallMessage);
+
+                // Notify caller that call was missed
+                const callerSockets = this.userSockets.get(userId);
+                callerSockets?.forEach((socketId) => {
+                  this.server.to(socketId).emit('call:missed', {
+                    roomId: data.roomId,
+                    callId: call.id,
+                  });
+                });
+              }
+            }
+
             this.callTimeouts.delete(data.roomId);
-
-            // Create missed call message
-            const missedCallMessage = await this.chatService.sendMessage(userId, {
-              roomId: data.roomId,
-              content: `${call.callType === 'video' ? 'Appel vidéo' : 'Appel vocal'} manqué`,
-              type: 'call',
-              callId: call.id,
-            });
-
-            this.server.to(`room:${data.roomId}`).emit('message:new', missedCallMessage);
-
-            // Notify caller that call was missed
-            const callerSockets = this.userSockets.get(userId);
-            callerSockets?.forEach((socketId) => {
-              this.server.to(socketId).emit('call:missed', {
-                roomId: data.roomId,
-                callId: call.id,
-              });
-            });
-          } catch (error) {
-            console.error('Error handling missed call:', error);
+          } catch {
+            // Error handling timeout
           }
         }
       }, 30000);
 
       this.callTimeouts.set(data.roomId, timeout);
 
+      // Notify all participants (ring them)
       data.participants.forEach((participantId) => {
         if (participantId !== userId) {
           const targetSockets = this.userSockets.get(participantId);
@@ -338,6 +373,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
                 roomId: data.roomId,
                 callType: data.callType,
                 initiatorName: `${call.initiator.firstName} ${call.initiator.lastName}`,
+                isGroup: isGroupCall,
               });
             });
           }
@@ -346,7 +382,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       return { success: true, callId: call.id };
     } catch (error) {
-      console.error('Error initiating call:', error);
       return { success: false, error: error.message };
     }
   }
@@ -512,7 +547,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       return { success: true };
     } catch (error) {
-      console.error('Error accepting call:', error);
       return { success: false, error: error.message };
     }
   }
@@ -525,6 +559,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       roomId: number;
       callerId: number;
       callId?: number;
+      isGroup?: boolean;
     }
   ) {
     try {
@@ -533,12 +568,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const callId = data.callId || this.activeCalls.get(data.roomId);
       const participants = this.callParticipants.get(data.roomId);
 
+      // For group calls: rejection is just dismissing the notification
+      if (data.isGroup) {
+        return { success: true, dismissed: true };
+      }
+
+      // For 1:1 calls: only end if initiator is alone
       if (callId) {
-        // Check if other people have already joined the call
         const hasOtherParticipants = participants && participants.size > 1;
 
         if (!hasOtherParticipants) {
-          // No one else has joined yet - end the entire call
+          // 1:1 call with no other participants - end the entire call
           const timeout = this.callTimeouts.get(data.roomId);
           if (timeout) {
             clearTimeout(timeout);
@@ -558,24 +598,127 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           });
 
           this.server.to(`room:${data.roomId}`).emit('message:new', callMessage);
+
+          // Notify caller that call was rejected and ended
+          const callerSockets = this.userSockets.get(data.callerId);
+          callerSockets?.forEach((socketId) => {
+            this.server.to(socketId).emit('call:rejected', {
+              rejectedBy: userId,
+              roomId: data.roomId,
+              callEnded: true,
+            });
+          });
         }
       }
 
-      // Notify the caller that this user rejected
-      const callerSockets = this.userSockets.get(data.callerId);
-      const hasOtherParticipants = participants && participants.size > 1;
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
 
-      callerSockets?.forEach((socketId) => {
-        this.server.to(socketId).emit('call:rejected', {
-          rejectedBy: userId,
-          roomId: data.roomId,
-          callEnded: !hasOtherParticipants,
+  @SubscribeMessage('call:join')
+  async handleCallJoin(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    data: {
+      roomId: number;
+      callId: number;
+    }
+  ) {
+    try {
+      const userId = client.data.userId;
+
+      // Verify call is still active
+      const activeCallId = this.activeCalls.get(data.roomId);
+      if (!activeCallId || activeCallId !== data.callId) {
+        return { success: false, error: 'Call is no longer active' };
+      }
+
+      // Add user to participants immediately (but don't notify others yet)
+      const participants = this.callParticipants.get(data.roomId);
+      if (participants) {
+        participants.add(userId);
+      }
+
+      // Update call status to ongoing if it was still initiated
+      await this.callService.updateCallStatus(data.callId, 'ongoing');
+
+      // Get call info to return call type
+      const callInfo = await this.callService.getCallById(data.callId);
+
+      // Return call type so client can start media stream
+      // Client will emit 'call:ready' once media is ready
+      return { success: true, callType: callInfo?.callType || 'video' };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  @SubscribeMessage('call:ready')
+  async handleCallReady(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    data: {
+      roomId: number;
+      callId: number;
+    }
+  ) {
+    try {
+      const userId = client.data.userId;
+
+      // Verify call is still active
+      const activeCallId = this.activeCalls.get(data.roomId);
+      if (!activeCallId || activeCallId !== data.callId) {
+        return { success: false, error: 'Call is no longer active' };
+      }
+
+      // Get user info
+      const userInfo = await this.chatService.getUserById(userId);
+      const userName = userInfo ? `${userInfo.firstName} ${userInfo.lastName}` : `User ${userId}`;
+
+      const participants = this.callParticipants.get(data.roomId);
+
+      // Notify all existing participants that this user is ready
+      if (participants) {
+        participants.forEach((participantId) => {
+          if (participantId !== userId) {
+            const targetSockets = this.userSockets.get(participantId);
+            targetSockets?.forEach((socketId) => {
+              this.server.to(socketId).emit('call:user-joined', {
+                userId,
+                roomId: data.roomId,
+                userName,
+              });
+            });
+          }
         });
-      });
+      }
+
+      // Send existing participants info to the newly joined user
+      if (participants && participants.size > 1) {
+        const existingParticipants = Array.from(participants)
+          .filter((pId) => pId !== userId)
+          .map(async (pId) => {
+            const user = await this.chatService.getUserById(pId);
+            return {
+              userId: pId,
+              userName: user ? `${user.firstName} ${user.lastName}` : `User ${pId}`,
+            };
+          });
+
+        const participantsInfo = await Promise.all(existingParticipants);
+
+        const newUserSockets = this.userSockets.get(userId);
+        newUserSockets?.forEach((socketId) => {
+          this.server.to(socketId).emit('call:existing-participants', {
+            participants: participantsInfo,
+          });
+        });
+      }
 
       return { success: true };
     } catch (error) {
-      console.error('Error rejecting call:', error);
       return { success: false, error: error.message };
     }
   }
@@ -595,55 +738,99 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const userId = client.data.userId;
 
       const callId = data.callId || this.activeCalls.get(data.roomId);
-      if (callId) {
-        // Clear timeout
-        const timeout = this.callTimeouts.get(data.roomId);
-        if (timeout) {
-          clearTimeout(timeout);
-          this.callTimeouts.delete(data.roomId);
-        }
+      const participants = this.callParticipants.get(data.roomId);
 
-        const call = await this.callService.endCall(callId, data.duration || 0);
-        this.activeCalls.delete(data.roomId);
-        this.callParticipants.delete(data.roomId);
+      if (callId && participants) {
+        // Remove this user from participants
+        participants.delete(userId);
 
-        // Create a system message for the completed call - sent from the initiator
-        const duration = data.duration || 0;
-        const minutes = Math.floor(duration / 60);
-        const seconds = duration % 60;
-        const durationText =
-          duration > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : '0:00';
-
-        const callMessage = await this.chatService.sendMessage(call.initiatorId, {
-          roomId: data.roomId,
-          content: `${call.callType === 'video' ? 'Appel vidéo' : 'Appel vocal'} - ${durationText}`,
-          type: 'call',
-          callId: call.id,
-        });
-
-        this.server.to(`room:${data.roomId}`).emit('message:new', callMessage);
-      }
-
-      data.participants.forEach((participantId) => {
-        if (participantId !== userId) {
+        // Notify others that this user left
+        participants.forEach((participantId) => {
           const targetSockets = this.userSockets.get(participantId);
           targetSockets?.forEach((socketId) => {
-            this.server.to(socketId).emit('call:ended', {
-              endedBy: userId,
+            this.server.to(socketId).emit('call:user-left', {
+              userId,
               roomId: data.roomId,
             });
           });
-        }
-      });
+        });
 
-      client.to(`room:${data.roomId}`).emit('call:ended', {
-        endedBy: userId,
-        roomId: data.roomId,
-      });
+        // Only end the call if no one is left
+        if (participants.size === 0) {
+          // Clear timeout
+          const timeout = this.callTimeouts.get(data.roomId);
+          if (timeout) {
+            clearTimeout(timeout);
+            this.callTimeouts.delete(data.roomId);
+          }
+
+          const call = await this.callService.endCall(callId, data.duration || 0);
+          this.activeCalls.delete(data.roomId);
+          this.callParticipants.delete(data.roomId);
+
+          // Find and update the existing "ongoing" message instead of creating a new one
+          const existingMessages = await this.chatService.getRoomMessagesForCallUpdate(
+            data.roomId,
+            callId
+          );
+
+          // Find the ongoing call message
+          const ongoingMessage = existingMessages.find(
+            (msg) => msg.callId === callId && msg.type === 'call'
+          );
+
+          if (ongoingMessage) {
+            // Update the existing message
+            const duration = data.duration || 0;
+            const minutes = Math.floor(duration / 60);
+            const seconds = duration % 60;
+            const durationText =
+              duration > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : '0:00';
+
+            await this.chatService.updateMessage(ongoingMessage.id, {
+              content: `${call.callType === 'video' ? 'Appel vidéo' : 'Appel vocal'} - ${durationText}`,
+            });
+
+            // Broadcast to entire room
+            this.server.to(`room:${data.roomId}`).emit('call:message-updated', {
+              messageId: ongoingMessage.id,
+              roomId: data.roomId,
+              callId: call.id,
+              status: 'completed',
+              duration: data.duration || 0,
+              content: `${call.callType === 'video' ? 'Appel vidéo' : 'Appel vocal'} - ${durationText}`,
+            });
+
+            // Also send to ALL participants directly (including the one who ended)
+            const allParticipantIds = Array.from(this.callParticipants.get(data.roomId) || []);
+            allParticipantIds.push(userId);
+
+            allParticipantIds.forEach((participantId) => {
+              const sockets = this.userSockets.get(participantId);
+              sockets?.forEach((socketId) => {
+                this.server.to(socketId).emit('call:message-updated', {
+                  messageId: ongoingMessage.id,
+                  roomId: data.roomId,
+                  callId: call.id,
+                  status: 'completed',
+                  duration: data.duration || 0,
+                  content: `${call.callType === 'video' ? 'Appel vidéo' : 'Appel vocal'} - ${durationText}`,
+                });
+              });
+            });
+          }
+
+          // Notify all room members that call ended
+          client.to(`room:${data.roomId}`).emit('call:ended', {
+            endedBy: userId,
+            roomId: data.roomId,
+            callEnded: true,
+          });
+        }
+      }
 
       return { success: true };
     } catch (error) {
-      console.error('Error ending call:', error);
       return { success: false, error: error.message };
     }
   }

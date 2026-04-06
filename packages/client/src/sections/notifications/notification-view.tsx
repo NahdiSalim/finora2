@@ -282,14 +282,14 @@ function NotificationBody({ notification }: NotificationBodyProps) {
       case "relationship_invitation":
         return (
           <span>
-            <strong>{actorName}</strong>{" "}
+            <strong>{title}</strong>{" "}
             <span>{message || "a accepté votre invitation."}</span>
           </span>
         );
       case "meeting_updated":
         return (
           <span>
-            <strong>{actorName}</strong>{" "}
+            <strong>{title}</strong>{" "}
             <span>
               a mis à jour la réunion
               {targetTitle ? (
@@ -307,7 +307,7 @@ function NotificationBody({ notification }: NotificationBodyProps) {
       case "file_attached":
         return (
           <span>
-            <strong>{actorName}</strong>{" "}
+            <strong>{title}</strong>{" "}
             <span>
               a joint un fichier à <strong>{targetTitle || title}</strong>.
             </span>
@@ -316,7 +316,7 @@ function NotificationBody({ notification }: NotificationBodyProps) {
       case "comment_added":
         return (
           <span>
-            <strong>{actorName}</strong>{" "}
+            <strong>{title}</strong>{" "}
             <span>
               a ajouté un commentaire
               {targetTitle ? (
@@ -334,7 +334,7 @@ function NotificationBody({ notification }: NotificationBodyProps) {
       case "task_assigned":
         return (
           <span>
-            <strong>{actorName}</strong>{" "}
+            <strong>{title}</strong>{" "}
             <span>
               vous a assigné une tâche
               {targetTitle ? (
@@ -352,7 +352,7 @@ function NotificationBody({ notification }: NotificationBodyProps) {
       default:
         return (
           <span>
-            <strong>{actorName}</strong> <span>{message || title}</span>
+            <strong>{title}</strong>
           </span>
         );
     }
@@ -371,21 +371,6 @@ function NotificationBody({ notification }: NotificationBodyProps) {
         }}
       >
         {renderText()}
-      </Typography>
-
-      {/* Timestamp */}
-      <Typography
-        variant="caption"
-        sx={{
-          display: "block",
-          mt: 0.4,
-          color: !read ? "primary.main" : "text.disabled",
-          fontWeight: !read ? 600 : 400,
-          fontSize: "0.7rem",
-          letterSpacing: 0.2,
-        }}
-      >
-        {timeDisplay}
       </Typography>
 
       {/* Attachment chip */}
@@ -447,12 +432,10 @@ function NotificationBody({ notification }: NotificationBodyProps) {
         !["relationship_invitation", "invitation_accepted"].includes(type) && (
           <Box
             sx={{
-              mt: 1.25,
-              pl: 1.5,
+              pl: 0.5,
               py: 0.5,
-              borderLeft: `3px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+              borderLeft: `3px solid ${theme.palette.info.lighter}`,
               borderRadius: "0 4px 4px 0",
-              backgroundColor: alpha(theme.palette.primary.main, 0.03),
             }}
           >
             <Typography
@@ -460,10 +443,24 @@ function NotificationBody({ notification }: NotificationBodyProps) {
               color="text.secondary"
               sx={{ fontStyle: "italic", lineHeight: 1.6, display: "block" }}
             >
-              «{message}»
+              &quot;{message}&quot;
             </Typography>
           </Box>
         )}
+      {/* Timestamp */}
+      <Typography
+        variant="caption"
+        sx={{
+          display: "block",
+          mt: 1.25,
+          color: !read ? "primary.main" : "text.disabled",
+          fontWeight: !read ? 600 : 400,
+          fontSize: "0.7rem",
+          letterSpacing: 0.2,
+        }}
+      >
+        {timeDisplay}
+      </Typography>
     </Box>
   );
 }

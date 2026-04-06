@@ -20,13 +20,11 @@ import CustomButton from "src/components/common/CustomButton";
 import { PageHeader } from "src/layouts/components/page-header";
 import { CustomPagination } from "src/layouts/components/table-pagination";
 import { useGetClientsInvoiceStatsQuery } from "src/lib/services/relationshipsApi";
+import { useFindOrCreateDirectRoomMutation } from "src/lib/services/chatApi";
 import type { Dayjs } from "dayjs";
 
 const ROWS_PER_PAGE = 8;
 const SEARCH_DEBOUNCE_MS = 300;
-const DEFAULT_COVER =
-  "https://images.unsplash.com/photo-1557682250-33bd709cbe85";
-
 export default function DocumentsView() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -60,12 +58,20 @@ export default function DocumentsView() {
   const clients = data?.data ?? [];
   const totalCount = data?.pagination?.total ?? 0;
 
-  const handleChat = (clientName: string, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-  };
+  const [findOrCreateDirectRoom] = useFindOrCreateDirectRoomMutation();
 
-  const handleDeactivate = (clientName: string, e?: React.MouseEvent) => {
+  const handleChat = async (
+    targetUserId?: number | null,
+    e?: React.MouseEvent,
+  ) => {
     e?.stopPropagation();
+    if (!targetUserId) return;
+    try {
+      const room = await findOrCreateDirectRoom({ targetUserId }).unwrap();
+      navigate(`${dashboardBase}/messages?roomId=${room.id}`);
+    } catch {
+      // ignore: user can retry
+    }
   };
 
   const dashboardBase = useDashboardBase();
@@ -222,11 +228,11 @@ export default function DocumentsView() {
                 >
                   <ClientCard
                     id={client.clientId}
-                    cover={DEFAULT_COVER}
+                    cover={undefined}
                     avatar={
                       client.clientLogo
                         ? `${uploadsUrl}/${client.clientLogo}`
-                        : `https://i.pravatar.cc/150?u=${client.clientId}`
+                        : undefined
                     }
                     name={displayName(client)}
                     ownerFirstName={client.ownerFirstName ?? ""}
@@ -234,10 +240,7 @@ export default function DocumentsView() {
                     email={client.clientEmail ?? ""}
                     processedDocs={client.invoiceStats.traite}
                     pendingDocs={client.invoiceStats.pending}
-                    onChat={(e) => handleChat(displayName(client), e)}
-                    onDeactivate={(e) =>
-                      handleDeactivate(displayName(client), e)
-                    }
+                    onChat={(e) => handleChat(client.ownerId, e)}
                     onCardClick={() =>
                       handleClientClick(
                         client.clientId,

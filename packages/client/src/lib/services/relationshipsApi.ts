@@ -6,6 +6,7 @@ export interface ClientInvoiceStats {
   clientName: string;
   clientLogo: string | null;
   clientEmail: string | null;
+  ownerId?: number | null;
   ownerFirstName: string | null;
   ownerLastName: string | null;
   invoiceStats: {

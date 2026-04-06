@@ -613,6 +613,7 @@ export class RelationshipService {
             email: true,
             owner: {
               select: {
+                id: true,
                 firstName: true,
                 lastName: true,
               },
@@ -666,6 +667,7 @@ export class RelationshipService {
           clientName: relationship.clientCompany.name,
           clientLogo: relationship.clientCompany.logo,
           clientEmail: relationship.clientCompany.email,
+          ownerId: relationship.clientCompany.owner?.id || null,
           ownerFirstName: relationship.clientCompany.owner?.firstName || null,
           ownerLastName: relationship.clientCompany.owner?.lastName || null,
           invoiceStats: {

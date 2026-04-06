@@ -121,7 +121,7 @@ export class RelationshipService {
       accountingFirmId = isClientToAccountant ? dto.targetCompanyId : user.companyId!;
     }
 
-    // Check if relationship already exists
+    // Check if relationship already exists with active/pending status
     const existingRelationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
       where: {
         clientCompanyId,
@@ -134,14 +134,32 @@ export class RelationshipService {
       throw new BadRequestException('Une relation existe déjà ou est en attente');
     }
 
-    // Create invitation
-    const invitation = await this.prisma.clientAccountingFirmRelationship.create({
-      data: {
+    // Create or reset invitation (upsert to handle unique constraint on clientCompanyId+accountingFirmId)
+    const invitation = await this.prisma.clientAccountingFirmRelationship.upsert({
+      where: {
+        clientCompanyId_accountingFirmId: {
+          clientCompanyId,
+          accountingFirmId,
+        },
+      },
+      create: {
         clientCompanyId,
         accountingFirmId,
         invitedBy: userId,
         status: 'pending',
         invitationMessage: dto.invitationMessage,
+      } as any,
+      update: {
+        invitedBy: userId,
+        status: 'pending',
+        invitationMessage: dto.invitationMessage ?? null,
+        rejectionReason: null,
+        responseDate: null,
+        relationshipStart: null,
+        relationshipEnd: null,
+        terminationReason: null,
+        terminatedBy: null,
+        terminatedAt: null,
       } as any,
       include: {
         clientCompany: { select: { id: true, name: true } },

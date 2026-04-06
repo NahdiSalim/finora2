@@ -1,5 +1,6 @@
 import {
   Archive,
+  Bell,
   Calendar,
   FileText,
   Folder,
@@ -39,6 +40,10 @@ export const NAV_CONFIG: Record<
   "/clients": {
     title: "Clients",
     icon: <Users />,
+  },
+  "/notifications": {
+    title: "notifications",
+    icon: <Bell />,
   },
   "/users": {
     title: "Users",

@@ -45,6 +45,10 @@ export const DocumentDetailsPage = lazy(
 );
 export const MeetingsPage = lazy(() => import("src/pages/meetings"));
 
+export const NotificationsPage = lazy(
+  () => import("src/pages/notifications/index"),
+);
+
 export const ArchivePage = lazy(() => import("src/pages/archive/index"));
 export const ArchiveDetailsPage = lazy(
   () => import("src/pages/archive/archive-details"),
@@ -136,6 +140,14 @@ export const routesSection: RouteObject[] = [
         element: (
           <PermissionGuard requiredPath="/collaborators">
             <CollaboratorPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "notifications",
+        element: (
+          <PermissionGuard requiredPath="/notifications">
+            <NotificationsPage />
           </PermissionGuard>
         ),
       },

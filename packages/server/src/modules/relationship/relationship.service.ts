@@ -289,6 +289,22 @@ export class RelationshipService {
 
     const isAccepted = dto.response === InvitationResponse.ACCEPT;
 
+    // Si acceptée, annuler toutes les autres invitations pending du même client
+    if (isAccepted) {
+      await this.prisma.clientAccountingFirmRelationship.updateMany({
+        where: {
+          clientCompanyId: invitation.clientCompanyId,
+          status: 'pending',
+          id: { not: invitationId },
+        },
+        data: {
+          status: 'rejected',
+          rejectionReason: 'Annulée automatiquement : le client a accepté une autre invitation.',
+          responseDate: new Date(),
+        },
+      });
+    }
+
     const notificationData = {
       relationshipId: updatedInvitation.id,
       status: isAccepted ? 'active' : 'rejected',

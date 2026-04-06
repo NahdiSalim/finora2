@@ -455,6 +455,7 @@ export class AccountantService {
       const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
         where: {
           accountingFirmId: accountant.companyId,
+          status: 'active',
         },
         include: {
           clientCompany: {
@@ -488,6 +489,7 @@ export class AccountantService {
       const total = await this.prisma.clientAccountingFirmRelationship.count({
         where: {
           accountingFirmId: accountant.companyId,
+          status: 'active',
         },
       });
 

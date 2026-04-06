@@ -121,6 +121,21 @@ export class RelationshipService {
       accountingFirmId = isClientToAccountant ? dto.targetCompanyId : user.companyId!;
     }
 
+    // Bloquer si le client a déjà une relation active avec un comptable
+    if (senderIsClient || (!senderIsAccountant && clientCompanyId === user.companyId)) {
+      const activeRelationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
+        where: {
+          clientCompanyId: user.companyId!,
+          status: 'active',
+        },
+      });
+      if (activeRelationship) {
+        throw new BadRequestException(
+          'Vous êtes déjà en relation avec un comptable. Vous ne pouvez pas envoyer une nouvelle invitation.'
+        );
+      }
+    }
+
     // Check if relationship already exists
     const existingRelationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
       where: {

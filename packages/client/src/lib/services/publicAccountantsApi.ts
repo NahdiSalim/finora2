@@ -85,6 +85,7 @@ export type PublicAccountantsResponse = {
 export const publicAccountantsApi = createApi({
   reducerPath: "publicAccountantsApi",
   baseQuery: baseQueryWithReauth,
+  tagTypes: ["PublicAccountants"],
   endpoints: (builder) => ({
     getPublicAccountants: builder.query<
       PublicAccountantsResponse,
@@ -127,6 +128,12 @@ export const publicAccountantsApi = createApi({
           method: "GET",
         };
       },
+      providesTags: (_result, _error, arg) => [
+        {
+          type: "PublicAccountants",
+          id: arg?.withRelationships ? "LIST_WITH_RELATIONSHIPS" : "LIST",
+        },
+      ],
     }),
 
     getPublicAccountantById: builder.query<PublicAccountantProfile, number>({

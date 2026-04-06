@@ -1,5 +1,5 @@
 import { CONFIG } from "src/config-global";
-import NotificationsView from "src/sections/notifications/index";
+import NotificationsView from "src/sections/notifications/notification-view";
 
 // ----------------------------------------------------------------------
 

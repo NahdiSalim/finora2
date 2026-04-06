@@ -13,6 +13,7 @@ import IconButton from "@mui/material/IconButton";
 import ListSubheader from "@mui/material/ListSubheader";
 import CircularProgress from "@mui/material/CircularProgress";
 import { useTheme, alpha } from "@mui/material/styles";
+import { useDashboardBase } from "src/hooks/useDashboardBase";
 
 import { Bell, CheckCheck } from "lucide-react";
 
@@ -31,6 +32,7 @@ import {
   type NotificationItemProps,
 } from "./notifications-popover/NotificationItem";
 import CustomButton from "src/components/common/CustomButton";
+import { useNavigate } from "react-router";
 
 // ----------------------------------------------------------------------
 
@@ -252,6 +254,14 @@ export function NotificationsPopover({
   const handleClosePopover = useCallback(() => {
     setOpenPopover(null);
   }, []);
+
+  const navigate = useNavigate();
+  const dashboardBase = useDashboardBase();
+
+  const handleViewAll = useCallback(() => {
+    handleClosePopover();
+    navigate(`${dashboardBase}/notification`);
+  }, [navigate, handleClosePopover, dashboardBase]);
 
   const handleMarkAllAsRead = useCallback(() => {
     suppressNextBeepRef.current = true;
@@ -505,6 +515,7 @@ export function NotificationsPopover({
             fullWidth
             variant="text"
             color="primary"
+            onClick={handleViewAll}
             sx={{
               fontSize: 13,
               fontWeight: 500,

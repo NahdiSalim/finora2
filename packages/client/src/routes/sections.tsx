@@ -143,14 +143,7 @@ export const routesSection: RouteObject[] = [
           </PermissionGuard>
         ),
       },
-      {
-        path: "notifications",
-        element: (
-          <PermissionGuard requiredPath="/notifications">
-            <NotificationsPage />
-          </PermissionGuard>
-        ),
-      },
+
       {
         path: "clients",
         element: (
@@ -340,6 +333,14 @@ export const routesSection: RouteObject[] = [
             element: (
               <PermissionGuard requiredPath="/collaborators">
                 <CollaboratorPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "notification",
+            element: (
+              <PermissionGuard requiredPath="/notification">
+                <NotificationsPage />
               </PermissionGuard>
             ),
           },

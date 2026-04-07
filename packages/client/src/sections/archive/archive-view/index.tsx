@@ -229,7 +229,7 @@ export default function ArchiveView() {
                     avatar={
                       client.clientLogo
                         ? `${uploadsUrl}/${client.clientLogo}`
-                        : `https://i.pravatar.cc/150?u=${client.clientId}`
+                        : undefined
                     }
                     name={displayName(client)}
                     ownerFirstName={client.ownerFirstName ?? ""}

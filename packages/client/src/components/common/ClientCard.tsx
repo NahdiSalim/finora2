@@ -161,6 +161,7 @@ function ArchivedCard({
               boxShadow: theme.shadows[1],
               filter: "grayscale(40%)",
               opacity: 0.85,
+              background: `linear-gradient(135deg, ${theme.palette.secondary.main}, ${theme.palette.secondary.dark})`,
             }}
           />
 

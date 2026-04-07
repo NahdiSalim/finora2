@@ -67,7 +67,7 @@ const itemVariants = {
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.22, ease: "easeOut" },
+    transition: { duration: 0.22, ease: "easeOut" as const },
   },
   exit: { opacity: 0, x: -16, transition: { duration: 0.18 } },
 };

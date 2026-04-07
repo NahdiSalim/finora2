@@ -17,7 +17,6 @@ import { useDashboardBase } from "src/hooks/useDashboardBase";
 
 import { Bell, CheckCheck } from "lucide-react";
 
-import { Iconify } from "src/components/iconify";
 import { Scrollbar } from "src/components/scrollbar";
 import {
   useGetNotificationsQuery,
@@ -494,11 +493,7 @@ export function NotificationsPopover({
                 gap: 1,
               }}
             >
-              <Iconify
-                icon="solar:bell-bold"
-                width={56}
-                sx={{ color: "text.disabled" }}
-              />
+              <Bell size={48} width={56} color={theme.palette.grey[300]} />
               <Typography
                 variant="body2"
                 sx={{ color: "text.secondary", fontSize: 13 }}

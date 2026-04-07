@@ -695,7 +695,7 @@ export default function MeetingsView() {
   const [mode, setMode] = useState<Mode>("appointments");
   const [tab, setTab] = useState<TimeTab>("today");
   const ROWS_PER_PAGE = 5;
-  const [page, setPage] = useState(0); // RTK Query expects 1-based pages
+  const [page, setPage] = useState(0);
   const { id: routeId } = useParams<{ id: string }>();
   const [selectedId, setSelectedId] = useState<number | null>(() => {
     const parsed = routeId ? parseInt(routeId, 10) : NaN;
@@ -705,6 +705,8 @@ export default function MeetingsView() {
     useState<AppointmentItem | null>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [rejectAppointment, setRejectAppointment] =
+    useState<AppointmentItem | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardMode, setWizardMode] = useState<"create" | "report">("create");
   const [wizardInitialValues, setWizardInitialValues] = useState<any>();
@@ -929,9 +931,9 @@ export default function MeetingsView() {
   };
 
   const handleRejectCancel = async () => {
-    if (!selectedId) return;
+    if (!rejectAppointment) return;
     await respondAppointment({
-      id: selectedId,
+      id: rejectAppointment.id,
       action: "reject",
       rejectionReason: rejectReason.trim() || undefined,
     }).unwrap();
@@ -944,8 +946,8 @@ export default function MeetingsView() {
   };
 
   const handleRejectReport = async () => {
-    if (!appointment) return;
-    openReportWizardFromAppointment(appointment, rejectReason);
+    if (!rejectAppointment) return;
+    openReportWizardFromAppointment(rejectAppointment, rejectReason);
     closeRejectModal();
   };
 
@@ -955,9 +957,9 @@ export default function MeetingsView() {
     setRejectDialogOpen(false);
     setRejectReason("");
     setTouched(false);
+    setRejectAppointment(null);
   };
-  // then pass onBlur={handleInputBlur} to CustomInput
-  // ── Availability layout ───────────────────────────────────────────────────
+
   if (mode === "availability") {
     return (
       <PageHeader
@@ -970,14 +972,12 @@ export default function MeetingsView() {
     );
   }
 
-  // ── Appointments layout ───────────────────────────────────────────────────
   return (
     <PageHeader
       title="Mes Rendez-vous"
-      caption="Suivi de vos rendez-vous"
+      caption="Gérez vos réunions, confirmez ou refusez les demandes, et consultez les détails."
       actions={headerActions}
     >
-      {/* ── CustomTabs ── */}
       <Box mt={2}>
         <FolderTabNavigation
           activeTab={tab}
@@ -996,9 +996,7 @@ export default function MeetingsView() {
             p: 2,
           }}
         >
-          {/* Appointment list */}
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
-            {/* Search */}
             <CustomInput
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -1036,8 +1034,7 @@ export default function MeetingsView() {
                     }
                   }}
                   onReject={() => {
-                    setSelectedAppointmentSnapshot(item);
-                    setSelectedId(item.id);
+                    setRejectAppointment(item);
                     setRejectDialogOpen(true);
                   }}
                   onReschedule={() => {
@@ -1060,12 +1057,10 @@ export default function MeetingsView() {
             </Box>
           )}
 
-          {/* Monthly calendar */}
           <Box sx={{ mt: 3 }}>
             <Typography variant="h6" sx={{ mb: 1.25 }}>
               {formatMonthLabelFr(calendarMonth)}
             </Typography>
-
             <MonthlyAppointmentCalendar
               monthDate={calendarMonth}
               appointments={calendarAppointments}
@@ -1080,7 +1075,6 @@ export default function MeetingsView() {
         </Box>
       </Box>
 
-      {/* ── Appointment details dialog ── */}
       <AppointmentDetailsDialog
         open={selectedId != null && appointment != null}
         appointment={appointment}
@@ -1089,12 +1083,13 @@ export default function MeetingsView() {
         onClose={() => {
           setSelectedId(null);
           setSelectedAppointmentSnapshot(null);
-          closeRejectModal();
         }}
         onConfirm={handleConfirm}
         onReject={() => {
-          setTouched(false);
-          setRejectDialogOpen(true);
+          if (appointment) {
+            setRejectAppointment(appointment);
+            setRejectDialogOpen(true);
+          }
         }}
         onCancel={handleCancelConfirmed}
         onReport={() => {
@@ -1103,7 +1098,6 @@ export default function MeetingsView() {
         }}
       />
 
-      {/* ── Reject reason dialog ── */}
       <Dialog
         open={rejectDialogOpen}
         onClose={closeRejectModal}
@@ -1122,17 +1116,14 @@ export default function MeetingsView() {
             <X />
           </IconButton>
         </DialogTitle>
-
         <DialogContent dividers sx={{ pt: 2 }}>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <Typography variant="body1">
               Êtes-vous sûr de vouloir refuser cette réunion ?
             </Typography>
-
             <Typography variant="body2" color="text.secondary">
               Une raison est requise pour justifier le refus.
             </Typography>
-
             <CustomInput
               multiline
               minRows={3}
@@ -1152,7 +1143,6 @@ export default function MeetingsView() {
             />
           </Box>
         </DialogContent>
-
         <DialogActions sx={{ p: 2, justifyContent: "space-between", gap: 1 }}>
           <CustomButton
             variant="outlined"
@@ -1181,7 +1171,6 @@ export default function MeetingsView() {
         </DialogActions>
       </Dialog>
 
-      {/* ── New appointment wizard ── */}
       <Drawer
         anchor="right"
         open={wizardOpen}

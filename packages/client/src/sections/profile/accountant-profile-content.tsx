@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Box, Card, Typography } from "@mui/material";
+import { useSearchParams } from "react-router-dom";
 
 import { ContactAccountantModal } from "src/components/visitor/ContactAccountantModal";
 import ProfileHeader from "src/layouts/components/profile-header";
@@ -7,6 +8,11 @@ import ProfileTabs from "src/layouts/components/profile-tabs";
 import ContactInfos from "src/layouts/components/profile-contact";
 import { PageHeader } from "src/layouts/components/page-header";
 import { useGetPublicAccountantByIdQuery } from "src/lib/services/publicAccountantsApi";
+import { useVerifyUserQuery } from "src/lib/services/authApi";
+import { useSendRelationshipInvitationMutation } from "src/lib/services/relationshipsApi";
+import { useFindOrCreateDirectRoomMutation } from "src/lib/services/chatApi";
+import { useDashboardBase } from "src/hooks/useDashboardBase";
+import { useAlert } from "src/contexts/AlertContext";
 import { useNavigate } from "react-router";
 
 export type AccountantProfileContentProps = {
@@ -29,6 +35,15 @@ export function AccountantProfileContent({
   allowSubmitReview = false,
 }: AccountantProfileContentProps) {
   const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [searchParams] = useSearchParams();
+  const relationshipStatus = (searchParams.get("relationshipStatus") ?? "")
+    .toLowerCase()
+    .trim();
+  const { showAlert } = useAlert();
+  const dashboardBase = useDashboardBase();
+  const { data: me } = useVerifyUserQuery();
+  const [sendRelationshipInvitation] = useSendRelationshipInvitationMutation();
+  const [findOrCreateDirectRoom] = useFindOrCreateDirectRoomMutation();
 
   const { data, isLoading, isError } = useGetPublicAccountantByIdQuery(
     accountantId,
@@ -60,18 +75,52 @@ export function AccountantProfileContent({
 
   const isAuthenticated = !!localStorage.getItem("token");
   const navigate = useNavigate();
+  const roleCode =
+    typeof me?.role === "string"
+      ? me.role.toUpperCase()
+      : (me?.role?.code ?? "").toUpperCase();
+  const isClient = roleCode === "CLIENT";
+  const invitationPending = isClient && relationshipStatus === "pending";
+  const relationshipActive = isClient && relationshipStatus === "active";
 
-  const handleSchedule = () => {
-    if (isAuthenticated) {
-      // Logique pour planifier un rendez-vous
-      navigate("/schedule");
-    } else {
-      // Rediriger vers la page de connexion
+  const handleSchedule = async () => {
+    if (!isAuthenticated) {
       navigate("/sign-in");
+      return;
     }
+
+    if (relationshipActive) {
+      navigate(`${dashboardBase}/meetings`);
+      return;
+    }
+
+    if (isClient && data?.company?.id && !invitationPending) {
+      try {
+        await sendRelationshipInvitation({
+          targetCompanyId: data.company.id,
+        }).unwrap();
+        showAlert("Invitation envoyée", "success");
+      } catch {
+        showAlert("Erreur lors de l'envoi de l'invitation", "error");
+      }
+      return;
+    }
+
+    navigate("/sign-in");
   };
 
-  const handleContact = () => {
+  const handleContact = async () => {
+    if (relationshipActive) {
+      try {
+        const room = await findOrCreateDirectRoom({
+          targetUserId: accountantId,
+        }).unwrap();
+        navigate(`${dashboardBase}/messages?roomId=${room.id}`);
+      } catch {
+        showAlert("Impossible d'ouvrir la discussion", "error");
+      }
+      return;
+    }
     setContactModalOpen(true);
   };
 
@@ -99,6 +148,16 @@ export function AccountantProfileContent({
           onSchedule={handleSchedule}
           onContact={handleContact}
           isAuthenticated={isAuthenticated}
+          scheduleLabel={
+            invitationPending
+              ? "Invitation envoyée"
+              : relationshipActive
+                ? "Planifier"
+                : "Inviter"
+          }
+          scheduleDisabled={invitationPending}
+          scheduleActionType={relationshipActive ? "schedule" : "invite"}
+          contactLabel={relationshipActive ? "Message" : "Contacter"}
         />
       </Card>
 

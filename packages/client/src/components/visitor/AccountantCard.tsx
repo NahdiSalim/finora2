@@ -45,6 +45,7 @@ export interface Accountant {
   accountantId?: number;
   /** Company id (used for relationship invitation) */
   companyId?: number;
+  relationshipStatus?: string;
 }
 
 interface AccountantCardProps {
@@ -59,6 +60,10 @@ interface AccountantCardProps {
   scheduleButtonLabel?: string;
   /** Si fourni, le bouton Schedule appelle ce callback au lieu de naviguer vers le profil */
   onScheduleClick?: () => void;
+  /** Désactive le bouton principal (ex: invitation déjà envoyée) */
+  scheduleDisabled?: boolean;
+  /** Type d'action du bouton principal */
+  scheduleActionType?: "invite" | "schedule";
 }
 
 // ----------------------------------------------------------------------
@@ -108,6 +113,8 @@ export function AccountantCard({
   getProfilePath,
   scheduleButtonLabel = "Planifier",
   onScheduleClick,
+  scheduleDisabled = false,
+  scheduleActionType = "schedule",
 }: AccountantCardProps) {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -140,6 +147,11 @@ export function AccountantCard({
   } = data;
 
   const isHighlighted = highlighted || featured;
+  {
+    /* Tags — hauteur réservée pour équilibrer les cartes */
+  }
+  const visibleTags = tags.slice(0, 3);
+  const remainingCount = tags.length - 3;
 
   return (
     <motion.div
@@ -268,7 +280,6 @@ export function AccountantCard({
               </Tooltip>
             </Stack>
           </Stack>
-
           {/* Description — zone à hauteur fixe quand vide pour équilibrer les cartes */}
           <Box sx={{ mt: 2, minHeight: description ? undefined : 72 }}>
             {description ? (
@@ -313,15 +324,13 @@ export function AccountantCard({
               </Typography>
             )}
           </Box>
-
-          {/* Tags — hauteur réservée pour équilibrer les cartes */}
           <Stack
             direction="row"
             spacing={0.5}
             flexWrap="wrap"
             sx={{ mt: 2, gap: 0.5, minHeight: 32 }}
           >
-            {tags.map((tag, idx) => (
+            {visibleTags.map((tag, idx) => (
               <motion.div
                 key={tag}
                 variants={tagVariants}
@@ -333,8 +342,25 @@ export function AccountantCard({
                 <CustomChip label={tag} />
               </motion.div>
             ))}
-          </Stack>
 
+            {remainingCount > 0 && (
+              <Box
+                sx={{
+                  px: 1.2,
+                  height: 24,
+                  display: "flex",
+                  alignItems: "center",
+                  borderRadius: "16px",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  bgcolor: "action.hover",
+                  color: "text.secondary",
+                }}
+              >
+                +{remainingCount}
+              </Box>
+            )}
+          </Stack>
           {/* Info row with animated icons */}
           <Stack
             direction="row"
@@ -399,7 +425,6 @@ export function AccountantCard({
               </Stack>
             </motion.div>
           </Stack>
-
           {/* Rating with animation */}
           <Stack
             direction="row"
@@ -427,7 +452,6 @@ export function AccountantCard({
               ({reviews} {reviews > 1 ? "reviews" : "review"})
             </Typography>
           </Stack>
-
           {/* Action buttons with animations */}
           <Grow in timeout={500}>
             <Box
@@ -445,11 +469,17 @@ export function AccountantCard({
                 variant="contained"
                 color="primary"
                 fullWidth
+                disabled={scheduleDisabled}
                 startIcon={
-                  onScheduleClick ? <Handshake /> : <Calendar size={18} />
+                  scheduleActionType === "invite" ? (
+                    <Handshake />
+                  ) : (
+                    <Calendar size={18} />
+                  )
                 }
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (scheduleDisabled) return;
                   if (onScheduleClick) onScheduleClick();
                   else if (profilePath) navigate(profilePath);
                 }}

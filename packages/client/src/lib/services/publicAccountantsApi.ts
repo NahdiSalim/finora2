@@ -30,6 +30,11 @@ export type PublicAccountant = {
     rating?: number;
     numberOfReviews?: number;
   };
+  relationship?: {
+    relationshipId: number;
+    status: string;
+    relationshipStart: string | null;
+  } | null;
 };
 
 /** Détail profil public (GET /public/accountants/:id) - même forme que getAccountantProfile */
@@ -80,6 +85,7 @@ export type PublicAccountantsResponse = {
 export const publicAccountantsApi = createApi({
   reducerPath: "publicAccountantsApi",
   baseQuery: baseQueryWithReauth,
+  tagTypes: ["PublicAccountants"],
   endpoints: (builder) => ({
     getPublicAccountants: builder.query<
       PublicAccountantsResponse,
@@ -91,6 +97,7 @@ export const publicAccountantsApi = createApi({
         location?: string;
         reviewMin?: number;
         reviewMax?: number;
+        withRelationships?: boolean;
       }
     >({
       query: ({
@@ -101,6 +108,7 @@ export const publicAccountantsApi = createApi({
         location,
         reviewMin,
         reviewMax,
+        withRelationships = false,
       } = {}) => {
         const params = new URLSearchParams();
         params.append("page", page.toString());
@@ -111,11 +119,21 @@ export const publicAccountantsApi = createApi({
         if (reviewMin != null) params.append("reviewMin", reviewMin.toString());
         if (reviewMax != null) params.append("reviewMax", reviewMax.toString());
 
+        const basePath = withRelationships
+          ? "/public/accountants/with-relationships"
+          : "/public/accountants";
+
         return {
-          url: `/public/accountants?${params.toString()}`,
+          url: `${basePath}?${params.toString()}`,
           method: "GET",
         };
       },
+      providesTags: (_result, _error, arg) => [
+        {
+          type: "PublicAccountants",
+          id: arg?.withRelationships ? "LIST_WITH_RELATIONSHIPS" : "LIST",
+        },
+      ],
     }),
 
     getPublicAccountantById: builder.query<PublicAccountantProfile, number>({

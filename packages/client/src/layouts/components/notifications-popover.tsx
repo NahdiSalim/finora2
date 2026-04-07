@@ -13,10 +13,10 @@ import IconButton from "@mui/material/IconButton";
 import ListSubheader from "@mui/material/ListSubheader";
 import CircularProgress from "@mui/material/CircularProgress";
 import { useTheme, alpha } from "@mui/material/styles";
+import { useDashboardBase } from "src/hooks/useDashboardBase";
 
-import { Bell } from "lucide-react";
+import { Bell, CheckCheck } from "lucide-react";
 
-import { Iconify } from "src/components/iconify";
 import { Scrollbar } from "src/components/scrollbar";
 import {
   useGetNotificationsQuery,
@@ -30,6 +30,9 @@ import {
   NotificationItem,
   type NotificationItemProps,
 } from "./notifications-popover/NotificationItem";
+import CustomButton from "src/components/common/CustomButton";
+import { useNavigate } from "react-router";
+import { useAppSelector } from "src/hooks/use-redux";
 
 // ----------------------------------------------------------------------
 
@@ -82,11 +85,11 @@ export function NotificationsPopover({
     },
   );
   const [markAsRead] = useMarkNotificationAsReadMutation();
-  const [markAllAsRead] = useMarkAllNotificationsAsReadMutation();
+  const [markAllAsRead, { isLoading: isMarkingAllAsRead }] =
+    useMarkAllNotificationsAsReadMutation();
   const [respondToInvitation] = useRespondToInvitationMutation();
   const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
   const seenNotificationIdsRef = useRef<Set<number>>(new Set());
-  /** Avoid treating transient empty lists / refetches as a second "first load" (that path skips the beep). */
   const notificationsHydratedRef = useRef(false);
   const suppressNextBeepRef = useRef(false);
 
@@ -95,15 +98,11 @@ export function NotificationsPopover({
     const audio = notificationAudioRef.current;
     if (!audio) return;
     audio.currentTime = 0;
-    void audio.play().catch(() => {
-      // Browsers can block autoplay until first user interaction.
-    });
+    void audio.play().catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return () => {};
-    }
+    if (typeof window === "undefined") return () => {};
     const audio = new Audio("/assets/sounds/notification.mp3");
     audio.preload = "auto";
     audio.volume = 1;
@@ -114,9 +113,7 @@ export function NotificationsPopover({
   }, []);
 
   useEffect(() => {
-    if (notificationsData === undefined) {
-      return;
-    }
+    if (notificationsData === undefined) return;
 
     const list = notificationsData.notifications ?? [];
     const currentIds = list
@@ -129,7 +126,6 @@ export function NotificationsPopover({
       return;
     }
 
-    // Skip transient empty snapshot so we don't clear "seen" then re-hydrate silently (no beep).
     if (currentIds.length === 0 && seenNotificationIdsRef.current.size > 0) {
       return;
     }
@@ -146,6 +142,59 @@ export function NotificationsPopover({
     seenNotificationIdsRef.current = new Set(currentIds);
   }, [notificationsData, playNotificationBeep]);
 
+  const navigate = useNavigate();
+  const dashboardBase = useDashboardBase();
+
+  // Get user role from Redux — same pattern as NotificationsView
+  const { user } = useAppSelector((state) => state.auth);
+  const userRole = useMemo(() => {
+    if (!user) return null;
+    const roleCode =
+      typeof user.role === "object" ? user.role?.code : user.role;
+    if (!roleCode) return null;
+    const role = String(roleCode).toLowerCase();
+    if (role.includes("client")) return "client";
+    if (
+      role.includes("accountant") ||
+      role.includes("comptable") ||
+      role.includes("admin")
+    ) {
+      return "comptable";
+    }
+    return null;
+  }, [user]);
+
+  // Same navigation logic as NotificationsView
+  const handleNavigate = useCallback(
+    (actionUrl: string) => {
+      handleClosePopover();
+
+      // Full external URL (e.g. MinIO/S3 presigned link) → open in new tab
+      if (/^https?:\/\//i.test(actionUrl)) {
+        window.open(actionUrl, "_blank", "noopener,noreferrer");
+        return;
+      }
+
+      if (!userRole) {
+        navigate(actionUrl);
+        return;
+      }
+
+      // Strip any existing role prefix then rebuild the full dashboard path
+      let cleanPath = actionUrl;
+      const dashboardRolePattern = /^\/dashboard\/(client|comptable)/;
+      if (dashboardRolePattern.test(cleanPath)) {
+        cleanPath = cleanPath.replace(dashboardRolePattern, "");
+      }
+      if (!cleanPath.startsWith("/")) {
+        cleanPath = `/${cleanPath}`;
+      }
+      navigate(`/dashboard/${userRole}${cleanPath}`);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [navigate, userRole],
+  );
+
   const notifications = useMemo(() => {
     const source =
       notificationsData?.notifications ??
@@ -156,6 +205,7 @@ export function NotificationsPopover({
         message: d.description,
         read: !d.isUnRead,
         createdAt: d.postedAt,
+        actionUrl: d.actionUrl,
         data: null,
       }));
     return source.map((n: any) => {
@@ -165,20 +215,26 @@ export function NotificationsPopover({
         readNumericId(notificationData.invitationId) ??
         readNumericId(notificationData.relationshipId) ??
         readNumericId((n as Record<string, unknown>).invitationId);
-      const actionUrl = String(
+
+      // Preserve the original casing of actionUrl — do NOT lowercase it
+      // (presigned S3 URLs are case-sensitive)
+      const rawActionUrl = String(
         (n as Record<string, unknown>).actionUrl ??
           (notificationData.actionUrl as string | undefined) ??
           "",
-      ).toLowerCase();
+      );
+      const actionUrl = rawActionUrl || undefined;
+
       const title = String(n.title ?? "").toLowerCase();
       const isInvite =
         notificationType.includes("relationship") ||
         notificationType.includes("invitation");
       const isInvitationToRespond =
-        actionUrl.includes("/relationships/invitations/") ||
+        (actionUrl ?? "").includes("/relationships/invitations/") ||
         title.includes("nouvelle invitation");
       const canRespond =
         isInvite && isInvitationToRespond && !n.read && invitationId != null;
+
       return {
         id: String(n.id),
         type: notificationType || "notification",
@@ -187,6 +243,8 @@ export function NotificationsPopover({
         description: n.message ?? "",
         avatarUrl: null,
         postedAt: n.createdAt ?? null,
+        actionUrl,
+        onNavigate: handleNavigate,
         canRespond,
         isProcessing: processingId === n.id,
         onAccept: canRespond
@@ -237,6 +295,7 @@ export function NotificationsPopover({
     showAlert,
     refetchNotifications,
     data,
+    handleNavigate,
   ]);
 
   const totalUnRead = notifications.filter(
@@ -259,6 +318,11 @@ export function NotificationsPopover({
     setOpenPopover(null);
   }, []);
 
+  const handleViewAll = useCallback(() => {
+    handleClosePopover();
+    navigate(`${dashboardBase}/notification`);
+  }, [navigate, handleClosePopover, dashboardBase]);
+
   const handleMarkAllAsRead = useCallback(() => {
     suppressNextBeepRef.current = true;
     markAllAsRead()
@@ -267,43 +331,15 @@ export function NotificationsPopover({
       .catch(() => showAlert("Erreur lors du marquage", "error"));
   }, [markAllAsRead, refetchNotifications, showAlert]);
 
-  // Render empty state if no notifications
-  const renderEmptyState = () => (
-    <Box
-      sx={{
-        py: 8,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        textAlign: "center",
-      }}
-    >
-      <Box sx={{ mb: 1, opacity: 0.6 }}>
-        <Bell size={20} color={theme.palette.text.disabled} />
-      </Box>
-      <Typography variant="body2" color="text.disabled">
-        Aucune notification
-      </Typography>
-    </Box>
-  );
-
-  // Render loading skeleton
-  const renderLoading = () => (
-    <Box
-      sx={{
-        py: 8,
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
-      <CircularProgress size={32} />
-    </Box>
-  );
+  const subtitleText = useMemo(() => {
+    if (isLoading) return "Chargement…";
+    if (totalUnRead === 0) return "Aucun message non lu";
+    return `${totalUnRead} message${totalUnRead > 1 ? "s" : ""} non lu${totalUnRead > 1 ? "s" : ""}`;
+  }, [isLoading, totalUnRead]);
 
   return (
     <>
+      {/* Trigger button */}
       <Button
         variant="outlined"
         onClick={handleOpenPopover}
@@ -322,16 +358,11 @@ export function NotificationsPopover({
             "border-color",
             "background-color",
             "color",
-            "transform",
           ]),
           "&:hover": {
             borderColor: theme.palette.primary.main,
             backgroundColor: alpha(theme.palette.primary.main, 0.08),
             color: theme.palette.primary.main,
-            transform: "scale(1.02)",
-          },
-          "&:active": {
-            transform: "scale(0.98)",
           },
           ...(openPopover && {
             borderColor: theme.palette.primary.main,
@@ -344,30 +375,19 @@ export function NotificationsPopover({
       >
         <Bell size={20} />
 
-        {/* Badge for unread count */}
         {hasUnread && (
           <Box
             sx={{
               position: "absolute",
-              top: 4,
-              right: 4,
-              minWidth: 18,
-              height: 18,
-              borderRadius: 9,
+              top: 7,
+              right: 7,
+              width: 9,
+              height: 9,
+              borderRadius: "50%",
               backgroundColor: theme.palette.error.main,
-              color: theme.palette.common.white,
-              fontSize: "0.65rem",
-              fontWeight: "bold",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              px: 0.5,
-              lineHeight: 1,
-              transform: "translate(25%, -25%)",
+              border: `2px solid ${theme.palette.background.paper}`,
             }}
-          >
-            {totalUnRead > 9 ? "9+" : totalUnRead}
-          </Box>
+          />
         )}
       </Button>
 
@@ -380,16 +400,13 @@ export function NotificationsPopover({
         slotProps={{
           paper: {
             sx: {
-              width: 360,
+              width: 380,
               overflow: "hidden",
               display: "flex",
               flexDirection: "column",
-              mt: 1.5,
-              borderRadius: 2.5,
-              boxShadow: theme.shadows[16],
-              transition: theme.transitions.create(["transform", "opacity"], {
-                duration: theme.transitions.duration.short,
-              }),
+              mt: 1,
+              borderRadius: "16px",
+              boxShadow: theme.shadows[8],
             },
           },
         }}
@@ -397,63 +414,95 @@ export function NotificationsPopover({
         {/* Header */}
         <Box
           sx={{
-            py: 1.5,
-            px: 2,
+            py: 2,
+            pl: 2.5,
+            pr: 2,
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            borderBottom: `1px solid ${theme.palette.divider}`,
+            gap: 1,
           }}
         >
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Typography
+              sx={{ fontWeight: 700, fontSize: 15, color: "text.primary" }}
+            >
               Notifications
             </Typography>
-            <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              {totalUnRead === 0
-                ? "Aucun message non lu"
-                : `${totalUnRead} message${totalUnRead > 1 ? "s" : ""} non lu${
-                    totalUnRead > 1 ? "s" : ""
-                  }`}
+            <Typography
+              sx={{
+                fontSize: 12.5,
+                color: hasUnread
+                  ? theme.palette.warning.dark
+                  : "text.secondary",
+                fontWeight: hasUnread ? 600 : 400,
+                mt: 0.25,
+              }}
+            >
+              {subtitleText}
             </Typography>
           </Box>
 
           {hasUnread && (
             <Tooltip title="Tout marquer comme lu">
               <IconButton
-                color="primary"
                 onClick={handleMarkAllAsRead}
-                size="small"
+                disabled={isMarkingAllAsRead}
                 sx={{
+                  color: theme.palette.primary.main,
                   "&:hover": {
-                    backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                    bgcolor: alpha(theme.palette.primary.main, 0.08),
                   },
                 }}
               >
-                <Iconify icon="eva:done-all-fill" width={20} />
+                {isMarkingAllAsRead ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  <CheckCheck size={20} />
+                )}
               </IconButton>
             </Tooltip>
           )}
         </Box>
 
+        <Divider sx={{ borderStyle: "dashed" }} />
+
         {/* Notification list */}
         <Scrollbar
           fillContent
-          sx={{
-            minHeight: 240,
-            maxHeight: { xs: 360, sm: "none" },
-            "& .MuiList-root": {
-              py: 0,
-            },
-          }}
+          sx={{ minHeight: 240, maxHeight: { xs: 360, sm: 420 } }}
         >
           {isLoading ? (
-            renderLoading()
+            <Box
+              sx={{
+                py: 8,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <CircularProgress size={28} />
+            </Box>
           ) : notifications.length === 0 ? (
-            renderEmptyState()
+            <Box
+              sx={{
+                py: 8,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 1,
+              }}
+            >
+              <Bell size={48} width={56} color={theme.palette.grey[300]} />
+              <Typography
+                variant="body2"
+                sx={{ color: "text.secondary", fontSize: 13 }}
+              >
+                Aucune notification
+              </Typography>
+            </Box>
           ) : (
             <>
-              {/* New section */}
               <List
                 disablePadding
                 subheader={
@@ -480,7 +529,6 @@ export function NotificationsPopover({
                 ))}
               </List>
 
-              {/* Older section */}
               <List
                 disablePadding
                 subheader={
@@ -510,24 +558,23 @@ export function NotificationsPopover({
           )}
         </Scrollbar>
 
-        {/* Footer with "View all" button */}
         <Divider sx={{ borderStyle: "dashed" }} />
-        <Box sx={{ p: 1.5 }}>
-          <Button
+
+        {/* Footer */}
+        <Box sx={{ p: 1 }}>
+          <CustomButton
             fullWidth
-            disableRipple
-            color="inherit"
+            variant="text"
+            color="primary"
+            onClick={handleViewAll}
             sx={{
-              borderRadius: 1.5,
-              textTransform: "none",
+              fontSize: 13,
               fontWeight: 500,
-              "&:hover": {
-                backgroundColor: alpha(theme.palette.primary.main, 0.08),
-              },
+              borderRadius: "10px",
             }}
           >
             Voir toutes les notifications
-          </Button>
+          </CustomButton>
         </Box>
       </Popover>
     </>

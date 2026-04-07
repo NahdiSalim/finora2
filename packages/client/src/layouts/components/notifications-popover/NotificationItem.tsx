@@ -1,11 +1,10 @@
 import React from "react";
-import { Box } from "@mui/material";
+import { Box, useTheme } from "@mui/material";
 import Avatar from "@mui/material/Avatar";
 import Typography from "@mui/material/Typography";
 import ListItemAvatar from "@mui/material/ListItemAvatar";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemText from "@mui/material/ListItemText";
-import { Bell } from "lucide-react";
 import { fToNow } from "src/utils/format-time";
 import CustomButton from "src/components/common/CustomButton";
 
@@ -17,21 +16,19 @@ export type NotificationItemProps = {
   description: string;
   avatarUrl: string | null;
   postedAt: string | number | null;
+  actionUrl?: string;
   canRespond?: boolean;
   onAccept?: () => void;
   onReject?: () => void;
+  onNavigate?: (url: string) => void;
   isProcessing?: boolean;
 };
 
 function renderContent(notification: NotificationItemProps) {
   const title = (
-    <Typography variant="subtitle2">
+    <Typography variant="caption" fontWeight={600}>
       {notification.title}
-      <Typography
-        component="span"
-        variant="body2"
-        sx={{ color: "text.secondary" }}
-      >
+      <Typography component="span" variant="caption" color="">
         &nbsp; {notification.description}
       </Typography>
     </Typography>
@@ -95,35 +92,51 @@ export function NotificationItem({
   notification: NotificationItemProps;
 }) {
   const { avatarUrl, title } = renderContent(notification);
+  const theme = useTheme();
+
+  const handleClick = () => {
+    if (notification.actionUrl && notification.onNavigate) {
+      notification.onNavigate(notification.actionUrl);
+    }
+  };
 
   return (
     <ListItemButton
+      onClick={handleClick}
       sx={{
-        py: 1.5,
-        px: 2.5,
-        mt: "1px",
+        cursor: notification.actionUrl ? "pointer" : "default",
         ...(notification.isUnRead && {
-          bgcolor: "action.selected",
+          bgcolor: "primary.lighter",
         }),
       }}
     >
       <ListItemAvatar>
-        <Avatar sx={{ bgcolor: "background.neutral" }}>{avatarUrl}</Avatar>
+        <Avatar
+          sx={{
+            background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+          }}
+        >
+          {avatarUrl}
+        </Avatar>
       </ListItemAvatar>
       <ListItemText
         primary={title}
+        primaryTypographyProps={{
+          fontWeight: notification.isUnRead ? 600 : 400,
+          color: notification.isUnRead ? "text.primary" : "text.disabled",
+        }}
         secondary={
           <Typography
             variant="caption"
+            fontWeight={notification.isUnRead ? 600 : 400}
+            color={notification.isUnRead ? "primary" : "text.disabled"}
             sx={{
               mt: 0.5,
               gap: 0.5,
               display: "flex",
               alignItems: "center",
-              color: "text.disabled",
             }}
           >
-            <Bell />
             {fToNow(notification.postedAt)}
           </Typography>
         }

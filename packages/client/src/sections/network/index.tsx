@@ -8,6 +8,7 @@ import {
 } from "@mui/material";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { MainSection } from "src/layouts/core/main-section";
 import {
@@ -23,6 +24,7 @@ import { useDashboardBase } from "src/hooks/useDashboardBase";
 import { useGetPublicAccountantsQuery } from "src/lib/services/publicAccountantsApi";
 import { useVerifyUserQuery } from "src/lib/services/authApi";
 import { useSendRelationshipInvitationMutation } from "src/lib/services/relationshipsApi";
+import { useFindOrCreateDirectRoomMutation } from "src/lib/services/chatApi";
 import {
   ALL_SPECIALTIES_FOR_FILTER,
   RATING_FILTER_OPTIONS,
@@ -33,6 +35,7 @@ import { useAlert } from "src/contexts/AlertContext";
 export default function NetworkView() {
   const theme = useTheme();
   const dashboardBase = useDashboardBase();
+  const navigate = useNavigate();
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState<string | undefined>(undefined);
   const [specialty, setSpecialty] = useState<string | undefined>(undefined);
@@ -45,6 +48,13 @@ export default function NetworkView() {
   const { showAlert } = useAlert();
   const { data: me } = useVerifyUserQuery();
   const [sendRelationshipInvitation] = useSendRelationshipInvitationMutation();
+  const [findOrCreateDirectRoom] = useFindOrCreateDirectRoomMutation();
+
+  const roleCode =
+    typeof me?.role === "string"
+      ? me.role.toUpperCase()
+      : (me?.role?.code ?? "").toUpperCase();
+  const isClient = roleCode === "CLIENT";
 
   const ratingOption = RATING_FILTER_OPTIONS.find(
     (o) => o.value === ratingRange,
@@ -62,6 +72,7 @@ export default function NetworkView() {
     location,
     reviewMin,
     reviewMax,
+    withRelationships: isClient,
   });
 
   const accountants: Accountant[] =
@@ -95,14 +106,9 @@ export default function NetworkView() {
         featured: false,
         accountantId: item.id,
         companyId: item.company?.id,
+        relationshipStatus: item.relationship?.status?.toLowerCase(),
       } as Accountant;
     }) ?? [];
-
-  const roleCode =
-    typeof me?.role === "string"
-      ? me.role.toUpperCase()
-      : (me?.role?.code ?? "").toUpperCase();
-  const isClient = roleCode === "CLIENT";
 
   const handleSearch = () => {
     const next = searchDraft.trim();
@@ -272,37 +278,74 @@ export default function NetworkView() {
               gap: 2.5,
             }}
           >
-            {accountants.map((accountant) => (
-              <AccountantCard
-                key={accountant.accountantId}
-                data={accountant}
-                getProfilePath={(id) =>
-                  `${dashboardBase}/network/accountant/${id}`
-                }
-                scheduleButtonLabel={isClient ? "Inviter" : "Planifier"}
-                onScheduleClick={
-                  isClient && accountant.companyId
-                    ? async () => {
-                        try {
-                          await sendRelationshipInvitation({
-                            targetCompanyId: accountant.companyId!,
-                          }).unwrap();
-                          showAlert("Invitation envoyée", "success");
-                        } catch {
-                          showAlert(
-                            "Erreur lors de l'envoi de l'invitation",
-                            "error",
-                          );
+            {accountants.map((accountant) => {
+              const invitationPending =
+                isClient && accountant.relationshipStatus === "pending";
+
+              return (
+                <AccountantCard
+                  key={accountant.accountantId}
+                  data={accountant}
+                  getProfilePath={(id) =>
+                    `${dashboardBase}/network/accountant/${id}?relationshipStatus=${encodeURIComponent(accountant.relationshipStatus ?? "")}`
+                  }
+                  scheduleButtonLabel={(() => {
+                    if (!isClient) return "Planifier";
+                    if (invitationPending) return "Invitation envoyée";
+                    if (accountant.relationshipStatus === "active")
+                      return "Planifier";
+                    return "Inviter";
+                  })()}
+                  scheduleDisabled={invitationPending}
+                  scheduleActionType={
+                    isClient && accountant.relationshipStatus !== "active"
+                      ? "invite"
+                      : "schedule"
+                  }
+                  onScheduleClick={
+                    isClient && accountant.relationshipStatus === "active"
+                      ? () => navigate(`${dashboardBase}/meetings`)
+                      : isClient && accountant.companyId && !invitationPending
+                        ? async () => {
+                            try {
+                              await sendRelationshipInvitation({
+                                targetCompanyId: accountant.companyId!,
+                              }).unwrap();
+                              showAlert("Invitation envoyée", "success");
+                            } catch {
+                              showAlert(
+                                "Erreur lors de l'envoi de l'invitation",
+                                "error",
+                              );
+                            }
+                          }
+                        : undefined
+                  }
+                  onMessageClick={
+                    isClient && accountant.relationshipStatus === "active"
+                      ? async (id) => {
+                          try {
+                            const room = await findOrCreateDirectRoom({
+                              targetUserId: id,
+                            }).unwrap();
+                            navigate(
+                              `${dashboardBase}/messages?roomId=${room.id}`,
+                            );
+                          } catch {
+                            showAlert(
+                              "Impossible d'ouvrir la discussion",
+                              "error",
+                            );
+                          }
                         }
-                      }
-                    : undefined
-                }
-                onMessageClick={(id) => {
-                  setContactAccountantId(id);
-                  setContactModalOpen(true);
-                }}
-              />
-            ))}
+                      : (id) => {
+                          setContactAccountantId(id);
+                          setContactModalOpen(true);
+                        }
+                  }
+                />
+              );
+            })}
           </Box>
         )}
 

@@ -1762,17 +1762,27 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
     <PageHeader
       title="Messagerie"
       caption="Un espace simple et sécurisé pour vos échanges."
+      sx={{
+        overflow: "hidden", // Clips content
+        height: "fit-content", // Ensures it doesn't expand unnecessarily
+        maxHeight: "100%", // Prevents it from exceeding parent bounds
+        overscrollBehavior: "none", // Prevents scroll-chaining to the parent
+        touchAction: "none", // Disables swipe-to-scroll on mobile
+      }}
     >
       <Box
         sx={{
           height: isMedium
-            ? `calc(100vh - 300px - ${MOBILE_BOTTOM_NAV_HEIGHT}px)`
-            : "calc(100vh - 300px)",
+            ? `calc(100vh - 400px - ${MOBILE_BOTTOM_NAV_HEIGHT}px)`
+            : "calc(100vh - 215px)",
           minHeight: 0,
           width: "100%",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          // mt: isMedium
+          //   ? `calc(100vh - 730px - ${MOBILE_BOTTOM_NAV_HEIGHT}px)`
+          //   : "calc(100vh - 730px)",
         }}
       >
         <Box

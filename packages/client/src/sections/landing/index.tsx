@@ -577,8 +577,7 @@ const FinoraLandingPage = () => {
   const trustedLogos = [
     "https://cdn-icons-png.flaticon.com/512/5968/5968705.png",
     "https://cdn-icons-png.flaticon.com/512/174/174857.png",
-    "https://cdn-icons-png.flaticon.com/512/3991/3991606.png",
-    "https://cdn-icons-png.flaticon.com/512/4923/4923715.png",
+    "https://upload.wikimedia.org/wikipedia/commons/5/51/Facebook_f_logo_%282019%29.svg",
   ];
 
   return (
@@ -624,14 +623,51 @@ const FinoraLandingPage = () => {
         <Container maxWidth="xl">
           <Box
             sx={{
-              py: scrolled ? 1.5 : 2,
+              py: scrolled ? 1 : 1.5,
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
               transition: "padding 0.4s ease",
             }}
           >
-            {scrolled ? <Logo /> : <Logo isOnDark />}
+            {scrolled ? (
+              <Box sx={{ display: { xs: "none", md: "flex" }, gap: 1 }}>
+                <Logo />
+              </Box>
+            ) : (
+              <Box sx={{ display: { xs: "none", md: "flex" }, gap: 1 }}>
+                <Logo isOnDark />
+              </Box>
+            )}
+
+            {scrolled ? (
+              <Box
+                sx={{
+                  display: { xs: "flex", md: "none" },
+                  justifyContent: "center",
+                  alignItems: "center",
+                  gap: 1,
+                  width: 32,
+                  height: 32,
+                }}
+              >
+                <Logo variant="symbol" />
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  display: { xs: "flex", md: "none" },
+                  justifyContent: "center",
+                  alignItems: "center",
+                  gap: 1,
+                  width: 32,
+                  height: 32,
+                }}
+              >
+                <Logo variant="symbol" isOnDark />
+              </Box>
+            )}
+
             <Box sx={{ display: { xs: "none", md: "flex" }, gap: 1 }}>
               {[
                 { label: "Accueil", id: "hero" },
@@ -663,6 +699,7 @@ const FinoraLandingPage = () => {
                 </Button>
               ))}
             </Box>
+
             <Box sx={{ display: "flex", gap: 1.5 }}>
               <CustomButton
                 variant="outlined"
@@ -686,6 +723,7 @@ const FinoraLandingPage = () => {
               >
                 S&apos;inscrire
               </CustomButton>
+
               <CustomButton
                 variant="contained"
                 color="secondary"
@@ -1865,16 +1903,7 @@ const FinoraLandingPage = () => {
                   mb: 2.5,
                 }}
               >
-                <img
-                  src="https://framerusercontent.com/images/kq857rH86cqGviBRliG7ERQy3MU.png?width=40&height=40"
-                  alt="Logo Finora"
-                  style={{ height: 38 }}
-                />
-                <img
-                  src="https://framerusercontent.com/images/0eFtMzYADpcGfz0iOHLgxGKIiSM.svg?width=83&height=18"
-                  alt="Finora"
-                  style={{ height: 18 }}
-                />
+                <Logo />
               </Box>
               <Typography
                 variant="body2"

@@ -34,6 +34,10 @@ export interface ProfileHeaderProps {
   onContact?: () => void;
   /** État de connexion de l'utilisateur */
   isAuthenticated?: boolean;
+  scheduleLabel?: string;
+  contactLabel?: string;
+  scheduleDisabled?: boolean;
+  scheduleActionType?: "invite" | "schedule";
 }
 
 const ProfileHeader: React.FC<ProfileHeaderProps> = ({
@@ -48,6 +52,10 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   onSchedule,
   isEditing = false,
   isAuthenticated = false, // Valeur par défaut à false
+  scheduleLabel,
+  contactLabel = "Contacter",
+  scheduleDisabled = false,
+  scheduleActionType = "schedule",
 }) => {
   const theme = useTheme();
   const isVisitorMode = onSchedule != null || onContact != null;
@@ -199,8 +207,11 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                 <CustomButton
                   size="large"
                   variant="contained"
+                  disabled={scheduleDisabled}
                   startIcon={
-                    isAuthenticated ? (
+                    scheduleActionType === "invite" ? (
+                      <Handshake size={18} />
+                    ) : isAuthenticated ? (
                       <Calendar size={18} />
                     ) : (
                       <Handshake size={18} />
@@ -213,7 +224,8 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                     fontWeight: 600,
                   }}
                 >
-                  {isAuthenticated ? "Planifier" : "Devenir un client"}
+                  {scheduleLabel ??
+                    (isAuthenticated ? "Planifier" : "Devenir un client")}
                 </CustomButton>
               )}
               {onContact && (
@@ -224,7 +236,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                   startIcon={<MessageCircle size={18} />}
                   onClick={onContact}
                 >
-                  Contacter
+                  {contactLabel}
                 </CustomButton>
               )}
             </Stack>

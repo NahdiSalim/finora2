@@ -70,7 +70,6 @@ export default function AppointmentCard({
 
   return (
     <Box
-      onClick={onClick}
       sx={{
         p: 1.5,
         border: "1px solid",
@@ -79,25 +78,30 @@ export default function AppointmentCard({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        cursor: "pointer",
         bgcolor: theme.palette.grey[50],
         "&:hover": { bgcolor: "action.hover" },
-        // Responsive : empiler verticalement sur petits écrans
         flexDirection: { xs: "column", sm: "row" },
         gap: { xs: 1.5, sm: 0 },
       }}
     >
-      {/* Partie gauche : informations principales */}
+      {/* ✅ Partie gauche : cliquable pour ouvrir les détails */}
       <Box
+        onClick={onClick}
         sx={{
           display: "flex",
           alignItems: "center",
           gap: 1.5,
-          // Prend toute la largeur sur mobile, moitié sur desktop
           width: { xs: "100%", sm: "50%" },
+          cursor: "pointer",
         }}
       >
-        <Avatar sx={{ width: 36, height: 36 }}>
+        <Avatar
+          sx={{
+            width: 36,
+            height: 36,
+            background: `linear-gradient(135deg, ${theme.palette.secondary.main}, ${theme.palette.secondary.dark})`,
+          }}
+        >
           {fullName.slice(0, 1).toUpperCase()}
         </Avatar>
 
@@ -113,7 +117,6 @@ export default function AppointmentCard({
             {appointment.title}
           </Typography>
 
-          {/* Détails : wrap sur petits écrans */}
           <Box
             sx={{
               display: "flex",
@@ -123,21 +126,18 @@ export default function AppointmentCard({
               gap: { xs: 0.5, sm: 0 },
             }}
           >
-            {/* Nom complet */}
             <Box
               sx={{
                 display: "flex",
                 alignItems: "center",
                 gap: 0.5,
-                // Sur mobile, pas de bordure à droite, sur desktop oui
                 borderRight: {
                   xs: "none",
                   sm: `1px solid ${theme.palette.info.lighter}`,
                 },
                 pr: { xs: 0, sm: 1 },
-                // Pour éviter que le nom ne s'étire trop
                 maxWidth: { xs: "100%", sm: 120 },
-                minWidth: 0, // permet le text-overflow
+                minWidth: 0,
               }}
             >
               <Tooltip title={fullName} arrow>
@@ -154,7 +154,6 @@ export default function AppointmentCard({
               </Tooltip>
             </Box>
 
-            {/* Date */}
             {shouldShowDate && (
               <Box
                 sx={{
@@ -184,7 +183,6 @@ export default function AppointmentCard({
               </Box>
             )}
 
-            {/* Heure */}
             <Box
               sx={{
                 display: "flex",
@@ -203,7 +201,6 @@ export default function AppointmentCard({
               </Typography>
             </Box>
 
-            {/* Lieu */}
             <Box
               sx={{
                 display: "flex",
@@ -228,58 +225,40 @@ export default function AppointmentCard({
         </Box>
       </Box>
 
-      {/* Partie droite : actions */}
+      {/* ✅ Partie droite : actions – ne déclenche PAS onClick de la carte */}
       <Box
         sx={{
           display: "flex",
           alignItems: "center",
           gap: 1,
-          // Centrer les actions sur mobile, aligner à droite sur desktop
           justifyContent: { xs: "center", sm: "flex-end" },
           width: { xs: "100%", sm: "auto" },
         }}
+        onClick={(e) => e.stopPropagation()}
       >
         <AppointmentStatusChip status={appointment.status} />
 
-        {/* Pending — Refuser / Confirmer */}
         {appointment.status === "pending" &&
           canConfirmReject &&
           onConfirm &&
           onReject && (
             <Box sx={{ display: "flex", gap: 1, ml: { xs: 0, sm: 1 } }}>
-              <CustomButton
-                variant="outlined"
-                color="error"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onReject();
-                }}
-              >
+              <CustomButton variant="outlined" color="error" onClick={onReject}>
                 Refuser
               </CustomButton>
-              <CustomButton
-                variant="contained"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onConfirm();
-                }}
-              >
+              <CustomButton variant="contained" onClick={onConfirm}>
                 Confirmer
               </CustomButton>
             </Box>
           )}
 
-        {/* Confirmed — Reporter */}
         {appointment.status === "confirmed" && (
           <Box sx={{ display: "flex", gap: 1, ml: { xs: 0, sm: 1 } }}>
             {onReschedule && (
               <CustomButton
                 variant="contained"
                 color="secondary"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onReschedule();
-                }}
+                onClick={onReschedule}
               >
                 Reporter
               </CustomButton>

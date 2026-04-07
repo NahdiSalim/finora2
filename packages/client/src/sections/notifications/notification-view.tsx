@@ -783,9 +783,18 @@ export default function NotificationsView() {
 
   const handleNavigate = useCallback(
     (actionUrl: string) => {
-      // If it's a full external URL (http/https), open it directly in a new tab
+      // External URLs – open in new tab
       if (/^https?:\/\//i.test(actionUrl)) {
         window.open(actionUrl, "_blank", "noopener,noreferrer");
+        return;
+      }
+
+      // ❌ Disable navigation for relationship-related URLs
+      if (
+        actionUrl.startsWith("/relationships") ||
+        actionUrl.includes("/relationships/")
+      ) {
+        showAlert("Acceder aux relations", "warning");
         return;
       }
 
@@ -804,9 +813,19 @@ export default function NotificationsView() {
         cleanPath = `/${cleanPath}`;
       }
       const fullPath = `/dashboard/${userRole}${cleanPath}`;
+
+      // Optional: also block after building fullPath if needed
+      if (fullPath.includes("/relationships")) {
+        showAlert(
+          "Accès non disponible pour ce type de notification",
+          "warning",
+        );
+        return;
+      }
+
       navigate(fullPath);
     },
-    [navigate, userRole],
+    [navigate, userRole, showAlert],
   );
 
   const pageActions =

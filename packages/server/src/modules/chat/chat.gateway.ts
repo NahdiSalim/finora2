@@ -27,7 +27,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private userSockets: Map<number, string[]> = new Map();
   private activeCalls: Map<number, number> = new Map();
   private callParticipants: Map<number, Set<number>> = new Map();
-  private callTimeouts: Map<number, NodeJS.Timeout> = new Map();
+  private callTimeouts: Map<number, ReturnType<typeof setTimeout>> = new Map();
 
   constructor(
     private chatService: ChatService,

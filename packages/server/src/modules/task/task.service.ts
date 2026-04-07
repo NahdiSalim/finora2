@@ -158,6 +158,7 @@ export class TaskService {
                 type: 'task',
                 action: 'assigned',
                 actorName,
+                actorId: createdById,
                 data: { taskId: t.id },
               })
               .catch(() => {});
@@ -234,6 +235,7 @@ export class TaskService {
           actorName: creatorUser
             ? `${creatorUser.firstName} ${creatorUser.lastName}`
             : 'Votre responsable',
+          actorId: createdById,
           data: { taskId: task.id },
         })
         .catch(() => {});

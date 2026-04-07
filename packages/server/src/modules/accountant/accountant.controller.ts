@@ -31,6 +31,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RoleCode } from 'src/common/enums/role.enum';
+import { JwtService } from '@nestjs/jwt';
 import type { AuthRequest } from '../auth/types/user-type';
 
 @ApiTags('Accountant')
@@ -151,60 +152,24 @@ export class AccountantController {
 @ApiTags('Public - Accountants')
 @Controller('public/accountants')
 export class PublicAccountantsController {
-  constructor(private accountantService: AccountantService) {}
+  constructor(
+    private accountantService: AccountantService,
+    private jwtService: JwtService
+  ) {}
 
   @Get()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Browse accountant profiles (public, no auth required)' })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Page number',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Items per page (max 50)',
-  })
-  @ApiQuery({
-    name: 'location',
-    required: false,
-    type: String,
-    description: 'Filter by location (searches in city, address, and postal code)',
-    example: '123',
-  })
-  @ApiQuery({
-    name: 'specialty',
-    required: false,
-    type: String,
-    description: 'Filter by company specialty (partial match, case insensitive)',
-    example: 'Audit',
-  })
-  @ApiQuery({
-    name: 'search',
-    required: false,
-    type: String,
-    description: 'Search by first name, last name, or company name',
-  })
-  @ApiQuery({
-    name: 'reviewMin',
-    required: false,
-    type: Number,
-    description: 'Minimum review rating',
-  })
-  @ApiQuery({
-    name: 'reviewMax',
-    required: false,
-    type: Number,
-    description: 'Maximum review rating',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'List of accountant profiles retrieved successfully',
-  })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'location', required: false, type: String })
+  @ApiQuery({ name: 'specialty', required: false, type: String })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'reviewMin', required: false, type: Number })
+  @ApiQuery({ name: 'reviewMax', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'List of accountant profiles retrieved successfully' })
   async browseAccountants(
+    @Req() req: any,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('location') location?: string,
@@ -213,6 +178,19 @@ export class PublicAccountantsController {
     @Query('reviewMin') reviewMin?: string,
     @Query('reviewMax') reviewMax?: string
   ) {
+    // Extraire le userId depuis le token Bearer si présent — sans bloquer si absent
+    let clientUserId: number | undefined;
+    const authHeader = req.headers?.authorization as string | undefined;
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.slice(7);
+        const payload = this.jwtService.decode(token) as any;
+        if (payload?.sub) clientUserId = Number(payload.sub);
+      } catch (e) {
+        console.error('[browseAccountants] token decode error:', e?.message);
+      }
+    }
+
     return await this.accountantService.browseAccountants({
       page: page ? parseInt(page) : 1,
       limit: limit ? parseInt(limit) : 20,
@@ -221,6 +199,43 @@ export class PublicAccountantsController {
       search,
       reviewMin: reviewMin ? parseFloat(reviewMin) : undefined,
       reviewMax: reviewMax ? parseFloat(reviewMax) : undefined,
+      clientUserId,
+    });
+  }
+
+  @Get('with-relationships')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Browse accountant profiles with relationship status (requires auth)' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'location', required: false, type: String })
+  @ApiQuery({ name: 'specialty', required: false, type: String })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'reviewMin', required: false, type: Number })
+  @ApiQuery({ name: 'reviewMax', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'List of accountant profiles with relationship status' })
+  async browseAccountantsWithRelationships(
+    @Req() req: AuthRequest,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('location') location?: string,
+    @Query('specialty') specialty?: string,
+    @Query('search') search?: string,
+    @Query('reviewMin') reviewMin?: string,
+    @Query('reviewMax') reviewMax?: string
+  ) {
+    const clientUserId = req.user!.id;
+    return await this.accountantService.browseAccountants({
+      page: page ? parseInt(page) : 1,
+      limit: limit ? parseInt(limit) : 20,
+      location,
+      specialty,
+      search,
+      reviewMin: reviewMin ? parseFloat(reviewMin) : undefined,
+      reviewMax: reviewMax ? parseFloat(reviewMax) : undefined,
+      clientUserId,
     });
   }
 

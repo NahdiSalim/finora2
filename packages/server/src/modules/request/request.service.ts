@@ -412,6 +412,7 @@ export class RequestService {
               type: 'request',
               action: 'created',
               actorName,
+              actorId: clientId,
               data: { requestId: request.id },
             })
             .catch(() => {});

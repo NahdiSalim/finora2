@@ -33,6 +33,7 @@ import {
   useMarkAllRoomsAsReadMutation,
   type RecentMessage,
 } from "src/lib/services/chatApi";
+import CustomButton from "src/components/common/CustomButton";
 
 // ----------------------------------------------------------------------
 
@@ -159,8 +160,8 @@ function MessageItem({
             height: 44,
             fontSize: 16,
             fontWeight: 700,
-            bgcolor: theme.palette.primary.lighter,
-            color: theme.palette.primary.darker,
+            background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+            color: theme.palette.common.white,
           }}
         >
           {message.room.type === "group"
@@ -544,23 +545,20 @@ export function MessagesPopover({ sx, ...other }: MessagesPopoverProps) {
 
         {/* Footer */}
         <Box sx={{ p: 1 }}>
-          <Button
+          <CustomButton
             fullWidth
             disableRipple
-            color="inherit"
+            color="primary"
             onClick={handleViewAll}
+            variant="text"
             sx={{
               fontSize: 13,
               fontWeight: 500,
               borderRadius: "10px",
-              "&:hover": {
-                backgroundColor: alpha(theme.palette.primary.main, 0.06),
-                color: theme.palette.primary.main,
-              },
             }}
           >
             Voir tous les messages
-          </Button>
+          </CustomButton>
         </Box>
       </Popover>
     </>

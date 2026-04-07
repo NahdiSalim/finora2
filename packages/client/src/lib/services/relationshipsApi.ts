@@ -1,11 +1,13 @@
 import { createApi } from "@reduxjs/toolkit/query/react";
 import { baseQueryWithReauth } from "./baseQueryWithReauth";
+import { publicAccountantsApi } from "./publicAccountantsApi";
 
 export interface ClientInvoiceStats {
   clientId: number;
   clientName: string;
   clientLogo: string | null;
   clientEmail: string | null;
+  ownerId?: number | null;
   ownerFirstName: string | null;
   ownerLastName: string | null;
   invoiceStats: {
@@ -116,6 +118,18 @@ export const relationshipsApi = createApi({
         body,
       }),
       invalidatesTags: [{ type: "RelationshipInvitations", id: "LIST" }],
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          dispatch(
+            publicAccountantsApi.util.invalidateTags([
+              { type: "PublicAccountants", id: "LIST_WITH_RELATIONSHIPS" },
+            ]),
+          );
+        } catch {
+          // no-op: keep existing mutation error handling
+        }
+      },
     }),
 
     respondToInvitation: builder.mutation<

@@ -455,6 +455,7 @@ export class AccountantService {
       const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
         where: {
           accountingFirmId: accountant.companyId,
+          status: 'active',
         },
         include: {
           clientCompany: {
@@ -488,6 +489,7 @@ export class AccountantService {
       const total = await this.prisma.clientAccountingFirmRelationship.count({
         where: {
           accountingFirmId: accountant.companyId,
+          status: 'active',
         },
       });
 
@@ -610,6 +612,8 @@ export class AccountantService {
     search?: string;
     reviewMin?: number;
     reviewMax?: number;
+    clientCompanyId?: number;
+    clientUserId?: number;
   }) {
     const page = filters.page || 1;
     const limit = Math.min(filters.limit || 20, 50); // Max 50 per page
@@ -801,6 +805,61 @@ export class AccountantService {
         return true;
       });
 
+      // If client is connected, fetch their relationships with all these accountants
+      const relationshipMap: Map<
+        number,
+        { status: string; relationshipStart: Date | null; relationshipId: number }
+      > = new Map();
+
+      if (filters.clientUserId || filters.clientCompanyId) {
+        const accountingFirmIds = completeProfiles
+          .map((a) => a.company?.id)
+          .filter((id): id is number => !!id);
+
+        if (accountingFirmIds.length > 0) {
+          // Toujours résoudre le companyId depuis la DB via userId (source de vérité)
+          let resolvedClientCompanyId: number | undefined = undefined;
+
+          if (filters.clientUserId) {
+            const clientUser = await this.prisma.user.findUnique({
+              where: { id: filters.clientUserId },
+              select: { companyId: true },
+            });
+            resolvedClientCompanyId = clientUser?.companyId ?? undefined;
+          }
+
+          if (!resolvedClientCompanyId) {
+            resolvedClientCompanyId = filters.clientCompanyId;
+          }
+
+          if (resolvedClientCompanyId) {
+            const relationships = await this.prisma.clientAccountingFirmRelationship.findMany({
+              where: {
+                clientCompanyId: resolvedClientCompanyId,
+                accountingFirmId: { in: accountingFirmIds },
+              },
+              select: {
+                id: true,
+                accountingFirmId: true,
+                status: true,
+                relationshipStart: true,
+              },
+              orderBy: { createdAt: 'desc' },
+            });
+
+            for (const rel of relationships) {
+              if (!relationshipMap.has(rel.accountingFirmId)) {
+                relationshipMap.set(rel.accountingFirmId, {
+                  relationshipId: rel.id,
+                  status: rel.status,
+                  relationshipStart: rel.relationshipStart,
+                });
+              }
+            }
+          }
+        }
+      }
+
       // Generate presigned URLs for all accountants with complete profiles
       const accountantsWithUrls = await Promise.all(
         completeProfiles.map(async (accountant) => {
@@ -856,6 +915,9 @@ export class AccountantService {
             department: accountant.department,
             cin: accountant.cin,
             diploma: accountant.diploma,
+            relationship: accountant.company?.id
+              ? (relationshipMap.get(accountant.company.id) ?? null)
+              : null,
             company: accountant.company
               ? {
                   id: accountant.company.id,

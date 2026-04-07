@@ -121,7 +121,7 @@ export class RelationshipService {
       accountingFirmId = isClientToAccountant ? dto.targetCompanyId : user.companyId!;
     }
 
-    // Check if relationship already exists
+    // Check if relationship already exists with active/pending status
     const existingRelationship = await this.prisma.clientAccountingFirmRelationship.findFirst({
       where: {
         clientCompanyId,
@@ -134,14 +134,32 @@ export class RelationshipService {
       throw new BadRequestException('Une relation existe déjà ou est en attente');
     }
 
-    // Create invitation
-    const invitation = await this.prisma.clientAccountingFirmRelationship.create({
-      data: {
+    // Create or reset invitation (upsert to handle unique constraint on clientCompanyId+accountingFirmId)
+    const invitation = await this.prisma.clientAccountingFirmRelationship.upsert({
+      where: {
+        clientCompanyId_accountingFirmId: {
+          clientCompanyId,
+          accountingFirmId,
+        },
+      },
+      create: {
         clientCompanyId,
         accountingFirmId,
         invitedBy: userId,
         status: 'pending',
         invitationMessage: dto.invitationMessage,
+      } as any,
+      update: {
+        invitedBy: userId,
+        status: 'pending',
+        invitationMessage: dto.invitationMessage ?? null,
+        rejectionReason: null,
+        responseDate: null,
+        relationshipStart: null,
+        relationshipEnd: null,
+        terminationReason: null,
+        terminatedBy: null,
+        terminatedAt: null,
       } as any,
       include: {
         clientCompany: { select: { id: true, name: true } },
@@ -169,6 +187,7 @@ export class RelationshipService {
         action: 'invitation_received',
         priority: 'high',
         actorName: senderName,
+        actorId: userId,
         data: {
           invitationId: invitation.id,
           companyName,
@@ -289,6 +308,23 @@ export class RelationshipService {
 
     const isAccepted = dto.response === InvitationResponse.ACCEPT;
 
+    // Si acceptée, rejeter toutes les autres relations du même client (pending ET active)
+    if (isAccepted) {
+      await this.prisma.clientAccountingFirmRelationship.updateMany({
+        where: {
+          clientCompanyId: invitation.clientCompanyId,
+          status: { in: ['pending', 'active'] },
+          id: { not: invitationId },
+        },
+        data: {
+          status: 'rejected',
+          rejectionReason:
+            'Annulée automatiquement : le client a établi une nouvelle relation avec un autre cabinet.',
+          responseDate: new Date(),
+        },
+      });
+    }
+
     const notificationData = {
       relationshipId: updatedInvitation.id,
       status: isAccepted ? 'active' : 'rejected',
@@ -306,12 +342,10 @@ export class RelationshipService {
 
       if (clientUser) {
         try {
-          console.log(invitation, 'ivnici');
           const firmCompany = await this.prisma.company.findUnique({
             where: { id: invitation.accountingFirmId },
             select: { name: true },
           });
-          console.log(firmCompany, 'firmCompany');
 
           await this.notificationService.notify({
             recipientId: clientUser.id,
@@ -319,6 +353,7 @@ export class RelationshipService {
             action: 'invitation_accepted',
             priority: 'normal',
             actorName: firmCompany?.name ?? invitation.accountingFirm.name,
+            actorId: userId,
             data: notificationData,
           });
         } catch (err) {
@@ -596,6 +631,7 @@ export class RelationshipService {
             email: true,
             owner: {
               select: {
+                id: true,
                 firstName: true,
                 lastName: true,
               },
@@ -649,6 +685,7 @@ export class RelationshipService {
           clientName: relationship.clientCompany.name,
           clientLogo: relationship.clientCompany.logo,
           clientEmail: relationship.clientCompany.email,
+          ownerId: relationship.clientCompany.owner?.id || null,
           ownerFirstName: relationship.clientCompany.owner?.firstName || null,
           ownerLastName: relationship.clientCompany.owner?.lastName || null,
           invoiceStats: {

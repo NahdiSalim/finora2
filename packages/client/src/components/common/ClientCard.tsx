@@ -25,8 +25,8 @@ import { useNavigate } from "react-router-dom";
 
 type UserCardProps = {
   id: string | number;
-  cover: string;
-  avatar: string;
+  cover?: string;
+  avatar?: string;
   name: string;
   email: string;
   ownerFirstName: string;
@@ -265,6 +265,14 @@ function DefaultCard({
   const theme = useTheme();
   const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
+  const initials =
+    name
+      .trim()
+      .split(/\s+/)
+      .map((word) => word.charAt(0))
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) || "CL";
 
   const handleCardClick = () => {
     if (onCardClick) onCardClick();
@@ -305,9 +313,9 @@ function DefaultCard({
         <Box
           sx={{
             height: 80,
-            backgroundImage: `url(${cover})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
+            background: cover
+              ? `url(${cover}) center/cover no-repeat`
+              : "linear-gradient(135deg, #e8eefc 0%, #d9e6ff 100%)",
           }}
         />
 
@@ -321,7 +329,9 @@ function DefaultCard({
               border: `3px solid ${theme.palette.background.paper}`,
               boxShadow: theme.shadows[2],
             }}
-          />
+          >
+            {!avatar && initials}
+          </Avatar>
         </Box>
 
         <CardContent>
@@ -387,16 +397,18 @@ function DefaultCard({
               </CustomButton>
             </Tooltip>
 
-            <Tooltip title="Deactivate" arrow>
-              <CustomButton
-                variant="outlined"
-                color="error"
-                onClick={handleDeactivateClick}
-                sx={{ minWidth: 44, p: 0 }}
-              >
-                <Power size={20} />
-              </CustomButton>
-            </Tooltip>
+            {onDeactivate && (
+              <Tooltip title="Deactivate" arrow>
+                <CustomButton
+                  variant="outlined"
+                  color="error"
+                  onClick={handleDeactivateClick}
+                  sx={{ minWidth: 44, p: 0 }}
+                >
+                  <Power size={20} />
+                </CustomButton>
+              </Tooltip>
+            )}
           </Box>
         </CardContent>
       </Card>

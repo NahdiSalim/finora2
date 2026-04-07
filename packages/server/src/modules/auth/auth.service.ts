@@ -773,20 +773,20 @@ export class AuthService {
       // Create default document folders for the client
       const defaultFolders = ['Vente', 'Achat', 'Banque', 'Devis'];
       try {
-        await this.prisma.document.createMany({
-          data: defaultFolders.map((name) => ({
-            name,
-            url: `documents/${clientCompany.id}/${name.toLowerCase()}`,
-            type: 'folder',
-            status: 'active',
-            ownerId: user.id,
-            companyId: clientCompany.id,
-            isFolder: true,
-            size: 0,
-            permissions: [],
-            children: [],
-          })),
-        });
+        for (const name of defaultFolders) {
+          await this.prisma.document.create({
+            data: {
+              name,
+              url: `documents/${clientCompany.id}/${name.toLowerCase()}`,
+              type: 'folder',
+              status: 'active',
+              ownerId: user.id,
+              companyId: clientCompany.id,
+              isFolder: true,
+              size: 0,
+            },
+          });
+        }
       } catch (error) {
         console.error('Failed to create default folders for client:', error);
       }

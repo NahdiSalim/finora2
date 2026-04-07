@@ -1780,9 +1780,9 @@ export default function MessagesView({ onOpenMedia }: MessagesViewProps) {
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          mt: isMedium
-            ? `calc(100vh - 730px - ${MOBILE_BOTTOM_NAV_HEIGHT}px)`
-            : "calc(100vh - 730px)",
+          // mt: isMedium
+          //   ? `calc(100vh - 730px - ${MOBILE_BOTTOM_NAV_HEIGHT}px)`
+          //   : "calc(100vh - 730px)",
         }}
       >
         <Box

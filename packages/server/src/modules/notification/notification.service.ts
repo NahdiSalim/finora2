@@ -129,6 +129,10 @@ export class NotificationService {
       notifications: parsedNotifications.map((n) => ({
         ...n,
         actorPhotoUrl: n.data?.actorId ? (actorPhotoMap.get(n.data.actorId) ?? null) : null,
+        // actionUrl est déjà dans n via le spread, mais on le rend explicite
+        actionUrl: n.actionUrl ?? null,
+        // category pour grouper côté frontend
+        category: n.type?.split('.')?.[0] ?? n.type,
       })),
       total,
       unreadCount,

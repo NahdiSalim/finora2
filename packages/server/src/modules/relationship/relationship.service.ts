@@ -495,10 +495,11 @@ export class RelationshipService {
     if (otherPartyOwnerId) {
       await this.notificationService.notify({
         recipientId: otherPartyOwnerId,
-        type: 'relationship.terminated',
-        action: 'view_relationships',
+        type: 'relationship',
+        action: 'terminated',
         priority: 'high',
         actorName: `${user.firstName} ${user.lastName}`,
+        actorId: userId,
         data: { relationshipId: updatedRelationship.id },
       });
     }

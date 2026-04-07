@@ -16,9 +16,11 @@ export type NotificationItemProps = {
   description: string;
   avatarUrl: string | null;
   postedAt: string | number | null;
+  actionUrl?: string;
   canRespond?: boolean;
   onAccept?: () => void;
   onReject?: () => void;
+  onNavigate?: (url: string) => void;
   isProcessing?: boolean;
 };
 
@@ -92,9 +94,17 @@ export function NotificationItem({
   const { avatarUrl, title } = renderContent(notification);
   const theme = useTheme();
 
+  const handleClick = () => {
+    if (notification.actionUrl && notification.onNavigate) {
+      notification.onNavigate(notification.actionUrl);
+    }
+  };
+
   return (
     <ListItemButton
+      onClick={handleClick}
       sx={{
+        cursor: notification.actionUrl ? "pointer" : "default",
         ...(notification.isUnRead && {
           bgcolor: "primary.lighter",
         }),

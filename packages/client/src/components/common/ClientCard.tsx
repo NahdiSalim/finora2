@@ -328,6 +328,7 @@ function DefaultCard({
               height: 80,
               border: `3px solid ${theme.palette.background.paper}`,
               boxShadow: theme.shadows[2],
+              background: `linear-gradient(135deg, ${theme.palette.secondary.main}, ${theme.palette.secondary.dark})`,
             }}
           >
             {!avatar && initials}
@@ -344,7 +345,17 @@ function DefaultCard({
             {name}
           </Typography>
 
-          <Typography variant="body2" color="text.secondary" align="center">
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            align="center"
+            sx={{
+              maxWidth: "100%",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
             {email}
           </Typography>
 
@@ -358,7 +369,7 @@ function DefaultCard({
                 color="text.secondary"
                 display="block"
               >
-                Processed
+                Traité
               </Typography>
               <Typography variant="body1" fontWeight={600}>
                 {processedDocs}
@@ -373,7 +384,7 @@ function DefaultCard({
                 color="text.secondary"
                 display="block"
               >
-                Pending
+                En attente
               </Typography>
               <Typography variant="body1" fontWeight={600}>
                 {pendingDocs}

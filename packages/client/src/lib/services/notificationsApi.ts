@@ -15,6 +15,7 @@ export interface NotificationDto {
   read: boolean;
   createdAt: string;
   updatedAt?: string;
+  actorPhotoUrl?: string | null;
 }
 
 export interface GetNotificationsResponse {

@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -34,6 +34,7 @@ import {
   useMarkAllNotificationsAsReadMutation,
   useMarkNotificationAsReadMutation,
 } from "src/lib/services/notificationsApi";
+import { useAppSelector } from "src/hooks/use-redux";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import isToday from "dayjs/plugin/isToday";
@@ -45,8 +46,17 @@ dayjs.extend(isToday);
 dayjs.extend(isYesterday);
 dayjs.locale("fr");
 
-// ─── Animation Variants ───────────────────────────────────────────────────────
+// ========== Helper: resolve image URLs ==========
+const getFullImageUrl = (url?: string | null): string | undefined => {
+  if (!url) return undefined;
+  if (/^(https?:\/\/|data:|blob:)/i.test(url)) return url;
+  const baseUrl = import.meta.env.VITE_API_URL || "";
+  const cleanBase = baseUrl.replace(/\/$/, "");
+  const cleanUrl = url.startsWith("/") ? url : `/${url}`;
+  return `${cleanBase}${cleanUrl}`;
+};
 
+// ========== Animation variants ==========
 const listVariants = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.04 } },
@@ -57,13 +67,12 @@ const itemVariants = {
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.22, ease: "easeOut" },
+    transition: { duration: 0.22, ease: "easeOut" as const },
   },
   exit: { opacity: 0, x: -16, transition: { duration: 0.18 } },
 };
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
+// ========== Types ==========
 interface NotificationAttachment {
   id: number;
   fileName: string;
@@ -76,6 +85,7 @@ interface NotificationActor {
   firstName: string;
   lastName: string;
   avatar?: string;
+  actorPhotoUrl?: string;
   type: "client" | "accountant" | "system";
 }
 
@@ -89,6 +99,7 @@ interface Notification {
   attachment?: NotificationAttachment;
   read: boolean;
   createdAt: string;
+  actionUrl?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -97,8 +108,7 @@ interface NotificationGroup {
   notifications: Notification[];
 }
 
-// ─── Config Maps ──────────────────────────────────────────────────────────────
-
+// ========== Config maps ==========
 const NOTIFICATION_ICON_MAP: Record<string, React.ReactNode> = {
   invitation_accepted: <UserPlus size={14} />,
   relationship_invitation: <UserPlus size={14} />,
@@ -122,8 +132,7 @@ const NOTIFICATION_COLOR_KEY: Record<
   request_created: "primary",
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
+// ========== Helpers ==========
 function safeParseJson(value: unknown): Record<string, unknown> {
   if (!value) return {};
   if (typeof value === "object" && !Array.isArray(value))
@@ -143,14 +152,21 @@ function safeParseJson(value: unknown): Record<string, unknown> {
 
 function normalizeNotification(raw: Record<string, unknown>): Notification {
   const data = safeParseJson(raw.data);
+  const actorRaw = (raw.actor as NotificationActor) ?? {};
   return {
     id: Number(raw.id),
     type: String(raw.type ?? "default").toLowerCase(),
-    actor: (raw.actor as NotificationActor) ?? {
-      id: Number(raw.userId ?? 0),
-      firstName: String(raw.actorFirstName ?? raw.userFirstName ?? "System"),
-      lastName: String(raw.actorLastName ?? raw.userLastName ?? ""),
-      type: (raw.actorType as NotificationActor["type"]) ?? "system",
+    actor: {
+      id: Number(actorRaw.id ?? raw.userId ?? 0),
+      firstName: String(
+        actorRaw.firstName ?? raw.actorFirstName ?? raw.userFirstName ?? "",
+      ),
+      lastName: String(
+        actorRaw.lastName ?? raw.actorLastName ?? raw.userLastName ?? "",
+      ),
+      avatar: actorRaw.avatar,
+      actorPhotoUrl: actorRaw.actorPhotoUrl,
+      type: (actorRaw.type as NotificationActor["type"]) ?? "system",
     },
     title: String(raw.title ?? "Notification"),
     message: String(raw.message ?? ""),
@@ -160,6 +176,7 @@ function normalizeNotification(raw: Record<string, unknown>): Notification {
     attachment: raw.attachment as NotificationAttachment | undefined,
     read: Boolean(raw.read),
     createdAt: String(raw.createdAt ?? new Date().toISOString()),
+    actionUrl: raw.actionUrl as string | undefined,
     metadata: data,
   };
 }
@@ -198,8 +215,7 @@ function getActorInitials(actor: NotificationActor): string {
   return `${actor.firstName.charAt(0)}${actor.lastName.charAt(0)}`.toUpperCase();
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
+// ========== Sub‑components ==========
 interface NotificationIconBadgeProps {
   type: string;
   actor: NotificationActor;
@@ -214,7 +230,8 @@ function NotificationIconBadge({
   const theme = useTheme();
   const colorKey = NOTIFICATION_COLOR_KEY[type] ?? "primary";
   const color = theme.palette[colorKey].main;
-  const icon = NOTIFICATION_ICON_MAP[type] ?? <Bell size={14} />;
+  const icon = NOTIFICATION_ICON_MAP[type] ?? <Bell size={10} />;
+  const avatarSrc = getFullImageUrl(actor.actorPhotoUrl || actor.avatar);
 
   return (
     <Badge
@@ -240,7 +257,8 @@ function NotificationIconBadge({
       }
     >
       <Avatar
-        src={actor.avatar}
+        src={avatarSrc}
+        alt={`${actor.firstName} ${actor.lastName}`}
         sx={{
           width: 42,
           height: 42,
@@ -263,18 +281,12 @@ interface NotificationBodyProps {
 
 function NotificationBody({ notification }: NotificationBodyProps) {
   const theme = useTheme();
-  const {
-    type,
-    actor,
-    targetTitle,
-    message,
-    title,
-    attachment,
-    read,
-    createdAt,
-  } = notification;
-  const actorName = `${actor.firstName} ${actor.lastName}`;
+  const { type, targetTitle, message, title, attachment, read, createdAt } =
+    notification;
   const timeDisplay = formatTimeDisplay(createdAt);
+  const attachmentUrl = attachment
+    ? getFullImageUrl(attachment.url)
+    : undefined;
 
   const renderText = () => {
     switch (type) {
@@ -360,7 +372,6 @@ function NotificationBody({ notification }: NotificationBodyProps) {
 
   return (
     <Box sx={{ flex: 1, minWidth: 0, pl: read ? 0 : 0.5 }}>
-      {/* Main text */}
       <Typography
         variant="body2"
         sx={{
@@ -373,11 +384,10 @@ function NotificationBody({ notification }: NotificationBodyProps) {
         {renderText()}
       </Typography>
 
-      {/* Attachment chip */}
-      {attachment && (
+      {attachment && attachmentUrl && (
         <Paper
           component="a"
-          href={attachment.url}
+          href={attachmentUrl}
           target="_blank"
           rel="noopener noreferrer"
           elevation={0}
@@ -427,7 +437,6 @@ function NotificationBody({ notification }: NotificationBodyProps) {
         </Paper>
       )}
 
-      {/* Quoted message */}
       {message &&
         !["relationship_invitation", "invitation_accepted"].includes(type) && (
           <Box
@@ -447,7 +456,6 @@ function NotificationBody({ notification }: NotificationBodyProps) {
             </Typography>
           </Box>
         )}
-      {/* Timestamp */}
       <Typography
         variant="caption"
         sx={{
@@ -465,25 +473,34 @@ function NotificationBody({ notification }: NotificationBodyProps) {
   );
 }
 
-// ─── Notification Item ────────────────────────────────────────────────────────
-
 interface NotificationItemProps {
   notification: Notification;
   onMarkAsRead: (id: number) => void;
+  onNavigate: (url: string) => void;
 }
 
 function NotificationItem({
   notification,
   onMarkAsRead,
+  onNavigate,
 }: NotificationItemProps) {
   const theme = useTheme();
   const colorKey = NOTIFICATION_COLOR_KEY[notification.type] ?? "primary";
   const accentColor = theme.palette[colorKey].main;
 
+  const handleClick = useCallback(() => {
+    if (!notification.read) {
+      onMarkAsRead(notification.id);
+    }
+    if (notification.actionUrl) {
+      onNavigate(notification.actionUrl);
+    }
+  }, [notification, onMarkAsRead, onNavigate]);
+
   return (
     <motion.div variants={itemVariants} layout>
       <Box
-        onClick={() => onMarkAsRead(notification.id)}
+        onClick={handleClick}
         sx={{
           display: "flex",
           alignItems: "flex-start",
@@ -500,7 +517,6 @@ function NotificationItem({
           transition: "all 0.2s ease",
           "&:hover": {
             backgroundColor: alpha(accentColor, 0.08),
-            "& .notification-actions": { opacity: 1 },
           },
           "&::before": !notification.read
             ? {
@@ -523,8 +539,6 @@ function NotificationItem({
           read={notification.read}
         />
         <NotificationBody notification={notification} />
-
-        {/* Unread dot */}
         {!notification.read && (
           <Box
             sx={{
@@ -542,8 +556,6 @@ function NotificationItem({
     </motion.div>
   );
 }
-
-// ─── Skeleton Loader ──────────────────────────────────────────────────────────
 
 function NotificationSkeleton() {
   return (
@@ -564,8 +576,6 @@ function NotificationSkeleton() {
     </Stack>
   );
 }
-
-// ─── Empty State ──────────────────────────────────────────────────────────────
 
 function EmptyState({ isUnread }: { isUnread: boolean }) {
   const theme = useTheme();
@@ -611,8 +621,6 @@ function EmptyState({ isUnread }: { isUnread: boolean }) {
     </Box>
   );
 }
-
-// ─── Group Header ─────────────────────────────────────────────────────────────
 
 function GroupHeader({ label, count }: { label: string; count: number }) {
   const theme = useTheme();
@@ -661,13 +669,43 @@ function GroupHeader({ label, count }: { label: string; count: number }) {
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
-
+// ========== Main Component ==========
 export default function NotificationsView() {
   const theme = useTheme();
+  const navigate = useNavigate();
   const { showAlert } = useAlert();
-  const [, setSearchParams] = useSearchParams();
-  const [selectedTab, setSelectedTab] = useState<"all" | "unread">("all");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // ✅ FIX: Initialize tab from URL search params so deep-links work correctly
+  const [selectedTab, setSelectedTab] = useState<"all" | "unread">(
+    (searchParams.get("tab") as "all" | "unread") ?? "all",
+  );
+
+  const { user } = useAppSelector((state) => state.auth);
+
+  // ✅ FIX: Removed the illegally nested useMemo — userRole is now a single flat memo
+  const userRole = useMemo(() => {
+    if (!user) return null;
+
+    const roleCode =
+      typeof user.role === "object" ? user.role?.code : user.role;
+
+    if (!roleCode) return null;
+
+    const role = String(roleCode).toLowerCase();
+
+    if (role.includes("client")) return "client";
+
+    if (
+      role.includes("accountant") ||
+      role.includes("comptable") ||
+      role.includes("admin")
+    ) {
+      return "comptable";
+    }
+
+    return null;
+  }, [user]);
 
   const {
     data: notificationsData,
@@ -682,7 +720,6 @@ export default function NotificationsView() {
   const [markAsRead] = useMarkNotificationAsReadMutation();
   const [markAllAsRead] = useMarkAllNotificationsAsReadMutation();
 
-  // Normalize raw API data once
   const notifications = useMemo<Notification[]>(() => {
     const source = notificationsData?.notifications ?? [];
     return (source as unknown as Record<string, unknown>[]).map(
@@ -724,7 +761,6 @@ export default function NotificationsView() {
         "Toutes les notifications ont été marquées comme lues",
         "success",
       );
-      // RTK Query cache invalidation should handle the refetch; explicit call as safety net
       refetchNotifications();
     } catch {
       showAlert("Erreur lors du marquage des notifications", "error");
@@ -733,20 +769,65 @@ export default function NotificationsView() {
 
   const handleMarkAsRead = useCallback(
     async (id: number) => {
-      // Find the notification — skip API call if already read
       const notification = notifications.find((n) => n.id === id);
       if (!notification || notification.read) return;
       try {
         await markAsRead(id).unwrap();
         refetchNotifications();
       } catch {
-        // Silent fail — non-critical action
+        // Silent fail
       }
     },
     [markAsRead, notifications, refetchNotifications],
   );
 
-  // ── Page actions ──────────────────────────────────────────────────────────
+  const handleNavigate = useCallback(
+    (actionUrl: string) => {
+      // External URLs – open in new tab
+      if (/^https?:\/\//i.test(actionUrl)) {
+        window.open(actionUrl, "_blank", "noopener,noreferrer");
+        return;
+      }
+
+      // ❌ Disable navigation for relationship-related URLs
+      if (
+        actionUrl.startsWith("/relationships") ||
+        actionUrl.includes("/relationships/")
+      ) {
+        showAlert("Acceder aux relations", "warning");
+        return;
+      }
+
+      if (!userRole) {
+        navigate(actionUrl);
+        return;
+      }
+
+      // Remove any existing /dashboard/client or /dashboard/comptable prefix
+      let cleanPath = actionUrl;
+      const dashboardRolePattern = /^\/dashboard\/(client|comptable)/;
+      if (dashboardRolePattern.test(cleanPath)) {
+        cleanPath = cleanPath.replace(dashboardRolePattern, "");
+      }
+      if (!cleanPath.startsWith("/")) {
+        cleanPath = `/${cleanPath}`;
+      }
+      const fullPath = `/dashboard/${userRole}${cleanPath}`;
+
+      // Optional: also block after building fullPath if needed
+      if (fullPath.includes("/relationships")) {
+        showAlert(
+          "Accès non disponible pour ce type de notification",
+          "warning",
+        );
+        return;
+      }
+
+      navigate(fullPath);
+    },
+    [navigate, userRole, showAlert],
+  );
+
   const pageActions =
     unreadCount > 0
       ? [
@@ -771,7 +852,6 @@ export default function NotificationsView() {
         ]
       : [];
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <PageHeader
       title="Notifications"
@@ -829,6 +909,7 @@ export default function NotificationsView() {
                               key={notification.id}
                               notification={notification}
                               onMarkAsRead={handleMarkAsRead}
+                              onNavigate={handleNavigate}
                             />
                           ))}
                         </Stack>

@@ -81,7 +81,7 @@ export default function ClientView() {
             sx={{
               width: 40,
               height: 40,
-              background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+              background: `linear-gradient(135deg, ${theme.palette.secondary.main}, ${theme.palette.secondary.dark})`,
               fontSize: 15,
               fontWeight: 600,
             }}

@@ -147,6 +147,11 @@ export function AccountantCard({
   } = data;
 
   const isHighlighted = highlighted || featured;
+  {
+    /* Tags — hauteur réservée pour équilibrer les cartes */
+  }
+  const visibleTags = tags.slice(0, 3);
+  const remainingCount = tags.length - 3;
 
   return (
     <motion.div
@@ -275,7 +280,6 @@ export function AccountantCard({
               </Tooltip>
             </Stack>
           </Stack>
-
           {/* Description — zone à hauteur fixe quand vide pour équilibrer les cartes */}
           <Box sx={{ mt: 2, minHeight: description ? undefined : 72 }}>
             {description ? (
@@ -320,15 +324,13 @@ export function AccountantCard({
               </Typography>
             )}
           </Box>
-
-          {/* Tags — hauteur réservée pour équilibrer les cartes */}
           <Stack
             direction="row"
             spacing={0.5}
             flexWrap="wrap"
             sx={{ mt: 2, gap: 0.5, minHeight: 32 }}
           >
-            {tags.map((tag, idx) => (
+            {visibleTags.map((tag, idx) => (
               <motion.div
                 key={tag}
                 variants={tagVariants}
@@ -340,8 +342,25 @@ export function AccountantCard({
                 <CustomChip label={tag} />
               </motion.div>
             ))}
-          </Stack>
 
+            {remainingCount > 0 && (
+              <Box
+                sx={{
+                  px: 1.2,
+                  height: 24,
+                  display: "flex",
+                  alignItems: "center",
+                  borderRadius: "16px",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  bgcolor: "action.hover",
+                  color: "text.secondary",
+                }}
+              >
+                +{remainingCount}
+              </Box>
+            )}
+          </Stack>
           {/* Info row with animated icons */}
           <Stack
             direction="row"
@@ -406,7 +425,6 @@ export function AccountantCard({
               </Stack>
             </motion.div>
           </Stack>
-
           {/* Rating with animation */}
           <Stack
             direction="row"
@@ -434,7 +452,6 @@ export function AccountantCard({
               ({reviews} {reviews > 1 ? "reviews" : "review"})
             </Typography>
           </Stack>
-
           {/* Action buttons with animations */}
           <Grow in timeout={500}>
             <Box

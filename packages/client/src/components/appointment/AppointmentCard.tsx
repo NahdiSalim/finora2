@@ -97,7 +97,13 @@ export default function AppointmentCard({
           width: { xs: "100%", sm: "50%" },
         }}
       >
-        <Avatar sx={{ width: 36, height: 36 }}>
+        <Avatar
+          sx={{
+            width: 36,
+            height: 36,
+            background: `linear-gradient(135deg, ${theme.palette.secondary.main}, ${theme.palette.secondary.dark})`,
+          }}
+        >
           {fullName.slice(0, 1).toUpperCase()}
         </Avatar>
 

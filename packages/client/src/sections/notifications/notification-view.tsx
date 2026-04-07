@@ -45,8 +45,20 @@ dayjs.extend(isToday);
 dayjs.extend(isYesterday);
 dayjs.locale("fr");
 
-// ─── Animation Variants ───────────────────────────────────────────────────────
+// ─── Helper: resolve image URLs ───────────────────────────────────────────────
+const getFullImageUrl = (url?: string | null): string | undefined => {
+  if (!url) return undefined;
+  // Already absolute URL (http, https, data, blob)
+  if (/^(https?:\/\/|data:|blob:)/i.test(url)) return url;
+  // Relative path starting with / or not
+  const baseUrl = import.meta.env.VITE_API_URL || "";
+  // Remove trailing slash from base if present, ensure clean join
+  const cleanBase = baseUrl.replace(/\/$/, "");
+  const cleanUrl = url.startsWith("/") ? url : `/${url}`;
+  return `${cleanBase}${cleanUrl}`;
+};
 
+// ─── Animation Variants ───────────────────────────────────────────────────────
 const listVariants = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.04 } },
@@ -63,7 +75,6 @@ const itemVariants = {
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
 interface NotificationAttachment {
   id: number;
   fileName: string;
@@ -76,6 +87,7 @@ interface NotificationActor {
   firstName: string;
   lastName: string;
   avatar?: string;
+  actorPhotoUrl?: string;
   type: "client" | "accountant" | "system";
 }
 
@@ -98,7 +110,6 @@ interface NotificationGroup {
 }
 
 // ─── Config Maps ──────────────────────────────────────────────────────────────
-
 const NOTIFICATION_ICON_MAP: Record<string, React.ReactNode> = {
   invitation_accepted: <UserPlus size={14} />,
   relationship_invitation: <UserPlus size={14} />,
@@ -123,7 +134,6 @@ const NOTIFICATION_COLOR_KEY: Record<
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function safeParseJson(value: unknown): Record<string, unknown> {
   if (!value) return {};
   if (typeof value === "object" && !Array.isArray(value))
@@ -143,14 +153,22 @@ function safeParseJson(value: unknown): Record<string, unknown> {
 
 function normalizeNotification(raw: Record<string, unknown>): Notification {
   const data = safeParseJson(raw.data);
+  // Extract actor with fallbacks
+  const actorRaw = (raw.actor as NotificationActor) ?? {};
   return {
     id: Number(raw.id),
     type: String(raw.type ?? "default").toLowerCase(),
-    actor: (raw.actor as NotificationActor) ?? {
-      id: Number(raw.userId ?? 0),
-      firstName: String(raw.actorFirstName ?? raw.userFirstName ?? "System"),
-      lastName: String(raw.actorLastName ?? raw.userLastName ?? ""),
-      type: (raw.actorType as NotificationActor["type"]) ?? "system",
+    actor: {
+      id: Number(actorRaw.id ?? raw.userId ?? 0),
+      firstName: String(
+        actorRaw.firstName ?? raw.actorFirstName ?? raw.userFirstName ?? "",
+      ),
+      lastName: String(
+        actorRaw.lastName ?? raw.actorLastName ?? raw.userLastName ?? "",
+      ),
+      avatar: actorRaw.avatar,
+      actorPhotoUrl: actorRaw.actorPhotoUrl,
+      type: (actorRaw.type as NotificationActor["type"]) ?? "system",
     },
     title: String(raw.title ?? "Notification"),
     message: String(raw.message ?? ""),
@@ -199,7 +217,6 @@ function getActorInitials(actor: NotificationActor): string {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
 interface NotificationIconBadgeProps {
   type: string;
   actor: NotificationActor;
@@ -214,7 +231,8 @@ function NotificationIconBadge({
   const theme = useTheme();
   const colorKey = NOTIFICATION_COLOR_KEY[type] ?? "primary";
   const color = theme.palette[colorKey].main;
-  const icon = NOTIFICATION_ICON_MAP[type] ?? <Bell size={14} />;
+  const icon = NOTIFICATION_ICON_MAP[type] ?? <Bell size={10} />;
+  const avatarSrc = getFullImageUrl(actor.actorPhotoUrl || actor.avatar);
 
   return (
     <Badge
@@ -240,7 +258,8 @@ function NotificationIconBadge({
       }
     >
       <Avatar
-        src={actor.avatar}
+        src={avatarSrc}
+        alt={`${actor.firstName} ${actor.lastName}`}
         sx={{
           width: 42,
           height: 42,
@@ -275,6 +294,9 @@ function NotificationBody({ notification }: NotificationBodyProps) {
   } = notification;
   const actorName = `${actor.firstName} ${actor.lastName}`;
   const timeDisplay = formatTimeDisplay(createdAt);
+  const attachmentUrl = attachment
+    ? getFullImageUrl(attachment.url)
+    : undefined;
 
   const renderText = () => {
     switch (type) {
@@ -360,7 +382,6 @@ function NotificationBody({ notification }: NotificationBodyProps) {
 
   return (
     <Box sx={{ flex: 1, minWidth: 0, pl: read ? 0 : 0.5 }}>
-      {/* Main text */}
       <Typography
         variant="body2"
         sx={{
@@ -373,11 +394,10 @@ function NotificationBody({ notification }: NotificationBodyProps) {
         {renderText()}
       </Typography>
 
-      {/* Attachment chip */}
-      {attachment && (
+      {attachment && attachmentUrl && (
         <Paper
           component="a"
-          href={attachment.url}
+          href={attachmentUrl}
           target="_blank"
           rel="noopener noreferrer"
           elevation={0}
@@ -427,7 +447,6 @@ function NotificationBody({ notification }: NotificationBodyProps) {
         </Paper>
       )}
 
-      {/* Quoted message */}
       {message &&
         !["relationship_invitation", "invitation_accepted"].includes(type) && (
           <Box
@@ -447,7 +466,6 @@ function NotificationBody({ notification }: NotificationBodyProps) {
             </Typography>
           </Box>
         )}
-      {/* Timestamp */}
       <Typography
         variant="caption"
         sx={{
@@ -466,7 +484,6 @@ function NotificationBody({ notification }: NotificationBodyProps) {
 }
 
 // ─── Notification Item ────────────────────────────────────────────────────────
-
 interface NotificationItemProps {
   notification: Notification;
   onMarkAsRead: (id: number) => void;
@@ -524,7 +541,6 @@ function NotificationItem({
         />
         <NotificationBody notification={notification} />
 
-        {/* Unread dot */}
         {!notification.read && (
           <Box
             sx={{
@@ -544,7 +560,6 @@ function NotificationItem({
 }
 
 // ─── Skeleton Loader ──────────────────────────────────────────────────────────
-
 function NotificationSkeleton() {
   return (
     <Stack spacing={1.5} sx={{ px: 2, py: 1 }}>
@@ -566,7 +581,6 @@ function NotificationSkeleton() {
 }
 
 // ─── Empty State ──────────────────────────────────────────────────────────────
-
 function EmptyState({ isUnread }: { isUnread: boolean }) {
   const theme = useTheme();
   return (
@@ -613,7 +627,6 @@ function EmptyState({ isUnread }: { isUnread: boolean }) {
 }
 
 // ─── Group Header ─────────────────────────────────────────────────────────────
-
 function GroupHeader({ label, count }: { label: string; count: number }) {
   const theme = useTheme();
   return (
@@ -662,7 +675,6 @@ function GroupHeader({ label, count }: { label: string; count: number }) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-
 export default function NotificationsView() {
   const theme = useTheme();
   const { showAlert } = useAlert();
@@ -682,7 +694,6 @@ export default function NotificationsView() {
   const [markAsRead] = useMarkNotificationAsReadMutation();
   const [markAllAsRead] = useMarkAllNotificationsAsReadMutation();
 
-  // Normalize raw API data once
   const notifications = useMemo<Notification[]>(() => {
     const source = notificationsData?.notifications ?? [];
     return (source as unknown as Record<string, unknown>[]).map(
@@ -724,7 +735,6 @@ export default function NotificationsView() {
         "Toutes les notifications ont été marquées comme lues",
         "success",
       );
-      // RTK Query cache invalidation should handle the refetch; explicit call as safety net
       refetchNotifications();
     } catch {
       showAlert("Erreur lors du marquage des notifications", "error");
@@ -733,20 +743,18 @@ export default function NotificationsView() {
 
   const handleMarkAsRead = useCallback(
     async (id: number) => {
-      // Find the notification — skip API call if already read
       const notification = notifications.find((n) => n.id === id);
       if (!notification || notification.read) return;
       try {
         await markAsRead(id).unwrap();
         refetchNotifications();
       } catch {
-        // Silent fail — non-critical action
+        // Silent fail
       }
     },
     [markAsRead, notifications, refetchNotifications],
   );
 
-  // ── Page actions ──────────────────────────────────────────────────────────
   const pageActions =
     unreadCount > 0
       ? [
@@ -771,7 +779,6 @@ export default function NotificationsView() {
         ]
       : [];
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <PageHeader
       title="Notifications"

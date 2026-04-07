@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -34,6 +34,7 @@ import {
   useMarkAllNotificationsAsReadMutation,
   useMarkNotificationAsReadMutation,
 } from "src/lib/services/notificationsApi";
+import { useAppSelector } from "src/hooks/use-redux";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import isToday from "dayjs/plugin/isToday";
@@ -45,20 +46,17 @@ dayjs.extend(isToday);
 dayjs.extend(isYesterday);
 dayjs.locale("fr");
 
-// ─── Helper: resolve image URLs ───────────────────────────────────────────────
+// ========== Helper: resolve image URLs ==========
 const getFullImageUrl = (url?: string | null): string | undefined => {
   if (!url) return undefined;
-  // Already absolute URL (http, https, data, blob)
   if (/^(https?:\/\/|data:|blob:)/i.test(url)) return url;
-  // Relative path starting with / or not
   const baseUrl = import.meta.env.VITE_API_URL || "";
-  // Remove trailing slash from base if present, ensure clean join
   const cleanBase = baseUrl.replace(/\/$/, "");
   const cleanUrl = url.startsWith("/") ? url : `/${url}`;
   return `${cleanBase}${cleanUrl}`;
 };
 
-// ─── Animation Variants ───────────────────────────────────────────────────────
+// ========== Animation variants ==========
 const listVariants = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.04 } },
@@ -74,7 +72,7 @@ const itemVariants = {
   exit: { opacity: 0, x: -16, transition: { duration: 0.18 } },
 };
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ========== Types ==========
 interface NotificationAttachment {
   id: number;
   fileName: string;
@@ -101,6 +99,7 @@ interface Notification {
   attachment?: NotificationAttachment;
   read: boolean;
   createdAt: string;
+  actionUrl?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -109,7 +108,7 @@ interface NotificationGroup {
   notifications: Notification[];
 }
 
-// ─── Config Maps ──────────────────────────────────────────────────────────────
+// ========== Config maps ==========
 const NOTIFICATION_ICON_MAP: Record<string, React.ReactNode> = {
   invitation_accepted: <UserPlus size={14} />,
   relationship_invitation: <UserPlus size={14} />,
@@ -133,7 +132,7 @@ const NOTIFICATION_COLOR_KEY: Record<
   request_created: "primary",
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ========== Helpers ==========
 function safeParseJson(value: unknown): Record<string, unknown> {
   if (!value) return {};
   if (typeof value === "object" && !Array.isArray(value))
@@ -153,7 +152,6 @@ function safeParseJson(value: unknown): Record<string, unknown> {
 
 function normalizeNotification(raw: Record<string, unknown>): Notification {
   const data = safeParseJson(raw.data);
-  // Extract actor with fallbacks
   const actorRaw = (raw.actor as NotificationActor) ?? {};
   return {
     id: Number(raw.id),
@@ -178,6 +176,7 @@ function normalizeNotification(raw: Record<string, unknown>): Notification {
     attachment: raw.attachment as NotificationAttachment | undefined,
     read: Boolean(raw.read),
     createdAt: String(raw.createdAt ?? new Date().toISOString()),
+    actionUrl: raw.actionUrl as string | undefined,
     metadata: data,
   };
 }
@@ -216,7 +215,7 @@ function getActorInitials(actor: NotificationActor): string {
   return `${actor.firstName.charAt(0)}${actor.lastName.charAt(0)}`.toUpperCase();
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ========== Sub‑components ==========
 interface NotificationIconBadgeProps {
   type: string;
   actor: NotificationActor;
@@ -282,17 +281,8 @@ interface NotificationBodyProps {
 
 function NotificationBody({ notification }: NotificationBodyProps) {
   const theme = useTheme();
-  const {
-    type,
-    actor,
-    targetTitle,
-    message,
-    title,
-    attachment,
-    read,
-    createdAt,
-  } = notification;
-  const actorName = `${actor.firstName} ${actor.lastName}`;
+  const { type, targetTitle, message, title, attachment, read, createdAt } =
+    notification;
   const timeDisplay = formatTimeDisplay(createdAt);
   const attachmentUrl = attachment
     ? getFullImageUrl(attachment.url)
@@ -483,24 +473,34 @@ function NotificationBody({ notification }: NotificationBodyProps) {
   );
 }
 
-// ─── Notification Item ────────────────────────────────────────────────────────
 interface NotificationItemProps {
   notification: Notification;
   onMarkAsRead: (id: number) => void;
+  onNavigate: (url: string) => void;
 }
 
 function NotificationItem({
   notification,
   onMarkAsRead,
+  onNavigate,
 }: NotificationItemProps) {
   const theme = useTheme();
   const colorKey = NOTIFICATION_COLOR_KEY[notification.type] ?? "primary";
   const accentColor = theme.palette[colorKey].main;
 
+  const handleClick = useCallback(() => {
+    if (!notification.read) {
+      onMarkAsRead(notification.id);
+    }
+    if (notification.actionUrl) {
+      onNavigate(notification.actionUrl);
+    }
+  }, [notification, onMarkAsRead, onNavigate]);
+
   return (
     <motion.div variants={itemVariants} layout>
       <Box
-        onClick={() => onMarkAsRead(notification.id)}
+        onClick={handleClick}
         sx={{
           display: "flex",
           alignItems: "flex-start",
@@ -517,7 +517,6 @@ function NotificationItem({
           transition: "all 0.2s ease",
           "&:hover": {
             backgroundColor: alpha(accentColor, 0.08),
-            "& .notification-actions": { opacity: 1 },
           },
           "&::before": !notification.read
             ? {
@@ -540,7 +539,6 @@ function NotificationItem({
           read={notification.read}
         />
         <NotificationBody notification={notification} />
-
         {!notification.read && (
           <Box
             sx={{
@@ -559,7 +557,6 @@ function NotificationItem({
   );
 }
 
-// ─── Skeleton Loader ──────────────────────────────────────────────────────────
 function NotificationSkeleton() {
   return (
     <Stack spacing={1.5} sx={{ px: 2, py: 1 }}>
@@ -580,7 +577,6 @@ function NotificationSkeleton() {
   );
 }
 
-// ─── Empty State ──────────────────────────────────────────────────────────────
 function EmptyState({ isUnread }: { isUnread: boolean }) {
   const theme = useTheme();
   return (
@@ -626,7 +622,6 @@ function EmptyState({ isUnread }: { isUnread: boolean }) {
   );
 }
 
-// ─── Group Header ─────────────────────────────────────────────────────────────
 function GroupHeader({ label, count }: { label: string; count: number }) {
   const theme = useTheme();
   return (
@@ -674,12 +669,43 @@ function GroupHeader({ label, count }: { label: string; count: number }) {
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ========== Main Component ==========
 export default function NotificationsView() {
   const theme = useTheme();
+  const navigate = useNavigate();
   const { showAlert } = useAlert();
-  const [, setSearchParams] = useSearchParams();
-  const [selectedTab, setSelectedTab] = useState<"all" | "unread">("all");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // ✅ FIX: Initialize tab from URL search params so deep-links work correctly
+  const [selectedTab, setSelectedTab] = useState<"all" | "unread">(
+    (searchParams.get("tab") as "all" | "unread") ?? "all",
+  );
+
+  const { user } = useAppSelector((state) => state.auth);
+
+  // ✅ FIX: Removed the illegally nested useMemo — userRole is now a single flat memo
+  const userRole = useMemo(() => {
+    if (!user) return null;
+
+    const roleCode =
+      typeof user.role === "object" ? user.role?.code : user.role;
+
+    if (!roleCode) return null;
+
+    const role = String(roleCode).toLowerCase();
+
+    if (role.includes("client")) return "client";
+
+    if (
+      role.includes("accountant") ||
+      role.includes("comptable") ||
+      role.includes("admin")
+    ) {
+      return "comptable";
+    }
+
+    return null;
+  }, [user]);
 
   const {
     data: notificationsData,
@@ -753,6 +779,34 @@ export default function NotificationsView() {
       }
     },
     [markAsRead, notifications, refetchNotifications],
+  );
+
+  const handleNavigate = useCallback(
+    (actionUrl: string) => {
+      // If it's a full external URL (http/https), open it directly in a new tab
+      if (/^https?:\/\//i.test(actionUrl)) {
+        window.open(actionUrl, "_blank", "noopener,noreferrer");
+        return;
+      }
+
+      if (!userRole) {
+        navigate(actionUrl);
+        return;
+      }
+
+      // Remove any existing /dashboard/client or /dashboard/comptable prefix
+      let cleanPath = actionUrl;
+      const dashboardRolePattern = /^\/dashboard\/(client|comptable)/;
+      if (dashboardRolePattern.test(cleanPath)) {
+        cleanPath = cleanPath.replace(dashboardRolePattern, "");
+      }
+      if (!cleanPath.startsWith("/")) {
+        cleanPath = `/${cleanPath}`;
+      }
+      const fullPath = `/dashboard/${userRole}${cleanPath}`;
+      navigate(fullPath);
+    },
+    [navigate, userRole],
   );
 
   const pageActions =
@@ -836,6 +890,7 @@ export default function NotificationsView() {
                               key={notification.id}
                               notification={notification}
                               onMarkAsRead={handleMarkAsRead}
+                              onNavigate={handleNavigate}
                             />
                           ))}
                         </Stack>

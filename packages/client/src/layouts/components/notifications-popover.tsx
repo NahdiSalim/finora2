@@ -33,6 +33,7 @@ import {
 } from "./notifications-popover/NotificationItem";
 import CustomButton from "src/components/common/CustomButton";
 import { useNavigate } from "react-router";
+import { useAppSelector } from "src/hooks/use-redux";
 
 // ----------------------------------------------------------------------
 
@@ -142,6 +143,59 @@ export function NotificationsPopover({
     seenNotificationIdsRef.current = new Set(currentIds);
   }, [notificationsData, playNotificationBeep]);
 
+  const navigate = useNavigate();
+  const dashboardBase = useDashboardBase();
+
+  // Get user role from Redux — same pattern as NotificationsView
+  const { user } = useAppSelector((state) => state.auth);
+  const userRole = useMemo(() => {
+    if (!user) return null;
+    const roleCode =
+      typeof user.role === "object" ? user.role?.code : user.role;
+    if (!roleCode) return null;
+    const role = String(roleCode).toLowerCase();
+    if (role.includes("client")) return "client";
+    if (
+      role.includes("accountant") ||
+      role.includes("comptable") ||
+      role.includes("admin")
+    ) {
+      return "comptable";
+    }
+    return null;
+  }, [user]);
+
+  // Same navigation logic as NotificationsView
+  const handleNavigate = useCallback(
+    (actionUrl: string) => {
+      handleClosePopover();
+
+      // Full external URL (e.g. MinIO/S3 presigned link) → open in new tab
+      if (/^https?:\/\//i.test(actionUrl)) {
+        window.open(actionUrl, "_blank", "noopener,noreferrer");
+        return;
+      }
+
+      if (!userRole) {
+        navigate(actionUrl);
+        return;
+      }
+
+      // Strip any existing role prefix then rebuild the full dashboard path
+      let cleanPath = actionUrl;
+      const dashboardRolePattern = /^\/dashboard\/(client|comptable)/;
+      if (dashboardRolePattern.test(cleanPath)) {
+        cleanPath = cleanPath.replace(dashboardRolePattern, "");
+      }
+      if (!cleanPath.startsWith("/")) {
+        cleanPath = `/${cleanPath}`;
+      }
+      navigate(`/dashboard/${userRole}${cleanPath}`);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [navigate, userRole],
+  );
+
   const notifications = useMemo(() => {
     const source =
       notificationsData?.notifications ??
@@ -152,6 +206,7 @@ export function NotificationsPopover({
         message: d.description,
         read: !d.isUnRead,
         createdAt: d.postedAt,
+        actionUrl: d.actionUrl,
         data: null,
       }));
     return source.map((n: any) => {
@@ -161,20 +216,26 @@ export function NotificationsPopover({
         readNumericId(notificationData.invitationId) ??
         readNumericId(notificationData.relationshipId) ??
         readNumericId((n as Record<string, unknown>).invitationId);
-      const actionUrl = String(
+
+      // Preserve the original casing of actionUrl — do NOT lowercase it
+      // (presigned S3 URLs are case-sensitive)
+      const rawActionUrl = String(
         (n as Record<string, unknown>).actionUrl ??
           (notificationData.actionUrl as string | undefined) ??
           "",
-      ).toLowerCase();
+      );
+      const actionUrl = rawActionUrl || undefined;
+
       const title = String(n.title ?? "").toLowerCase();
       const isInvite =
         notificationType.includes("relationship") ||
         notificationType.includes("invitation");
       const isInvitationToRespond =
-        actionUrl.includes("/relationships/invitations/") ||
+        (actionUrl ?? "").includes("/relationships/invitations/") ||
         title.includes("nouvelle invitation");
       const canRespond =
         isInvite && isInvitationToRespond && !n.read && invitationId != null;
+
       return {
         id: String(n.id),
         type: notificationType || "notification",
@@ -183,6 +244,8 @@ export function NotificationsPopover({
         description: n.message ?? "",
         avatarUrl: null,
         postedAt: n.createdAt ?? null,
+        actionUrl,
+        onNavigate: handleNavigate,
         canRespond,
         isProcessing: processingId === n.id,
         onAccept: canRespond
@@ -233,6 +296,7 @@ export function NotificationsPopover({
     showAlert,
     refetchNotifications,
     data,
+    handleNavigate,
   ]);
 
   const totalUnRead = notifications.filter(
@@ -255,9 +319,6 @@ export function NotificationsPopover({
     setOpenPopover(null);
   }, []);
 
-  const navigate = useNavigate();
-  const dashboardBase = useDashboardBase();
-
   const handleViewAll = useCallback(() => {
     handleClosePopover();
     navigate(`${dashboardBase}/notification`);
@@ -279,7 +340,7 @@ export function NotificationsPopover({
 
   return (
     <>
-      {/* Trigger button — matches MessagesPopover exactly */}
+      {/* Trigger button */}
       <Button
         variant="outlined"
         onClick={handleOpenPopover}
@@ -315,7 +376,6 @@ export function NotificationsPopover({
       >
         <Bell size={20} />
 
-        {/* Unread dot — same style as MessagesPopover */}
         {hasUnread && (
           <Box
             sx={{
@@ -346,13 +406,13 @@ export function NotificationsPopover({
               display: "flex",
               flexDirection: "column",
               mt: 1,
-              borderRadius: "16px", // ← matches MessagesPopover
-              boxShadow: theme.shadows[8], // ← matches MessagesPopover
+              borderRadius: "16px",
+              boxShadow: theme.shadows[8],
             },
           },
         }}
       >
-        {/* Header — matches MessagesPopover layout */}
+        {/* Header */}
         <Box
           sx={{
             py: 2,
@@ -383,7 +443,6 @@ export function NotificationsPopover({
             </Typography>
           </Box>
 
-          {/* Mark-all-as-read — uses CheckCheck icon like MessagesPopover */}
           {hasUnread && (
             <Tooltip title="Tout marquer comme lu">
               <IconButton
@@ -425,7 +484,6 @@ export function NotificationsPopover({
               <CircularProgress size={28} />
             </Box>
           ) : notifications.length === 0 ? (
-            /* Empty state — matches MessagesPopover */
             <Box
               sx={{
                 py: 8,
@@ -450,7 +508,6 @@ export function NotificationsPopover({
             </Box>
           ) : (
             <>
-              {/* New section */}
               <List
                 disablePadding
                 subheader={
@@ -477,7 +534,6 @@ export function NotificationsPopover({
                 ))}
               </List>
 
-              {/* Older section */}
               <List
                 disablePadding
                 subheader={
@@ -509,7 +565,7 @@ export function NotificationsPopover({
 
         <Divider sx={{ borderStyle: "dashed" }} />
 
-        {/* Footer — matches MessagesPopover */}
+        {/* Footer */}
         <Box sx={{ p: 1 }}>
           <CustomButton
             fullWidth

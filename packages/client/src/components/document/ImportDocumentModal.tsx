@@ -22,10 +22,14 @@ const ACCEPTED_FILES = [".jpg", ".jpeg", ".png", ".pdf", ".mp4"];
 
 // ─── Folder tree item (loads children when expanded) ────────────────────────
 
+const DESTINATION_PAGE_SIZE = 5;
+
 interface FolderTreeItemProps {
   folderId: number;
   folderName: string;
   depth: number;
+  hasFolders?: boolean;
+  foldersCount?: number;
   expandedIds: Set<number>;
   onToggleExpand: (id: number) => void;
   selectedId: number | null;
@@ -37,25 +41,36 @@ function FolderTreeItem({
   folderId,
   folderName,
   depth,
+  hasFolders,
+  foldersCount,
   expandedIds,
   onToggleExpand,
   selectedId,
   onSelect,
   clientCompanyId,
 }: FolderTreeItemProps) {
+  const canExpand =
+    hasFolders === true ||
+    (typeof foldersCount === "number" && foldersCount > 0);
   const isExpanded = expandedIds.has(folderId);
   const { data } = useGetDocumentsQuery(
     {
       clientId: clientCompanyId,
       parentId: folderId,
-      limit: 500,
+      page: 1,
+      limit: DESTINATION_PAGE_SIZE,
       status: "active",
       itemType: "folder",
     },
-    { skip: !isExpanded },
+    { skip: !isExpanded || !canExpand },
   );
   const childFolders =
-    data?.data?.map((d) => ({ id: d.id, name: d.name })) ?? [];
+    data?.data?.map((d) => ({
+      id: d.id,
+      name: d.name,
+      hasFolders: d.hasFolders,
+      foldersCount: d.foldersCount,
+    })) ?? [];
 
   return (
     <>
@@ -76,6 +91,7 @@ function FolderTreeItem({
           component="span"
           onClick={(e) => {
             e.stopPropagation();
+            if (!canExpand) return;
             onToggleExpand(folderId);
           }}
           sx={{
@@ -84,10 +100,19 @@ function FolderTreeItem({
             transition: "transform 0.2s",
           }}
         >
-          <ChevronRight size={18} />
+          {canExpand ? (
+            <ChevronRight size={18} />
+          ) : (
+            <ChevronRight size={18} color="transparent" />
+          )}
         </Box>
         <Folder size={18} />
-        <Typography variant="body2">{folderName}</Typography>
+        <Typography variant="body2">
+          {folderName}
+          {typeof foldersCount === "number" && foldersCount > 0
+            ? ` (${foldersCount})`
+            : ""}
+        </Typography>
       </Box>
       {isExpanded &&
         childFolders.map((child) => (
@@ -96,6 +121,8 @@ function FolderTreeItem({
             folderId={child.id}
             folderName={child.name}
             depth={depth + 1}
+            hasFolders={child.hasFolders}
+            foldersCount={child.foldersCount}
             expandedIds={expandedIds}
             onToggleExpand={onToggleExpand}
             selectedId={selectedId}
@@ -139,39 +166,59 @@ export function ImportDocumentModal({
     defaultParentId ?? null,
   );
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [rootPage, setRootPage] = useState(1);
+  const [accumulatedRootFolders, setAccumulatedRootFolders] = useState<
+    { id: number; name: string; hasFolders?: boolean; foldersCount?: number }[]
+  >([]);
   const [error, setError] = useState<string | null>(null);
-  const hasAutoExpandedRoot = useRef(false);
+  const destinationScrollRef = useRef<HTMLDivElement | null>(null);
+  const isLoadingNextRootPageRef = useRef(false);
 
   useEffect(() => {
-    if (open) setParentId(defaultParentId ?? null);
+    if (open) {
+      setParentId(defaultParentId ?? null);
+      setExpandedIds(new Set());
+      setRootPage(1);
+      setAccumulatedRootFolders([]);
+    }
   }, [open, defaultParentId]);
 
-  const { data } = useGetDocumentsQuery(
+  const {
+    data,
+    isFetching,
+    isLoading: isFoldersLoading,
+  } = useGetDocumentsQuery(
     {
       clientId: clientCompanyId,
       parentId: undefined,
-      limit: 500,
+      page: rootPage,
+      limit: DESTINATION_PAGE_SIZE,
       status: "active",
       itemType: "folder",
     },
     { skip: !open },
   );
-  const rootFolders =
-    data?.data?.map((d) => ({ id: d.id, name: d.name })) ?? [];
+  const hasMoreRootPages =
+    (data?.pagination?.currentPage ?? 1) < (data?.pagination?.totalPages ?? 1);
 
   useEffect(() => {
-    if (!open) {
-      hasAutoExpandedRoot.current = false;
-      return;
-    }
-    if (rootFolders.length === 0 || hasAutoExpandedRoot.current) return;
-    hasAutoExpandedRoot.current = true;
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      rootFolders.forEach((f) => next.add(f.id));
-      return next;
+    if (!data) return;
+    const incoming = (data.data ?? []).map((d) => ({
+      id: d.id,
+      name: d.name,
+      hasFolders: d.hasFolders,
+      foldersCount: d.foldersCount,
+    }));
+    setAccumulatedRootFolders((prev) => {
+      if (rootPage === 1) return incoming;
+      const existingIds = new Set(prev.map((f) => f.id));
+      const appended = incoming.filter((f) => !existingIds.has(f.id));
+      return [...prev, ...appended];
     });
-  }, [open, rootFolders]);
+    isLoadingNextRootPageRef.current = false;
+  }, [data, rootPage]);
+
+  const isFetchingMoreRoots = isFetching && rootPage > 1;
 
   const resetForm = useCallback(() => {
     setFile(null);
@@ -179,6 +226,8 @@ export function ImportDocumentModal({
     setCategory("");
     setParentId(defaultParentId ?? null);
     setExpandedIds(new Set());
+    setRootPage(1);
+    setAccumulatedRootFolders([]);
     setError(null);
   }, [defaultParentId]);
 
@@ -209,6 +258,23 @@ export function ImportDocumentModal({
       return next;
     });
   }, []);
+
+  const handleDestinationScroll = useCallback(() => {
+    const el = destinationScrollRef.current;
+    if (
+      !el ||
+      isFetching ||
+      isFetchingMoreRoots ||
+      !hasMoreRootPages ||
+      isLoadingNextRootPageRef.current
+    )
+      return;
+    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
+    if (nearBottom) {
+      isLoadingNextRootPageRef.current = true;
+      setRootPage((prev) => prev + 1);
+    }
+  }, [hasMoreRootPages, isFetching, isFetchingMoreRoots]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -315,6 +381,8 @@ export function ImportDocumentModal({
               Choisir la destination du document
             </Typography>
             <Box
+              ref={destinationScrollRef}
+              onScroll={handleDestinationScroll}
               sx={{
                 border: 1,
                 borderColor: "divider",
@@ -341,12 +409,14 @@ export function ImportDocumentModal({
                 <Folder size={18} />
                 <Typography variant="body2">Racine</Typography>
               </Box>
-              {rootFolders.map((folder) => (
+              {accumulatedRootFolders.map((folder) => (
                 <FolderTreeItem
                   key={folder.id}
                   folderId={folder.id}
                   folderName={folder.name}
                   depth={0}
+                  hasFolders={folder.hasFolders}
+                  foldersCount={folder.foldersCount}
                   expandedIds={expandedIds}
                   onToggleExpand={handleToggleExpand}
                   selectedId={parentId}
@@ -354,6 +424,24 @@ export function ImportDocumentModal({
                   clientCompanyId={clientCompanyId}
                 />
               ))}
+              {(isFoldersLoading || isFetchingMoreRoots) && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ px: 2, py: 1.25, display: "block" }}
+                >
+                  Chargement...
+                </Typography>
+              )}
+              {!isFoldersLoading && accumulatedRootFolders.length === 0 && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ px: 2, py: 1.25, display: "block" }}
+                >
+                  Aucun dossier disponible.
+                </Typography>
+              )}
             </Box>
           </Box>
 

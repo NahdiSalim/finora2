@@ -16,6 +16,7 @@ export interface DocumentItem {
   updatedAt: string;
   foldersCount?: number;
   filesCount?: number;
+  hasFolders?: boolean;
   owner?: { id: number; username?: string; email?: string };
 }
 

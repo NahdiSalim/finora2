@@ -29,6 +29,7 @@ export const TaskDetailsPage = lazy(
 export const ClientPage = lazy(() => import("src/pages/clients"));
 export const MessagesPage = lazy(() => import("src/pages/messages"));
 export const RequestPage = lazy(() => import("src/pages/requests"));
+export const FacturesPage = lazy(() => import("src/pages/factures"));
 export const ProfilePage = lazy(() => import("src/pages/profile"));
 export const NetworkPage = lazy(() => import("src/pages/network"));
 export const NetworkAccountantProfilePage = lazy(() =>
@@ -451,6 +452,14 @@ export const routesSection: RouteObject[] = [
             element: (
               <PermissionGuard requiredPath="/requests">
                 <RequestPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "factures",
+            element: (
+              <PermissionGuard requiredPath="/requests">
+                <FacturesPage />
               </PermissionGuard>
             ),
           },

@@ -1,6 +1,7 @@
 import {
   Archive,
   Calendar,
+  FileBadge2,
   FileText,
   Folder,
   HandCoins,
@@ -48,6 +49,10 @@ export const NAV_CONFIG: Record<
   "/documents": {
     title: "Documents",
     icon: <FileText />,
+  },
+  "/factures": {
+    title: "Factures",
+    icon: <FileBadge2 />,
   },
 
   "/meetings": {

@@ -196,6 +196,17 @@ export const MSG = {
 
   // ─── FACTURES ───────────────────────────────────────────────────────────────
   invoice: {
+    // Invoice creation
+    created: 'Facture créée avec succès.',
+    updated: 'Facture mise à jour avec succès.',
+    deleted: 'Facture supprimée avec succès.',
+
+    not_found: 'Facture introuvable.',
+    access_denied: "Vous n'avez pas accès à cette facture.",
+    no_lines: 'La facture doit contenir au moins une ligne.',
+    no_company: "Votre compte n'est associé à aucune entreprise.",
+
+    // Invoice extraction (document module)
     already_extracted: 'Facture déjà extraite.',
     extracted: 'Facture extraite avec succès. Veuillez vérifier et enregistrer les données.',
     saved: 'Métadonnées de la facture enregistrées avec succès.',

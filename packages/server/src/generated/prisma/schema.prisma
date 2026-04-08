@@ -1,0 +1,1278 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// From accountant_leave.prisma
+model AccountantLeave {
+  id           Int      @id @default(autoincrement())
+  accountantId Int
+  startDate    DateTime @db.Date
+  endDate      DateTime @db.Date
+  reason       String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  accountant User @relation("AccountantLeaves", fields: [accountantId], references: [id], onDelete: Cascade)
+
+  @@index([accountantId])
+  @@index([startDate])
+  @@index([endDate])
+  @@map("accountant_leaves")
+}
+
+// From action.prisma
+model Action {
+  id          Int      @id @default(autoincrement())
+  name        String
+  code        String   @unique
+  description String?
+  category    String? // "read" | "create" | "update" | "delete"
+  pageId      Int
+  createdAt   DateTime @default(now())
+
+  page Pages @relation(fields: [pageId], references: [id])
+
+  roleActions RoleAction[]
+
+  @@index([pageId])
+  @@index([code])
+}
+
+// From appointment.prisma
+model Appointment {
+  id          Int     @id @default(autoincrement())
+  title       String
+  description String? @db.Text
+  type        String  @default("meeting") // 'meeting', 'consultation', 'review', 'other'
+
+  // Date and time
+  date DateTime @db.Date // date du rendez-vous ex: 2026-04-15
+  hour String // heure du rendez-vous ex: "09:00"
+
+  // Status
+  status String @default("pending") // 'pending', 'confirmed', 'rescheduled', 'rejected', 'cancelled', 'completed'
+
+  // Location
+  location    String?
+  meetingType String  @default("in_person") // 'in_person', 'online', 'phone'
+
+  // Relations
+  clientId Int?
+  client   User? @relation("ClientAppointments", fields: [clientId], references: [id], onDelete: Cascade)
+
+  accountantId Int?
+  accountant   User? @relation("AccountantAppointments", fields: [accountantId], references: [id], onDelete: SetNull)
+
+  companyId Int?
+  company   Company? @relation("CompanyAppointments", fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Rescheduling
+  originalAppointmentId   Int?
+  originalAppointment     Appointment?  @relation("RescheduledAppointments", fields: [originalAppointmentId], references: [id], onDelete: SetNull)
+  rescheduledAppointments Appointment[] @relation("RescheduledAppointments")
+
+  // Notes
+  accountantNotes String? @db.Text
+  clientNotes     String? @db.Text
+  rejectionReason String? @db.Text
+
+  // Extras
+  color  String? // hex color for calendar display e.g. "#1976d2"
+  guests String[] // array of guest emails
+
+  // Timestamps
+  confirmedAt DateTime?
+  cancelledAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  createdById Int?
+  createdBy   User? @relation("AppointmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById Int?
+  updatedBy   User? @relation("AppointmentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  slot         AvailabilitySlot?   @relation("AppointmentSlot")
+  reports      AppointmentReport[] @relation("AppointmentReports")
+  chatMessages ChatMessage[]       @relation("ChatMessageAppointment")
+
+  @@index([clientId])
+  @@index([accountantId])
+  @@index([companyId])
+  @@index([status])
+  @@index([date])
+  @@map("appointments")
+}
+
+// From appointment_report.prisma
+model AppointmentReport {
+  id            Int      @id @default(autoincrement())
+  appointmentId Int
+  reportedById  Int
+  oldDate       DateTime @db.Date
+  oldHour       String
+  newDate       DateTime @db.Date
+  newHour       String
+  reason        String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  appointment Appointment @relation("AppointmentReports", fields: [appointmentId], references: [id], onDelete: Cascade)
+  reportedBy  User        @relation("ReportedByUser", fields: [reportedById], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId])
+  @@index([reportedById])
+  @@map("appointment_reports")
+}
+
+// From audit_log.prisma
+model AuditLog {
+  id           Int      @id @default(autoincrement())
+  userId       Int?
+  action       String // "create" | "read" | "update" | "delete" | "login" | "logout" | "export" | "import"
+  entity       String // "user" | "company" | "document" | "task" | "request" | etc.
+  entityId     Int?
+  changes      String?  @db.Text // JSON string of changes
+  metadata     String?  @db.Text // JSON string of additional metadata
+  ipAddress    String?
+  userAgent    String?
+  companyId    Int?
+  status       String   @default("success") // "success" | "failure"
+  errorMessage String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  user    User?    @relation("AuditLogUser", fields: [userId], references: [id], onDelete: SetNull)
+  company Company? @relation("AuditLogCompany", fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([entityId])
+  @@index([companyId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// From availability.prisma
+model Availability {
+  id           Int  @id @default(autoincrement())
+  accountantId Int
+  companyId    Int?
+
+  // Recurring slot: dayOfWeek = 'lundi' | 'mardi' | 'mercredi' | 'jeudi' | 'vendredi' | 'samedi' | 'dimanche'
+  isRecurring Boolean @default(true)
+  dayOfWeek   String? // used when isRecurring=true
+
+  // One-off slot: specific date, used when isRecurring=false
+  specificDate DateTime? @db.Date
+
+  // Time window (stored as "HH:MM" strings for simplicity)
+  startTime String // e.g. "09:00"
+  endTime   String // e.g. "10:00"
+
+  // Slot duration in minutes (e.g. 30 or 60)
+  slotDuration Int @default(60)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accountant User               @relation("AccountantAvailabilities", fields: [accountantId], references: [id], onDelete: Cascade)
+  company    Company?           @relation("CompanyAvailabilities", fields: [companyId], references: [id], onDelete: SetNull)
+  slots      AvailabilitySlot[]
+
+  @@index([accountantId])
+  @@index([companyId])
+  @@index([dayOfWeek])
+  @@index([specificDate])
+  @@index([isActive])
+  @@map("availabilities")
+}
+
+// From availability_slot.prisma
+model AvailabilitySlot {
+  id             Int      @id @default(autoincrement())
+  availabilityId Int
+  accountantId   Int
+  date           DateTime @db.Date // date concrète du slot ex: 2026-04-28
+  startTime      String // "09:00"
+  endTime        String // "10:00"
+  status         String   @default("available") // "available" | "booked" | "cancelled"
+
+  appointmentId Int?     @unique // null = libre, rempli = occupé
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  availability Availability @relation(fields: [availabilityId], references: [id], onDelete: Cascade)
+  accountant   User         @relation("AccountantSlots", fields: [accountantId], references: [id], onDelete: Cascade)
+  appointment  Appointment? @relation("AppointmentSlot", fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@unique([accountantId, date, startTime]) // un seul slot par créneau horaire par comptable
+  @@index([availabilityId])
+  @@index([accountantId])
+  @@index([date])
+  @@index([status])
+  @@map("availability_slots")
+}
+
+// From call.prisma
+model Call {
+  id           Int       @id @default(autoincrement())
+  roomId       Int
+  initiatorId  Int
+  callType     String // "audio" | "video"
+  status       String    @default("initiated") // "initiated" | "ongoing" | "completed" | "missed" | "rejected"
+  participants String[] // Array of participant user IDs
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+  duration     Int? // Duration in seconds
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  room      ChatRoom      @relation("RoomCalls", fields: [roomId], references: [id])
+  initiator User          @relation("CallInitiator", fields: [initiatorId], references: [id])
+  messages  ChatMessage[] @relation("ChatMessageCall")
+
+  @@index([roomId])
+  @@index([initiatorId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+// From chat_message.prisma
+model ChatMessage {
+  id             Int       @id @default(autoincrement())
+  roomId         Int?
+  threadId       Int?
+  documentId     Int?
+  senderId       Int
+  content        String    @db.Text
+  type           String    @default("text") // "text" | "file" | "image" | "system" | "call"
+  attachmentId   Int?
+  readBy         String[] // Array of user IDs who read the message
+  reactions      String[] // JSON array of reaction objects
+  mentions       String[] // Array of mentioned user IDs
+  annotationData String?   @db.Text // JSON with annotation coordinates
+  edited         Boolean   @default(false)
+  editedAt       DateTime?
+  deleted        Boolean   @default(false)
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Attachments to entities
+  requestId     Int?
+  taskId        Int?
+  appointmentId Int?
+  callId        Int?
+
+  room        ChatRoom?    @relation(fields: [roomId], references: [id])
+  thread      ChatThread?  @relation(fields: [threadId], references: [id])
+  sender      User         @relation("ChatMessageSender", fields: [senderId], references: [id])
+  request     Request?     @relation("ChatMessageRequest", fields: [requestId], references: [id], onDelete: SetNull)
+  task        Task?        @relation("ChatMessageTask", fields: [taskId], references: [id], onDelete: SetNull)
+  appointment Appointment? @relation("ChatMessageAppointment", fields: [appointmentId], references: [id], onDelete: SetNull)
+  call        Call?        @relation("ChatMessageCall", fields: [callId], references: [id], onDelete: SetNull)
+
+  @@index([roomId])
+  @@index([threadId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@index([requestId])
+  @@index([taskId])
+  @@index([appointmentId])
+  @@index([callId])
+}
+
+// From chat_room.prisma
+model ChatRoom {
+  id             Int      @id @default(autoincrement())
+  name           String?
+  type           String // "direct" | "group" | "request" | "ticket" | "meeting" | "company"
+  description    String?
+  participants   String[] // Array of user IDs
+  createdById    Int
+  lastMessageId  Int?
+  lastActivity   DateTime @default(now())
+  contextId      Int? // ID of related entity (request, ticket, etc.)
+  contextType    String? // "request" | "ticket" | "meeting" | "company"
+  pinnedMessages String[] // Array of message IDs
+  admins         String[] // Array of user IDs who are admins
+  status         String   @default("active") // "active" | "archived"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  createdBy User @relation("ChatRoomCreatedBy", fields: [createdById], references: [id])
+
+  messages ChatMessage[]
+  calls    Call[]        @relation("RoomCalls")
+
+  @@index([createdById])
+  @@index([contextId])
+  @@index([contextType])
+  @@index([status])
+}
+
+// From chat_thread.prisma
+model ChatThread {
+  id             Int       @id @default(autoincrement())
+  title          String?
+  contextType    String? // "document" | "annotation"
+  contextId      Int?
+  documentId     Int?
+  spatialContext String?   @db.Text // JSON with coordinates/page info
+  createdById    Int
+  participants   String[] // Array of user IDs
+  messages       String[] // Array of message IDs
+  lastMessageId  Int?
+  resolved       Boolean   @default(false)
+  resolvedAt     DateTime?
+  resolvedById   Int?
+  status         String    @default("active") // "active" | "archived"
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  createdBy  User      @relation("ChatThreadCreatedBy", fields: [createdById], references: [id])
+  document   Document? @relation(fields: [documentId], references: [id])
+  resolvedBy User?     @relation("ChatThreadResolvedBy", fields: [resolvedById], references: [id])
+
+  chatMessages ChatMessage[]
+
+  @@index([createdById])
+  @@index([documentId])
+  @@index([resolved])
+  @@index([status])
+}
+
+// From client_accounting_firm_relationship.prisma
+model ClientAccountingFirmRelationship {
+  id               Int @id @default(autoincrement())
+  clientCompanyId  Int
+  accountingFirmId Int
+
+  // Invitation details
+  invitedBy      Int    @default(1) // User ID who sent the invitation
+  invitationType String @default("client_to_accountant") // "client_to_accountant" | "accountant_to_client"
+
+  // Status management
+  status       String    @default("pending") // "pending" | "accepted" | "rejected" | "active" | "terminated"
+  requestDate  DateTime  @default(now())
+  responseDate DateTime?
+  respondedBy  Int? // User ID who responded to the invitation
+
+  // Contract and relationship
+  contractId        Int?
+  relationshipStart DateTime?
+  relationshipEnd   DateTime?
+
+  // Termination
+  terminationReason String?
+  terminatedBy      Int? // User ID who terminated the relationship
+  terminatedAt      DateTime?
+
+  // Additional info
+  invitationMessage String? @db.Text
+  rejectionReason   String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clientCompany  Company   @relation("ClientCompany", fields: [clientCompanyId], references: [id])
+  accountingFirm Company   @relation("AccountingFirm", fields: [accountingFirmId], references: [id])
+  contract       Contract? @relation(fields: [contractId], references: [id])
+
+  @@unique([clientCompanyId, accountingFirmId])
+  @@index([clientCompanyId])
+  @@index([accountingFirmId])
+  @@index([status])
+  @@index([invitedBy])
+}
+
+// From company.prisma
+model Company {
+  id               Int       @id @default(autoincrement())
+  name             String
+  legalName        String?
+  siret            String?   @unique
+  vatNumber        String?
+  legalForm        String?
+  rne              String?
+  rneFile          String?
+  patentNumber     String?
+  patentFile       String?
+  creationDate     DateTime?
+  capital          Int?
+  address          String?
+  city             String?
+  postalCode       String?
+  countryCode      String?   @default("FR") // ISO country code
+  country          String?   @default("France")
+  phone            String?
+  numWhatsapp      String?
+  email            String?
+  website          String?
+  activityCode     String?
+  sector           String?
+  employeeCount    Int?
+  type             String? // "client" | "accounting_firm"
+  description      String?
+  experience       String? // Experience description for accounting firms
+  specialties      String[]
+  rating           Float?
+  numberOfReviews  Int?      @default(0)
+  ownerId          Int?
+  primaryContactId Int?
+  fiscalInfo       String?
+  socialInfo       String?
+  status           String    @default("active")
+  logo             String?
+
+  // Storage quota management
+  storageQuotaBytes     BigInt?   @default(10737418240) // Default 10GB in bytes
+  storageUsedBytes      BigInt?   @default(0)
+  storageAlertThreshold Float?    @default(0.8) // Alert at 80%
+  lastStorageAlert      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner          User?  @relation("CompanyOwner", fields: [ownerId], references: [id])
+  primaryContact User?  @relation("CompanyPrimaryContact", fields: [primaryContactId], references: [id])
+  employees      User[] @relation("CompanyEmployees")
+
+  clientRelationships         ClientAccountingFirmRelationship[] @relation("ClientCompany")
+  accountingFirmRelationships ClientAccountingFirmRelationship[] @relation("AccountingFirm")
+
+  // Documents
+  documents        Document[] @relation("DocumentCompany")
+  createdDocuments Document[] @relation("DocumentCreatedByCompany")
+
+  // Requests
+  requests               Request[] @relation("CompanyRequests")
+  accountingFirmRequests Request[] @relation("AccountingFirmRequests")
+
+  // Appointments
+  appointments   Appointment[]  @relation("CompanyAppointments")
+  availabilities Availability[] @relation("CompanyAvailabilities")
+
+  // Tasks
+  tasks Task[] @relation("TaskCompany")
+
+  // Tickets
+  tickets Ticket[] @relation("TicketCompany")
+
+  // Meetings
+  meetings Meeting[] @relation("MeetingCompany")
+
+  // Audit Logs
+  auditLogs AuditLog[] @relation("AuditLogCompany")
+
+  // Reviews
+  reviews Review[] @relation("CompanyReviews")
+
+  // Posts
+  posts Post[] @relation("CompanyPosts")
+
+  // Contact Messages
+  contactMessages ContactMessage[] @relation("ContactMessageCompany")
+
+  // Invoices
+  invoices Invoice[] @relation("CompanyInvoices")
+
+  @@index([siret])
+  @@index([type])
+  @@index([status])
+}
+
+// From contact_message.prisma
+model ContactMessage {
+  id           Int  @id @default(autoincrement())
+  accountantId Int // Comptable contacté
+  companyId    Int? // Cabinet comptable
+
+  // Informations du visiteur
+  visitorName    String
+  visitorEmail   String
+  visitorPhone   String?
+  visitorCompany String? // Nom de l'entreprise du visiteur
+
+  // Message
+  subject String
+  message String @db.Text
+
+  // Statut
+  status    String    @default("new") // "new" | "read" | "replied" | "archived"
+  isReplied Boolean   @default(false)
+  repliedAt DateTime?
+
+  // Métadonnées
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accountant User     @relation("ContactMessageAccountant", fields: [accountantId], references: [id], onDelete: Cascade)
+  company    Company? @relation("ContactMessageCompany", fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([accountantId])
+  @@index([companyId])
+  @@index([status])
+  @@index([visitorEmail])
+  @@index([createdAt])
+  @@map("contact_messages")
+}
+
+// From contract.prisma
+model Contract {
+  id             Int       @id @default(autoincrement())
+  content        String?   @db.Text
+  variables      String?   @db.Text
+  status         String    @default("draft") // "draft" | "sent" | "signed" | "expired"
+  generatedAt    DateTime  @default(now())
+  sentAt         DateTime?
+  signedAt       DateTime?
+  expirationDate DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  relationships ClientAccountingFirmRelationship[]
+
+  @@index([status])
+}
+
+// From document.prisma
+model Document {
+  id                 Int       @id @default(autoincrement())
+  name               String
+  type               String? // "pdf" | "excel" | "word" | "image" | "other"
+  mimeType           String?
+  size               Int? // Size in bytes
+  url                String
+  category           String? // Document category (e.g., facture, contrat, rapport)
+  processingStatus   String    @default("pending") // "pending" | "traite" | "enregistre" | "synchronise"
+  extractionStatus   String? // null | "pending" | "done" | "failed" — only for category=facture
+  ownerId            Int // Always the client company owner
+  companyId          Int? // Always the client company
+  createdBy          Int? // User ID who created this document (client or accountant user)
+  createdByCompanyId Int? // Company ID who created this document (client or accountant firm)
+  parentId           Int? // For folder structure
+  requestId          Int?
+  ticketId           Int?
+  isFolder           Boolean   @default(false)
+  children           String[] // Array of child document IDs
+  permissions        String[] // JSON array of permission objects
+  lastChatActivity   DateTime?
+  status             String    @default("active") // "active" | "archived" | "deleted"
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  owner            User       @relation("DocumentOwner", fields: [ownerId], references: [id])
+  company          Company?   @relation("DocumentCompany", fields: [companyId], references: [id])
+  createdByUser    User?      @relation("DocumentCreatedBy", fields: [createdBy], references: [id])
+  createdByCompany Company?   @relation("DocumentCreatedByCompany", fields: [createdByCompanyId], references: [id])
+  parent           Document?  @relation("DocumentChildren", fields: [parentId], references: [id])
+  childDocuments   Document[] @relation("DocumentChildren")
+
+  chatThreads     ChatThread[]
+  invoiceMetadata InvoiceMetadata?
+  invoice         Invoice?
+  versions        DocumentVersion[]
+
+  currentVersion Int? @default(1)
+
+  @@index([ownerId])
+  @@index([companyId])
+  @@index([createdBy])
+  @@index([createdByCompanyId])
+  @@index([parentId])
+  @@index([status])
+  @@index([category])
+  @@index([processingStatus])
+}
+
+// From document_version.prisma
+model DocumentVersion {
+  id            Int      @id @default(autoincrement())
+  documentId    Int
+  versionNumber Int // 1, 2, 3...
+  url           String // chemin MinIO de cette version
+  name          String // nom du fichier à ce moment
+  size          Int?
+  uploadedBy    Int
+  comment       String?  @db.Text // note optionnelle ex: "correction TVA"
+  createdAt     DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploader User     @relation("DocumentVersionUploader", fields: [uploadedBy], references: [id])
+
+  @@index([documentId])
+  @@index([uploadedBy])
+  @@map("document_versions")
+}
+
+// From features.prisma
+model Feature {
+  id         Int          @id @default(autoincrement())
+  slug       String       @unique
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  pages      Pages[]
+  p_features p_features[]
+}
+
+// From invoice-metadata.prisma
+model InvoiceMetadata {
+  id         Int @id @default(autoincrement())
+  documentId Int @unique
+
+  // Invoice Header
+  msgSenderId   String?
+  msgReceiverId String?
+
+  // BGM
+  invoiceType   String? // FACTURE
+  invoiceNumber String? // 0099 / 2025
+
+  // DTM
+  invoiceDate DateTime?
+
+  // Partners (stored as JSON)
+  partners Json? // Array of partner objects
+
+  // Payment Terms
+  paymentTerms Json? // Array of payment objects
+
+  // Text
+  totalInWords String? // Arrêté la Présente à la Somme de...
+
+  // Line Items (stored as JSON)
+  lineItems Json? // Array of line item objects
+
+  // Amounts
+  amounts Json? // Array of amount objects
+
+  // Taxes
+  taxes Json? // Array of tax objects
+
+  // Full extracted data (backup)
+  rawData Json? // Complete JSON response from API
+
+  // Processing info
+  extractedAt      DateTime @default(now())
+  extractionStatus String   @default("success") // "success" | "failed"
+  errorMessage     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([invoiceNumber])
+  @@index([invoiceDate])
+}
+
+// From invoice.prisma
+model Invoice {
+  id            Int    @id @default(autoincrement())
+  invoiceNumber String // auto-generated by service e.g. "FAC-2026-001"
+
+  // Status
+  status String @default("draft") // "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled"
+
+  // Dates — createdAt serves as issue date, no separate issueDate field
+  dueDate DateTime @db.Date // Date d'échéance
+
+  // VAT
+  vatRate Decimal @db.Decimal(5, 2) // TVA (%) e.g. 19.00
+
+  // Discount
+  discountType  String? // "percentage" | "fixed"
+  discountValue Decimal? @db.Decimal(10, 2)
+
+  // Stored computed amounts
+  subtotal       Decimal  @db.Decimal(10, 2) // Montant HT — sum of line totals before discount/VAT
+  discountAmount Decimal? @db.Decimal(10, 2)
+  vatAmount      Decimal  @db.Decimal(10, 2) // Montant TVA
+  total          Decimal  @db.Decimal(10, 2) // Montant TTC
+
+  // Payment tracking — drives "Reste à payer" column and "Partiel" status
+  amountPaid      Decimal @default(0) @db.Decimal(10, 2)
+  remainingAmount Decimal @default(0) @db.Decimal(10, 2) // kept in sync: total - amountPaid
+
+  // Notes
+  notes String? @db.Text
+
+  // Relations
+  companyId   Int
+  createdById Int
+  documentId  Int? @unique // optional: linked Document for future PDF sharing
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company       @relation("CompanyInvoices", fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy User          @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  document  Document?     @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  lines     InvoiceLine[]
+
+  @@unique([companyId, invoiceNumber])
+  @@index([companyId])
+  @@index([createdById])
+  @@index([status])
+  @@index([dueDate])
+  @@map("invoices")
+}
+
+// From invoice_line.prisma
+model InvoiceLine {
+  id          Int     @id @default(autoincrement())
+  invoiceId   Int
+  description String  @db.Text // Description
+  quantity    Decimal @db.Decimal(10, 3) // Qté
+  unitPrice   Decimal @db.Decimal(10, 2) // Prix unit.
+  lineTotal   Decimal @db.Decimal(10, 2) // quantity * unitPrice, stored
+  order       Int     @default(0) // preserves line display order
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_lines")
+}
+
+// From meeting.prisma
+model Meeting {
+  id              Int      @id @default(autoincrement())
+  clientId        Int?
+  companyId       Int?
+  accountantId    Int?
+  participants    String[] // Array of user IDs
+  type            String // "online" | "in_person" | "phone"
+  title           String
+  notes           String?  @db.Text
+  startAt         DateTime
+  endAt           DateTime
+  locationAddress String?
+  locationMapUrl  String?
+  videoLink       String?
+  status          String   @default("scheduled") // "scheduled" | "in_progress" | "completed" | "cancelled"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client     User?    @relation("MeetingClient", fields: [clientId], references: [id])
+  company    Company? @relation("MeetingCompany", fields: [companyId], references: [id])
+  accountant User?    @relation("MeetingAccountant", fields: [accountantId], references: [id])
+
+  @@index([clientId])
+  @@index([companyId])
+  @@index([accountantId])
+  @@index([status])
+  @@index([startAt])
+}
+
+// From notification.prisma
+model Notification {
+  id          Int       @id @default(autoincrement())
+  recipientId Int
+  type        String // "request" | "task" | "meeting" | "message" | "system" | "appointment" | "comment"
+  title       String
+  message     String
+  data        String?   @db.Text // JSON with additional data
+  read        Boolean   @default(false)
+  readAt      DateTime? // When the notification was read
+  actionUrl   String? // URL to navigate to when clicking notification
+  priority    String    @default("normal") // "low" | "normal" | "high" | "urgent"
+  createdAt   DateTime  @default(now())
+
+  recipient User @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId])
+  @@index([read])
+  @@index([createdAt])
+  @@index([type])
+}
+
+// From pages.prisma
+model Pages {
+  id        Int       @id @default(autoincrement())
+  PageUrl   String
+  slug      String    @unique
+  featureId Int
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  feature   Feature   @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  p_pages   p_pages[]
+  actions   Action[]
+}
+
+// From post.prisma
+model Post {
+  id            Int       @id @default(autoincrement())
+  authorId      Int // Comptable qui publie
+  companyId     Int? // Cabinet comptable
+  title         String
+  content       String    @db.Text
+  images        String[] // Array of image URLs
+  tags          String[] // Tags pour catégoriser les posts
+  visibility    String    @default("public") // "public" | "clients_only" | "private"
+  status        String    @default("published") // "draft" | "published" | "archived"
+  viewsCount    Int       @default(0)
+  likesCount    Int       @default(0)
+  commentsCount Int       @default(0)
+  publishedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  author  User     @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  company Company? @relation("CompanyPosts", fields: [companyId], references: [id], onDelete: SetNull)
+
+  comments PostComment[]
+  likes    PostLike[]
+
+  @@index([authorId])
+  @@index([companyId])
+  @@index([status])
+  @@index([visibility])
+  @@index([publishedAt])
+  @@map("posts")
+}
+
+model PostComment {
+  id        Int      @id @default(autoincrement())
+  postId    Int
+  authorId  Int
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User @relation("PostCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([authorId])
+  @@map("post_comments")
+}
+
+model PostLike {
+  id        Int      @id @default(autoincrement())
+  postId    Int
+  userId    Int
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation("PostLikeUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+  @@map("post_likes")
+}
+
+// From p_features.prisma
+model p_features {
+  role_id    Int
+  feature_id Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  role    Role    @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  feature Feature @relation(fields: [feature_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, feature_id])
+  @@index([feature_id])
+}
+
+// From p_pages.prisma
+model p_pages {
+  role_id   Int
+  page_id   Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  role Role  @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  page Pages @relation(fields: [page_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, page_id])
+  @@index([page_id])
+}
+
+// From p_tasks.prisma
+model p_tasks {
+  id      Int  @id @default(autoincrement())
+  role_id Int
+  task_id Int
+  role    Role @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  task    Task @relation(fields: [task_id], references: [id], onDelete: Cascade)
+
+  @@unique([role_id, task_id])
+  @@index([role_id])
+  @@index([task_id])
+}
+
+// From refreshToken.prisma
+model RefreshToken {
+  id     Int    @id @default(autoincrement())
+  token  String @unique
+  userId Int
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+  isRevoked  Boolean  @default(false)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// From request.prisma
+model Request {
+  id                  Int      @id @default(autoincrement())
+  subject             String // Titre de la demande
+  topic               String? // Sujet (subcategory/specific topic)
+  description         String?  @db.Text
+  type                String // 'accounting', 'tax', 'consultation', 'document', 'other'
+  urgency             String   @default("normal") // 'low', 'normal', 'high', 'urgent'
+  status              String   @default("pending") // 'pending', 'in_progress', 'resolved', 'rejected', 'cancelled'
+  response            String?  @db.Text
+  attachments         String[] @default([]) // Array of file paths in MinIO (client attachments)
+  responseAttachments String[] @default([]) // Array of file paths for accountant response
+
+  // Desired response date/time
+  desiredResponseDate String?
+  desiredResponseTime String?
+
+  // Relations
+  clientId Int
+  client   User @relation("ClientRequests", fields: [clientId], references: [id], onDelete: Cascade)
+
+  assignedToId Int?
+  assignedTo   User? @relation("AssignedRequests", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  companyId Int?
+  company   Company? @relation("CompanyRequests", fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Accounting firm that receives this request
+  accountingFirmId Int?
+  accountingFirm   Company? @relation("AccountingFirmRequests", fields: [accountingFirmId], references: [id], onDelete: SetNull)
+
+  // Task conversion
+  convertedToTaskId Int?  @unique
+  convertedToTask   Task? @relation("RequestToTask", fields: [convertedToTaskId], references: [id], onDelete: SetNull)
+  taskFromRequest   Task? @relation("TaskFromRequest")
+
+  // Ticket relation
+  tickets Ticket[]
+
+  // Chat messages relation
+  chatMessages ChatMessage[] @relation("ChatMessageRequest")
+
+  // Timestamps
+  respondedAt DateTime?
+  resolvedAt  DateTime?
+  convertedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([clientId])
+  @@index([assignedToId])
+  @@index([companyId])
+  @@index([accountingFirmId])
+  @@index([status])
+  @@index([convertedToTaskId])
+  @@map("requests")
+}
+
+// From review.prisma
+model Review {
+  id           Int       @id @default(autoincrement())
+  accountantId Int // Comptable évalué
+  clientId     Int // Client qui évalue
+  companyId    Int? // Cabinet comptable évalué
+  rating       Int // 1-5 étoiles
+  comment      String?   @db.Text
+  isVerified   Boolean   @default(false) // Client vérifié (a vraiment travaillé avec le comptable)
+  isPublic     Boolean   @default(true) // Visible publiquement
+  response     String?   @db.Text // Réponse du comptable
+  respondedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  accountant User     @relation("ReviewAccountant", fields: [accountantId], references: [id], onDelete: Cascade)
+  client     User     @relation("ReviewClient", fields: [clientId], references: [id], onDelete: Cascade)
+  company    Company? @relation("CompanyReviews", fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@unique([accountantId, clientId]) // Un client ne peut laisser qu'un seul avis par comptable
+  @@index([accountantId])
+  @@index([clientId])
+  @@index([companyId])
+  @@index([rating])
+  @@index([isPublic])
+  @@map("reviews")
+}
+
+// From roles.prisma
+model Role {
+  id            Int          @id @default(autoincrement())
+  code          String       @unique
+  nameFr        String
+  nameEn        String
+  descriptionEn String
+  descriptionFr String
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  p_pages       p_pages[]
+  p_features    p_features[]
+  p_tasks       p_tasks[]
+  users         User[]
+  roleActions   RoleAction[]
+
+  @@unique([nameFr, nameEn])
+}
+
+// From role_action.prisma
+model RoleAction {
+  id          Int       @id @default(autoincrement())
+  roleId      Int
+  actionId    Int
+  grantedById Int?
+  grantedAt   DateTime  @default(now())
+  expiresAt   DateTime?
+  conditions  String?   @db.Text // JSON with conditional rules
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  role      Role   @relation(fields: [roleId], references: [id])
+  action    Action @relation(fields: [actionId], references: [id])
+  grantedBy User?  @relation("RoleActionGrantedBy", fields: [grantedById], references: [id])
+
+  @@unique([roleId, actionId])
+  @@index([roleId])
+  @@index([actionId])
+}
+
+// From task-client.prisma
+model TaskClient {
+  id        Int      @id @default(autoincrement())
+  taskId    Int
+  clientId  Int
+  createdAt DateTime @default(now())
+
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  client User @relation("TaskClientRelation", fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, clientId])
+  @@index([taskId])
+  @@index([clientId])
+  @@map("task_clients")
+}
+
+// From task-comment.prisma
+model TaskComment {
+  id          Int      @id @default(autoincrement())
+  taskId      Int
+  userId      Int
+  comment     String   @db.Text
+  attachments String[] // Array of file URLs
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([taskId])
+  @@index([userId])
+}
+
+// From task.prisma
+model Task {
+  id               Int       @id @default(autoincrement())
+  title            String
+  description      String?   @db.Text
+  type             String // "accounting" | "review" | "meeting" | "document" | "other"
+  priority         String    @default("medium") // "low" | "medium" | "high" | "urgent"
+  status           String    @default("todo") // "todo" | "in_progress" | "completed" | "cancelled"
+  dueDate          DateTime?
+  assigneeId       Int?
+  createdById      Int
+  requestId        Int?      @unique
+  ticketId         Int?
+  companyId        Int?
+  subtasks         String[] // JSON array of subtask objects
+  attachments      String[] // JSON array of attachment URLs
+  progress         Int       @default(0) // 0-100
+  order            Int       @default(0) // for drag & drop reordering
+  completedAt      DateTime?
+  validatedBy      Int? // User who validated the task
+  validatedAt      DateTime?
+  validationStatus String? // "approved" | "rejected"
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  assignee           User?         @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdBy          User          @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  validator          User?         @relation("TaskValidator", fields: [validatedBy], references: [id])
+  request            Request?      @relation("TaskFromRequest", fields: [requestId], references: [id])
+  ticket             Ticket?       @relation(fields: [ticketId], references: [id])
+  company            Company?      @relation("TaskCompany", fields: [companyId], references: [id])
+  taskClients        TaskClient[]
+  p_tasks            p_tasks[]
+  comments           TaskComment[]
+  requestConversions Request[]     @relation("RequestToTask")
+  chatMessages       ChatMessage[] @relation("ChatMessageTask")
+
+  @@index([assigneeId])
+  @@index([createdById])
+  @@index([requestId])
+  @@index([ticketId])
+  @@index([status])
+  @@index([priority])
+}
+
+// From ticket.prisma
+model Ticket {
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String?   @db.Text
+  state       String    @default("open") // "open" | "in_progress" | "resolved" | "closed"
+  priority    String    @default("medium") // "low" | "medium" | "high" | "urgent"
+  deadline    DateTime?
+  createdById Int
+  assigneeId  Int?
+  clientId    Int?
+  companyId   Int?
+  requestId   Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  createdBy User     @relation("TicketCreatedBy", fields: [createdById], references: [id])
+  assignee  User?    @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  client    User?    @relation("TicketClient", fields: [clientId], references: [id])
+  company   Company? @relation("TicketCompany", fields: [companyId], references: [id])
+  request   Request? @relation(fields: [requestId], references: [id])
+
+  tasks Task[]
+
+  @@index([createdById])
+  @@index([assigneeId])
+  @@index([clientId])
+  @@index([companyId])
+  @@index([requestId])
+  @@index([state])
+}
+
+// From users.prisma
+model User {
+  id                   Int       @id @default(autoincrement())
+  id_role              Int?
+  username             String
+  firstName            String?
+  lastName             String?
+  password             String    @db.Text
+  email                String    @unique
+  phone                String?
+  companyId            Int?
+  position             String?
+  department           String?
+  cin                  String?
+  diploma              String?
+  photo                String?
+  coverPhoto           String?
+  lastLogin            DateTime?
+  isActive             Boolean   @default(true)
+  status               String    @default("pending") // "pending" | "active" | "suspended"
+  resetPasswordToken   String?   @unique
+  resetPasswordExpires DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  createdById          Int?
+  updatedById          Int?
+
+  role          Role?          @relation(fields: [id_role], references: [id])
+  company       Company?       @relation("CompanyEmployees", fields: [companyId], references: [id])
+  refreshTokens RefreshToken[]
+
+  ownedCompanies          Company[] @relation("CompanyOwner")
+  primaryContactCompanies Company[] @relation("CompanyPrimaryContact")
+
+  // Documents
+  documents        Document[] @relation("DocumentOwner")
+  createdDocuments Document[] @relation("DocumentCreatedBy")
+
+  // Notifications
+  notifications Notification[] @relation("NotificationRecipient")
+
+  // Tasks
+  assignedTasks       Task[]        @relation("TaskAssignee")
+  createdTasks        Task[]        @relation("TaskCreatedBy")
+  validatedTasks      Task[]        @relation("TaskValidator")
+  taskClientRelations TaskClient[]  @relation("TaskClientRelation")
+  taskComments        TaskComment[]
+
+  // Requests
+  clientRequests   Request[] @relation("ClientRequests")
+  assignedRequests Request[] @relation("AssignedRequests")
+
+  // Appointments
+  clientAppointments     Appointment[]       @relation("ClientAppointments")
+  accountantAppointments Appointment[]       @relation("AccountantAppointments")
+  createdAppointments    Appointment[]       @relation("AppointmentCreatedBy")
+  updatedAppointments    Appointment[]       @relation("AppointmentUpdatedBy")
+  availabilities         Availability[]      @relation("AccountantAvailabilities")
+  availabilitySlots      AvailabilitySlot[]  @relation("AccountantSlots")
+  accountantLeaves       AccountantLeave[]   @relation("AccountantLeaves")
+  appointmentReports     AppointmentReport[] @relation("ReportedByUser")
+
+  // Tickets
+  createdTickets  Ticket[] @relation("TicketCreatedBy")
+  assignedTickets Ticket[] @relation("TicketAssignee")
+  clientTickets   Ticket[] @relation("TicketClient")
+
+  // Meetings
+  clientMeetings     Meeting[] @relation("MeetingClient")
+  accountantMeetings Meeting[] @relation("MeetingAccountant")
+
+  // Chat
+  createdChatRooms ChatRoom[]    @relation("ChatRoomCreatedBy")
+  sentMessages     ChatMessage[] @relation("ChatMessageSender")
+  createdThreads   ChatThread[]  @relation("ChatThreadCreatedBy")
+  resolvedThreads  ChatThread[]  @relation("ChatThreadResolvedBy")
+  initiatedCalls   Call[]        @relation("CallInitiator")
+
+  // Role Actions
+  grantedRoleActions RoleAction[] @relation("RoleActionGrantedBy")
+
+  // Audit Logs
+  auditLogs AuditLog[] @relation("AuditLogUser")
+
+  // Reviews
+  givenReviews    Review[] @relation("ReviewClient")
+  receivedReviews Review[] @relation("ReviewAccountant")
+
+  // Posts
+  posts        Post[]        @relation("PostAuthor")
+  postComments PostComment[] @relation("PostCommentAuthor")
+  postLikes    PostLike[]    @relation("PostLikeUser")
+
+  // Contact Messages
+  receivedContactMessages ContactMessage[] @relation("ContactMessageAccountant")
+
+  // Document Versions
+  uploadedVersions DocumentVersion[] @relation("DocumentVersionUploader")
+
+  // Invoices
+  createdInvoices Invoice[] @relation("InvoiceCreatedBy")
+
+  @@index([email])
+  @@index([companyId])
+  @@index([status])
+}

@@ -200,11 +200,19 @@ export const MSG = {
     created: 'Facture créée avec succès.',
     updated: 'Facture mise à jour avec succès.',
     deleted: 'Facture supprimée avec succès.',
+    cancelled: 'Facture annulée avec succès.',
+    payment_added: 'Paiement enregistré avec succès.',
+    payment_exceeds_remaining: 'Le montant du paiement dépasse le reste à payer.',
+    payment_on_cancelled: "Impossible d'enregistrer un paiement sur une facture annulée.",
 
     not_found: 'Facture introuvable.',
+    already_cancelled: 'Cette facture est déjà annulée.',
+    cannot_cancel: (status: string) =>
+      `Une facture au statut "${status}" ne peut pas être annulée.`,
     access_denied: "Vous n'avez pas accès à cette facture.",
     no_lines: 'La facture doit contenir au moins une ligne.',
     no_company: "Votre compte n'est associé à aucune entreprise.",
+    locked: (status: string) => `Cette facture est "${status}" et ne peut plus être modifiée.`,
 
     // Invoice extraction (document module)
     already_extracted: 'Facture déjà extraite.',

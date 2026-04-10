@@ -739,6 +739,7 @@ model Invoice {
   createdBy      User         @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   document       Document?    @relation(fields: [documentId], references: [id], onDelete: SetNull)
   lines          InvoiceLine[]
+  payments       InvoicePayment[]
 
   @@unique([companyId, invoiceNumber])
   @@index([companyId])
@@ -766,6 +767,24 @@ model InvoiceLine {
 
   @@index([invoiceId])
   @@map("invoice_lines")
+}
+
+
+// From invoice_payment.prisma
+model InvoicePayment {
+  id          Int      @id @default(autoincrement())
+  invoiceId   Int
+  amount      Decimal  @db.Decimal(10, 2)
+  paymentDate DateTime @db.Date
+  method      String   // "cash" | "bank_transfer" | "check" | "card" | "other"
+  note        String?  @db.Text
+
+  createdAt   DateTime @default(now())
+
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_payments")
 }
 
 

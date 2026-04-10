@@ -85,10 +85,70 @@ export interface SynchronizeDocumentResponse {
   data?: { documentId: number; processingStatus: ProcessingStatus };
 }
 
+// ─── Invoice list types (matches POST /api/invoices + GET /api/invoices) ────────
+
+export interface InvoiceLine {
+  id: number;
+  invoiceId: number;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  order: number;
+}
+
+export interface Invoice {
+  id: number;
+  invoiceNumber: string;
+  /** Backend values: "draft" | "paid" | "partial" | "overdue" */
+  status: string;
+  dueDate: string;
+  vatRate: number;
+  discountType: string | null;
+  discountValue: number | null;
+  subtotal: number;
+  discountAmount: number | null;
+  vatAmount: number;
+  total: number;
+  amountPaid: number;
+  remainingAmount: number;
+  notes: string | null;
+  companyId: number;
+  createdById: number;
+  createdAt: string;
+  updatedAt: string;
+  lines: InvoiceLine[];
+}
+
+export interface GetInvoicesResponse {
+  data: Invoice[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface CreateInvoiceLineRequest {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface CreateInvoiceRequest {
+  /** Backend values: "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled" */
+  status?: string;
+  /** YYYY-MM-DD */
+  dueDate: string;
+  vatRate: number;
+  discountType?: string;
+  discountValue?: number;
+  notes?: string;
+  lines: CreateInvoiceLineRequest[];
+}
+
 export const invoicesApi = createApi({
   reducerPath: "invoicesApi",
   baseQuery: baseQueryWithReauth,
-  tagTypes: ["InvoiceMetadata", "InvoiceStatus", "Documents"],
+  tagTypes: ["InvoiceMetadata", "InvoiceStatus", "Documents", "Invoices"],
   endpoints: (builder) => ({
     extractInvoice: builder.mutation<ExtractInvoiceResponse, number>({
       query: (documentId) => ({
@@ -172,6 +232,46 @@ export const invoicesApi = createApi({
         { type: "Documents" },
       ],
     }),
+
+    createInvoice: builder.mutation<Invoice, CreateInvoiceRequest>({
+      query: (body) => ({
+        url: "/invoices",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: [{ type: "Invoices", id: "LIST" }],
+    }),
+
+    getInvoices: builder.query<
+      GetInvoicesResponse,
+      {
+        page?: number;
+        pageSize?: number;
+        status?: string;
+        search?: string;
+      } | void
+    >({
+      query: (params = {}) => {
+        const sp = new URLSearchParams();
+        if (params?.page != null) sp.set("page", String(params.page));
+        if (params?.pageSize != null)
+          sp.set("pageSize", String(params.pageSize));
+        if (params?.status) sp.set("status", params.status);
+        if (params?.search) sp.set("search", params.search);
+        const qs = sp.toString();
+        return { url: `/invoices${qs ? `?${qs}` : ""}`, method: "GET" };
+      },
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.data.map((inv) => ({
+                type: "Invoices" as const,
+                id: inv.id,
+              })),
+              { type: "Invoices", id: "LIST" },
+            ]
+          : [{ type: "Invoices", id: "LIST" }],
+    }),
   }),
 });
 
@@ -182,4 +282,6 @@ export const {
   useGetDocumentsStatusQuery,
   useSaveInvoiceMetadataMutation,
   useSynchronizeDocumentMutation,
+  useCreateInvoiceMutation,
+  useGetInvoicesQuery,
 } = invoicesApi;

@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Box,
   Card,
+  CircularProgress,
   IconButton,
   Stack,
   Typography,
@@ -17,13 +18,66 @@ import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
 import { DataTable, type Column } from "src/layouts/components/custom-table";
 import FactureStatusChip from "src/components/facture/FactureStatusChip";
-import type { Facture, FactureStatus } from "src/types/facture";
+import type { Facture, DiscountType, FactureStatus } from "src/types/facture";
+import {
+  useGetInvoicesQuery,
+  type Invoice,
+} from "src/lib/services/invoicesApi";
 
-// Import the logic you moved to the separate file
 import { buildFactureTemplate } from "src/components/facture/FactureTemplate";
-
 import FactureModal from "../modal/FactureModal";
 import ViewFactureDrawer from "../drawer/ViewFactureDrawer";
+
+// ─── Status mappings ──────────────────────────────────────────────────────────
+
+const backendStatusMap: Record<string, FactureStatus> = {
+  draft: "brouillon",
+  sent: "brouillon",
+  paid: "payee",
+  partial: "partiel",
+  overdue: "en_retard",
+  cancelled: "brouillon",
+};
+
+const uiStatusToBackend: Record<string, string | undefined> = {
+  all: undefined,
+  brouillon: "draft",
+  payee: "paid",
+  partiel: "partial",
+  en_retard: "overdue",
+};
+
+// ─── Mapper ───────────────────────────────────────────────────────────────────
+
+function invoiceToFacture(inv: Invoice): Facture {
+  return {
+    id: inv.id,
+    number: inv.invoiceNumber,
+    status: backendStatusMap[inv.status] ?? "brouillon",
+    tvaRate: Number(inv.vatRate),
+    dueDate: inv.dueDate,
+    discountType: (inv.discountType ?? "percentage") as DiscountType,
+    discountValue: Number(inv.discountValue ?? 0),
+    lines: inv.lines.map((l) => ({
+      id: String(l.id),
+      description: l.description,
+      quantity: Number(l.quantity),
+      unitPrice: Number(l.unitPrice),
+    })),
+    notes: inv.notes ?? "",
+    amountHT: Number(inv.subtotal),
+    amountTVA: Number(inv.vatAmount),
+    amountTTC: Number(inv.total),
+    amountPaid: Number(inv.amountPaid),
+    amountRemaining: Number(inv.remainingAmount),
+    createdAt: inv.createdAt,
+  };
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+/** Number of invoices fetched per page. Kept small so each batch is fast. */
+const PAGE_SIZE = 10;
 
 const formatAmount = (value: number) =>
   new Intl.NumberFormat("fr-FR", {
@@ -40,33 +94,220 @@ const statusTabs: Array<{ id: "all" | FactureStatus; label: string }> = [
   { id: "en_retard", label: "En retard" },
 ];
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function FactureView() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
+  // ── Modal / drawer state ──────────────────────────────────────────────────
   const [openModal, setOpenModal] = useState(false);
   const [openDrawer, setOpenDrawer] = useState(false);
   const [selected, setSelected] = useState<Facture | null>(null);
+
+  // ── Filter state ──────────────────────────────────────────────────────────
   const [statusFilter, setStatusFilter] = useState<"all" | FactureStatus>(
     "all",
   );
+  /** Raw value bound to the input — updates on every keystroke. */
   const [search, setSearch] = useState("");
-  const [factures, setFactures] = useState<Facture[]>([]);
+  /**
+   * Debounced value sent to the backend — only updates 400 ms after the user
+   * stops typing. This prevents a network request on every keystroke and avoids
+   * resetting the accumulated list mid-typing.
+   */
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  const filtered = useMemo(
-    () =>
-      factures.filter((f) => {
-        const statusOk = statusFilter === "all" || f.status === statusFilter;
-        const searchOk =
-          !search ||
-          f.number.toLowerCase().includes(search.toLowerCase()) ||
-          f.lines.some((line) =>
-            line.description.toLowerCase().includes(search.toLowerCase()),
-          );
-        return statusOk && searchOk;
-      }),
-    [factures, statusFilter, search],
-  );
+  // ── Infinite-scroll state ─────────────────────────────────────────────────
+  /**
+   * currentPage: which backend page we last requested.
+   * allInvoices: accumulated list across all fetched pages.
+   *
+   * These two always move forward together — they reset together when
+   * statusFilter or search changes.
+   */
+  const [currentPage, setCurrentPage] = useState(1);
+  const [allInvoices, setAllInvoices] = useState<Facture[]>([]);
+
+  // ── Debounce search → resets list and page after typing stops ────────────
+  /**
+   * Fires 400 ms after the user stops typing.
+   * Batches three state updates in the same render so RTK Query sees the
+   * correct args (page 1, new search term) from the very first fetch.
+   */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setCurrentPage(1);
+      setAllInvoices([]);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // ── RTK Query ─────────────────────────────────────────────────────────────
+  const { data: apiResponse, isFetching } = useGetInvoicesQuery({
+    page: currentPage,
+    pageSize: PAGE_SIZE,
+    status: uiStatusToBackend[statusFilter],
+    search: debouncedSearch || undefined,
+  });
+
+  // Total count for the current filter (used for "has more" check and tab badge).
+  const total = apiResponse?.total ?? 0;
+  const hasMore = allInvoices.length < total;
+
+  // ── Refs — kept in sync every render so observer callbacks are never stale ─
+  /**
+   * currentPageRef: lets the data-append effect know which page just arrived
+   * without adding currentPage as a dependency (which would cause the effect
+   * to fire before the new data arrives and re-append the old page's items).
+   */
+  const currentPageRef = useRef(currentPage);
+  currentPageRef.current = currentPage;
+
+  // Used by the IntersectionObserver callback instead of closing over the state
+  // values (which would be stale after the observer is set up).
+  const isFetchingRef = useRef(isFetching);
+  isFetchingRef.current = isFetching;
+  const hasMoreRef = useRef(hasMore);
+  hasMoreRef.current = hasMore;
+
+  /**
+   * isIntersectingRef: tracks whether the sentinel is currently inside the
+   * viewport (including the 200 px rootMargin pre-fire zone).
+   *
+   * The IntersectionObserver only fires on *changes* to intersection state —
+   * it does NOT re-fire while the sentinel stays visible. So we keep this ref
+   * updated in the observer callback and read it in the data-append effect to
+   * decide whether to immediately request the next page after a batch arrives.
+   */
+  const isIntersectingRef = useRef(false);
+
+  /** Invisible 1px div placed at the bottom of the list — the scroll trigger. */
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // ── Append new page data when it arrives ──────────────────────────────────
+  /**
+   * Runs whenever RTK Query delivers new data for the current query args.
+   *
+   * Page accumulation logic:
+   *   - page 1  → replace allInvoices entirely (handles filter/search resets)
+   *   - page N  → append only items whose id is not already in the list
+   *               (duplicate guard: covers edge cases where the observer fires
+   *               twice before isFetching flips to true)
+   *
+   * After appending, if the sentinel is still in the viewport and there are
+   * more pages to load, we immediately increment the page counter here.
+   * This is the fix for the core bug: because the sentinel never *exits* the
+   * viewport when the list is short, the IntersectionObserver never re-fires,
+   * so without this explicit check only the first page would ever be loaded.
+   */
+  useEffect(() => {
+    if (!apiResponse?.data) return;
+    const page = currentPageRef.current;
+    const responseTotal = apiResponse.total ?? 0;
+    const newItems = apiResponse.data.map(invoiceToFacture);
+
+    setAllInvoices((prev) => {
+      if (page === 1) {
+        console.debug("[InfiniteScroll] page 1 — replacing list", {
+          fetched: newItems.length,
+          total: responseTotal,
+        });
+        return newItems;
+      }
+
+      const existingIds = new Set(prev.map((f) => f.id));
+      const unique = newItems.filter((f) => !existingIds.has(f.id));
+      const updated = unique.length > 0 ? [...prev, ...unique] : prev;
+
+      console.debug("[InfiniteScroll] append", {
+        page,
+        added: unique.length,
+        accumulated: updated.length,
+        total: responseTotal,
+        hasMore: updated.length < responseTotal,
+      });
+
+      return updated;
+    });
+
+    // page * PAGE_SIZE is the maximum number of items that could have been
+    // fetched through the current page. If that is less than the server total,
+    // at least one more page exists.
+    //
+    // We cannot read allInvoices.length here (it reflects the pre-update value),
+    // so we use the page-based arithmetic instead — it gives the same answer
+    // without requiring a second render cycle.
+    if (isIntersectingRef.current && page * PAGE_SIZE < responseTotal) {
+      console.debug(
+        "[InfiniteScroll] sentinel still visible — auto-loading next page",
+        {
+          nextPage: page + 1,
+        },
+      );
+      setCurrentPage((p) => p + 1);
+    }
+  }, [apiResponse]);
+
+  // ── IntersectionObserver — triggers next page load ────────────────────────
+  /**
+   * Set up once on mount. Watches the sentinel div at the bottom of the list.
+   * rootMargin: "200px" pre-fires 200px before the sentinel enters the
+   * viewport, giving the next batch time to load before the user reaches the
+   * very end of the list.
+   *
+   * Responsibility: keep isIntersectingRef up-to-date AND handle the
+   * scroll-triggered case (user scrolled far enough to bring the sentinel into
+   * view after it had previously exited).
+   *
+   * The "sentinel always visible" case (short list) is handled in the
+   * data-append effect above.
+   */
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const intersecting = entries[0].isIntersecting;
+        isIntersectingRef.current = intersecting;
+
+        console.debug("[InfiniteScroll] observer fired", {
+          intersecting,
+          isFetching: isFetchingRef.current,
+          hasMore: hasMoreRef.current,
+        });
+
+        if (intersecting && !isFetchingRef.current && hasMoreRef.current) {
+          setCurrentPage((prev) => prev + 1);
+        }
+      },
+      { rootMargin: "200px" },
+    );
+
+    if (sentinel) observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, []); // mount-only — all runtime checks go through refs
+
+  // ── Filter / search change → full reset ───────────────────────────────────
+  /**
+   * Inline in the handlers so React batches all three state updates in the
+   * same render cycle, avoiding an intermediate render with stale data.
+   */
+  const handleStatusChange = (id: string) => {
+    setStatusFilter(id as "all" | FactureStatus);
+    setCurrentPage(1);
+    setAllInvoices([]);
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Only update the raw input value here.
+    // The debounce effect watches `search` and will reset the page + list
+    // and update `debouncedSearch` after 400 ms of inactivity.
+    setSearch(e.target.value);
+  };
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   const openDetails = (facture: Facture) => {
     setSelected(facture);
@@ -76,12 +317,13 @@ export default function FactureView() {
   const handleDownloadPdf = (facture: Facture) => {
     const win = window.open("", "_blank");
     if (!win) return;
-    // Using the imported template logic
     win.document.write(buildFactureTemplate(facture));
     win.document.close();
     win.focus();
     win.print();
   };
+
+  // ── Desktop columns ───────────────────────────────────────────────────────
 
   const columns: Column<Facture>[] = [
     {
@@ -201,6 +443,16 @@ export default function FactureView() {
     },
   ];
 
+  // ── Derived render helpers ────────────────────────────────────────────────
+
+  /** True only during the very first fetch (list is still empty). */
+  const isInitialLoad = isFetching && allInvoices.length === 0;
+
+  /** True while fetching a subsequent page (list already has content). */
+  const isFetchingMore = isFetching && allInvoices.length > 0;
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
   return (
     <PageHeader
       title="Factures"
@@ -221,17 +473,16 @@ export default function FactureView() {
         },
       ]}
     >
+      {/* Active tab shows the total for the current filter. Inactive tabs have
+          no badge — counting them would require extra queries. */}
       <FolderTabNavigation
         tabs={statusTabs.map((tab) => ({
           id: tab.id,
           label: tab.label,
-          count:
-            tab.id === "all"
-              ? factures.length
-              : factures.filter((f) => f.status === tab.id).length,
+          count: tab.id === statusFilter ? total : undefined,
         }))}
         activeTab={statusFilter}
-        onTabChange={(id) => setStatusFilter(id as "all" | FactureStatus)}
+        onTabChange={handleStatusChange}
       />
 
       <Card
@@ -246,19 +497,25 @@ export default function FactureView() {
         <CustomInput
           placeholder="Rechercher par numéro ou description..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={handleSearchChange}
           startIcon={<Search size={18} />}
           sx={{ mb: 3 }}
         />
 
-        {isMobile ? (
+        {/* ── Initial load spinner (empty list + first fetch in progress) ── */}
+        {isInitialLoad ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+            <CircularProgress size={32} />
+          </Box>
+        ) : isMobile ? (
+          /* ── Mobile: card list ─────────────────────────────────────────── */
           <Stack spacing={2}>
-            {filtered.length === 0 ? (
+            {allInvoices.length === 0 ? (
               <Typography color="text.secondary" align="center" sx={{ py: 6 }}>
                 Aucune facture trouvée
               </Typography>
             ) : (
-              filtered.map((facture) => (
+              allInvoices.map((facture) => (
                 <Card
                   key={facture.id}
                   variant="outlined"
@@ -306,19 +563,41 @@ export default function FactureView() {
             )}
           </Stack>
         ) : (
+          /* ── Desktop: data table ───────────────────────────────────────── */
           <DataTable
             columns={columns}
-            data={filtered}
+            data={allInvoices}
             rowKey={(f) => f.id}
             emptyMessage="Aucune facture trouvée"
           />
+        )}
+
+        {/*
+         * Sentinel — invisible 1px element watched by IntersectionObserver.
+         * Placed inside the Card so it scrolls with the page content.
+         * rootMargin: "200px" means the observer fires when this div is
+         * within 200px of the viewport bottom, pre-loading the next batch.
+         */}
+        <div ref={sentinelRef} style={{ height: 1 }} />
+
+        {/* Bottom loader — shown while a subsequent page is being fetched. */}
+        {isFetchingMore && (
+          <Box sx={{ display: "flex", justifyContent: "center", pt: 2 }}>
+            <CircularProgress size={24} />
+          </Box>
         )}
       </Card>
 
       <FactureModal
         open={openModal}
         onClose={() => setOpenModal(false)}
-        onCreate={(facture) => setFactures((prev) => [facture, ...prev])}
+        onCreate={() => {
+          // createInvoice mutation invalidates "Invoices LIST" → RTK Query
+          // auto-refetches page 1. Reset local accumulator so the new invoice
+          // (sorted by createdAt desc) appears at the top of the list.
+          setCurrentPage(1);
+          setAllInvoices([]);
+        }}
       />
 
       <ViewFactureDrawer

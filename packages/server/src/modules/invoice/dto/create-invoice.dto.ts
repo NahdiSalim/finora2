@@ -34,17 +34,17 @@ export class CreateInvoiceLineDto {
   @ApiProperty({ example: 'Conseil en comptabilité', description: 'Description de la ligne' })
   @IsString()
   @IsNotEmpty()
-  description: string;
+  description!: string;
 
   @ApiProperty({ example: 2, description: 'Quantité' })
   @IsNumber({ maxDecimalPlaces: 3 })
   @Min(0.001, { message: 'La quantité doit être supérieure à 0' })
-  quantity: number;
+  quantity!: number;
 
   @ApiProperty({ example: 150.0, description: 'Prix unitaire HT' })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0, { message: 'Le prix unitaire ne peut pas être négatif' })
-  unitPrice: number;
+  unitPrice!: number;
 }
 
 export class CreateInvoiceDto {
@@ -65,8 +65,8 @@ export class CreateInvoiceDto {
   })
   @IsString()
   @IsNotEmpty()
-  @Matches(DATE_REGEX, { message: "dueDate doit être au format YYYY-MM-DD" })
-  dueDate: string;
+  @Matches(DATE_REGEX, { message: 'dueDate doit être au format YYYY-MM-DD' })
+  dueDate!: string;
 
   @ApiProperty({
     example: 19,
@@ -75,7 +75,7 @@ export class CreateInvoiceDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0, { message: 'Le taux de TVA ne peut pas être négatif' })
   @Max(100, { message: 'Le taux de TVA ne peut pas dépasser 100%' })
-  vatRate: number;
+  vatRate!: number;
 
   @ApiProperty({
     example: DiscountType.PERCENTAGE,
@@ -114,5 +114,5 @@ export class CreateInvoiceDto {
   @ArrayMinSize(1, { message: 'La facture doit contenir au moins une ligne' })
   @ValidateNested({ each: true })
   @Type(() => CreateInvoiceLineDto)
-  lines: CreateInvoiceLineDto[];
+  lines!: CreateInvoiceLineDto[];
 }

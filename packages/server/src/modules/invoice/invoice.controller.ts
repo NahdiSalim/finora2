@@ -9,8 +9,18 @@ import {
   ParseIntPipe,
   UseGuards,
   Req,
+  Res,
+  HttpCode,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import type { Response } from 'express';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiResponse,
+  ApiQuery,
+  ApiProduces,
+} from '@nestjs/swagger';
 import { InvoiceService } from './invoice.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
@@ -36,6 +46,7 @@ export class InvoiceController {
   }
 
   @Post(':id/payments')
+  @HttpCode(201)
   @ApiOperation({ summary: 'Add a payment to an invoice' })
   @ApiResponse({ status: 201, description: 'Payment recorded, invoice totals updated' })
   @ApiResponse({ status: 400, description: 'Invoice is cancelled' })
@@ -68,6 +79,29 @@ export class InvoiceController {
     @Req() req: AuthRequest
   ) {
     return this.invoiceService.update(id, dto, req.user!.id);
+  }
+
+  @Get(':id/pdf')
+  @ApiOperation({ summary: 'Download invoice as PDF' })
+  @ApiProduces('application/pdf')
+  @ApiResponse({
+    status: 200,
+    description: 'PDF file',
+    content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } },
+  })
+  @ApiResponse({ status: 404, description: 'Invoice not found' })
+  async getPdf(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthRequest,
+    @Res() res: Response
+  ): Promise<void> {
+    const { buffer, invoiceNumber } = await this.invoiceService.generatePdf(id, req.user!.id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="facture-${invoiceNumber}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Get(':id')

@@ -36,12 +36,12 @@ const backendStatusMap: Record<string, FactureStatus> = {
   paid: "payee",
   partial: "partiel",
   overdue: "en_retard",
-  cancelled: "brouillon",
+  cancelled: "annulee",
 };
 
 const uiStatusToBackend: Record<string, string | undefined> = {
   all: undefined,
-  brouillon: "draft",
+  brouillon: "draft,sent",
   payee: "paid",
   partiel: "partial",
   en_retard: "overdue",
@@ -132,10 +132,15 @@ export default function FactureView() {
   // ── Debounce search → resets list and page after typing stops ────────────
   /**
    * Fires 400 ms after the user stops typing.
-   * Batches three state updates in the same render so RTK Query sees the
-   * correct args (page 1, new search term) from the very first fetch.
+   * Skipped on the initial mount (isMounted guard) so the first API response
+   * is never wiped by the debounce timer firing with the empty initial value.
    */
+  const isMountedRef = useRef(false);
   useEffect(() => {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      return () => {};
+    }
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
       setCurrentPage(1);
@@ -145,7 +150,11 @@ export default function FactureView() {
   }, [search]);
 
   // ── RTK Query ─────────────────────────────────────────────────────────────
-  const { data: apiResponse, isFetching } = useGetInvoicesQuery({
+  const {
+    data: apiResponse,
+    isFetching,
+    error: invoiceError,
+  } = useGetInvoicesQuery({
     page: currentPage,
     pageSize: PAGE_SIZE,
     status: uiStatusToBackend[statusFilter],
@@ -502,8 +511,14 @@ export default function FactureView() {
           sx={{ mb: 3 }}
         />
 
-        {/* ── Initial load spinner (empty list + first fetch in progress) ── */}
-        {isInitialLoad ? (
+        {/* ── API error (e.g. user has no company) ── */}
+        {invoiceError && !isFetching ? (
+          <Typography color="error" align="center" sx={{ py: 6 }}>
+            Impossible de charger les factures. Vérifiez que votre compte est
+            bien associé à une entreprise.
+          </Typography>
+        ) : /* ── Initial load spinner (empty list + first fetch in progress) ── */
+        isInitialLoad ? (
           <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
             <CircularProgress size={32} />
           </Box>

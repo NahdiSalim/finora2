@@ -4,6 +4,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsEnum,
+  IsIn,
   IsNumber,
   IsArray,
   Min,
@@ -23,17 +24,17 @@ export class UpdateInvoiceLineDto {
   @ApiProperty({ example: 'Conseil en comptabilité', description: 'Description de la ligne' })
   @IsString()
   @IsNotEmpty()
-  description: string;
+  description!: string;
 
   @ApiProperty({ example: 2, description: 'Quantité' })
   @IsNumber({ maxDecimalPlaces: 3 })
   @Min(0.001, { message: 'La quantité doit être supérieure à 0' })
-  quantity: number;
+  quantity!: number;
 
   @ApiProperty({ example: 150.0, description: 'Prix unitaire HT' })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0, { message: 'Le prix unitaire ne peut pas être négatif' })
-  unitPrice: number;
+  unitPrice!: number;
 }
 
 // ─── Invoice DTO ──────────────────────────────────────────────────────────────
@@ -45,11 +46,13 @@ export class UpdateInvoiceLineDto {
 export class UpdateInvoiceDto {
   @ApiProperty({
     example: InvoiceStatus.SENT,
-    enum: InvoiceStatus,
+    enum: [InvoiceStatus.DRAFT, InvoiceStatus.SENT],
     required: false,
-    description: 'Nouveau statut de la facture',
+    description: 'Nouveau statut de la facture (draft ou sent uniquement)',
   })
-  @IsEnum(InvoiceStatus)
+  @IsIn([InvoiceStatus.DRAFT, InvoiceStatus.SENT], {
+    message: "Le statut ne peut être défini qu'à draft ou sent manuellement",
+  })
   @IsOptional()
   status?: InvoiceStatus;
 

@@ -5,6 +5,7 @@ import { MSG } from '../../common/messages';
 import { CreateInvoiceDto, DiscountType, InvoiceStatus } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { generateInvoicePdf } from './helpers/invoice-pdf.helper';
 
 @Injectable()
 export class InvoiceService {
@@ -32,45 +33,66 @@ export class InvoiceService {
     // 2. Generate unique invoice number scoped to this company
     const invoiceNumber = await this.generateInvoiceNumber(companyId);
 
-    // 3. Calculate all amounts from lines + VAT + discount
+    // 3. Guard: percentage discount cannot exceed 100 %
+    if (
+      dto.discountType === DiscountType.PERCENTAGE &&
+      dto.discountValue != null &&
+      dto.discountValue > 100
+    ) {
+      throw new ApiError(
+        'La remise en pourcentage ne peut pas dépasser 100 %',
+        400,
+        'INVALID_DISCOUNT'
+      );
+    }
+
+    // 4. Calculate all amounts from lines + VAT + discount
     const amounts = this.calculateAmounts(dto);
 
-    // 4. Create invoice + nested lines in a single transaction
-    const invoice = await this.prisma.invoice.create({
-      data: {
-        invoiceNumber,
-        status: dto.status ?? 'draft',
-        dueDate: new Date(dto.dueDate + 'T00:00:00.000Z'),
-        vatRate: dto.vatRate,
-        discountType: dto.discountType ?? null,
-        discountValue: dto.discountValue ?? null,
-        subtotal: amounts.subtotal,
-        discountAmount: amounts.discountAmount,
-        vatAmount: amounts.vatAmount,
-        total: amounts.total,
-        amountPaid: 0,
-        remainingAmount: amounts.total,
-        notes: dto.notes ?? null,
-        companyId,
-        createdById: userId,
-        lines: {
-          create: dto.lines.map((line, index) => ({
-            description: line.description,
-            quantity: line.quantity,
-            unitPrice: line.unitPrice,
-            lineTotal: this.round(line.quantity * line.unitPrice),
-            order: index,
-          })),
+    // 5. Create invoice + nested lines in a single transaction
+    try {
+      const invoice = await this.prisma.invoice.create({
+        data: {
+          invoiceNumber,
+          status: dto.status ?? 'draft',
+          dueDate: new Date(dto.dueDate + 'T00:00:00.000Z'),
+          vatRate: dto.vatRate,
+          discountType: dto.discountType ?? null,
+          discountValue: dto.discountValue ?? null,
+          subtotal: amounts.subtotal,
+          discountAmount: amounts.discountAmount,
+          vatAmount: amounts.vatAmount,
+          total: amounts.total,
+          amountPaid: 0,
+          remainingAmount: amounts.total,
+          notes: dto.notes ?? null,
+          companyId,
+          createdById: userId,
+          lines: {
+            create: dto.lines.map((line, index) => ({
+              description: line.description,
+              quantity: line.quantity,
+              unitPrice: line.unitPrice,
+              lineTotal: this.round(line.quantity * line.unitPrice),
+              order: index,
+            })),
+          },
         },
-      },
-      include: {
-        lines: {
-          orderBy: { order: 'asc' },
+        include: {
+          lines: { orderBy: { order: 'asc' } },
         },
-      },
-    });
-
-    return this.serialize(invoice);
+      });
+      return this.serialize(invoice);
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        throw new ApiError(
+          'Conflit de numéro de facture, veuillez réessayer',
+          409,
+          'INVOICE_NUMBER_CONFLICT'
+        );
+      }
+      throw err;
+    }
   }
 
   // ─── FIND ALL ─────────────────────────────────────────────────────────────────
@@ -82,20 +104,55 @@ export class InvoiceService {
     page: number = 1,
     pageSize: number = 10
   ) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { companyId: true },
-    });
+    const companyId = await this.resolveCompanyId(userId);
 
-    if (!user?.companyId) {
-      throw new ApiError(MSG.invoice.no_company, 400, 'USER_NO_COMPANY');
-    }
+    const safePageSize = Math.min(Math.max(1, pageSize), 100);
+    const skip = (page - 1) * safePageSize;
 
-    const skip = (page - 1) * pageSize;
+    // Midnight UTC — the boundary used by computeStatus.
+    const todayUtc = new Date();
+    todayUtc.setUTCHours(0, 0, 0, 0);
+
+    /**
+     * Status filter — all branches must match the FINAL business status that
+     * serialize/computeStatus will return, not just the raw stored column.
+     *
+     * computeStatus rule: if remainingAmount > 0 AND dueDate < today
+     *   → status becomes "overdue" regardless of what is stored.
+     *
+     * Consequences per tab:
+     *   "overdue"    → stored as 'overdue' OR (not terminal + balance > 0 + past due)
+     *   "draft,sent" → stored as draft/sent AND NOT effectively overdue
+     *                  (must exclude invoices that computeStatus would flip to overdue)
+     *   other single → exact stored match (paid, partial, cancelled are terminal /
+     *                  never flipped by computeStatus so stored = displayed)
+     *   undefined    → all invoices EXCEPT cancelled
+     */
+    const effectivelyOverdue = {
+      status: { notIn: [InvoiceStatus.PAID, InvoiceStatus.CANCELLED] },
+      remainingAmount: { gt: 0 },
+      dueDate: { lt: todayUtc },
+    };
+
+    const statusWhere =
+      status === 'overdue'
+        ? {
+            OR: [{ status: InvoiceStatus.OVERDUE }, effectivelyOverdue],
+          }
+        : status && status.includes(',')
+          ? {
+              // Multi-status (brouillon tab: draft + sent).
+              // Exclude any invoice that computeStatus would promote to overdue.
+              status: { in: status.split(',').map((s) => s.trim()) },
+              NOT: effectivelyOverdue,
+            }
+          : status
+            ? { status }
+            : { status: { not: InvoiceStatus.CANCELLED } };
 
     const where = {
-      companyId: user.companyId,
-      ...(status ? { status } : {}),
+      companyId,
+      ...statusWhere,
       ...(search
         ? {
             OR: [
@@ -111,7 +168,7 @@ export class InvoiceService {
         where,
         orderBy: { createdAt: 'desc' },
         skip,
-        take: pageSize,
+        take: safePageSize,
         include: {
           lines: { orderBy: { order: 'asc' } },
         },
@@ -123,24 +180,17 @@ export class InvoiceService {
       data: invoices.map((inv) => this.serialize(inv)),
       total,
       page,
-      pageSize,
+      pageSize: safePageSize,
     };
   }
 
   // ─── FIND ONE ─────────────────────────────────────────────────────────────────
 
   async findOne(invoiceId: number, userId: number) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { companyId: true },
-    });
-
-    if (!user?.companyId) {
-      throw new ApiError(MSG.invoice.no_company, 400, 'USER_NO_COMPANY');
-    }
+    const companyId = await this.resolveCompanyId(userId);
 
     const invoice = await this.prisma.invoice.findFirst({
-      where: { id: invoiceId, companyId: user.companyId },
+      where: { id: invoiceId, companyId },
       include: { lines: { orderBy: { order: 'asc' } } },
     });
 
@@ -151,22 +201,80 @@ export class InvoiceService {
     return this.serialize(invoice);
   }
 
+  // ─── GENERATE PDF ─────────────────────────────────────────────────────────────
+
+  async generatePdf(
+    invoiceId: number,
+    userId: number
+  ): Promise<{ buffer: Buffer; invoiceNumber: string }> {
+    // 1. Resolve company membership
+    const companyId = await this.resolveCompanyId(userId);
+
+    // 2. Fetch invoice + lines + company info in one query
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id: invoiceId, companyId },
+      include: {
+        lines: { orderBy: { order: 'asc' } },
+        company: {
+          select: {
+            name: true,
+            legalName: true,
+            address: true,
+            city: true,
+            postalCode: true,
+            phone: true,
+            email: true,
+            vatNumber: true,
+          },
+        },
+      },
+    });
+
+    if (!invoice) {
+      throw new ApiError(MSG.invoice.not_found, 404, 'INVOICE_NOT_FOUND');
+    }
+
+    // 3. Apply the overdue rule so the PDF reflects the live status
+    const remainingAmount = Number(invoice.remainingAmount);
+    const status = this.computeStatus(invoice.status, remainingAmount, invoice.dueDate);
+
+    // 4. Build PDF
+    const buffer = await generateInvoicePdf({
+      invoiceNumber: invoice.invoiceNumber,
+      status,
+      createdAt: invoice.createdAt,
+      dueDate: invoice.dueDate,
+      vatRate: Number(invoice.vatRate),
+      discountType: invoice.discountType,
+      discountValue: invoice.discountValue != null ? Number(invoice.discountValue) : null,
+      subtotal: Number(invoice.subtotal),
+      discountAmount: invoice.discountAmount != null ? Number(invoice.discountAmount) : null,
+      vatAmount: Number(invoice.vatAmount),
+      total: Number(invoice.total),
+      amountPaid: Number(invoice.amountPaid),
+      remainingAmount,
+      notes: invoice.notes,
+      lines: invoice.lines.map((l) => ({
+        description: l.description,
+        quantity: Number(l.quantity),
+        unitPrice: Number(l.unitPrice),
+        lineTotal: Number(l.lineTotal),
+      })),
+      company: invoice.company,
+    });
+
+    return { buffer, invoiceNumber: invoice.invoiceNumber };
+  }
+
   // ─── UPDATE ───────────────────────────────────────────────────────────────────
 
   async update(invoiceId: number, dto: UpdateInvoiceDto, userId: number) {
     // 1. Verify company membership
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { companyId: true },
-    });
-
-    if (!user?.companyId) {
-      throw new ApiError(MSG.invoice.no_company, 400, 'USER_NO_COMPANY');
-    }
+    const companyId = await this.resolveCompanyId(userId);
 
     // 2. Load invoice scoped to the user's company (lines needed for recalc)
     const invoice = await this.prisma.invoice.findFirst({
-      where: { id: invoiceId, companyId: user.companyId },
+      where: { id: invoiceId, companyId },
       include: { lines: { orderBy: { order: 'asc' } } },
     });
 
@@ -177,6 +285,28 @@ export class InvoiceService {
     // 3. Block edits on terminal statuses
     if (invoice.status === InvoiceStatus.PAID || invoice.status === InvoiceStatus.CANCELLED) {
       throw new ApiError(MSG.invoice.locked(invoice.status), 400, 'INVOICE_LOCKED');
+    }
+
+    // Guard: caller may not directly set status to a terminal value
+    if (dto.status === InvoiceStatus.PAID || dto.status === InvoiceStatus.CANCELLED) {
+      throw new ApiError(MSG.invoice.locked(dto.status), 400, 'INVALID_STATUS_TRANSITION');
+    }
+
+    // Guard: percentage discount cannot exceed 100 %
+    const discountTypeForCheck = dto.discountType ?? invoice.discountType;
+    const discountValueForCheck =
+      dto.discountValue ??
+      (invoice.discountValue != null ? Number(invoice.discountValue) : undefined);
+    if (
+      discountTypeForCheck === DiscountType.PERCENTAGE &&
+      discountValueForCheck != null &&
+      discountValueForCheck > 100
+    ) {
+      throw new ApiError(
+        'La remise en pourcentage ne peut pas dépasser 100 %',
+        400,
+        'INVALID_DISCOUNT'
+      );
     }
 
     // 4. Resolve effective values for recalculation
@@ -209,7 +339,15 @@ export class InvoiceService {
       effectiveDiscountValue
     );
 
-    // 6. Persist in a single transaction for atomicity
+    // 6. Compute remainingAmount and derive the live status after recalculation
+    const newRemaining = this.round(Math.max(0, amounts.total - Number(invoice.amountPaid)));
+    const effectiveDueDate = dto.dueDate
+      ? new Date(`${dto.dueDate}T00:00:00.000Z`)
+      : invoice.dueDate;
+    const storedStatus = dto.status ?? invoice.status;
+    const liveStatus = this.computeStatus(storedStatus, newRemaining, effectiveDueDate);
+
+    // 7. Persist in a single transaction for atomicity
     const updated = await this.prisma.$transaction(async (tx) => {
       // Delete existing lines first if a replacement set was supplied
       if (dto.lines) {
@@ -220,19 +358,21 @@ export class InvoiceService {
         where: { id: invoiceId },
         data: {
           // Scalar fields — only written when the caller explicitly provided them
-          ...(dto.status !== undefined && { status: dto.status }),
           ...(dto.dueDate !== undefined && { dueDate: new Date(`${dto.dueDate}T00:00:00.000Z`) }),
           ...(dto.vatRate !== undefined && { vatRate: dto.vatRate }),
           ...(dto.discountType !== undefined && { discountType: dto.discountType }),
           ...(dto.discountValue !== undefined && { discountValue: dto.discountValue }),
           ...(dto.notes !== undefined && { notes: dto.notes }),
 
+          // Always persist the computed live status (covers overdue transitions)
+          status: liveStatus,
+
           // Recalculated totals — always overwritten
           subtotal: amounts.subtotal,
           discountAmount: amounts.discountAmount,
           vatAmount: amounts.vatAmount,
           total: amounts.total,
-          remainingAmount: this.round(amounts.total - Number(invoice.amountPaid)),
+          remainingAmount: newRemaining,
 
           // Replace lines when a new set was supplied (deleteMany ran above)
           ...(dto.lines && {
@@ -257,18 +397,11 @@ export class InvoiceService {
   // ─── CANCEL ───────────────────────────────────────────────────────────────────
 
   async cancel(invoiceId: number, userId: number) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { companyId: true },
-    });
-
-    if (!user?.companyId) {
-      throw new ApiError(MSG.invoice.no_company, 400, 'USER_NO_COMPANY');
-    }
+    const companyId = await this.resolveCompanyId(userId);
 
     const invoice = await this.prisma.invoice.findFirst({
-      where: { id: invoiceId, companyId: user.companyId },
-      include: { lines: { orderBy: { order: 'asc' } } },
+      where: { id: invoiceId, companyId },
+      select: { id: true, status: true },
     });
 
     if (!invoice) {
@@ -295,17 +428,10 @@ export class InvoiceService {
   // ─── ADD PAYMENT ──────────────────────────────────────────────────────────────
 
   async addPayment(invoiceId: number, dto: CreatePaymentDto, userId: number) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { companyId: true },
-    });
-
-    if (!user?.companyId) {
-      throw new ApiError(MSG.invoice.no_company, 400, 'USER_NO_COMPANY');
-    }
+    const companyId = await this.resolveCompanyId(userId);
 
     const invoice = await this.prisma.invoice.findFirst({
-      where: { id: invoiceId, companyId: user.companyId },
+      where: { id: invoiceId, companyId },
       include: { lines: { orderBy: { order: 'asc' } }, payments: true },
     });
 
@@ -343,16 +469,25 @@ export class InvoiceService {
 
       const amountPaid = this.round(Number(aggregate._sum.amount ?? 0));
       const total = this.round(Number(invoice.total));
+
+      // In-transaction overpayment guard — catches races missed by the pre-check
+      if (amountPaid > total) {
+        throw new ApiError(MSG.invoice.payment_exceeds_remaining, 400, 'PAYMENT_EXCEEDS_REMAINING');
+      }
       const remainingAmount = this.round(Math.max(0, total - amountPaid));
 
-      // 3. Derive new status
-      let status = invoice.status;
-      if (amountPaid <= 0) {
-        // no change — keep existing status
-      } else if (amountPaid >= total) {
+      // 3. Derive new status — also applies the overdue rule so the DB stays correct.
+      let status: string;
+      if (amountPaid >= total) {
+        // Fully paid — terminal, nothing else to check.
         status = InvoiceStatus.PAID;
+      } else if (amountPaid > 0) {
+        // Partial payment: the invoice is either "partial" or "overdue" depending
+        // on whether the due date has already passed.
+        status = this.computeStatus(InvoiceStatus.PARTIAL, remainingAmount, invoice.dueDate);
       } else {
-        status = InvoiceStatus.PARTIAL;
+        // No payment at all (edge case — keep existing status but re-check overdue).
+        status = this.computeStatus(invoice.status, remainingAmount, invoice.dueDate);
       }
 
       // 4. Update invoice totals + status
@@ -378,8 +513,17 @@ export class InvoiceService {
    */
   private serialize(invoice: any) {
     const { lines, ...rest } = invoice;
+
+    // Coerce Decimal fields to plain numbers first so computeStatus receives a number.
+    const remainingAmount = Number(rest.remainingAmount);
+
+    // Always derive the live status — overrides whatever is stored in the DB
+    // for invoices whose due date has passed while a balance remains.
+    const status = this.computeStatus(rest.status, remainingAmount, new Date(rest.dueDate));
+
     return {
       ...rest,
+      status,
       vatRate: Number(rest.vatRate),
       discountValue: rest.discountValue != null ? Number(rest.discountValue) : null,
       subtotal: Number(rest.subtotal),
@@ -387,7 +531,7 @@ export class InvoiceService {
       vatAmount: Number(rest.vatAmount),
       total: Number(rest.total),
       amountPaid: Number(rest.amountPaid),
-      remainingAmount: Number(rest.remainingAmount),
+      remainingAmount,
       lines: lines.map((line: any) => ({
         ...line,
         quantity: Number(line.quantity),
@@ -482,6 +626,47 @@ export class InvoiceService {
   /** Rounds a number to 2 decimal places (monetary precision). */
   private round(value: number): number {
     return Math.round(value * 100) / 100;
+  }
+
+  /**
+   * Resolves the companyId for the given user.
+   * Throws 400 USER_NO_COMPANY if the user doesn't exist or has no company.
+   */
+  private async resolveCompanyId(userId: number): Promise<number> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { companyId: true },
+    });
+    if (!user?.companyId) {
+      throw new ApiError(MSG.invoice.no_company, 400, 'USER_NO_COMPANY');
+    }
+    return user.companyId;
+  }
+
+  /**
+   * Returns the effective invoice status, applying the overdue rule.
+   *
+   * Rules (in order):
+   *   1. paid | cancelled → terminal, never change.
+   *   2. remainingAmount > 0 AND dueDate is strictly before today → overdue.
+   *   3. Otherwise → return the stored status unchanged.
+   *
+   * "Today" is midnight UTC so an invoice due today is NOT yet overdue;
+   * it becomes overdue starting tomorrow.
+   */
+  private computeStatus(stored: string, remainingAmount: number, dueDate: Date): string {
+    if (stored === InvoiceStatus.PAID || stored === InvoiceStatus.CANCELLED) {
+      return stored;
+    }
+
+    const todayUtc = new Date();
+    todayUtc.setUTCHours(0, 0, 0, 0);
+
+    if (remainingAmount > 0 && dueDate < todayUtc) {
+      return InvoiceStatus.OVERDUE;
+    }
+
+    return stored;
   }
 
   /**

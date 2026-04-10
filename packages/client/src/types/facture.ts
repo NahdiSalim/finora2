@@ -1,4 +1,9 @@
-export type FactureStatus = "brouillon" | "payee" | "partiel" | "en_retard";
+export type FactureStatus =
+  | "brouillon"
+  | "payee"
+  | "partiel"
+  | "en_retard"
+  | "annulee";
 
 export type DiscountType = "percentage" | "fixed";
 

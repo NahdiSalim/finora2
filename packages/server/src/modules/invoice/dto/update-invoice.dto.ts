@@ -107,6 +107,25 @@ export class UpdateInvoiceDto {
   notes?: string;
 
   @ApiProperty({
+    example: 'Entreprise ABC',
+    required: false,
+    description: 'Nom du client destinataire',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  clientName?: string;
+
+  @ApiProperty({
+    example: '12 avenue de la République, 1002 Tunis',
+    required: false,
+    description: 'Adresse du client destinataire',
+  })
+  @IsString()
+  @IsOptional()
+  clientAddress?: string;
+
+  @ApiProperty({
     type: [UpdateInvoiceLineDto],
     required: false,
     description:

@@ -66,6 +66,8 @@ export class InvoiceService {
           amountPaid: 0,
           remainingAmount: amounts.total,
           notes: dto.notes ?? null,
+          clientName: dto.clientName,
+          clientAddress: dto.clientAddress ?? null,
           companyId,
           createdById: userId,
           lines: {
@@ -254,6 +256,8 @@ export class InvoiceService {
       amountPaid: Number(invoice.amountPaid),
       remainingAmount,
       notes: invoice.notes,
+      clientName: invoice.clientName,
+      clientAddress: invoice.clientAddress ?? null,
       lines: invoice.lines.map((l) => ({
         description: l.description,
         quantity: Number(l.quantity),
@@ -363,6 +367,8 @@ export class InvoiceService {
           ...(dto.discountType !== undefined && { discountType: dto.discountType }),
           ...(dto.discountValue !== undefined && { discountValue: dto.discountValue }),
           ...(dto.notes !== undefined && { notes: dto.notes }),
+          ...(dto.clientName !== undefined && { clientName: dto.clientName }),
+          ...(dto.clientAddress !== undefined && { clientAddress: dto.clientAddress }),
 
           // Always persist the computed live status (covers overdue transitions)
           status: liveStatus,

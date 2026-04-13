@@ -107,6 +107,23 @@ export class CreateInvoiceDto {
   notes?: string;
 
   @ApiProperty({
+    example: 'Entreprise ABC',
+    description: 'Nom du client destinataire',
+  })
+  @IsString()
+  @IsNotEmpty()
+  clientName!: string;
+
+  @ApiProperty({
+    example: '12 avenue de la République, 1002 Tunis',
+    required: false,
+    description: 'Adresse du client destinataire',
+  })
+  @IsString()
+  @IsOptional()
+  clientAddress?: string;
+
+  @ApiProperty({
     type: [CreateInvoiceLineDto],
     description: 'Lignes de produit / service',
   })

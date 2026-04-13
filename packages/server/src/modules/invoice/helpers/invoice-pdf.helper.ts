@@ -37,6 +37,8 @@ export interface InvoicePdfData {
   amountPaid: number;
   remainingAmount: number;
   notes: string | null;
+  clientName: string | null;
+  clientAddress?: string | null;
   lines: PdfLine[];
   company?: PdfCompany | null;
 }
@@ -145,7 +147,7 @@ function drawHeader(doc: PDFKit.PDFDocument, data: InvoicePdfData): void {
 
 // ─── Section: Company + invoice meta ─────────────────────────────────────────
 
-function drawInfoSection(doc: PDFKit.PDFDocument, data: InvoicePdfData): void {
+function drawInfoSection(doc: PDFKit.PDFDocument, data: InvoicePdfData): number {
   const sectionY = HEADER_H + 22;
 
   // ── Left column: emitter ──
@@ -199,6 +201,34 @@ function drawInfoSection(doc: PDFKit.PDFDocument, data: InvoicePdfData): void {
       .text('—', MARGIN, cy, { lineBreak: false });
   }
 
+  // ── DESTINATAIRE block (below emitter in the left column) ──
+  if (data.clientName) {
+    cy += 18;
+
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(8)
+      .fillColor(C.muted)
+      .text('DESTINATAIRE', MARGIN, cy, { lineBreak: false });
+    cy += 14;
+
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(11)
+      .fillColor(C.dark)
+      .text(data.clientName, MARGIN, cy, { width: 230, lineBreak: false });
+    cy += 16;
+
+    if (data.clientAddress) {
+      doc
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor(C.muted)
+        .text(data.clientAddress, MARGIN, cy, { width: 230 });
+      cy = doc.y + 4;
+    }
+  }
+
   // ── Right column: invoice meta ──
   const metaLabelX = RIGHT - 230;
   const metaValueX = RIGHT - 105;
@@ -235,6 +265,8 @@ function drawInfoSection(doc: PDFKit.PDFDocument, data: InvoicePdfData): void {
     .lineWidth(0.75)
     .strokeColor(C.border)
     .stroke();
+
+  return dividerY;
 }
 
 // ─── Section: Line items table ────────────────────────────────────────────────
@@ -447,10 +479,10 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Buffer> 
 
     // ── Draw sections ──
     drawHeader(doc, data);
-    drawInfoSection(doc, data);
+    const infoEndY = drawInfoSection(doc, data);
 
-    // Table starts below info section with a fixed gap
-    const tableY = HEADER_H + 22 + 120; // header + info block height
+    // Table starts just below the info section divider (dynamic — grows with recipient block)
+    const tableY = infoEndY + 16;
     const afterTable = drawLinesTable(doc, data, tableY);
     const afterTotals = drawTotals(doc, data, afterTable);
     drawNotes(doc, data, afterTotals);

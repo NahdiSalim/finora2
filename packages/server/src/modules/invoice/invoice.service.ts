@@ -6,10 +6,14 @@ import { CreateInvoiceDto, DiscountType, InvoiceStatus } from './dto/create-invo
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { generateInvoicePdf } from './helpers/invoice-pdf.helper';
+import { DocumentService } from '../document/document.service';
 
 @Injectable()
 export class InvoiceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly documentService: DocumentService
+  ) {}
 
   // ─── CREATE ───────────────────────────────────────────────────────────────────
 
@@ -266,6 +270,24 @@ export class InvoiceService {
       })),
       company: invoice.company,
     });
+
+    // 5. Save/update the PDF in the Documents module and link it to this invoice.
+    //    - First call: creates a new Document record and writes documentId on the invoice.
+    //    - Subsequent calls: overwrites the MinIO object and updates the existing record.
+    const doc = await this.documentService.saveInvoicePdfDocument(
+      userId,
+      companyId,
+      invoice.invoiceNumber,
+      buffer,
+      invoice.documentId ?? null
+    );
+
+    if (!invoice.documentId) {
+      await this.prisma.invoice.update({
+        where: { id: invoiceId },
+        data: { documentId: doc.id },
+      });
+    }
 
     return { buffer, invoiceNumber: invoice.invoiceNumber };
   }

@@ -90,7 +90,7 @@ export class NotificationService {
     // Extraire les actorIds uniques depuis data JSON
     const parsedNotifications = notifications.map((n) => ({
       ...n,
-      data: n.data ? JSON.parse(n.data as string) : null,
+      data: n.data ? JSON.parse(n.data) : null,
     }));
 
     const actorIds = [

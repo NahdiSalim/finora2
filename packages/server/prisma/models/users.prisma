@@ -99,6 +99,10 @@ model User {
   // Invoices
   invoices              Invoice[] @relation("InvoiceCreatedBy")
 
+  // Devis
+  ownedDevis            Devis[] @relation("DevisOwner")
+  createdDevis          Devis[] @relation("DevisCreatedBy")
+
   @@index([email])
   @@index([companyId])
   @@index([status])

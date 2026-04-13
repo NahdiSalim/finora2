@@ -184,7 +184,7 @@ export class PublicAccountantsController {
     if (authHeader?.startsWith('Bearer ')) {
       try {
         const token = authHeader.slice(7);
-        const payload = this.jwtService.decode(token) as any;
+        const payload = this.jwtService.decode(token);
         if (payload?.sub) clientUserId = Number(payload.sub);
       } catch (e) {
         console.error('[browseAccountants] token decode error:', e?.message);

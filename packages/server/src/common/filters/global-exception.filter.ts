@@ -1,10 +1,4 @@
-import {
-  ArgumentsHost,
-  Catch,
-  ExceptionFilter,
-  Injectable,
-  HttpException,
-} from '@nestjs/common';
+import { ArgumentsHost, Catch, ExceptionFilter, Injectable, HttpException } from '@nestjs/common';
 import { Response } from 'express';
 import { ApiError } from '../errors/api-error';
 interface HttpErrorObject {
@@ -13,7 +7,7 @@ interface HttpErrorObject {
   code?: string;
   status?: string;
   stack?: string;
-  isOperational?: boolean 
+  isOperational?: boolean;
 }
 
 @Catch()

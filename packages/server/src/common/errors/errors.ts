@@ -16,8 +16,7 @@ export const errors = {
     errorCode: 'INVALID_PASSWORD',
   },
   ERR_PROGRAM_HAS_SERVER_ROOT_NOT_FOUND: {
-    message:
-      'Le programme doit être situé dans un sous-dossier du dossier "server"',
+    message: 'Le programme doit être situé dans un sous-dossier du dossier "server"',
     code: 500,
     errorCode: 'ERR_PROGRAM_HAS_SERVER_ROOT_NOT_FOUND',
   },

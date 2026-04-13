@@ -1287,7 +1287,7 @@ export class RequestService {
       } else {
         // Validate that the assignee is an accountant or collaborator
         const assignee = await this.prisma.user.findUnique({
-          where: { id: dto.assignedToId as number },
+          where: { id: dto.assignedToId },
           include: {
             role: {
               select: {
@@ -1410,7 +1410,7 @@ export class RequestService {
           }
         } else {
           // Assigning to an ACCOUNTANT - keep as request
-          updateData.assignedToId = dto.assignedToId as number;
+          updateData.assignedToId = dto.assignedToId;
           // Note: Status is NOT automatically changed per requirement #5
         }
       }

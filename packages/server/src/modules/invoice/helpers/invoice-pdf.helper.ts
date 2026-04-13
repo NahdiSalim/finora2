@@ -1,5 +1,4 @@
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const PDFDocument = require('pdfkit') as typeof import('pdfkit');
+import PDFDocument from 'pdfkit';
 import { PassThrough } from 'stream';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
@@ -116,7 +115,7 @@ const fmtDate = (d: Date | string) =>
 
 // ─── Section: Header bar ──────────────────────────────────────────────────────
 
-function drawHeader(doc: PDFKit.PDFDocument, data: InvoicePdfData): void {
+function drawHeader(doc: InstanceType<typeof PDFDocument>, data: InvoicePdfData): void {
   // Full-width blue bar
   doc.rect(0, 0, PAGE_W, HEADER_H).fill(C.primary);
 
@@ -155,7 +154,7 @@ function drawHeader(doc: PDFKit.PDFDocument, data: InvoicePdfData): void {
 
 // ─── Section: Company + invoice meta ─────────────────────────────────────────
 
-function drawInfoSection(doc: PDFKit.PDFDocument, data: InvoicePdfData): number {
+function drawInfoSection(doc: InstanceType<typeof PDFDocument>, data: InvoicePdfData): number {
   const sectionY = HEADER_H + 22;
 
   // ── Left column: emitter ──
@@ -279,7 +278,11 @@ function drawInfoSection(doc: PDFKit.PDFDocument, data: InvoicePdfData): number 
 
 // ─── Section: Line items table ────────────────────────────────────────────────
 
-function drawLinesTable(doc: PDFKit.PDFDocument, data: InvoicePdfData, startY: number): number {
+function drawLinesTable(
+  doc: InstanceType<typeof PDFDocument>,
+  data: InvoicePdfData,
+  startY: number
+): number {
   let y = startY;
 
   // ── Table header row ──
@@ -349,7 +352,11 @@ function drawLinesTable(doc: PDFKit.PDFDocument, data: InvoicePdfData, startY: n
 
 // ─── Section: Totals ─────────────────────────────────────────────────────────
 
-function drawTotals(doc: PDFKit.PDFDocument, data: InvoicePdfData, startY: number): number {
+function drawTotals(
+  doc: InstanceType<typeof PDFDocument>,
+  data: InvoicePdfData,
+  startY: number
+): number {
   let y = startY + 18;
 
   const labelX = COL.total - 120; // left edge of label column
@@ -419,7 +426,11 @@ function drawTotals(doc: PDFKit.PDFDocument, data: InvoicePdfData, startY: numbe
 
 // ─── Section: Notes ───────────────────────────────────────────────────────────
 
-function drawNotes(doc: PDFKit.PDFDocument, data: InvoicePdfData, startY: number): number {
+function drawNotes(
+  doc: InstanceType<typeof PDFDocument>,
+  data: InvoicePdfData,
+  startY: number
+): number {
   if (!data.notes?.trim()) return startY;
 
   let y = startY + 24;
@@ -446,7 +457,7 @@ function drawNotes(doc: PDFKit.PDFDocument, data: InvoicePdfData, startY: number
 
 // ─── Section: Footer ─────────────────────────────────────────────────────────
 
-function drawFooter(doc: PDFKit.PDFDocument): void {
+function drawFooter(doc: InstanceType<typeof PDFDocument>): void {
   const y = FOOTER_Y; // ≈ 769.89pt — within the usable content area (< PAGE_H - MARGIN = 791.89)
   const generated = new Date().toLocaleDateString('fr-FR', {
     day: '2-digit',

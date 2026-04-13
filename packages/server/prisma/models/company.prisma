@@ -88,6 +88,10 @@ model Company {
   // Invoices
   invoices          Invoice[] @relation("CompanyInvoices")
 
+  // Devis
+  devis             Devis[] @relation("DevisCompany")
+  createdDevis      Devis[] @relation("DevisCreatedByCompany")
+
   @@index([siret])
   @@index([type])
   @@index([status])

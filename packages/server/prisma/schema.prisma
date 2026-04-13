@@ -492,11 +492,12 @@ model Company {
   // Contact Messages
   contactMessages   ContactMessage[] @relation("ContactMessageCompany")
 
+  // Invoices
+  invoices          Invoice[] @relation("CompanyInvoices")
+
   // Devis
   devis             Devis[] @relation("DevisCompany")
   createdDevis      Devis[] @relation("DevisCreatedByCompany")
-  // Invoices
-  invoices          Invoice[] @relation("CompanyInvoices")
 
   @@index([siret])
   @@index([type])
@@ -1347,11 +1348,12 @@ model User {
   // Document Versions
   uploadedVersions      DocumentVersion[] @relation("DocumentVersionUploader")
 
-  // Devis
-  ownedDevis           Devis[] @relation("DevisOwner")
-  createdDevis         Devis[] @relation("DevisCreatedBy")
   // Invoices
   invoices              Invoice[] @relation("InvoiceCreatedBy")
+
+  // Devis
+  ownedDevis            Devis[] @relation("DevisOwner")
+  createdDevis          Devis[] @relation("DevisCreatedBy")
 
   @@index([email])
   @@index([companyId])

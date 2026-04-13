@@ -104,6 +104,14 @@ export class InvoiceController {
     res.end(buffer);
   }
 
+  @Get(':id/payments')
+  @ApiOperation({ summary: 'List all payments for an invoice (ordered by date desc)' })
+  @ApiResponse({ status: 200, description: 'Payment list' })
+  @ApiResponse({ status: 404, description: 'Invoice not found' })
+  async getPayments(@Param('id', ParseIntPipe) id: number, @Req() req: AuthRequest) {
+    return this.invoiceService.getPayments(id, req.user!.id);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a single invoice by id' })
   @ApiResponse({ status: 200, description: 'Invoice detail' })

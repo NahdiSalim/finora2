@@ -532,6 +532,39 @@ export class InvoiceService {
     return this.serializeWithPayments(updated);
   }
 
+  // ─── GET PAYMENTS ─────────────────────────────────────────────────────────────
+
+  async getPayments(invoiceId: number, userId: number) {
+    const companyId = await this.resolveCompanyId(userId);
+
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id: invoiceId, companyId },
+      select: { id: true },
+    });
+
+    if (!invoice) {
+      throw new ApiError(MSG.invoice.not_found, 404, 'INVOICE_NOT_FOUND');
+    }
+
+    const payments = await this.prisma.invoicePayment.findMany({
+      where: { invoiceId },
+      orderBy: { paymentDate: 'desc' },
+      select: {
+        id: true,
+        amount: true,
+        paymentDate: true,
+        method: true,
+        note: true,
+        createdAt: true,
+      },
+    });
+
+    return payments.map((p) => ({
+      ...p,
+      amount: Number(p.amount),
+    }));
+  }
+
   // ─── PRIVATE HELPERS ──────────────────────────────────────────────────────────
 
   /**

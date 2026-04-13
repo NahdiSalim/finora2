@@ -1,4 +1,9 @@
-export type FactureStatus = "brouillon" | "payee" | "partiel" | "en_retard";
+export type FactureStatus =
+  | "brouillon"
+  | "payee"
+  | "partiel"
+  | "en_retard"
+  | "annulee";
 
 export type DiscountType = "percentage" | "fixed";
 
@@ -9,6 +14,16 @@ export interface FactureLine {
   unitPrice: number;
 }
 
+export interface FactureCompany {
+  name: string;
+  legalName: string | null;
+  address: string | null;
+  city: string | null;
+  postalCode: string | null;
+  phone: string | null;
+  email: string | null;
+}
+
 export interface Facture {
   id: number;
   number: string;
@@ -17,6 +32,10 @@ export interface Facture {
   dueDate: string;
   discountType: DiscountType;
   discountValue: number;
+  discountAmount: number | null;
+  clientName: string | null;
+  clientAddress: string | null;
+  company: FactureCompany | null;
   lines: FactureLine[];
   notes: string;
   amountHT: number;
@@ -33,6 +52,8 @@ export interface FactureFormValues {
   dueDate: string;
   discountType: DiscountType;
   discountValue: number;
+  clientName: string;
+  clientAddress: string;
   lines: FactureLine[];
   notes: string;
 }

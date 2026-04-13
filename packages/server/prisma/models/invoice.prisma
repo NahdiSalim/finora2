@@ -1,0 +1,65 @@
+model InvoiceLine {
+  id          Int      @id @default(autoincrement())
+  invoiceId   Int
+  description String
+  quantity    Decimal  @db.Decimal(10, 3)
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  lineTotal   Decimal  @db.Decimal(10, 2)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_lines")
+}
+
+model InvoicePayment {
+  id          Int      @id @default(autoincrement())
+  invoiceId   Int
+  amount      Decimal  @db.Decimal(10, 2)
+  paymentDate DateTime @db.Date
+  method      String
+  note        String?
+  createdAt   DateTime @default(now())
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_payments")
+}
+
+model Invoice {
+  id              Int              @id @default(autoincrement())
+  invoiceNumber   String
+  status          String           @default("draft")
+  dueDate         DateTime         @db.Date
+  vatRate         Decimal          @db.Decimal(5, 2)
+  discountType    String?
+  discountValue   Decimal?         @db.Decimal(10, 2)
+  subtotal        Decimal          @db.Decimal(10, 2)
+  discountAmount  Decimal?         @db.Decimal(10, 2)
+  vatAmount       Decimal          @db.Decimal(10, 2)
+  total           Decimal          @db.Decimal(10, 2)
+  amountPaid      Decimal          @default(0) @db.Decimal(10, 2)
+  remainingAmount Decimal          @default(0) @db.Decimal(10, 2)
+  notes           String?
+  clientName      String?
+  clientAddress   String?
+  companyId       Int
+  createdById     Int
+  documentId      Int?             @unique
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  lines           InvoiceLine[]
+  payments        InvoicePayment[]
+  company         Company          @relation("CompanyInvoices", fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy       User             @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
+  document        Document?        @relation(fields: [documentId], references: [id])
+
+  @@unique([companyId, invoiceNumber])
+  @@index([companyId])
+  @@index([createdById])
+  @@index([dueDate])
+  @@index([status])
+  @@map("invoices")
+}

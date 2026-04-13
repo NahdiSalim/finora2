@@ -85,6 +85,9 @@ model Company {
   // Contact Messages
   contactMessages   ContactMessage[] @relation("ContactMessageCompany")
 
+  // Invoices
+  invoices          Invoice[] @relation("CompanyInvoices")
+
   @@index([siret])
   @@index([type])
   @@index([status])

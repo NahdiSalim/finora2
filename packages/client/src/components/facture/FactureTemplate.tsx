@@ -1,4 +1,4 @@
-import type { Facture } from "src/types/facture";
+import type { Facture, FactureCompany } from "src/types/facture";
 
 const formatAmount = (value: number) =>
   new Intl.NumberFormat("fr-FR", {
@@ -9,19 +9,23 @@ const formatAmount = (value: number) =>
 
 const WEBSITE_LOGO_URL = "/assets/logo-finora.png";
 
-const ISSUER_INFO = {
-  name: "VOTRE NOM DE COMPAGNIE",
-  phone: "123-456-7890",
-  email: "hello@reallygreatsite.com",
-  address: ["123 Anywhere St,", "Any City ST 12345"],
-};
-
-const PAYMENT_INFO = {
-  bank: "Nom de votre banque",
-  account: "123-456-7890",
-};
-
 export const buildFactureTemplate = (facture: Facture): string => {
+  const co: FactureCompany | null = facture.company ?? null;
+
+  // Build issuer lines from company data, skipping nulls
+  const issuerLines = [
+    co?.legalName ?? co?.name ?? null,
+    co?.phone ?? null,
+    co?.email ?? null,
+    co?.address ?? null,
+    [co?.postalCode, co?.city].filter(Boolean).join(" ") || null,
+  ].filter(Boolean) as string[];
+
+  // Build recipient lines from clientName / clientAddress
+  const recipientLines = [
+    facture.clientName ?? null,
+    facture.clientAddress ?? null,
+  ].filter(Boolean) as string[];
   const lineItemsHtml = facture.lines
     .map(
       (line) => `
@@ -99,19 +103,22 @@ export const buildFactureTemplate = (facture: Facture): string => {
           <tr>
             <td style="width: 50%; vertical-align: top; padding-right: 20px;">
               <div class="bold" style="text-transform: uppercase; margin-bottom: 8px; font-size: 11px; letter-spacing: 0.5px;">ÉMETTEUR :</div>
-              <div class="bold" style="font-size: 14px; margin-bottom: 4px;">${ISSUER_INFO.name}</div>
-              <div style="margin-bottom: 2px;">${ISSUER_INFO.phone}</div>
-              <div style="margin-bottom: 2px;">${ISSUER_INFO.email}</div>
-              <div>${ISSUER_INFO.address[0]}</div>
-              <div>${ISSUER_INFO.address[1]}</div>
+              ${issuerLines
+                .map(
+                  (line, i) =>
+                    `<div ${i === 0 ? 'class="bold" style="font-size: 14px; margin-bottom: 4px;"' : 'style="margin-bottom: 2px;"'}>${line}</div>`,
+                )
+                .join("")}
             </td>
             
             <td style="width: 50%; vertical-align: top; text-align: right; padding-left: 20px;">
               <div class="bold" style="text-transform: uppercase; margin-bottom: 8px; font-size: 11px; letter-spacing: 0.5px;">DESTINATAIRE :</div>
-              <div class="bold" style="font-size: 14px; margin-bottom: 4px;">M. NOA ANDRIEUX</div>
-              <div style="margin-bottom: 2px;">hello@reallygreatsite.com</div>
-              <div style="margin-bottom: 2px;">123 Anywhere St,</div>
-              <div>Any City ST 12345</div>
+              ${recipientLines
+                .map(
+                  (line, i) =>
+                    `<div ${i === 0 ? 'class="bold" style="font-size: 14px; margin-bottom: 4px;"' : 'style="margin-bottom: 2px;"'}>${line}</div>`,
+                )
+                .join("")}
             </td>
           </tr>
         </table>
@@ -137,8 +144,6 @@ export const buildFactureTemplate = (facture: Facture): string => {
             <td style="width: 55%; vertical-align: top; padding-right: 20px; font-size: 12px;">
               <div class="bold" style="text-transform: uppercase; margin-bottom: 10px; font-size: 13px; letter-spacing: 0.5px;">RÈGLEMENT :</div>
               <div class="bold" style="margin-bottom: 5px;">Par virement bancaire :</div>
-              <div style="margin-bottom: 3px;">Banque : ${PAYMENT_INFO.bank}</div>
-              <div>Compte : ${PAYMENT_INFO.account}</div>
               <div style="margin-top: 15px; font-size: 10px; color: #6b7280; line-height: 1.4;">
                 En cas de retard de paiement, une indemnité de 10% par jour de retard ainsi que des frais de recouvrement de 40 euros seront exigibles.
               </div>
@@ -154,10 +159,15 @@ export const buildFactureTemplate = (facture: Facture): string => {
                   <td class="bold" style="padding: 6px 0; text-align: right; padding-right: 15px;">TVA (${facture.tvaRate}%) :</td>
                   <td style="padding: 6px 0; text-align: right; white-space: nowrap;">${formatAmount(facture.amountTVA)}</td>
                 </tr>
+                ${
+                  facture.discountAmount != null && facture.discountAmount > 0
+                    ? `
                 <tr>
-                  <td class="bold" style="padding: 6px 0; text-align: right; padding-right: 15px;">REMISE :</td>
-                  <td style="padding: 6px 0; text-align: right; white-space: nowrap;">- DT</td>
-                </tr>
+                  <td class="bold" style="padding: 6px 0; text-align: right; padding-right: 15px;">REMISE${facture.discountType === "percentage" ? ` (${facture.discountValue}%)` : ""} :</td>
+                  <td style="padding: 6px 0; text-align: right; white-space: nowrap;">– ${formatAmount(facture.discountAmount)}</td>
+                </tr>`
+                    : ""
+                }
                 <tr style="border-top: 2px solid #333;">
                   <td class="bold" style="padding: 12px 0 6px 0; text-align: right; padding-right: 15px; font-size: 15px;">TOTAL TTC :</td>
                   <td class="heavy" style="padding: 12px 0 6px 0; text-align: right; font-size: 17px; white-space: nowrap;">${formatAmount(facture.amountTTC)}</td>

@@ -33,6 +33,7 @@ const getStatusConfig = (status: string) => {
     payee: { label: "Payée", color: "#10B981" },
     partiel: { label: "Partiel", color: "#F59E0B" },
     en_retard: { label: "En retard", color: "#EF4444" },
+    annulee: { label: "Annulée", color: "#6B7280" },
   };
   return configs[status] || configs.brouillon;
 };

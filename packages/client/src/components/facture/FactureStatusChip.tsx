@@ -6,6 +6,7 @@ const labelMap: Record<FactureStatus, string> = {
   payee: "Payée",
   partiel: "Partiel",
   en_retard: "En retard",
+  annulee: "Annulée",
 };
 
 const colorMap: Record<
@@ -16,6 +17,7 @@ const colorMap: Record<
   payee: "success",
   partiel: "warning",
   en_retard: "error",
+  annulee: "default",
 };
 
 interface Props {

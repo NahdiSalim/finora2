@@ -1312,6 +1312,91 @@ export class DocumentService {
   }
 
   /**
+   * Save a generated invoice PDF to MinIO and register it as a Document record.
+   *
+   * Called by InvoiceService after PDF generation.
+   * - If the invoice already has a linked document (existingDocumentId), the MinIO object
+   *   is overwritten in-place and the document record is updated (size + url).
+   * - If not, a new Document is created and its ID is returned so the caller can
+   *   write it back to invoice.documentId.
+   *
+   * Category is set to 'facture' so the file appears under the Factures filter in the
+   * Documents module.  extractionStatus is left null because this is a generated PDF —
+   * it does not need AI/OCR processing.
+   */
+  async saveInvoicePdfDocument(
+    userId: number,
+    companyId: number,
+    invoiceNumber: string,
+    buffer: Buffer,
+    existingDocumentId: number | null
+  ): Promise<{ id: number }> {
+    const filename = `${invoiceNumber}.pdf`;
+    console.log(
+      `[DocumentService][DEBUG] saveInvoicePdfDocument called: invoiceNumber=${invoiceNumber}, companyId=${companyId}, userId=${userId}, existingDocumentId=${existingDocumentId}, bufferSize=${buffer.length}`
+    );
+
+    // Resolve the company owner — ownerId must reference the company's owner user.
+    // Fall back to the caller (userId) if the company has no explicit owner set.
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { ownerId: true },
+    });
+    const ownerId = company?.ownerId ?? userId;
+    console.log(
+      `[DocumentService][DEBUG] ownerId resolved: ${ownerId} (company.ownerId=${company?.ownerId})`
+    );
+
+    // Upload (or overwrite) the object in MinIO.
+    // uploadBuffer generates the key: company_<companyId>/factures/<filename>
+    console.log(
+      `[DocumentService][DEBUG] Uploading to MinIO: company_${companyId}/factures/${filename}`
+    );
+    const objectName = await this.minioService.uploadBuffer(
+      companyId,
+      `factures/${filename}`,
+      buffer,
+      'application/pdf'
+    );
+    console.log(`[DocumentService][DEBUG] MinIO upload OK: objectName=${objectName}`);
+
+    // Update the existing document record when the invoice is already linked.
+    if (existingDocumentId) {
+      await this.prisma.document.update({
+        where: { id: existingDocumentId },
+        data: { size: buffer.length, url: objectName },
+      });
+      console.log(`[DocumentService][DEBUG] Updated existing document id=${existingDocumentId}`);
+      return { id: existingDocumentId };
+    }
+
+    // First time: create a new Document record.
+    const doc = await this.prisma.document.create({
+      data: {
+        name: filename,
+        type: 'pdf',
+        mimeType: 'application/pdf',
+        size: buffer.length,
+        url: objectName,
+        category: 'facture',
+        extractionStatus: null, // generated PDF — no extraction needed
+        processingStatus: 'synchronise',
+        ownerId,
+        companyId,
+        createdBy: userId,
+        createdByCompanyId: companyId,
+        isFolder: false,
+        status: 'active',
+      },
+    });
+
+    console.log(
+      `[DocumentService][DEBUG] Document created in DB: id=${doc.id}, companyId=${companyId}, category=facture, status=active`
+    );
+    return { id: doc.id };
+  }
+
+  /**
    * Validate accountant has active relationship with client
    */
   async validateAccountantClientRelationship(

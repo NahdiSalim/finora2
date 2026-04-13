@@ -18,13 +18,22 @@ import { Plus, Trash2, X } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
 import CustomSelect from "src/components/common/CustomSelect";
-import type { Facture, FactureFormValues } from "src/types/facture";
+import type { FactureFormValues } from "src/types/facture";
 import { factureValidationSchema } from "src/validations/facture/facture-validation";
+import { useCreateInvoiceMutation } from "src/lib/services/invoicesApi";
+
+/** Maps frontend French status values to backend English values. */
+const statusToBackend: Record<string, string> = {
+  brouillon: "draft",
+  payee: "paid",
+  partiel: "partial",
+  en_retard: "overdue",
+};
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  onCreate: (facture: Facture) => void;
+  onCreate: () => void;
 }
 
 const formatAmount = (value: number) =>
@@ -60,6 +69,7 @@ const createLine = () => ({
 export default function FactureModal({ open, onClose, onCreate }: Props) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const [createInvoice, { isLoading: isCreating }] = useCreateInvoiceMutation();
 
   const {
     control,
@@ -77,6 +87,8 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
       dueDate: "",
       discountType: "percentage",
       discountValue: 0,
+      clientName: "",
+      clientAddress: "",
       lines: [createLine()],
       notes: "",
     },
@@ -97,27 +109,36 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
       dueDate: "",
       discountType: "percentage",
       discountValue: 0,
+      clientName: "",
+      clientAddress: "",
       lines: [createLine()],
       notes: "",
     });
     onClose();
   };
 
-  const onSubmit = (formValues: FactureFormValues) => {
-    const computed = computeAmounts(formValues);
-    const now = new Date();
-    const id = now.getTime();
-    const facture: Facture = {
-      id,
-      number: `FAC-${now.getFullYear()}-${String(id).slice(-5)}`,
-      ...formValues,
-      ...computed,
-      amountPaid: 0,
-      amountRemaining: computed.amountTTC,
-      createdAt: now.toISOString(),
-    };
-    onCreate(facture);
-    closeAndReset();
+  const onSubmit = async (formValues: FactureFormValues) => {
+    try {
+      await createInvoice({
+        status: statusToBackend[formValues.status] ?? "draft",
+        dueDate: formValues.dueDate,
+        vatRate: formValues.tvaRate,
+        discountType: formValues.discountType,
+        discountValue: formValues.discountValue || undefined,
+        notes: formValues.notes || undefined,
+        clientName: formValues.clientName,
+        clientAddress: formValues.clientAddress || undefined,
+        lines: formValues.lines.map(({ description, quantity, unitPrice }) => ({
+          description,
+          quantity,
+          unitPrice,
+        })),
+      }).unwrap();
+      onCreate();
+      closeAndReset();
+    } catch {
+      // error toast is shown globally by baseQueryWithReauth
+    }
   };
 
   return (
@@ -350,6 +371,22 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
           </Box>
 
           <CustomInput
+            label="Nom du client"
+            placeholder="Nom ou raison sociale du destinataire"
+            {...register("clientName")}
+            error={!!errors.clientName}
+            helperText={errors.clientName?.message}
+          />
+
+          <CustomInput
+            label="Adresse du client"
+            placeholder="Adresse complète du destinataire (optionnel)"
+            {...register("clientAddress")}
+            error={!!errors.clientAddress}
+            helperText={errors.clientAddress?.message}
+          />
+
+          <CustomInput
             label="Notes"
             placeholder="Ajoutez une note ou des conditions spécifiques..."
             {...register("notes")}
@@ -437,7 +474,10 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
             <CustomButton type="button" variant="text" onClick={closeAndReset}>
               Annuler
             </CustomButton>
-            <CustomButton type="submit" disabled={!isValid || isSubmitting}>
+            <CustomButton
+              type="submit"
+              disabled={!isValid || isSubmitting || isCreating}
+            >
               Créer la facture
             </CustomButton>
           </Stack>

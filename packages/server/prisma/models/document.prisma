@@ -32,6 +32,7 @@ model Document {
   
   chatThreads       ChatThread[]
   invoiceMetadata   InvoiceMetadata?
+  invoice           Invoice?
   versions          DocumentVersion[]
 
   currentVersion    Int?     @default(1)

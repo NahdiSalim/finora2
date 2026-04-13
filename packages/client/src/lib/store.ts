@@ -19,6 +19,7 @@ import { appointmentsApi } from "./services/appointmentsApi";
 import { locationApi } from "./services/locationApi";
 import { chatApi } from "./services/chatApi";
 import { notificationsApi } from "./services/notificationsApi";
+import { devisApi } from "./services/devisApi";
 
 const apiMiddlewares = [
   authApi.middleware,
@@ -40,6 +41,7 @@ const apiMiddlewares = [
   locationApi.middleware,
   chatApi.middleware,
   notificationsApi.middleware,
+  devisApi.middleware,
 ];
 
 const apiResetters = [
@@ -61,6 +63,7 @@ const apiResetters = [
   locationApi.util.resetApiState,
   chatApi.util.resetApiState,
   notificationsApi.util.resetApiState,
+  devisApi.util.resetApiState,
 ];
 
 const appReducer = combineReducers({
@@ -84,6 +87,7 @@ const appReducer = combineReducers({
   [locationApi.reducerPath]: locationApi.reducer,
   [chatApi.reducerPath]: chatApi.reducer,
   [notificationsApi.reducerPath]: notificationsApi.reducer,
+  [devisApi.reducerPath]: devisApi.reducer,
 });
 
 const baseStore = configureStore({

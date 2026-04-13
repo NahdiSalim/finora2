@@ -24,12 +24,6 @@ export function useNavigation() {
       });
     }
 
-    // 👇 ajout temporaire pour afficher Messagerie en dev
-    if (import.meta.env.DEV) {
-      allowedPaths.add("/messages");
-      allowedPaths.add("/factures");
-    }
-
     // Determine user role
     const userRole =
       typeof user?.role === "object" ? user?.role?.code : user?.role;
@@ -41,6 +35,17 @@ export function useNavigation() {
     const isCollaboratorOnly =
       userRoleUpper === ROLE_CODES.COLLABORATOR ||
       userRoleUpper === "COLLABORATEUR";
+    const isClient = userRoleUpper === ROLE_CODES.CLIENT;
+
+    // 👇 ajout temporaire pour afficher Messagerie en dev
+    if (import.meta.env.DEV) {
+      allowedPaths.add("/messages");
+      allowedPaths.add("/factures");
+      // Devis is only for clients
+      if (isClient) {
+        allowedPaths.add("/devis");
+      }
+    }
 
     const items: NavItem[] = [];
 

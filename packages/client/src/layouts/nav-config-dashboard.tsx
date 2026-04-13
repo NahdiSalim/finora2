@@ -3,6 +3,7 @@ import {
   Calendar,
   FileBadge2,
   FileText,
+  FileCheck2,
   Folder,
   HandCoins,
   LayoutGrid,
@@ -53,6 +54,10 @@ export const NAV_CONFIG: Record<
   "/factures": {
     title: "Factures",
     icon: <FileBadge2 />,
+  },
+  "/devis": {
+    title: "Devis",
+    icon: <FileCheck2 />,
   },
 
   "/meetings": {

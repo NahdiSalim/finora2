@@ -492,6 +492,10 @@ model Company {
   // Contact Messages
   contactMessages   ContactMessage[] @relation("ContactMessageCompany")
 
+  // Devis
+  devis             Devis[] @relation("DevisCompany")
+  createdDevis      Devis[] @relation("DevisCreatedByCompany")
+
   @@index([siret])
   @@index([type])
   @@index([status])
@@ -554,6 +558,50 @@ model Contract {
   relationships   ClientAccountingFirmRelationship[]
 
   @@index([status])
+}
+
+
+// From devis.prisma
+model Devis {
+  id                Int       @id @default(autoincrement())
+  number            String    @unique // DEV-2026-12345
+  status            String    @default("en_attente") // "en_attente" | "accepte" | "refuse"
+  tvaRate           Float     @default(19)
+  validUntil        DateTime  @db.Date
+  discountType      String    @default("percentage") // "percentage" | "fixed"
+  discountValue     Float     @default(0)
+  lines             Json      // Array of {id, description, quantity, unitPrice}
+  notes             String?   @db.Text
+  
+  // Calculated amounts
+  amountHT          Float
+  amountTVA         Float
+  amountTTC         Float
+  
+  // File storage
+  pdfUrl            String?   // MinIO path to generated PDF
+  
+  // Relations
+  ownerId           Int       // Client who owns this devis
+  companyId         Int       // Client's company
+  createdBy         Int?      // User ID who created this devis
+  createdByCompanyId Int?     // Company ID who created this devis
+  
+  // Timestamps
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Relationships
+  owner             User      @relation("DevisOwner", fields: [ownerId], references: [id])
+  company           Company   @relation("DevisCompany", fields: [companyId], references: [id])
+  createdByUser     User?     @relation("DevisCreatedBy", fields: [createdBy], references: [id])
+  createdByCompany  Company?  @relation("DevisCreatedByCompany", fields: [createdByCompanyId], references: [id])
+  
+  @@index([ownerId])
+  @@index([companyId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("devis")
 }
 
 
@@ -1227,6 +1275,10 @@ model User {
 
   // Document Versions
   uploadedVersions      DocumentVersion[] @relation("DocumentVersionUploader")
+
+  // Devis
+  ownedDevis           Devis[] @relation("DevisOwner")
+  createdDevis         Devis[] @relation("DevisCreatedBy")
 
   @@index([email])
   @@index([companyId])

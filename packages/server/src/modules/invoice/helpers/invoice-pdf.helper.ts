@@ -46,9 +46,17 @@ export interface InvoicePdfData {
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
 const PAGE_W = 595.28; // A4 width in points
+const PAGE_H = 841.89; // A4 height in points
 const MARGIN = 50;
 const RIGHT = PAGE_W - MARGIN; // 545.28 — right edge of content
 const CONT_W = RIGHT - MARGIN; // 495.28 — usable content width
+
+/**
+ * Footer Y — anchored to the page bottom so it always sits inside the content
+ * area regardless of PDFKit's bottom margin (50pt).
+ * PAGE_H - MARGIN - 22 ≈ 770pt  <  usable bottom (PAGE_H - MARGIN = 791.89pt).
+ */
+const FOOTER_Y = PAGE_H - MARGIN - 22; // ≈ 769.89pt
 
 /**
  * Absolute X positions of each table column.
@@ -439,7 +447,7 @@ function drawNotes(doc: PDFKit.PDFDocument, data: InvoicePdfData, startY: number
 // ─── Section: Footer ─────────────────────────────────────────────────────────
 
 function drawFooter(doc: PDFKit.PDFDocument): void {
-  const y = 808;
+  const y = FOOTER_Y; // ≈ 769.89pt — within the usable content area (< PAGE_H - MARGIN = 791.89)
   const generated = new Date().toLocaleDateString('fr-FR', {
     day: '2-digit',
     month: 'long',

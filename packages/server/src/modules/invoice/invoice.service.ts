@@ -53,12 +53,18 @@ export class InvoiceService {
     // 4. Calculate all amounts from lines + VAT + discount
     const amounts = this.calculateAmounts(dto);
 
+    // If the caller creates the invoice already marked as paid, treat the full
+    // total as collected so amountPaid / remainingAmount stay consistent.
+    const initialStatus = dto.status ?? 'draft';
+    const initialPaid = initialStatus === InvoiceStatus.PAID ? amounts.total : 0;
+    const initialRemaining = this.round(amounts.total - initialPaid);
+
     // 5. Create invoice + nested lines in a single transaction
     try {
       const invoice = await this.prisma.invoice.create({
         data: {
           invoiceNumber,
-          status: dto.status ?? 'draft',
+          status: initialStatus,
           dueDate: new Date(dto.dueDate + 'T00:00:00.000Z'),
           vatRate: dto.vatRate,
           discountType: dto.discountType ?? null,
@@ -67,8 +73,8 @@ export class InvoiceService {
           discountAmount: amounts.discountAmount,
           vatAmount: amounts.vatAmount,
           total: amounts.total,
-          amountPaid: 0,
-          remainingAmount: amounts.total,
+          amountPaid: initialPaid,
+          remainingAmount: initialRemaining,
           notes: dto.notes ?? null,
           clientName: dto.clientName,
           clientAddress: dto.clientAddress ?? null,
@@ -88,6 +94,24 @@ export class InvoiceService {
           lines: { orderBy: { order: 'asc' } },
         },
       });
+
+      // Fire-and-forget: generate PDF and create the Document entry immediately
+      // so the invoice is visible in "Mes documents" right after creation.
+      // generatePdf() already wraps the MinIO/DB save in its own try-catch,
+      // so any storage failure is logged but never propagates here.
+      console.log(
+        `[InvoiceService][DEBUG] Starting auto PDF sync for invoice ${invoice.invoiceNumber} (id=${invoice.id}, userId=${userId})`
+      );
+      this.generatePdf(invoice.id, userId)
+        .then(() =>
+          console.log(
+            `[InvoiceService][DEBUG] Auto PDF sync completed for ${invoice.invoiceNumber}`
+          )
+        )
+        .catch((err) => {
+          console.error(`[InvoiceService] Auto PDF sync failed for ${invoice.invoiceNumber}:`, err);
+        });
+
       return this.serialize(invoice);
     } catch (err: any) {
       if (err?.code === 'P2002') {
@@ -177,6 +201,17 @@ export class InvoiceService {
         take: safePageSize,
         include: {
           lines: { orderBy: { order: 'asc' } },
+          company: {
+            select: {
+              name: true,
+              legalName: true,
+              address: true,
+              city: true,
+              postalCode: true,
+              phone: true,
+              email: true,
+            },
+          },
         },
       }),
       this.prisma.invoice.count({ where }),
@@ -272,21 +307,31 @@ export class InvoiceService {
     });
 
     // 5. Save/update the PDF in the Documents module and link it to this invoice.
-    //    - First call: creates a new Document record and writes documentId on the invoice.
-    //    - Subsequent calls: overwrites the MinIO object and updates the existing record.
-    const doc = await this.documentService.saveInvoicePdfDocument(
-      userId,
-      companyId,
-      invoice.invoiceNumber,
-      buffer,
-      invoice.documentId ?? null
-    );
+    //    Wrapped in try/catch so that a MinIO misconfiguration or any other
+    //    storage error never blocks the PDF download — the buffer is already
+    //    built and must always reach the client.
+    try {
+      const doc = await this.documentService.saveInvoicePdfDocument(
+        userId,
+        companyId,
+        invoice.invoiceNumber,
+        buffer,
+        invoice.documentId ?? null
+      );
 
-    if (!invoice.documentId) {
-      await this.prisma.invoice.update({
-        where: { id: invoiceId },
-        data: { documentId: doc.id },
-      });
+      if (!invoice.documentId) {
+        await this.prisma.invoice.update({
+          where: { id: invoiceId },
+          data: { documentId: doc.id },
+        });
+      }
+    } catch (syncErr: any) {
+      // Log the full error so MinIO/DB failures are visible in server logs.
+      // We do NOT rethrow — the PDF buffer is already built and must reach the client.
+      console.error(
+        `[InvoiceService] PDF document sync failed for invoice ${invoice.invoiceNumber}:`,
+        syncErr
+      );
     }
 
     return { buffer, invoiceNumber: invoice.invoiceNumber };

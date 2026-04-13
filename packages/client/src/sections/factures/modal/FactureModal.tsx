@@ -87,6 +87,8 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
       dueDate: "",
       discountType: "percentage",
       discountValue: 0,
+      clientName: "",
+      clientAddress: "",
       lines: [createLine()],
       notes: "",
     },
@@ -107,6 +109,8 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
       dueDate: "",
       discountType: "percentage",
       discountValue: 0,
+      clientName: "",
+      clientAddress: "",
       lines: [createLine()],
       notes: "",
     });
@@ -122,6 +126,8 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
         discountType: formValues.discountType,
         discountValue: formValues.discountValue || undefined,
         notes: formValues.notes || undefined,
+        clientName: formValues.clientName,
+        clientAddress: formValues.clientAddress || undefined,
         lines: formValues.lines.map(({ description, quantity, unitPrice }) => ({
           description,
           quantity,
@@ -363,6 +369,22 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
               ))}
             </Stack>
           </Box>
+
+          <CustomInput
+            label="Nom du client"
+            placeholder="Nom ou raison sociale du destinataire"
+            {...register("clientName")}
+            error={!!errors.clientName}
+            helperText={errors.clientName?.message}
+          />
+
+          <CustomInput
+            label="Adresse du client"
+            placeholder="Adresse complète du destinataire (optionnel)"
+            {...register("clientAddress")}
+            error={!!errors.clientAddress}
+            helperText={errors.clientAddress?.message}
+          />
 
           <CustomInput
             label="Notes"

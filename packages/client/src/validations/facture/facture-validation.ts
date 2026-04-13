@@ -37,4 +37,8 @@ export const factureValidationSchema = Yup.object({
     .min(1, "Ajoutez au moins une ligne de produit")
     .required(),
   notes: Yup.string().max(2000, "La note ne peut pas dépasser 2000 caractères"),
+  clientName: Yup.string()
+    .required("Le nom du client est requis")
+    .max(200, "Le nom du client est trop long"),
+  clientAddress: Yup.string().max(500, "L'adresse est trop longue"),
 });

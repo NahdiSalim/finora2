@@ -1332,15 +1332,33 @@ export class DocumentService {
     existingDocumentId: number | null
   ): Promise<{ id: number }> {
     const filename = `${invoiceNumber}.pdf`;
+    console.log(
+      `[DocumentService][DEBUG] saveInvoicePdfDocument called: invoiceNumber=${invoiceNumber}, companyId=${companyId}, userId=${userId}, existingDocumentId=${existingDocumentId}, bufferSize=${buffer.length}`
+    );
+
+    // Resolve the company owner — ownerId must reference the company's owner user.
+    // Fall back to the caller (userId) if the company has no explicit owner set.
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { ownerId: true },
+    });
+    const ownerId = company?.ownerId ?? userId;
+    console.log(
+      `[DocumentService][DEBUG] ownerId resolved: ${ownerId} (company.ownerId=${company?.ownerId})`
+    );
 
     // Upload (or overwrite) the object in MinIO.
     // uploadBuffer generates the key: company_<companyId>/factures/<filename>
+    console.log(
+      `[DocumentService][DEBUG] Uploading to MinIO: company_${companyId}/factures/${filename}`
+    );
     const objectName = await this.minioService.uploadBuffer(
       companyId,
       `factures/${filename}`,
       buffer,
       'application/pdf'
     );
+    console.log(`[DocumentService][DEBUG] MinIO upload OK: objectName=${objectName}`);
 
     // Update the existing document record when the invoice is already linked.
     if (existingDocumentId) {
@@ -1348,6 +1366,7 @@ export class DocumentService {
         where: { id: existingDocumentId },
         data: { size: buffer.length, url: objectName },
       });
+      console.log(`[DocumentService][DEBUG] Updated existing document id=${existingDocumentId}`);
       return { id: existingDocumentId };
     }
 
@@ -1362,7 +1381,7 @@ export class DocumentService {
         category: 'facture',
         extractionStatus: null, // generated PDF — no extraction needed
         processingStatus: 'synchronise',
-        ownerId: userId,
+        ownerId,
         companyId,
         createdBy: userId,
         createdByCompanyId: companyId,
@@ -1371,6 +1390,9 @@ export class DocumentService {
       },
     });
 
+    console.log(
+      `[DocumentService][DEBUG] Document created in DB: id=${doc.id}, companyId=${companyId}, category=facture, status=active`
+    );
     return { id: doc.id };
   }
 

@@ -97,6 +97,16 @@ export interface InvoiceLine {
   order: number;
 }
 
+export interface InvoiceCompany {
+  name: string;
+  legalName: string | null;
+  address: string | null;
+  city: string | null;
+  postalCode: string | null;
+  phone: string | null;
+  email: string | null;
+}
+
 export interface Invoice {
   id: number;
   invoiceNumber: string;
@@ -113,11 +123,14 @@ export interface Invoice {
   amountPaid: number;
   remainingAmount: number;
   notes: string | null;
+  clientName: string | null;
+  clientAddress: string | null;
   companyId: number;
   createdById: number;
   createdAt: string;
   updatedAt: string;
   lines: InvoiceLine[];
+  company: InvoiceCompany | null;
 }
 
 export interface GetInvoicesResponse {
@@ -142,6 +155,8 @@ export interface CreateInvoiceRequest {
   discountType?: string;
   discountValue?: number;
   notes?: string;
+  clientName: string;
+  clientAddress?: string;
   lines: CreateInvoiceLineRequest[];
 }
 

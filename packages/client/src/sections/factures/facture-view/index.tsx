@@ -58,6 +58,11 @@ function invoiceToFacture(inv: Invoice): Facture {
     dueDate: inv.dueDate,
     discountType: (inv.discountType ?? "percentage") as DiscountType,
     discountValue: Number(inv.discountValue ?? 0),
+    discountAmount:
+      inv.discountAmount != null ? Number(inv.discountAmount) : null,
+    clientName: inv.clientName ?? null,
+    clientAddress: inv.clientAddress ?? null,
+    company: inv.company ?? null,
     lines: inv.lines.map((l) => ({
       id: String(l.id),
       description: l.description,

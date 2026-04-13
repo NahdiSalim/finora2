@@ -249,18 +249,26 @@ export function FileCard({
           borderRadius: 2,
         }}
       >
-        {/* PDF embed */}
+        {/* PDF thumbnail — iframe narrow enough that the A4 page fills/overflows its
+            width at any browser zoom (75-100%), eliminating side gray space.
+            scale = card_inner_width(184px) / iframe_width(480px) = 0.383.
+            Hash params (#toolbar=0 etc.) are silently ignored for blob: URLs
+            by Chrome, so we omit them. */}
         {hasContentPreview && isPdf && previewContentUrl && (
           <Box sx={{ position: "absolute", inset: 0, overflow: "hidden" }}>
-            <embed
+            <Box
+              component="iframe"
+              title={file.name}
               src={previewContentUrl}
-              type="application/pdf"
-              style={{
+              sx={{
                 position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
+                top: 0,
+                left: 0,
+                width: 480,
+                height: 1000,
                 border: "none",
+                transformOrigin: "top left",
+                transform: "scale(0.383)",
                 pointerEvents: "none",
               }}
             />

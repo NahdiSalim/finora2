@@ -132,15 +132,18 @@ export default function FactureView() {
   // ── Debounce search → resets list and page after typing stops ────────────
   /**
    * Fires 400 ms after the user stops typing.
-   * Skipped on the initial mount (isMounted guard) so the first API response
-   * is never wiped by the debounce timer firing with the empty initial value.
+   *
+   * prevSearchRef is initialized to the same value as `search` ("").
+   * On mount — including React Strict Mode's double-invocation — prevSearch
+   * equals search so the effect exits early without scheduling a timer.
+   * This replaces the previous isMountedRef pattern, which broke under Strict
+   * Mode: the second invocation saw isMounted=true and scheduled a ghost timer
+   * that cleared allInvoices 400 ms after mount.
    */
-  const isMountedRef = useRef(false);
+  const prevSearchRef = useRef(search);
   useEffect(() => {
-    if (!isMountedRef.current) {
-      isMountedRef.current = true;
-      return () => {};
-    }
+    if (prevSearchRef.current === search) return () => {};
+    prevSearchRef.current = search;
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
       setCurrentPage(1);

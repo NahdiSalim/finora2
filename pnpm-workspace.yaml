@@ -14,3 +14,4 @@ onlyBuiltDependencies:
   - bcrypt
   - esbuild
   - prisma
+  - puppeteer

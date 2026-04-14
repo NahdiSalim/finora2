@@ -499,6 +499,9 @@ model Company {
   devis             Devis[] @relation("DevisCompany")
   createdDevis      Devis[] @relation("DevisCreatedByCompany")
 
+  // Suppliers
+  suppliers         Supplier[] @relation("CompanySuppliers")
+
   @@index([siret])
   @@index([type])
   @@index([status])
@@ -1360,3 +1363,25 @@ model User {
   @@index([status])
 }
 
+
+
+// Suppliers (fournisseurs) — owned by CLIENT companies
+model Supplier {
+  id          Int       @id @default(autoincrement())
+  name        String
+  company     String
+  email       String
+  phone       String
+  address     String?
+  taxId       String?
+  logoUrl     String?
+  companyId   Int
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  ownerCompany Company   @relation("CompanySuppliers", fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("suppliers")
+}

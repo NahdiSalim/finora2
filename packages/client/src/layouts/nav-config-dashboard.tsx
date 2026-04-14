@@ -10,6 +10,7 @@ import {
   List,
   MessageSquareMore,
   Share2,
+  Store,
   User,
   Users,
 } from "lucide-react";
@@ -93,5 +94,10 @@ export const NAV_CONFIG: Record<
   "/tasks": {
     title: "Mes tâches",
     icon: <Folder />,
+  },
+
+  "/suppliers": {
+    title: "Fournisseurs",
+    icon: <Store />,
   },
 };

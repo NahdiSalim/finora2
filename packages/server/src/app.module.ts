@@ -27,6 +27,7 @@ import { RelationshipModule } from './modules/relationship/relationship.module';
 import { LocationModule } from './modules/location/location.module';
 import { DevisModule } from './modules/devis/devis.module';
 import { InvoiceModule } from './modules/invoice/invoice.module';
+import { SupplierModule } from './modules/supplier/supplier.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { InvoiceModule } from './modules/invoice/invoice.module';
     LocationModule,
     DevisModule,
     InvoiceModule,
+    SupplierModule,
   ],
   controllers: [AppController],
   providers: [

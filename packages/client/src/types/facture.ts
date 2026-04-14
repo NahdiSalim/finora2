@@ -1,59 +1,62 @@
 export type FactureStatus =
-  | "brouillon"
-  | "payee"
-  | "partiel"
-  | "en_retard"
-  | "annulee";
+  | "draft"
+  | "sent"
+  | "paid"
+  | "partial"
+  | "overdue"
+  | "cancelled";
 
 export type DiscountType = "percentage" | "fixed";
 
 export interface FactureLine {
-  id: string;
+  id?: number;
   description: string;
   quantity: number;
   unitPrice: number;
-}
-
-export interface FactureCompany {
-  name: string;
-  legalName: string | null;
-  address: string | null;
-  city: string | null;
-  postalCode: string | null;
-  phone: string | null;
-  email: string | null;
+  lineTotal?: number;
 }
 
 export interface Facture {
   id: number;
-  number: string;
+  number?: string; // UI property for invoice number
+  invoiceNumber?: string; // Backend property
   status: FactureStatus;
-  tvaRate: number;
   dueDate: string;
-  discountType: DiscountType;
-  discountValue: number;
+  tvaRate?: number; // UI property for VAT rate
+  vatRate?: number; // Backend property
+  discountType: DiscountType | null;
+  discountValue: number | null;
+  amountHT?: number; // UI property for subtotal
+  subtotal?: number; // Backend property
   discountAmount: number | null;
+  amountTVA?: number; // UI property for VAT amount
+  vatAmount?: number; // Backend property
+  amountTTC?: number; // UI property for total
+  total?: number; // Backend property
+  amountPaid?: number; // UI property for amount paid
+  amountRemaining?: number; // UI property for remaining amount
+  remainingAmount?: number; // Backend property
+  notes: string | null;
   clientName: string | null;
   clientAddress: string | null;
-  company: FactureCompany | null;
-  lines: FactureLine[];
-  notes: string;
-  amountHT: number;
-  amountTVA: number;
-  amountTTC: number;
-  amountPaid: number;
-  amountRemaining: number;
+  company?: any;
+  companyId?: number;
+  createdById?: number;
+  documentId?: number | null;
   createdAt: string;
+  updatedAt?: string;
+  lines: FactureLine[];
+  pdfUrl?: string;
 }
 
 export interface FactureFormValues {
-  status: FactureStatus;
-  tvaRate: number;
+  status?: FactureStatus;
   dueDate: string;
-  discountType: DiscountType;
-  discountValue: number;
-  clientName: string;
-  clientAddress: string;
+  vatRate: number;
+  discountType?: DiscountType;
+  discountValue?: number;
   lines: FactureLine[];
-  notes: string;
+  notes?: string;
+  clientName?: string;
+  clientAddress?: string;
 }

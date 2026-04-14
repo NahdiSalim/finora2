@@ -1,14 +1,17 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { InvoiceController } from './invoice.controller';
 import { InvoiceService } from './invoice.service';
-import { PrismaModule } from '../../../prisma/prisma.module';
-import { AuthModule } from '../auth/auth.module';
-import { DocumentModule } from '../document/document.module';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { MinioService } from '../../common/services/minio.service';
+import { AuthService } from '../auth/auth.service';
+import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
+import { MailService } from '../mail/mail.service';
 
 @Module({
-  imports: [PrismaModule, AuthModule, forwardRef(() => DocumentModule)],
+  imports: [PassportModule, JwtModule.register({})],
   controllers: [InvoiceController],
-  providers: [InvoiceService],
+  providers: [InvoiceService, PrismaService, MinioService, AuthService, MailService],
   exports: [InvoiceService],
 })
 export class InvoiceModule {}

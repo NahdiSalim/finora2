@@ -2,22 +2,24 @@ import { Chip } from "@mui/material";
 import type { FactureStatus } from "src/types/facture";
 
 const labelMap: Record<FactureStatus, string> = {
-  brouillon: "Brouillon",
-  payee: "Payée",
-  partiel: "Partiel",
-  en_retard: "En retard",
-  annulee: "Annulée",
+  draft: "Brouillon",
+  sent: "Envoyée",
+  paid: "Payée",
+  partial: "Partiel",
+  overdue: "En retard",
+  cancelled: "Annulée",
 };
 
 const colorMap: Record<
   FactureStatus,
   "default" | "success" | "warning" | "error"
 > = {
-  brouillon: "default",
-  payee: "success",
-  partiel: "warning",
-  en_retard: "error",
-  annulee: "default",
+  draft: "default",
+  sent: "default",
+  paid: "success",
+  partial: "warning",
+  overdue: "error",
+  cancelled: "default",
 };
 
 interface Props {

@@ -31,20 +31,20 @@ import ViewFactureDrawer from "../drawer/ViewFactureDrawer";
 // ─── Status mappings ──────────────────────────────────────────────────────────
 
 const backendStatusMap: Record<string, FactureStatus> = {
-  draft: "brouillon",
-  sent: "brouillon",
-  paid: "payee",
-  partial: "partiel",
-  overdue: "en_retard",
-  cancelled: "annulee",
+  draft: "draft",
+  sent: "sent",
+  paid: "paid",
+  partial: "partial",
+  overdue: "overdue",
+  cancelled: "cancelled",
 };
 
 const uiStatusToBackend: Record<string, string | undefined> = {
   all: undefined,
-  brouillon: "draft,sent",
-  payee: "paid",
-  partiel: "partial",
-  en_retard: "overdue",
+  draft: "draft,sent",
+  paid: "paid",
+  partial: "partial",
+  overdue: "overdue",
 };
 
 // ─── Mapper ───────────────────────────────────────────────────────────────────
@@ -53,7 +53,7 @@ function invoiceToFacture(inv: Invoice): Facture {
   return {
     id: inv.id,
     number: inv.invoiceNumber,
-    status: backendStatusMap[inv.status] ?? "brouillon",
+    status: backendStatusMap[inv.status] ?? "draft",
     tvaRate: Number(inv.vatRate),
     dueDate: inv.dueDate,
     discountType: (inv.discountType ?? "percentage") as DiscountType,
@@ -64,7 +64,7 @@ function invoiceToFacture(inv: Invoice): Facture {
     clientAddress: inv.clientAddress ?? null,
     company: inv.company ?? null,
     lines: inv.lines.map((l) => ({
-      id: String(l.id),
+      id: l.id,
       description: l.description,
       quantity: Number(l.quantity),
       unitPrice: Number(l.unitPrice),
@@ -93,10 +93,10 @@ const formatAmount = (value: number) =>
 
 const statusTabs: Array<{ id: "all" | FactureStatus; label: string }> = [
   { id: "all", label: "Toutes" },
-  { id: "brouillon", label: "Brouillon" },
-  { id: "payee", label: "Payée" },
-  { id: "partiel", label: "Partiel" },
-  { id: "en_retard", label: "En retard" },
+  { id: "draft", label: "Brouillon" },
+  { id: "paid", label: "Payée" },
+  { id: "partial", label: "Partiel" },
+  { id: "overdue", label: "En retard" },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -380,7 +380,7 @@ export default function FactureView() {
       align: "right",
       render: (f) => (
         <Typography variant="body2" fontWeight={500} sx={{ pr: 1.5 }}>
-          {formatAmount(f.amountHT)}
+          {formatAmount(f.amountHT ?? 0)}
         </Typography>
       ),
     },
@@ -391,7 +391,7 @@ export default function FactureView() {
       align: "right",
       render: (f) => (
         <Typography variant="body2" fontWeight={700} sx={{ pr: 1.5 }}>
-          {formatAmount(f.amountTTC)}
+          {formatAmount(f.amountTTC ?? 0)}
         </Typography>
       ),
     },
@@ -415,10 +415,10 @@ export default function FactureView() {
         <Typography
           variant="body2"
           fontWeight={700}
-          color={f.amountRemaining > 0 ? "error.main" : "success.main"}
+          color={(f.amountRemaining ?? 0) > 0 ? "error.main" : "success.main"}
           sx={{ pr: 1.5 }}
         >
-          {formatAmount(f.amountRemaining)}
+          {formatAmount(f.amountRemaining ?? 0)}
         </Typography>
       ),
     },
@@ -559,7 +559,7 @@ export default function FactureView() {
                         {new Date(facture.dueDate).toLocaleDateString("fr-FR")}
                       </Typography>
                       <Typography variant="subtitle2" fontWeight={700}>
-                        TTC: {formatAmount(facture.amountTTC)}
+                        TTC: {formatAmount(facture.amountTTC ?? 0)}
                       </Typography>
                     </Box>
                     <Stack direction="row" spacing={1}>

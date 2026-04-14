@@ -459,7 +459,7 @@ export const routesSection: RouteObject[] = [
           {
             path: "factures",
             element: (
-              <PermissionGuard requiredPath="/requests">
+              <PermissionGuard requiredPath="/factures" allowForRole="CLIENT">
                 <FacturesPage />
               </PermissionGuard>
             ),

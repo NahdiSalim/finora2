@@ -18,16 +18,18 @@ import { Plus, Trash2, X } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
 import CustomSelect from "src/components/common/CustomSelect";
-import type { FactureFormValues } from "src/types/facture";
+import type { FactureFormValues, FactureLine } from "src/types/facture";
 import { factureValidationSchema } from "src/validations/facture/facture-validation";
 import { useCreateInvoiceMutation } from "src/lib/services/invoicesApi";
 
-/** Maps frontend French status values to backend English values. */
+/** Maps frontend status values to backend values. */
 const statusToBackend: Record<string, string> = {
-  brouillon: "draft",
-  payee: "paid",
-  partiel: "partial",
-  en_retard: "overdue",
+  draft: "draft",
+  sent: "sent",
+  paid: "paid",
+  partial: "partial",
+  overdue: "overdue",
+  cancelled: "cancelled",
 };
 
 interface Props {
@@ -53,14 +55,13 @@ function computeAmounts(values: FactureFormValues) {
       ? (subtotal * (values.discountValue || 0)) / 100
       : values.discountValue || 0;
   const amountHT = Math.max(subtotal - discount, 0);
-  const amountTVA = (amountHT * (values.tvaRate || 0)) / 100;
+  const amountTVA = (amountHT * (values.vatRate || 0)) / 100;
   const amountTTC = amountHT + amountTVA;
 
   return { amountHT, amountTVA, amountTTC };
 }
 
-const createLine = () => ({
-  id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+const createLine = (): FactureLine => ({
   description: "",
   quantity: 1,
   unitPrice: 0,
@@ -82,8 +83,8 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
     resolver: yupResolver(factureValidationSchema) as never,
     mode: "onChange",
     defaultValues: {
-      status: "brouillon",
-      tvaRate: 19,
+      status: "draft",
+      vatRate: 19,
       dueDate: "",
       discountType: "percentage",
       discountValue: 0,
@@ -104,8 +105,8 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
 
   const closeAndReset = () => {
     reset({
-      status: "brouillon",
-      tvaRate: 19,
+      status: "draft",
+      vatRate: 19,
       dueDate: "",
       discountType: "percentage",
       discountValue: 0,
@@ -120,13 +121,13 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
   const onSubmit = async (formValues: FactureFormValues) => {
     try {
       await createInvoice({
-        status: statusToBackend[formValues.status] ?? "draft",
+        status: statusToBackend[formValues.status ?? "draft"] ?? "draft",
         dueDate: formValues.dueDate,
-        vatRate: formValues.tvaRate,
+        vatRate: formValues.vatRate,
         discountType: formValues.discountType,
         discountValue: formValues.discountValue || undefined,
         notes: formValues.notes || undefined,
-        clientName: formValues.clientName,
+        clientName: formValues.clientName ?? "",
         clientAddress: formValues.clientAddress || undefined,
         lines: formValues.lines.map(({ description, quantity, unitPrice }) => ({
           description,
@@ -205,10 +206,11 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
                   error={!!errors.status}
                   helperText={errors.status?.message}
                 >
-                  <MenuItem value="brouillon">Brouillon</MenuItem>
-                  <MenuItem value="payee">Payée</MenuItem>
-                  <MenuItem value="partiel">Partiel</MenuItem>
-                  <MenuItem value="en_retard">En retard</MenuItem>
+                  <MenuItem value="draft">Brouillon</MenuItem>
+                  <MenuItem value="sent">Envoyée</MenuItem>
+                  <MenuItem value="paid">Payée</MenuItem>
+                  <MenuItem value="partial">Partiel</MenuItem>
+                  <MenuItem value="overdue">En retard</MenuItem>
                 </CustomSelect>
               )}
             />
@@ -225,9 +227,9 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
             <CustomInput
               label="TVA (%)"
               type="number"
-              {...register("tvaRate", { valueAsNumber: true })}
-              error={!!errors.tvaRate}
-              helperText={errors.tvaRate?.message}
+              {...register("vatRate", { valueAsNumber: true })}
+              error={!!errors.vatRate}
+              helperText={errors.vatRate?.message}
             />
 
             <Controller

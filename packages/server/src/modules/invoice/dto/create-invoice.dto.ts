@@ -1,135 +1,83 @@
-import { ApiProperty } from '@nestjs/swagger';
 import {
   IsString,
-  IsNotEmpty,
-  IsOptional,
-  IsEnum,
   IsNumber,
+  IsDateString,
   IsArray,
+  IsOptional,
+  IsIn,
   Min,
   Max,
-  ArrayMinSize,
   ValidateNested,
-  Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiProperty } from '@nestjs/swagger';
 
-const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
-
-export enum InvoiceStatus {
-  DRAFT = 'draft',
-  SENT = 'sent',
-  PAID = 'paid',
-  PARTIAL = 'partial',
-  OVERDUE = 'overdue',
-  CANCELLED = 'cancelled',
-}
-
-export enum DiscountType {
-  PERCENTAGE = 'percentage',
-  FIXED = 'fixed',
-}
-
-export class CreateInvoiceLineDto {
-  @ApiProperty({ example: 'Conseil en comptabilité', description: 'Description de la ligne' })
+export class InvoiceLineDto {
+  @ApiProperty()
   @IsString()
-  @IsNotEmpty()
-  description!: string;
+  description: string;
 
-  @ApiProperty({ example: 2, description: 'Quantité' })
-  @IsNumber({ maxDecimalPlaces: 3 })
-  @Min(0.001, { message: 'La quantité doit être supérieure à 0' })
-  quantity!: number;
+  @ApiProperty()
+  @IsNumber()
+  @Min(0.001)
+  quantity: number;
 
-  @ApiProperty({ example: 150.0, description: 'Prix unitaire HT' })
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0, { message: 'Le prix unitaire ne peut pas être négatif' })
-  unitPrice!: number;
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  unitPrice: number;
 }
 
 export class CreateInvoiceDto {
   @ApiProperty({
-    example: InvoiceStatus.DRAFT,
-    enum: InvoiceStatus,
-    default: InvoiceStatus.DRAFT,
+    enum: ['draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled'],
     required: false,
-    description: 'Statut de la facture',
   })
-  @IsEnum(InvoiceStatus)
   @IsOptional()
-  status?: InvoiceStatus;
-
-  @ApiProperty({
-    example: '2026-05-15',
-    description: "Date d'échéance (YYYY-MM-DD)",
-  })
   @IsString()
-  @IsNotEmpty()
-  @Matches(DATE_REGEX, { message: 'dueDate doit être au format YYYY-MM-DD' })
-  dueDate!: string;
+  @IsIn(['draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled'])
+  status?: string;
 
-  @ApiProperty({
-    example: 19,
-    description: 'Taux de TVA en pourcentage (ex: 19)',
-  })
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0, { message: 'Le taux de TVA ne peut pas être négatif' })
-  @Max(100, { message: 'Le taux de TVA ne peut pas dépasser 100%' })
-  vatRate!: number;
+  @ApiProperty()
+  @IsDateString()
+  dueDate: string;
 
-  @ApiProperty({
-    example: DiscountType.PERCENTAGE,
-    enum: DiscountType,
-    required: false,
-    description: 'Type de remise',
-  })
-  @IsEnum(DiscountType)
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  vatRate: number;
+
+  @ApiProperty({ enum: ['percentage', 'fixed'], required: false })
   @IsOptional()
-  discountType?: DiscountType;
+  @IsString()
+  @IsIn(['percentage', 'fixed'])
+  discountType?: string;
 
-  @ApiProperty({
-    example: 10,
-    required: false,
-    description: 'Valeur de la remise (% ou montant fixe selon discountType)',
-  })
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0, { message: 'La valeur de remise ne peut pas être négative' })
+  @ApiProperty({ required: false })
   @IsOptional()
+  @IsNumber()
+  @Min(0)
   discountValue?: number;
 
-  @ApiProperty({
-    example: 'Paiement à 30 jours. Pénalités de retard applicables.',
-    required: false,
-    description: 'Notes ou conditions spécifiques',
-  })
-  @IsString()
+  @ApiProperty({ type: [InvoiceLineDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => InvoiceLineDto)
+  lines: InvoiceLineDto[];
+
+  @ApiProperty({ required: false })
   @IsOptional()
+  @IsString()
   notes?: string;
 
-  @ApiProperty({
-    example: 'Entreprise ABC',
-    description: 'Nom du client destinataire',
-  })
-  @IsString()
-  @IsNotEmpty()
-  clientName!: string;
-
-  @ApiProperty({
-    example: '12 avenue de la République, 1002 Tunis',
-    required: false,
-    description: 'Adresse du client destinataire',
-  })
-  @IsString()
+  @ApiProperty({ required: false })
   @IsOptional()
-  clientAddress?: string;
+  @IsString()
+  clientName?: string;
 
-  @ApiProperty({
-    type: [CreateInvoiceLineDto],
-    description: 'Lignes de produit / service',
-  })
-  @IsArray()
-  @ArrayMinSize(1, { message: 'La facture doit contenir au moins une ligne' })
-  @ValidateNested({ each: true })
-  @Type(() => CreateInvoiceLineDto)
-  lines!: CreateInvoiceLineDto[];
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  clientAddress?: string;
 }

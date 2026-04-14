@@ -29,13 +29,14 @@ const formatAmount = (value: number) =>
 
 const getStatusConfig = (status: string) => {
   const configs: Record<string, { label: string; color: string }> = {
-    brouillon: { label: "Brouillon", color: "#6B7280" },
-    payee: { label: "Payée", color: "#10B981" },
-    partiel: { label: "Partiel", color: "#F59E0B" },
-    en_retard: { label: "En retard", color: "#EF4444" },
-    annulee: { label: "Annulée", color: "#6B7280" },
+    draft: { label: "Brouillon", color: "#6B7280" },
+    sent: { label: "Envoyée", color: "#6B7280" },
+    paid: { label: "Payée", color: "#10B981" },
+    partial: { label: "Partiel", color: "#F59E0B" },
+    overdue: { label: "En retard", color: "#EF4444" },
+    cancelled: { label: "Annulée", color: "#6B7280" },
   };
-  return configs[status] || configs.brouillon;
+  return configs[status] || configs.draft;
 };
 
 export default function ViewFactureDrawer({
@@ -209,7 +210,7 @@ export default function ViewFactureDrawer({
                 TAUX TVA
               </Typography>
               <Typography variant="body2" sx={{ fontSize: 13 }}>
-                {facture.tvaRate}%
+                {facture.tvaRate ?? facture.vatRate}%
               </Typography>
             </Box>
 
@@ -226,7 +227,9 @@ export default function ViewFactureDrawer({
               <Typography variant="body2" sx={{ fontSize: 13 }}>
                 {facture.discountType === "percentage"
                   ? `${facture.discountValue}%`
-                  : `${formatAmount(facture.discountValue)}`}
+                  : facture.discountValue !== null
+                    ? formatAmount(facture.discountValue)
+                    : "0.00 DT"}
               </Typography>
             </Box>
           </Box>
@@ -329,15 +332,15 @@ export default function ViewFactureDrawer({
               Montant HT
             </Typography>
             <Typography variant="body2" fontWeight={600}>
-              {formatAmount(facture.amountHT)}
+              {formatAmount(facture.amountHT ?? facture.subtotal ?? 0)}
             </Typography>
           </Box>
           <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
             <Typography variant="body2" color="text.secondary">
-              TVA ({facture.tvaRate}%)
+              TVA ({facture.tvaRate ?? facture.vatRate}%)
             </Typography>
             <Typography variant="body2" fontWeight={600}>
-              {formatAmount(facture.amountTVA)}
+              {formatAmount(facture.amountTVA ?? facture.vatAmount ?? 0)}
             </Typography>
           </Box>
           <Divider sx={{ my: 1 }} />
@@ -352,7 +355,7 @@ export default function ViewFactureDrawer({
               fontWeight={700}
               color="primary.main"
             >
-              {formatAmount(facture.amountTTC)}
+              {formatAmount(facture.amountTTC ?? facture.total ?? 0)}
             </Typography>
           </Box>
           <Box sx={{ display: "flex", justifyContent: "space-between" }}>
@@ -363,10 +366,14 @@ export default function ViewFactureDrawer({
               variant="body2"
               fontWeight={700}
               color={
-                facture.amountRemaining > 0 ? "error.main" : "success.main"
+                (facture.amountRemaining ?? facture.remainingAmount ?? 0) > 0
+                  ? "error.main"
+                  : "success.main"
               }
             >
-              {formatAmount(facture.amountRemaining)}
+              {formatAmount(
+                facture.amountRemaining ?? facture.remainingAmount ?? 0,
+              )}
             </Typography>
           </Box>
         </Box>

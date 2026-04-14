@@ -2,9 +2,12 @@ import * as Yup from "yup";
 
 export const factureValidationSchema = Yup.object({
   status: Yup.string()
-    .oneOf(["brouillon", "payee", "partiel", "en_retard"], "Statut invalide")
-    .required("Le statut est requis"),
-  tvaRate: Yup.number()
+    .oneOf(
+      ["draft", "sent", "paid", "partial", "overdue", "cancelled"],
+      "Statut invalide",
+    )
+    .optional(),
+  vatRate: Yup.number()
     .typeError("La TVA doit être un nombre")
     .min(0, "La TVA ne peut pas être négative")
     .max(100, "La TVA ne peut pas dépasser 100%")
@@ -12,15 +15,15 @@ export const factureValidationSchema = Yup.object({
   dueDate: Yup.string().required("La date d'échéance est requise"),
   discountType: Yup.string()
     .oneOf(["percentage", "fixed"], "Type de remise invalide")
-    .required("Le type de remise est requis"),
+    .optional(),
   discountValue: Yup.number()
     .typeError("La valeur de remise doit être un nombre")
     .min(0, "La remise ne peut pas être négative")
-    .required("La valeur de remise est requise"),
+    .optional(),
   lines: Yup.array()
     .of(
       Yup.object({
-        id: Yup.string().required(),
+        id: Yup.number().optional(),
         description: Yup.string()
           .required("La description est requise")
           .max(300, "La description est trop longue"),
@@ -36,9 +39,11 @@ export const factureValidationSchema = Yup.object({
     )
     .min(1, "Ajoutez au moins une ligne de produit")
     .required(),
-  notes: Yup.string().max(2000, "La note ne peut pas dépasser 2000 caractères"),
+  notes: Yup.string()
+    .max(2000, "La note ne peut pas dépasser 2000 caractères")
+    .optional(),
   clientName: Yup.string()
-    .required("Le nom du client est requis")
-    .max(200, "Le nom du client est trop long"),
-  clientAddress: Yup.string().max(500, "L'adresse est trop longue"),
+    .max(200, "Le nom du client est trop long")
+    .optional(),
+  clientAddress: Yup.string().max(500, "L'adresse est trop longue").optional(),
 });

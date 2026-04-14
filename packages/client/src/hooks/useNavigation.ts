@@ -40,9 +40,9 @@ export function useNavigation() {
     // 👇 ajout temporaire pour afficher Messagerie en dev
     if (import.meta.env.DEV) {
       allowedPaths.add("/messages");
-      allowedPaths.add("/factures");
-      // Devis is only for clients
+      // Factures and Devis are only for clients
       if (isClient) {
+        allowedPaths.add("/factures");
         allowedPaths.add("/devis");
       }
     }
@@ -65,6 +65,11 @@ export function useNavigation() {
 
       // Skip /tasks for accountants - only show for collaborators
       if (path === "/tasks" && isAccountant) {
+        return;
+      }
+
+      // Skip /factures for non-clients - only show for clients
+      if (path === "/factures" && !isClient) {
         return;
       }
 

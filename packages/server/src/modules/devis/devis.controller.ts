@@ -78,7 +78,7 @@ export class DevisController {
     }
 
     const pageNum = page ? parseInt(page) : 1;
-    const limitNum = limit ? parseInt(limit) : 20;
+    const limitNum = limit ? parseInt(limit) : 10;
     const startDateObj = startDate ? new Date(startDate) : undefined;
     const endDateObj = endDate ? new Date(endDate) : undefined;
 

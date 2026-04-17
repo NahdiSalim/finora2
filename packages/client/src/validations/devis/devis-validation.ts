@@ -1,6 +1,9 @@
 import * as Yup from "yup";
 
 export const devisValidationSchema = Yup.object({
+  number: Yup.string()
+    .required("Le numéro de devis est requis")
+    .max(50, "Le numéro est trop long"),
   status: Yup.string()
     .oneOf(["en_attente", "accepte", "refuse"], "Statut invalide")
     .required("Le statut est requis"),
@@ -37,4 +40,5 @@ export const devisValidationSchema = Yup.object({
     .min(1, "Ajoutez au moins une ligne de produit")
     .required(),
   notes: Yup.string().max(2000, "La note ne peut pas dépasser 2000 caractères"),
+  supplierId: Yup.number().optional(),
 });

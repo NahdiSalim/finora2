@@ -22,6 +22,7 @@ model Devis {
   companyId         Int       // Client's company
   createdBy         Int?      // User ID who created this devis
   createdByCompanyId Int?     // Company ID who created this devis
+  supplierId        Int?      // Optional supplier (recipient)
   
   // Timestamps
   createdAt         DateTime  @default(now())
@@ -32,9 +33,11 @@ model Devis {
   company           Company   @relation("DevisCompany", fields: [companyId], references: [id])
   createdByUser     User?     @relation("DevisCreatedBy", fields: [createdBy], references: [id])
   createdByCompany  Company?  @relation("DevisCreatedByCompany", fields: [createdByCompanyId], references: [id])
+  supplier          Supplier? @relation("DevisSupplier", fields: [supplierId], references: [id])
   
   @@index([ownerId])
   @@index([companyId])
+  @@index([supplierId])
   @@index([status])
   @@index([createdAt])
   @@map("devis")

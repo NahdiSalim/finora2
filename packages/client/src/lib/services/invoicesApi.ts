@@ -107,6 +107,17 @@ export interface InvoiceCompany {
   email: string | null;
 }
 
+export interface InvoiceSupplier {
+  id: number;
+  name: string;
+  company: string;
+  email: string;
+  phone: string;
+  address?: string;
+  taxId?: string;
+  logoUrl?: string;
+}
+
 export interface Invoice {
   id: number;
   invoiceNumber: string;
@@ -123,14 +134,14 @@ export interface Invoice {
   amountPaid: number;
   remainingAmount: number;
   notes: string | null;
-  clientName: string | null;
-  clientAddress: string | null;
+  supplierId: number;
   companyId: number;
   createdById: number;
   createdAt: string;
   updatedAt: string;
   lines: InvoiceLine[];
   company: InvoiceCompany | null;
+  supplier?: InvoiceSupplier | null;
 }
 
 export interface GetInvoicesResponse {
@@ -140,6 +151,41 @@ export interface GetInvoicesResponse {
   pageSize: number;
 }
 
+export interface InvoiceAnalytics {
+  totalInvoices: number;
+  totalRevenue: number;
+  totalPaid: number;
+  totalRemaining: number;
+  counts: {
+    draft: number;
+    paid: number;
+    partial: number;
+    overdue: number;
+    cancelled: number;
+  };
+}
+
+export interface GetInvoicesListResponse {
+  status: string;
+  code: string;
+  data: Invoice[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    limitPerPage: number;
+    totalCount: number;
+  };
+  counts: {
+    draft: number;
+    sent: number;
+    paid: number;
+    partial: number;
+    overdue: number;
+    cancelled: number;
+  };
+  analytics: InvoiceAnalytics;
+}
+
 export interface CreateInvoiceLineRequest {
   description: string;
   quantity: number;
@@ -147,6 +193,7 @@ export interface CreateInvoiceLineRequest {
 }
 
 export interface CreateInvoiceRequest {
+  invoiceNumber: string;
   /** Backend values: "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled" */
   status?: string;
   /** YYYY-MM-DD */
@@ -155,8 +202,8 @@ export interface CreateInvoiceRequest {
   discountType?: string;
   discountValue?: number;
   notes?: string;
-  clientName: string;
-  clientAddress?: string;
+  supplierId: number;
+  amountPaid?: number;
   lines: CreateInvoiceLineRequest[];
 }
 
@@ -257,11 +304,26 @@ export const invoicesApi = createApi({
       invalidatesTags: [{ type: "Invoices", id: "LIST" }],
     }),
 
+    publishInvoice: builder.mutation<
+      { status: string; code: string; data: Invoice; message: string },
+      { id: number; status: string }
+    >({
+      query: ({ id, status }) => ({
+        url: `/invoices/${id}/publish`,
+        method: "POST",
+        body: { status },
+      }),
+      invalidatesTags: (_result, _err, { id }) => [
+        { type: "Invoices", id },
+        { type: "Invoices", id: "LIST" },
+      ],
+    }),
+
     getInvoices: builder.query<
-      GetInvoicesResponse,
+      GetInvoicesListResponse,
       {
         page?: number;
-        pageSize?: number;
+        limit?: number;
         status?: string;
         search?: string;
       } | void
@@ -269,8 +331,7 @@ export const invoicesApi = createApi({
       query: (params = {}) => {
         const sp = new URLSearchParams();
         if (params?.page != null) sp.set("page", String(params.page));
-        if (params?.pageSize != null)
-          sp.set("pageSize", String(params.pageSize));
+        if (params?.limit != null) sp.set("limit", String(params.limit));
         if (params?.status) sp.set("status", params.status);
         if (params?.search) sp.set("search", params.search);
         const qs = sp.toString();
@@ -298,5 +359,6 @@ export const {
   useSaveInvoiceMetadataMutation,
   useSynchronizeDocumentMutation,
   useCreateInvoiceMutation,
+  usePublishInvoiceMutation,
   useGetInvoicesQuery,
 } = invoicesApi;

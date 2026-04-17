@@ -1,24 +1,22 @@
 import * as Yup from "yup";
 
 export const factureValidationSchema = Yup.object({
+  invoiceNumber: Yup.string()
+    .required("Le numéro de facture est requis")
+    .max(50, "Le numéro de facture est trop long"),
   status: Yup.string()
-    .oneOf(
-      ["draft", "sent", "paid", "partial", "overdue", "cancelled"],
-      "Statut invalide",
-    )
-    .optional(),
+    .oneOf(["draft", "sent", "overdue"], "Statut invalide")
+    .required("Le statut est requis"),
   vatRate: Yup.number()
     .typeError("La TVA doit être un nombre")
-    .min(0, "La TVA ne peut pas être négative")
-    .max(100, "La TVA ne peut pas dépasser 100%")
+    .min(0)
+    .max(100)
     .required("La TVA est requise"),
   dueDate: Yup.string().required("La date d'échéance est requise"),
-  discountType: Yup.string()
-    .oneOf(["percentage", "fixed"], "Type de remise invalide")
-    .optional(),
+  discountType: Yup.string().oneOf(["percentage", "fixed"]).optional(),
   discountValue: Yup.number()
     .typeError("La valeur de remise doit être un nombre")
-    .min(0, "La remise ne peut pas être négative")
+    .min(0)
     .optional(),
   lines: Yup.array()
     .of(
@@ -26,24 +24,35 @@ export const factureValidationSchema = Yup.object({
         id: Yup.number().optional(),
         description: Yup.string()
           .required("La description est requise")
-          .max(300, "La description est trop longue"),
+          .max(300),
         quantity: Yup.number()
           .typeError("La quantité doit être un nombre")
-          .min(1, "La quantité doit être au moins 1")
+          .min(1)
           .required("La quantité est requise"),
         unitPrice: Yup.number()
           .typeError("Le prix unitaire doit être un nombre")
-          .min(0, "Le prix unitaire ne peut pas être négatif")
+          .min(0)
           .required("Le prix unitaire est requis"),
       }),
     )
     .min(1, "Ajoutez au moins une ligne de produit")
     .required(),
-  notes: Yup.string()
-    .max(2000, "La note ne peut pas dépasser 2000 caractères")
-    .optional(),
-  clientName: Yup.string()
-    .max(200, "Le nom du client est trop long")
-    .optional(),
-  clientAddress: Yup.string().max(500, "L'adresse est trop longue").optional(),
+  notes: Yup.string().max(2000).optional(),
+  supplierId: Yup.number()
+    .typeError("Le fournisseur est requis")
+    .required("Le fournisseur est requis"),
+  paymentStatus: Yup.string()
+    .oneOf(["unpaid", "paid", "partial"])
+    .required("Le statut de paiement est requis"),
+  amountPaid: Yup.number()
+    .typeError("Le montant payé doit être un nombre")
+    .min(0)
+    .when("paymentStatus", {
+      is: "partial",
+      then: (s) =>
+        s
+          .required("Le montant payé est requis")
+          .min(0.01, "Le montant doit être supérieur à 0"),
+      otherwise: (s) => s.optional(),
+    }),
 });

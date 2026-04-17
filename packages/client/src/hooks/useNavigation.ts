@@ -74,8 +74,21 @@ export function useNavigation() {
         return;
       }
 
+      // Skip /devis for non-clients - only show for clients
+      if (path === "/devis" && !isClient) {
+        return;
+      }
+
       // Skip /suppliers for non-clients - only show for clients
       if (path === "/suppliers" && !isClient) {
+        return;
+      }
+
+      // For clients: skip individual factures/devis/suppliers — they are grouped below
+      if (
+        isClient &&
+        (path === "/factures" || path === "/devis" || path === "/suppliers")
+      ) {
         return;
       }
 
@@ -144,6 +157,44 @@ export function useNavigation() {
             title: tasksConfig.title,
             path: `${dashboardBase}/tasks`,
             icon: tasksConfig.icon,
+          });
+        }
+      }
+    }
+
+    // For clients: inject grouped "Finances" item (Fournisseurs → Factures → Devis)
+    if (isClient) {
+      const financesConfig = NAV_CONFIG["/__finances"];
+      const suppliersConfig = NAV_CONFIG["/suppliers"];
+      const facturesConfig = NAV_CONFIG["/factures"];
+      const devisConfig = NAV_CONFIG["/devis"];
+
+      if (financesConfig && suppliersConfig && facturesConfig && devisConfig) {
+        const hasFinancesEntry = items.some(
+          (item) => item.title === financesConfig.title,
+        );
+        if (!hasFinancesEntry) {
+          items.push({
+            title: financesConfig.title,
+            path: `${dashboardBase}/suppliers`,
+            icon: financesConfig.icon,
+            children: [
+              {
+                title: suppliersConfig.title,
+                path: `${dashboardBase}/suppliers`,
+                icon: suppliersConfig.icon,
+              },
+              {
+                title: facturesConfig.title,
+                path: `${dashboardBase}/factures`,
+                icon: facturesConfig.icon,
+              },
+              {
+                title: devisConfig.title,
+                path: `${dashboardBase}/devis`,
+                icon: devisConfig.icon,
+              },
+            ],
           });
         }
       }

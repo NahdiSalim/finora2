@@ -1,14 +1,16 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import {
   alpha,
+  Autocomplete,
   Box,
   Dialog,
   DialogContent,
   IconButton,
   MenuItem,
   Stack,
+  TextField,
   Typography,
   useMediaQuery,
   useTheme,
@@ -18,14 +20,18 @@ import { Plus, Trash2, X } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
 import CustomSelect from "src/components/common/CustomSelect";
-import type { DevisFormValues } from "src/types/devis";
+import type { DevisFormValues, DevisLine } from "src/types/devis";
 import { devisValidationSchema } from "src/validations/devis/devis-validation";
 import { useCreateDevisMutation } from "src/lib/services/devisApi";
-import { useAlert } from "src/contexts/AlertContext";
+import {
+  useGetSuppliersQuery,
+  type Supplier,
+} from "src/lib/services/suppliersApi";
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  onCreate?: () => void;
 }
 
 const formatAmount = (value: number) =>
@@ -47,23 +53,57 @@ function computeAmounts(values: DevisFormValues) {
   const amountHT = Math.max(subtotal - discount, 0);
   const amountTVA = (amountHT * (values.tvaRate || 0)) / 100;
   const amountTTC = amountHT + amountTVA;
-
   return { amountHT, amountTVA, amountTTC };
 }
 
-const createLine = () => ({
+const createLine = (): DevisLine => ({
   id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   description: "",
   quantity: 1,
   unitPrice: 0,
 });
 
-export default function DevisModal({ open, onClose }: Props) {
+const defaultValues: DevisFormValues = {
+  number: "",
+  status: "en_attente",
+  tvaRate: 19,
+  validUntil: "",
+  discountType: "percentage",
+  discountValue: 0,
+  lines: [createLine()],
+  notes: "",
+  supplierId: undefined,
+};
+
+export default function DevisModal({ open, onClose, onCreate }: Props) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const { showAlert } = useAlert();
-
   const [createDevis, { isLoading: isCreating }] = useCreateDevisMutation();
+
+  // Supplier search state
+  const [supplierSearch, setSupplierSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(
+    null,
+  );
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(supplierSearch), 500);
+    return () => clearTimeout(timer);
+  }, [supplierSearch]);
+
+  const { data: suppliersData, isLoading: isLoadingSuppliers } =
+    useGetSuppliersQuery(
+      { page: 1, limit: 50, search: debouncedSearch || undefined },
+      { skip: !open },
+    );
+
+  const allSuppliers = useMemo(() => {
+    const list = suppliersData?.data || [];
+    if (!selectedSupplier) return list;
+    const ids = new Set([selectedSupplier.id]);
+    return [selectedSupplier, ...list.filter((s) => !ids.has(s.id))];
+  }, [suppliersData, selectedSupplier]);
 
   const {
     control,
@@ -71,52 +111,31 @@ export default function DevisModal({ open, onClose }: Props) {
     reset,
     watch,
     handleSubmit,
-    formState: { errors, isValid },
+    formState: { errors, isValid, isSubmitting },
   } = useForm<DevisFormValues>({
     resolver: yupResolver(devisValidationSchema) as never,
     mode: "onChange",
-    defaultValues: {
-      status: "en_attente",
-      tvaRate: 19,
-      validUntil: "",
-      discountType: "percentage",
-      discountValue: 0,
-      lines: [createLine()],
-      notes: "",
-    },
+    defaultValues,
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "lines",
-  });
-
+  const { fields, append, remove } = useFieldArray({ control, name: "lines" });
   const values = watch();
   const amounts = useMemo(() => computeAmounts(values), [values]);
 
   const closeAndReset = () => {
-    reset({
-      status: "en_attente",
-      tvaRate: 19,
-      validUntil: "",
-      discountType: "percentage",
-      discountValue: 0,
-      lines: [createLine()],
-      notes: "",
-    });
+    reset({ ...defaultValues, lines: [createLine()] });
+    setSelectedSupplier(null);
+    setSupplierSearch("");
     onClose();
   };
 
   const onSubmit = async (formValues: DevisFormValues) => {
     try {
       await createDevis(formValues).unwrap();
-      showAlert("Devis créé avec succès", "success");
+      onCreate?.();
       closeAndReset();
-    } catch (error: any) {
-      showAlert(
-        error?.data?.message || "Erreur lors de la création du devis",
-        "error",
-      );
+    } catch {
+      // error handled globally
     }
   };
 
@@ -124,23 +143,21 @@ export default function DevisModal({ open, onClose }: Props) {
     <Dialog
       open={open}
       onClose={closeAndReset}
-      maxWidth="sm"
+      maxWidth="md"
       fullWidth
       fullScreen={isMobile}
       PaperProps={{
-        sx: {
-          borderRadius: isMobile ? 0 : 3,
-          overflow: "hidden",
-        },
+        sx: { borderRadius: isMobile ? 0 : 3, overflow: "hidden" },
       }}
     >
+      {/* Header */}
       <Box
         sx={{
           px: { xs: 2, md: 3 },
           py: 2,
           borderBottom: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
           background:
-            "linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(14,165,233,0.08) 100%)",
+            "linear-gradient(135deg, rgba(37,99,235,0.08) 0%, rgba(14,165,233,0.08) 100%)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -165,6 +182,79 @@ export default function DevisModal({ open, onClose }: Props) {
           onSubmit={handleSubmit(onSubmit)}
           sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}
         >
+          {/* Devis number */}
+          <CustomInput
+            label="Numéro de devis"
+            placeholder="Ex: DEV-2026-001"
+            {...register("number")}
+            error={!!errors.number}
+            helperText={errors.number?.message}
+            required
+          />
+
+          {/* Supplier autocomplete */}
+          <Controller
+            name="supplierId"
+            control={control}
+            render={({ field: { onChange } }) => (
+              <Autocomplete
+                freeSolo={false}
+                options={allSuppliers}
+                value={selectedSupplier}
+                onChange={(_, newValue) => {
+                  setSelectedSupplier(newValue);
+                  onChange(newValue?.id);
+                }}
+                onInputChange={(_, val) => setSupplierSearch(val)}
+                inputValue={supplierSearch}
+                getOptionLabel={(o) => `${o.name} - ${o.company}`}
+                isOptionEqualToValue={(o, v) => o.id === v.id}
+                loading={isLoadingSuppliers}
+                filterOptions={(x) => x}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Fournisseur (Destinataire)"
+                    placeholder="Rechercher un fournisseur..."
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {isLoadingSuppliers && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ mr: 1 }}
+                            >
+                              Chargement...
+                            </Typography>
+                          )}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
+                  />
+                )}
+                renderOption={(props, option) => {
+                  const { key, ...rest } = props;
+                  return (
+                    <Box component="li" key={key} {...rest}>
+                      <Box sx={{ display: "flex", flexDirection: "column" }}>
+                        <Typography variant="body2" fontWeight={600}>
+                          {option.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {option.company} • {option.email}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  );
+                }}
+              />
+            )}
+          />
+
+          {/* Main info grid */}
           <Box
             sx={{
               display: "grid",
@@ -232,6 +322,7 @@ export default function DevisModal({ open, onClose }: Props) {
             />
           </Box>
 
+          {/* Product lines */}
           <Box
             sx={{
               border: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
@@ -304,7 +395,6 @@ export default function DevisModal({ open, onClose }: Props) {
                     error={!!errors.lines?.[index]?.unitPrice}
                     helperText={errors.lines?.[index]?.unitPrice?.message}
                   />
-
                   <Box
                     sx={{
                       display: "flex",
@@ -349,8 +439,11 @@ export default function DevisModal({ open, onClose }: Props) {
             {...register("notes")}
             error={!!errors.notes}
             helperText={errors.notes?.message}
+            multiline
+            rows={3}
           />
 
+          {/* Totals summary */}
           <Box
             sx={{
               borderRadius: 3,
@@ -431,8 +524,12 @@ export default function DevisModal({ open, onClose }: Props) {
             <CustomButton type="button" variant="text" onClick={closeAndReset}>
               Annuler
             </CustomButton>
-            <CustomButton type="submit" disabled={!isValid || isCreating}>
-              {isCreating ? "Création..." : "Créer le devis"}
+            <CustomButton
+              type="submit"
+              disabled={!isValid || isSubmitting || isCreating}
+              loading={isCreating || isSubmitting}
+            >
+              Créer le devis
             </CustomButton>
           </Stack>
         </Box>

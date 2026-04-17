@@ -23,6 +23,11 @@ interface GetDevisListResponse {
     limitPerPage: number;
     totalCount: number;
   };
+  counts: {
+    en_attente: number;
+    accepte: number;
+    refuse: number;
+  };
 }
 
 interface CreateDevisResponse {
@@ -133,29 +138,34 @@ export const devisApi = createApi({
       ],
     }),
 
-    // Download devis PDF
-    downloadDevis: builder.mutation<{ blob: Blob; filename: string }, number>({
+    // Download devis PDF — uses plain fetch so the Blob never enters Redux state
+    downloadDevis: builder.mutation<{ filename: string }, number>({
       queryFn: async (id) => {
         const token = localStorage.getItem("token");
         const res = await fetch(`${API_BASE}/devis/${id}/download`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         if (!res.ok) {
-          try {
-            const err = await res.json().catch(() => ({}));
-            return { error: { status: res.status, data: err } as any };
-          } catch {
-            return {
-              error: { status: res.status, data: "Download failed" } as any,
-            };
-          }
+          const err = await res.json().catch(() => ({}));
+          return { error: { status: res.status, data: err } as any };
         }
         const disposition = res.headers.get("Content-Disposition");
         const filename =
           disposition?.match(/filename="?([^";]+)"?/)?.[1]?.trim() ??
           `devis-${id}.pdf`;
+
+        // Trigger browser download directly — never put Blob in Redux
         const blob = await res.blob();
-        return { data: { blob, filename } };
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        return { data: { filename } };
       },
     }),
   }),

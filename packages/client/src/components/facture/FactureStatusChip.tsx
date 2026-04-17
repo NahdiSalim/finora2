@@ -1,25 +1,18 @@
-import { Chip } from "@mui/material";
+import { Chip, alpha } from "@mui/material";
 import type { FactureStatus } from "src/types/facture";
 
-const labelMap: Record<FactureStatus, string> = {
-  draft: "Brouillon",
-  sent: "Envoyée",
-  paid: "Payée",
-  partial: "Partiel",
-  overdue: "En retard",
-  cancelled: "Annulée",
-};
+interface Config {
+  label: string;
+  color: string;
+}
 
-const colorMap: Record<
-  FactureStatus,
-  "default" | "success" | "warning" | "error"
-> = {
-  draft: "default",
-  sent: "default",
-  paid: "success",
-  partial: "warning",
-  overdue: "error",
-  cancelled: "default",
+const statusConfig: Record<FactureStatus, Config> = {
+  draft: { label: "Brouillon", color: "#6B7280" },
+  sent: { label: "Envoyée", color: "#3B82F6" },
+  overdue: { label: "En retard", color: "#EF4444" },
+  paid: { label: "Envoyée", color: "#3B82F6" }, // legacy: was sent then paid
+  partial: { label: "Envoyée", color: "#3B82F6" }, // legacy: was sent then partial
+  cancelled: { label: "Annulée", color: "#6B7280" },
 };
 
 interface Props {
@@ -27,12 +20,18 @@ interface Props {
 }
 
 export default function FactureStatusChip({ status }: Props) {
+  const cfg = statusConfig[status] ?? statusConfig.draft;
   return (
     <Chip
-      label={labelMap[status]}
-      color={colorMap[status]}
+      label={cfg.label}
       size="small"
-      sx={{ fontWeight: 600 }}
+      sx={{
+        fontWeight: 600,
+        fontSize: 11,
+        color: cfg.color,
+        bgcolor: alpha(cfg.color, 0.12),
+        border: "none",
+      }}
     />
   );
 }

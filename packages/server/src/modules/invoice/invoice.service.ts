@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { MinioService } from '../../common/services/minio.service';
 import { ApiError } from '../../common/errors/api-error';
-import { MSG } from '../../common/messages';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import * as puppeteer from 'puppeteer';
@@ -16,79 +15,80 @@ export class InvoiceService {
     private readonly minioService: MinioService
   ) {}
 
-  /**
-   * Create a new invoice and generate PDF
-   */
+  // ==================== CRUD ====================
+
   async createInvoice(userId: number, userCompanyId: number, dto: CreateInvoiceDto) {
-    // Invoices can only be created by clients for now
-    // Calculate amounts
+    const supplier = await this.prisma.supplier.findUnique({ where: { id: dto.supplierId } });
+    if (!supplier) throw new ApiError('Supplier not found', 404, 'SUPPLIER_NOT_FOUND');
+    if (supplier.companyId !== userCompanyId)
+      throw new ApiError('Supplier does not belong to your company', 403, 'ACCESS_DENIED');
+
     const amounts = this.calculateAmounts(dto);
+    const amountPaid = dto.amountPaid ?? 0;
+    const remainingAmount = amounts.total - amountPaid;
 
-    // Generate invoice number
-    const invoiceNumber = await this.generateInvoiceNumber(userCompanyId);
-
-    // Create invoice in database
-    const invoice = await this.prisma.invoice.create({
-      data: {
-        invoiceNumber,
-        status: dto.status || 'draft',
-        dueDate: new Date(dto.dueDate),
-        vatRate: dto.vatRate,
-        discountType: dto.discountType || null,
-        discountValue: dto.discountValue || null,
-        subtotal: amounts.subtotal,
-        discountAmount: amounts.discountAmount,
-        vatAmount: amounts.vatAmount,
-        total: amounts.total,
-        amountPaid: 0,
-        remainingAmount: amounts.total,
-        notes: dto.notes || null,
-        clientName: dto.clientName || null,
-        clientAddress: dto.clientAddress || null,
-        companyId: userCompanyId,
-        createdById: userId,
-        lines: {
-          create: dto.lines.map((line, index) => ({
-            description: line.description,
-            quantity: line.quantity,
-            unitPrice: line.unitPrice,
-            lineTotal: this.round(line.quantity * line.unitPrice),
-            order: index,
-          })),
-        },
-      },
-    });
-
-    // Generate and upload PDF synchronously
+    let invoice: any;
     try {
-      await this.generateAndUploadPdf(invoice.id, userCompanyId);
-      this.logger.log(`PDF generated successfully for invoice ${invoice.id}`);
-    } catch (err) {
-      this.logger.error(`Failed to generate PDF for invoice ${invoice.id}:`, err);
-      // Don't throw error - invoice is still created, PDF can be regenerated later
+      invoice = await this.prisma.invoice.create({
+        data: {
+          invoiceNumber: dto.invoiceNumber,
+          status: dto.status || 'draft',
+          dueDate: new Date(dto.dueDate),
+          vatRate: dto.vatRate,
+          discountType: dto.discountType || null,
+          discountValue: dto.discountValue || null,
+          subtotal: amounts.subtotal,
+          discountAmount: amounts.discountAmount,
+          vatAmount: amounts.vatAmount,
+          total: amounts.total,
+          amountPaid,
+          remainingAmount,
+          notes: dto.notes || null,
+          supplierId: dto.supplierId,
+          companyId: userCompanyId,
+          createdById: userId,
+          lines: {
+            create: dto.lines.map((line, index) => ({
+              description: line.description,
+              quantity: line.quantity,
+              unitPrice: line.unitPrice,
+              lineTotal: this.round(line.quantity * line.unitPrice),
+              order: index,
+            })),
+          },
+        },
+        include: { lines: { orderBy: { order: 'asc' } } },
+      });
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        throw new ApiError(
+          'Ce numéro de facture existe déjà pour votre entreprise',
+          400,
+          'DUPLICATE_INVOICE_NUMBER'
+        );
+      }
+      throw error;
     }
 
-    // Fetch updated invoice with PDF URL
-    const updatedInvoice = await this.prisma.invoice.findUnique({
-      where: { id: invoice.id },
-      include: { lines: { orderBy: { order: 'asc' } } },
-    });
+    // Generate PDF asynchronously for non-draft invoices
+    if ((dto.status || 'draft') !== 'draft') {
+      this.generateAndSavePdf(invoice.id, userCompanyId).catch((err) =>
+        this.logger.error(`PDF generation failed for invoice ${invoice.id}: ${err.message}`)
+      );
+    }
 
     return {
       status: 'success',
       code: '201',
-      data: updatedInvoice || invoice,
+      data: invoice,
       message: 'Invoice created successfully',
     };
   }
 
-  /**
-   * Get all invoices for a company with filters
-   */
   async getInvoicesList(
     userCompanyId: number,
     page: number = 1,
-    limit: number = 20,
+    limit: number = 10,
     status?: string,
     search?: string,
     startDate?: Date,
@@ -96,33 +96,49 @@ export class InvoiceService {
   ) {
     const skip = (page - 1) * limit;
 
-    const where: any = {
-      companyId: userCompanyId,
-    };
-
-    if (status) {
-      where.status = status;
-    }
+    const baseWhere: any = { companyId: userCompanyId };
 
     if (search && search.trim()) {
-      where.OR = [
-        { invoiceNumber: { contains: search.trim(), mode: 'insensitive' } },
+      baseWhere.OR = [
+        {
+          supplier: {
+            OR: [
+              { name: { contains: search.trim(), mode: 'insensitive' } },
+              { company: { contains: search.trim(), mode: 'insensitive' } },
+              { taxId: { contains: search.trim(), mode: 'insensitive' } },
+            ],
+          },
+        },
         { notes: { contains: search.trim(), mode: 'insensitive' } },
-        { clientName: { contains: search.trim(), mode: 'insensitive' } },
       ];
     }
 
     if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) {
-        where.createdAt.gte = startDate;
-      }
-      if (endDate) {
-        where.createdAt.lte = endDate;
-      }
+      baseWhere.createdAt = {};
+      if (startDate) baseWhere.createdAt.gte = startDate;
+      if (endDate) baseWhere.createdAt.lte = endDate;
     }
 
-    const [totalCount, invoicesList] = await Promise.all([
+    const where: any = { ...baseWhere };
+    if (status) {
+      const statuses = status
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      where.status = statuses.length === 1 ? statuses[0] : { in: statuses };
+    }
+
+    const [
+      totalCount,
+      invoicesList,
+      countDraft,
+      countSent,
+      countPaid,
+      countPartial,
+      countOverdue,
+      countCancelled,
+      analyticsRaw,
+    ] = await Promise.all([
       this.prisma.invoice.count({ where }),
       this.prisma.invoice.findMany({
         where,
@@ -131,34 +147,84 @@ export class InvoiceService {
         take: limit,
         include: {
           lines: { orderBy: { order: 'asc' } },
-          createdBy: {
+          supplier: {
             select: {
               id: true,
-              username: true,
+              name: true,
+              company: true,
               email: true,
+              phone: true,
+              address: true,
+              taxId: true,
+              logoUrl: true,
+            },
+          },
+          company: {
+            select: {
+              name: true,
+              legalName: true,
+              address: true,
+              city: true,
+              postalCode: true,
+              phone: true,
+              email: true,
+              vatNumber: true,
+              logo: true,
             },
           },
         },
       }),
+      this.prisma.invoice.count({ where: { ...baseWhere, status: 'draft' } }),
+      this.prisma.invoice.count({ where: { ...baseWhere, status: 'sent' } }),
+      this.prisma.invoice.count({ where: { ...baseWhere, status: 'paid' } }),
+      this.prisma.invoice.count({ where: { ...baseWhere, status: 'partial' } }),
+      this.prisma.invoice.count({ where: { ...baseWhere, status: 'overdue' } }),
+      this.prisma.invoice.count({ where: { ...baseWhere, status: 'cancelled' } }),
+      this.prisma.invoice.aggregate({
+        where: { companyId: userCompanyId },
+        _sum: { total: true, amountPaid: true, remainingAmount: true },
+        _count: { id: true },
+      }),
     ]);
 
-    // Generate presigned URLs for all PDFs (if they exist in documents)
+    const analytics = {
+      totalInvoices: analyticsRaw._count.id,
+      totalRevenue: this.round(Number(analyticsRaw._sum.total ?? 0)),
+      totalPaid: this.round(Number(analyticsRaw._sum.amountPaid ?? 0)),
+      totalRemaining: this.round(Number(analyticsRaw._sum.remainingAmount ?? 0)),
+      counts: {
+        draft: countDraft,
+        sent: countSent,
+        paid: countPaid,
+        partial: countPartial,
+        overdue: countOverdue,
+        cancelled: countCancelled,
+      },
+    };
+
+    // Generate presigned URLs for supplier logos + company logo
     const invoicesListWithUrls = await Promise.all(
       invoicesList.map(async (invoice) => {
-        let pdfUrl: string | undefined;
-
-        // Try to find the document by looking up through documentId
-        if (invoice.documentId) {
+        let supplierLogoUrl: string | undefined;
+        if ((invoice.supplier as any)?.logoUrl) {
           try {
-            const document = await this.prisma.document.findUnique({
-              where: { id: invoice.documentId },
-              select: { url: true },
-            });
-            if (document?.url) {
-              pdfUrl = await this.minioService.getPresignedUrl(document.url);
-            }
-          } catch (error) {
-            this.logger.warn(`Failed to generate presigned URL for invoice ${invoice.id}`);
+            supplierLogoUrl = await this.minioService.getPresignedUrl(
+              (invoice.supplier as any).logoUrl
+            );
+          } catch {
+            supplierLogoUrl = (invoice.supplier as any).logoUrl;
+          }
+        }
+
+        let companyLogoUrl: string | undefined;
+        if ((invoice.company as any)?.logo) {
+          try {
+            companyLogoUrl = await this.minioService.getPresignedUrl(
+              (invoice.company as any).logo,
+              7 * 24 * 60 * 60
+            );
+          } catch {
+            companyLogoUrl = undefined;
           }
         }
 
@@ -178,12 +244,13 @@ export class InvoiceService {
             unitPrice: Number(line.unitPrice),
             lineTotal: Number(line.lineTotal),
           })),
-          pdfUrl,
+          supplier: invoice.supplier ? { ...invoice.supplier, logoUrl: supplierLogoUrl } : null,
+          company: invoice.company
+            ? { ...invoice.company, logoUrl: companyLogoUrl, logo: undefined }
+            : null,
         };
       })
     );
-
-    const totalPages = Math.ceil(totalCount / limit);
 
     return {
       status: 'success',
@@ -191,55 +258,51 @@ export class InvoiceService {
       data: invoicesListWithUrls,
       pagination: {
         currentPage: page,
-        totalPages,
+        totalPages: Math.ceil(totalCount / limit),
         limitPerPage: limit,
         totalCount,
       },
+      counts: analytics.counts,
+      analytics,
     };
   }
 
-  /**
-   * Get invoice by ID
-   */
   async getInvoice(id: number, userCompanyId: number) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       include: {
         lines: { orderBy: { order: 'asc' } },
-        createdBy: {
+        supplier: {
           select: {
             id: true,
-            username: true,
+            name: true,
+            company: true,
             email: true,
+            phone: true,
+            address: true,
+            taxId: true,
+            logoUrl: true,
+          },
+        },
+        company: {
+          select: {
+            name: true,
+            legalName: true,
+            address: true,
+            city: true,
+            postalCode: true,
+            phone: true,
+            email: true,
+            vatNumber: true,
+            logo: true,
           },
         },
       },
     });
 
-    if (!invoice) {
-      throw new ApiError('Invoice not found', 404, 'NOT_FOUND');
-    }
-
-    // Check access
-    if (invoice.companyId !== userCompanyId) {
+    if (!invoice) throw new ApiError('Invoice not found', 404, 'NOT_FOUND');
+    if (invoice.companyId !== userCompanyId)
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
-    }
-
-    // Generate presigned URL for PDF if exists
-    let pdfUrl: string | undefined;
-    if (invoice.documentId) {
-      try {
-        const document = await this.prisma.document.findUnique({
-          where: { id: invoice.documentId },
-          select: { url: true },
-        });
-        if (document?.url) {
-          pdfUrl = await this.minioService.getPresignedUrl(document.url);
-        }
-      } catch (error) {
-        this.logger.warn(`Failed to generate presigned URL for invoice ${id}`);
-      }
-    }
 
     return {
       status: 'success',
@@ -260,30 +323,20 @@ export class InvoiceService {
           unitPrice: Number(line.unitPrice),
           lineTotal: Number(line.lineTotal),
         })),
-        pdfUrl,
       },
     };
   }
 
-  /**
-   * Update invoice
-   */
   async updateInvoice(id: number, userCompanyId: number, dto: UpdateInvoiceDto) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       include: { lines: true },
     });
 
-    if (!invoice) {
-      throw new ApiError('Invoice not found', 404, 'NOT_FOUND');
-    }
-
-    // Check access
-    if (invoice.companyId !== userCompanyId) {
+    if (!invoice) throw new ApiError('Invoice not found', 404, 'NOT_FOUND');
+    if (invoice.companyId !== userCompanyId)
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
-    }
 
-    // Recalculate amounts if lines or discount changed
     let amounts: any = {};
     if (
       dto.lines ||
@@ -291,7 +344,7 @@ export class InvoiceService {
       dto.discountValue !== undefined ||
       dto.vatRate !== undefined
     ) {
-      const dataForCalculation = {
+      amounts = this.calculateAmounts({
         lines:
           dto.lines ||
           invoice.lines.map((l: any) => ({
@@ -307,16 +360,11 @@ export class InvoiceService {
               ? Number(invoice.discountValue)
               : 0,
         vatRate: dto.vatRate !== undefined ? dto.vatRate : Number(invoice.vatRate),
-      } as any;
-
-      amounts = this.calculateAmounts(dataForCalculation);
+      } as any);
     }
 
-    // Delete existing lines if new lines provided
     if (dto.lines) {
-      await this.prisma.invoiceLine.deleteMany({
-        where: { invoiceId: id },
-      });
+      await this.prisma.invoiceLine.deleteMany({ where: { invoiceId: id } });
     }
 
     const updated = await this.prisma.invoice.update({
@@ -328,8 +376,11 @@ export class InvoiceService {
         ...(dto.discountType && { discountType: dto.discountType }),
         ...(dto.discountValue !== undefined && { discountValue: dto.discountValue }),
         ...(dto.notes !== undefined && { notes: dto.notes }),
-        ...(dto.clientName !== undefined && { clientName: dto.clientName }),
-        ...(dto.clientAddress !== undefined && { clientAddress: dto.clientAddress }),
+        ...(dto.supplierId !== undefined && { supplierId: dto.supplierId }),
+        ...(dto.amountPaid !== undefined && {
+          amountPaid: dto.amountPaid,
+          remainingAmount: (amounts.total ?? Number(invoice.total)) - dto.amountPaid,
+        }),
         ...(amounts.subtotal !== undefined && {
           subtotal: amounts.subtotal,
           discountAmount: amounts.discountAmount,
@@ -352,125 +403,56 @@ export class InvoiceService {
       include: { lines: { orderBy: { order: 'asc' } } },
     });
 
-    // Regenerate PDF synchronously if content changed
-    if (dto.lines || dto.status || dto.notes || dto.vatRate !== undefined) {
-      try {
-        await this.generateAndUploadPdf(id, invoice.companyId);
-        this.logger.log(`PDF regenerated successfully for invoice ${id}`);
-      } catch (err) {
-        this.logger.error(`Failed to regenerate PDF for invoice ${id}:`, err);
-      }
-    }
-
-    // Fetch updated invoice
-    const finalInvoice = await this.prisma.invoice.findUnique({
-      where: { id },
-      include: { lines: { orderBy: { order: 'asc' } } },
-    });
-
     return {
       status: 'success',
       code: '200',
-      data: finalInvoice || updated,
+      data: updated,
       message: 'Invoice updated successfully',
     };
   }
 
-  /**
-   * Delete invoice
-   */
   async deleteInvoice(id: number, userCompanyId: number) {
-    const invoice = await this.prisma.invoice.findUnique({
-      where: { id },
-    });
-
-    if (!invoice) {
-      throw new ApiError('Invoice not found', 404, 'NOT_FOUND');
-    }
-
-    // Check access
-    if (invoice.companyId !== userCompanyId) {
+    const invoice = await this.prisma.invoice.findUnique({ where: { id } });
+    if (!invoice) throw new ApiError('Invoice not found', 404, 'NOT_FOUND');
+    if (invoice.companyId !== userCompanyId)
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
-    }
 
-    // Delete PDF from MinIO and document entry
-    if (invoice.documentId) {
-      try {
-        const document = await this.prisma.document.findUnique({
-          where: { id: invoice.documentId },
-          select: { url: true },
-        });
+    await this.prisma.invoice.delete({ where: { id } });
 
-        if (document?.url) {
-          await this.minioService.deleteFile(document.url);
-        }
+    return { status: 'success', code: '200', message: 'Invoice deleted successfully' };
+  }
 
-        // Mark document as deleted
-        await this.prisma.document.update({
-          where: { id: invoice.documentId },
-          data: { status: 'deleted' },
-        });
-      } catch (error) {
-        this.logger.warn(`Failed to delete PDF for invoice ${id}`);
-      }
-    }
+  async publishInvoice(id: number, userCompanyId: number, newStatus: string) {
+    const invoice = await this.prisma.invoice.findUnique({ where: { id } });
+    if (!invoice) throw new ApiError('Invoice not found', 404, 'NOT_FOUND');
+    if (invoice.companyId !== userCompanyId)
+      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+    if (invoice.status !== 'draft')
+      throw new ApiError('Only draft invoices can be published', 400, 'INVALID_STATUS');
+    if (!['sent', 'overdue'].includes(newStatus))
+      throw new ApiError('Invalid target status', 400, 'INVALID_STATUS');
 
-    // Delete invoice from database (cascade will delete lines)
-    await this.prisma.invoice.delete({
+    const updated = await this.prisma.invoice.update({
       where: { id },
+      data: { status: newStatus },
+      include: { lines: { orderBy: { order: 'asc' } } },
     });
+
+    // Generate PDF now that invoice is published
+    this.generateAndSavePdf(id, userCompanyId).catch((err) =>
+      this.logger.error(`PDF generation failed for invoice ${id}: ${err.message}`)
+    );
 
     return {
       status: 'success',
       code: '200',
-      message: 'Invoice deleted successfully',
+      data: updated,
+      message: 'Invoice published successfully',
     };
   }
 
-  /**
-   * Download invoice PDF
-   */
-  async downloadInvoicePdf(id: number, userCompanyId: number) {
-    const invoice = await this.prisma.invoice.findUnique({
-      where: { id },
-    });
+  // ==================== HELPERS ====================
 
-    if (!invoice) {
-      throw new ApiError('Invoice not found', 404, 'NOT_FOUND');
-    }
-
-    // Check access
-    if (invoice.companyId !== userCompanyId) {
-      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
-    }
-
-    if (!invoice.documentId) {
-      throw new ApiError('PDF not found', 404, 'PDF_NOT_FOUND');
-    }
-
-    const document = await this.prisma.document.findUnique({
-      where: { id: invoice.documentId },
-      select: { url: true },
-    });
-
-    if (!document?.url) {
-      throw new ApiError('PDF not found', 404, 'PDF_NOT_FOUND');
-    }
-
-    const stream = await this.minioService.getFileStream(document.url);
-
-    return {
-      stream,
-      filename: `${invoice.invoiceNumber}.pdf`,
-      mimeType: 'application/pdf',
-    };
-  }
-
-  // ==================== HELPER METHODS ====================
-
-  /**
-   * Calculate amounts (subtotal, discount, VAT, total)
-   */
   private calculateAmounts(dto: {
     lines: any[];
     discountType?: string;
@@ -478,7 +460,6 @@ export class InvoiceService {
     vatRate: number;
   }) {
     const subtotal = dto.lines.reduce((acc, line) => acc + line.quantity * line.unitPrice, 0);
-
     let discount = 0;
     if (dto.discountType && dto.discountValue && dto.discountValue > 0) {
       discount =
@@ -486,11 +467,9 @@ export class InvoiceService {
           ? (subtotal * dto.discountValue) / 100
           : dto.discountValue;
     }
-
     const amountAfterDiscount = Math.max(subtotal - discount, 0);
     const vatAmount = (amountAfterDiscount * dto.vatRate) / 100;
     const total = amountAfterDiscount + vatAmount;
-
     return {
       subtotal: this.round(subtotal),
       discountAmount: this.round(discount),
@@ -499,46 +478,21 @@ export class InvoiceService {
     };
   }
 
-  /**
-   * Generate unique invoice number
-   */
-  private async generateInvoiceNumber(companyId: number): Promise<string> {
-    const now = new Date();
-    const year = now.getFullYear();
-
-    const prefix = `FAC-${year}-`;
-
-    const latest = await this.prisma.invoice.findFirst({
-      where: {
-        companyId,
-        invoiceNumber: { startsWith: prefix },
-      },
-      orderBy: { invoiceNumber: 'desc' },
-      select: { invoiceNumber: true },
-    });
-
-    let nextSequence = 1;
-    if (latest) {
-      const parts = latest.invoiceNumber.split('-');
-      const lastSeq = parseInt(parts[parts.length - 1], 10);
-      if (!isNaN(lastSeq)) {
-        nextSequence = lastSeq + 1;
-      }
-    }
-
-    const sequence = String(nextSequence).padStart(3, '0');
-    return `${prefix}${sequence}`;
+  private round(value: number): number {
+    return Math.round(value * 100) / 100;
   }
 
+  // ==================== PDF GENERATION ====================
+
   /**
-   * Generate PDF from invoice data and upload to MinIO + save in Documents
+   * Generate PDF using Puppeteer and save to MinIO under factures/YYYY-MM-DD/
+   * Runs asynchronously — does not block the API response.
    */
-  private async generateAndUploadPdf(invoiceId: number, companyId: number): Promise<void> {
+  private async generateAndSavePdf(invoiceId: number, companyId: number): Promise<void> {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: invoiceId },
       include: {
         lines: { orderBy: { order: 'asc' } },
-        createdBy: true,
         company: {
           select: {
             name: true,
@@ -549,49 +503,55 @@ export class InvoiceService {
             phone: true,
             email: true,
             vatNumber: true,
+            logo: true,
+          },
+        },
+        supplier: {
+          select: {
+            name: true,
+            company: true,
+            email: true,
+            phone: true,
+            address: true,
+            taxId: true,
+            logoUrl: true,
           },
         },
       },
     });
 
-    if (!invoice) {
-      throw new Error(`Invoice ${invoiceId} not found`);
-    }
+    if (!invoice) throw new Error(`Invoice ${invoiceId} not found`);
 
-    // Build HTML template
-    const html = this.buildInvoiceHtml(invoice);
+    const html = await this.buildHtml(invoice);
 
-    // Generate PDF using puppeteer
     const browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-web-security',
+        '--allow-running-insecure-content',
+      ],
     });
 
     try {
       const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: 'networkidle0' });
-
+      await page.setContent(html, { waitUntil: 'domcontentloaded' });
       const pdfBuffer = await page.pdf({
         format: 'A4',
         printBackground: true,
-        margin: {
-          top: '20px',
-          right: '20px',
-          bottom: '20px',
-          left: '20px',
-        },
+        margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
       });
 
-      // Get or create folder structure: factures/YYYY-MM-DD/
-      const dateFolder = await this.ensureFactureFolderStructure(
+      // Ensure folder structure: factures/YYYY-MM-DD/
+      const dateFolder = await this.ensureFolderStructure(
         companyId,
         invoice.createdById,
         invoice.createdAt
       );
-
-      // Upload PDF to MinIO in date-specific folder
-      const fileName = `${invoice.invoiceNumber}.pdf`;
       const folderPath = await this.buildFolderPath(dateFolder.id);
+      const fileName = `${invoice.invoiceNumber}.pdf`;
+
       const objectName = await this.minioService.uploadFile(companyId, folderPath, {
         originalname: fileName,
         buffer: Buffer.from(pdfBuffer),
@@ -599,7 +559,6 @@ export class InvoiceService {
         mimetype: 'application/pdf',
       } as Express.Multer.File);
 
-      // Create Document entry in database
       const document = await this.prisma.document.create({
         data: {
           name: fileName,
@@ -609,7 +568,7 @@ export class InvoiceService {
           url: objectName,
           category: 'facture',
           ownerId: invoice.createdById,
-          companyId: companyId,
+          companyId,
           createdBy: invoice.createdById,
           createdByCompanyId: companyId,
           parentId: dateFolder.id,
@@ -618,318 +577,239 @@ export class InvoiceService {
         },
       });
 
-      // Update invoice with documentId link
       await this.prisma.invoice.update({
         where: { id: invoiceId },
         data: { documentId: document.id },
       });
 
-      this.logger.log(`PDF generated and saved for invoice ${invoiceId} in documents folder`);
+      this.logger.log(`PDF saved for invoice ${invoiceId}`);
     } finally {
       await browser.close();
     }
   }
 
-  /**
-   * Ensure folder structure exists: factures/YYYY-MM-DD/
-   */
-  private async ensureFactureFolderStructure(
+  /** Build the HTML template — mirrors FactureTemplate.tsx on the frontend */
+  private async buildHtml(invoice: any): Promise<string> {
+    const fmt = (v: number) =>
+      new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+        v
+      ) + ' DT';
+
+    // Issuer (client company)
+    const issuerLines: string[] = [];
+    if (invoice.company) {
+      if (invoice.company.legalName || invoice.company.name)
+        issuerLines.push(invoice.company.legalName || invoice.company.name);
+      if (invoice.company.address) issuerLines.push(invoice.company.address);
+      if (invoice.company.city || invoice.company.postalCode)
+        issuerLines.push(
+          [invoice.company.postalCode, invoice.company.city].filter(Boolean).join(' ')
+        );
+      if (invoice.company.phone) issuerLines.push('Tél : ' + invoice.company.phone);
+      if (invoice.company.email) issuerLines.push(invoice.company.email);
+      if (invoice.company.vatNumber) issuerLines.push('N° TVA : ' + invoice.company.vatNumber);
+    }
+
+    // Recipient (supplier)
+    const recipientLines: string[] = [];
+    if (invoice.supplier) {
+      if (invoice.supplier.name) recipientLines.push(invoice.supplier.name);
+      if (invoice.supplier.company) recipientLines.push(invoice.supplier.company);
+      if (invoice.supplier.address) recipientLines.push(invoice.supplier.address);
+      if (invoice.supplier.email) recipientLines.push('Email : ' + invoice.supplier.email);
+      if (invoice.supplier.phone) recipientLines.push('Tél : ' + invoice.supplier.phone);
+      if (invoice.supplier.taxId) recipientLines.push('Matricule : ' + invoice.supplier.taxId);
+    }
+
+    // Company logo — fetch via MinIO SDK and embed as base64 data URI
+    // (Puppeteer cannot reach the MinIO HTTP endpoint from the server process)
+    const emetteurName = invoice.company?.legalName || invoice.company?.name || 'Émetteur';
+    let logoHtml = `<div style="font-size:20px;font-weight:700;color:#111827;">${emetteurName}</div>`;
+    if (invoice.company?.logo) {
+      try {
+        const buf = await this.minioService.downloadFile(invoice.company.logo);
+        const ext = invoice.company.logo.split('.').pop()?.toLowerCase() ?? 'png';
+        const mime: Record<string, string> = {
+          png: 'image/png',
+          jpg: 'image/jpeg',
+          jpeg: 'image/jpeg',
+          gif: 'image/gif',
+          webp: 'image/webp',
+          svg: 'image/svg+xml',
+        };
+        const dataUri = `data:${mime[ext] ?? 'image/png'};base64,${buf.toString('base64')}`;
+        logoHtml = `<img src="${dataUri}" alt="${emetteurName}" style="height:50px;max-width:200px;object-fit:contain;" />`;
+      } catch {
+        // fallback to company name text
+      }
+    }
+
+    const lineItemsHtml = (invoice.lines as any[])
+      .map(
+        (line) => `
+      <tr style="border-bottom:1px solid #e5e7eb;">
+        <td style="padding:12px 8px;font-size:12px;width:45%;word-wrap:break-word;">${line.description}</td>
+        <td style="padding:12px 8px;text-align:center;font-size:12px;width:20%;white-space:nowrap;">${fmt(Number(line.unitPrice))}</td>
+        <td style="padding:12px 8px;text-align:center;font-size:12px;width:15%;">${Number(line.quantity)}</td>
+        <td style="padding:12px 8px;text-align:right;font-weight:bold;font-size:12px;width:20%;white-space:nowrap;">${fmt(Number(line.lineTotal))}</td>
+      </tr>`
+      )
+      .join('');
+
+    const discountRow =
+      invoice.discountAmount && Number(invoice.discountAmount) > 0
+        ? `<tr>
+          <td class="bold" style="padding:6px 0;text-align:right;padding-right:15px;">REMISE${invoice.discountType === 'percentage' ? ` (${invoice.discountValue}%)` : ''} :</td>
+          <td style="padding:6px 0;text-align:right;white-space:nowrap;">– ${fmt(Number(invoice.discountAmount))}</td>
+        </tr>`
+        : '';
+
+    const notesHtml = invoice.notes
+      ? `<div style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:10px;color:#6b7280;">
+          <strong style="color:#111827;">Note :</strong> ${invoice.notes}
+        </div>`
+      : '';
+
+    return `<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8">
+<style>
+  body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#111827;margin:0;padding:40px;line-height:1.5;font-size:12px;}
+  .bold{font-weight:700;} .heavy{font-weight:800;}
+  .page-container{max-width:800px;margin:0 auto;}
+</style></head>
+<body><div class="page-container">
+  <table style="width:100%;margin-bottom:30px;border-collapse:collapse;">
+    <tr>
+      <td style="width:40%;vertical-align:middle;">${logoHtml}</td>
+      <td style="width:60%;text-align:right;vertical-align:middle;">
+        <h1 class="heavy" style="font-size:48px;text-transform:uppercase;margin:0;line-height:1;">FACTURE</h1>
+      </td>
+    </tr>
+  </table>
+  <table style="width:100%;margin-bottom:20px;font-size:13px;border-collapse:collapse;">
+    <tr>
+      <td style="width:50%;vertical-align:top;">
+        <div><span class="bold">DATE :</span> ${new Date(invoice.createdAt).toLocaleDateString('fr-FR')}</div>
+        <div><span class="bold">ÉCHÉANCE :</span> ${new Date(invoice.dueDate).toLocaleDateString('fr-FR')}</div>
+      </td>
+      <td style="width:50%;text-align:right;vertical-align:top;">
+        <div class="bold" style="font-size:15px;">FACTURE N° : ${invoice.invoiceNumber}</div>
+      </td>
+    </tr>
+  </table>
+  <div style="border-top:2px solid #333;margin-bottom:25px;"></div>
+  <table style="width:100%;margin-bottom:40px;font-size:12px;border-collapse:collapse;">
+    <tr>
+      <td style="width:50%;vertical-align:top;padding-right:20px;">
+        <div class="bold" style="text-transform:uppercase;margin-bottom:8px;font-size:11px;letter-spacing:0.5px;">ÉMETTEUR :</div>
+        ${issuerLines.map((l, i) => `<div ${i === 0 ? 'class="bold" style="font-size:14px;margin-bottom:4px;"' : 'style="margin-bottom:2px;"'}>${l}</div>`).join('')}
+      </td>
+      <td style="width:50%;vertical-align:top;text-align:right;padding-left:20px;">
+        <div class="bold" style="text-transform:uppercase;margin-bottom:8px;font-size:11px;letter-spacing:0.5px;">DESTINATAIRE :</div>
+        ${recipientLines.map((l, i) => `<div ${i === 0 ? 'class="bold" style="font-size:14px;margin-bottom:4px;"' : 'style="margin-bottom:2px;"'}>${l}</div>`).join('')}
+      </td>
+    </tr>
+  </table>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:30px;">
+    <thead><tr style="border-bottom:2px solid #333;">
+      <th class="bold" style="text-align:left;padding:10px 8px;font-size:12px;width:45%;">Description</th>
+      <th class="bold" style="text-align:center;padding:10px 8px;font-size:12px;width:20%;">Prix Unitaire</th>
+      <th class="bold" style="text-align:center;padding:10px 8px;font-size:12px;width:15%;">Quantité</th>
+      <th class="bold" style="text-align:right;padding:10px 8px;font-size:12px;width:20%;">Total</th>
+    </tr></thead>
+    <tbody>${lineItemsHtml}</tbody>
+  </table>
+  <table style="width:100%;margin-bottom:30px;border-collapse:collapse;">
+    <tr>
+      <td style="width:55%;vertical-align:top;padding-right:20px;font-size:12px;">
+        <div class="bold" style="text-transform:uppercase;margin-bottom:10px;font-size:13px;">RÈGLEMENT :</div>
+        <div style="font-size:10px;color:#6b7280;line-height:1.4;margin-top:10px;">
+          En cas de retard de paiement, une indemnité de 10% par jour de retard sera exigible.
+        </div>
+      </td>
+      <td style="width:45%;vertical-align:top;text-align:right;padding-left:20px;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tr>
+            <td class="bold" style="padding:6px 0;text-align:right;padding-right:15px;">TOTAL HT :</td>
+            <td style="padding:6px 0;text-align:right;white-space:nowrap;">${fmt(Number(invoice.subtotal))}</td>
+          </tr>
+          <tr>
+            <td class="bold" style="padding:6px 0;text-align:right;padding-right:15px;">TVA (${Number(invoice.vatRate)}%) :</td>
+            <td style="padding:6px 0;text-align:right;white-space:nowrap;">${fmt(Number(invoice.vatAmount))}</td>
+          </tr>
+          ${discountRow}
+          <tr style="border-top:2px solid #333;">
+            <td class="bold" style="padding:12px 0 6px 0;text-align:right;padding-right:15px;font-size:15px;">TOTAL TTC :</td>
+            <td class="heavy" style="padding:12px 0 6px 0;text-align:right;font-size:17px;white-space:nowrap;">${fmt(Number(invoice.total))}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+  ${notesHtml}
+</div></body></html>`;
+  }
+
+  private async ensureFolderStructure(
     companyId: number,
     ownerId: number,
     createdAt: Date
   ): Promise<any> {
-    // 1. Find or create root "factures" folder
-    let facturesFolder = await this.prisma.document.findFirst({
-      where: {
-        companyId: companyId,
-        name: 'factures',
-        isFolder: true,
-        parentId: null,
-        status: 'active',
-      },
+    let root = await this.prisma.document.findFirst({
+      where: { companyId, name: 'factures', isFolder: true, parentId: null, status: 'active' },
     });
-
-    if (!facturesFolder) {
-      facturesFolder = await this.prisma.document.create({
+    if (!root) {
+      root = await this.prisma.document.create({
         data: {
           name: 'factures',
           type: 'folder',
           isFolder: true,
           url: '',
-          ownerId: ownerId,
-          companyId: companyId,
+          ownerId,
+          companyId,
           createdBy: ownerId,
           createdByCompanyId: companyId,
           parentId: null,
           status: 'active',
         },
       });
-      this.logger.log(`Created factures root folder for company ${companyId}`);
     }
 
-    // 2. Find or create date folder (YYYY-MM-DD)
-    const dateString = this.formatDate(createdAt);
+    const dateStr = createdAt.toISOString().slice(0, 10); // YYYY-MM-DD
     let dateFolder = await this.prisma.document.findFirst({
-      where: {
-        companyId: companyId,
-        name: dateString,
-        isFolder: true,
-        parentId: facturesFolder.id,
-        status: 'active',
-      },
+      where: { companyId, name: dateStr, isFolder: true, parentId: root.id, status: 'active' },
     });
-
     if (!dateFolder) {
       dateFolder = await this.prisma.document.create({
         data: {
-          name: dateString,
+          name: dateStr,
           type: 'folder',
           isFolder: true,
           url: '',
-          ownerId: ownerId,
-          companyId: companyId,
+          ownerId,
+          companyId,
           createdBy: ownerId,
           createdByCompanyId: companyId,
-          parentId: facturesFolder.id,
+          parentId: root.id,
           status: 'active',
         },
       });
-      this.logger.log(`Created date folder ${dateString} for company ${companyId}`);
     }
-
     return dateFolder;
   }
 
-  /**
-   * Build folder path from document ID
-   */
   private async buildFolderPath(folderId: number): Promise<string> {
-    const path: string[] = [];
+    const parts: string[] = [];
     let currentId: number | null = folderId;
-
     while (currentId) {
       const folder = await this.prisma.document.findUnique({
         where: { id: currentId },
         select: { name: true, parentId: true },
       });
-
       if (!folder) break;
-
-      path.unshift(folder.name);
+      parts.unshift(folder.name);
       currentId = folder.parentId;
     }
-
-    return path.join('/');
-  }
-
-  /**
-   * Format date as YYYY-MM-DD
-   */
-  private formatDate(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-
-  /**
-   * Build HTML template for PDF generation
-   */
-  private buildInvoiceHtml(invoice: any): string {
-    const formatAmount = (value: number) =>
-      new Intl.NumberFormat('fr-FR', {
-        style: 'decimal',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(value) + ' DT';
-
-    const lines = (invoice.lines as any[]) || [];
-    const lineItemsHtml = lines
-      .map(
-        (line) => `
-      <tr style="border-bottom: 1px solid #e5e7eb;">
-        <td style="padding: 12px 8px; font-size: 12px; width: 45%; word-wrap: break-word;">${line.description}</td>
-        <td style="padding: 12px 8px; text-align: center; font-size: 12px; width: 20%; white-space: nowrap;">${formatAmount(Number(line.unitPrice))}</td>
-        <td style="padding: 12px 8px; text-align: center; font-size: 12px; width: 15%;">${Number(line.quantity)}</td>
-        <td style="padding: 12px 8px; text-align: right; font-weight: bold; font-size: 12px; width: 20%; white-space: nowrap;">${formatAmount(Number(line.lineTotal))}</td>
-      </tr>
-    `
-      )
-      .join('');
-
-    const statusLabels: Record<string, string> = {
-      draft: 'BROUILLON',
-      sent: 'ENVOYÉE',
-      paid: 'PAYÉE',
-      partial: 'PARTIELLEMENT PAYÉE',
-      overdue: 'EN RETARD',
-      cancelled: 'ANNULÉE',
-    };
-
-    const statusColors: Record<string, string> = {
-      draft: '#94A3B8',
-      sent: '#3B82F6',
-      paid: '#10B981',
-      partial: '#F59E0B',
-      overdue: '#EF4444',
-      cancelled: '#64748B',
-    };
-
-    return `
-    <!DOCTYPE html>
-    <html lang="fr">
-    <head>
-        <meta charset="UTF-8">
-        <title>Facture ${invoice.invoiceNumber}</title>
-        <style>
-            @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;800&display=swap');
-            body { 
-              font-family: 'Montserrat', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-              color: #111827;
-              margin: 0;
-              padding: 40px;
-              line-height: 1.5;
-              font-size: 12px;
-            }
-            .bold { font-weight: 700; }
-            .heavy { font-weight: 800; }
-            .page-container {
-              max-width: 800px;
-              margin: 0 auto;
-            }
-        </style>
-    </head>
-    <body>
-      <div class="page-container">
-        
-        <!-- Header with Title -->
-        <table style="width: 100%; margin-bottom: 30px; border-collapse: collapse;">
-          <tr>
-            <td style="width: 60%; vertical-align: middle;">
-              <h1 class="heavy" style="font-size: 48px; text-transform: uppercase; margin: 0; padding: 0; line-height: 1; color: #10B981;">FACTURE</h1>
-            </td>
-            <td style="width: 40%; text-align: right; vertical-align: middle;">
-              <div class="bold" style="font-size: 15px; margin-bottom: 8px;">FACTURE N° : ${invoice.invoiceNumber}</div>
-              <div style="display: inline-block; padding: 6px 16px; background-color: ${statusColors[invoice.status]}; color: white; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">
-                ${statusLabels[invoice.status] || invoice.status}
-              </div>
-            </td>
-          </tr>
-        </table>
-
-        <!-- Company and Client Info -->
-        <table style="width: 100%; margin-bottom: 20px; border-collapse: collapse;">
-          <tr>
-            <td style="width: 50%; vertical-align: top; padding-right: 20px;">
-              <div class="bold" style="font-size: 10px; text-transform: uppercase; margin-bottom: 8px; color: #64748B;">ÉMETTEUR :</div>
-              ${
-                invoice.company
-                  ? `
-              <div class="bold" style="font-size: 13px; margin-bottom: 4px;">${invoice.company.legalName || invoice.company.name}</div>
-              ${invoice.company.address ? `<div style="font-size: 11px; margin-bottom: 2px;">${invoice.company.address}</div>` : ''}
-              ${invoice.company.city || invoice.company.postalCode ? `<div style="font-size: 11px; margin-bottom: 2px;">${[invoice.company.postalCode, invoice.company.city].filter(Boolean).join(' ')}</div>` : ''}
-              ${invoice.company.phone ? `<div style="font-size: 11px; margin-bottom: 2px;">Tél : ${invoice.company.phone}</div>` : ''}
-              ${invoice.company.email ? `<div style="font-size: 11px; margin-bottom: 2px;">${invoice.company.email}</div>` : ''}
-              ${invoice.company.vatNumber ? `<div style="font-size: 11px;">N° TVA : ${invoice.company.vatNumber}</div>` : ''}
-              `
-                  : '<div style="font-size: 11px;">—</div>'
-              }
-            </td>
-            <td style="width: 50%; vertical-align: top; padding-left: 20px;">
-              <div class="bold" style="font-size: 10px; text-transform: uppercase; margin-bottom: 8px; color: #64748B;">DESTINATAIRE :</div>
-              <div class="bold" style="font-size: 13px; margin-bottom: 4px;">${invoice.clientName || 'Non spécifié'}</div>
-              ${invoice.clientAddress ? `<div style="font-size: 11px; line-height: 1.5;">${invoice.clientAddress}</div>` : ''}
-            </td>
-          </tr>
-        </table>
-
-        <!-- Dates -->
-        <table style="width: 100%; margin-bottom: 20px; font-size: 13px; border-collapse: collapse;">
-          <tr>
-            <td style="width: 50%; vertical-align: top;">
-              <div><span class="bold">DATE D'ÉMISSION :</span> ${new Date(invoice.createdAt).toLocaleDateString('fr-FR')}</div>
-              <div><span class="bold">DATE D'ÉCHÉANCE :</span> ${new Date(invoice.dueDate).toLocaleDateString('fr-FR')}</div>
-            </td>
-          </tr>
-        </table>
-
-        <!-- Divider -->
-        <div style="border-top: 2px solid #10B981; margin-bottom: 25px;"></div>
-
-        <!-- Product Lines Table -->
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
-          <thead>
-            <tr style="border-bottom: 2px solid #10B981; background: linear-gradient(to bottom, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.04));">
-              <th class="bold" style="text-align: left; padding: 12px 8px; font-size: 12px; width: 45%;">Description :</th>
-              <th class="bold" style="text-align: center; padding: 12px 8px; font-size: 12px; width: 20%;">Prix Unitaire :</th>
-              <th class="bold" style="text-align: center; padding: 12px 8px; font-size: 12px; width: 15%;">Quantité :</th>
-              <th class="bold" style="text-align: right; padding: 12px 8px; font-size: 12px; width: 20%;">Total :</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${lineItemsHtml}
-          </tbody>
-        </table>
-
-        <!-- Totals -->
-        <table style="width: 100%; margin-bottom: 30px; border-collapse: collapse;">
-          <tr>
-            <td style="width: 55%; vertical-align: top; padding-right: 20px;">
-              ${
-                invoice.notes
-                  ? `
-              <div class="bold" style="text-transform: uppercase; margin-bottom: 10px; font-size: 13px; letter-spacing: 0.5px; color: #10B981;">NOTES :</div>
-              <div style="padding: 15px; background-color: #F3F4F6; border-left: 4px solid #10B981; border-radius: 4px; line-height: 1.6; font-size: 11px; color: #374151;">
-                ${invoice.notes}
-              </div>
-              `
-                  : ''
-              }
-            </td>
-
-            <td style="width: 45%; vertical-align: top; text-align: right; padding-left: 20px;">
-              <table style="width: 100%; border-collapse: collapse; font-size: 13px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(5, 150, 105, 0.05) 100%); padding: 20px; border-radius: 8px; border: 2px solid rgba(16, 185, 129, 0.2);">
-                <tr>
-                  <td class="bold" style="padding: 8px 0; text-align: right; padding-right: 20px; color: #374151;">SOUS-TOTAL HT :</td>
-                  <td style="padding: 8px 0; text-align: right; white-space: nowrap; font-weight: 600;">${formatAmount(Number(invoice.subtotal))}</td>
-                </tr>
-                ${
-                  invoice.discountAmount && Number(invoice.discountAmount) > 0
-                    ? `
-                <tr>
-                  <td class="bold" style="padding: 8px 0; text-align: right; padding-right: 20px; color: #374151;">REMISE :</td>
-                  <td style="padding: 8px 0; text-align: right; white-space: nowrap; font-weight: 600;">- ${formatAmount(Number(invoice.discountAmount))}</td>
-                </tr>
-                `
-                    : ''
-                }
-                <tr>
-                  <td class="bold" style="padding: 8px 0; text-align: right; padding-right: 20px; color: #374151;">TVA (${Number(invoice.vatRate)}%) :</td>
-                  <td style="padding: 8px 0; text-align: right; white-space: nowrap; font-weight: 600;">${formatAmount(Number(invoice.vatAmount))}</td>
-                </tr>
-                <tr style="border-top: 2px solid #10B981;">
-                  <td class="bold" style="padding: 15px 0 8px 0; text-align: right; padding-right: 20px; font-size: 16px; color: #10B981;">TOTAL TTC :</td>
-                  <td class="heavy" style="padding: 15px 0 8px 0; text-align: right; font-size: 20px; white-space: nowrap; color: #10B981;">${formatAmount(Number(invoice.total))}</td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-
-        <!-- Footer -->
-        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #E5E7EB; text-align: center; font-size: 10px; color: #64748B;">
-          <div>Document généré le ${new Date().toLocaleDateString('fr-FR')}</div>
-          <div style="margin-top: 4px;">Merci pour votre confiance</div>
-        </div>
-
-      </div>
-    </body>
-    </html>
-  `;
-  }
-
-  /** Round to 2 decimal places */
-  private round(value: number): number {
-    return Math.round(value * 100) / 100;
+    return parts.join('/');
   }
 }

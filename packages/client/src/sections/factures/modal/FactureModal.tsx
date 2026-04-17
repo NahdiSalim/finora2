@@ -1,14 +1,16 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import {
   alpha,
+  Autocomplete,
   Box,
   Dialog,
   DialogContent,
   IconButton,
   MenuItem,
   Stack,
+  TextField,
   Typography,
   useMediaQuery,
   useTheme,
@@ -21,16 +23,10 @@ import CustomSelect from "src/components/common/CustomSelect";
 import type { FactureFormValues, FactureLine } from "src/types/facture";
 import { factureValidationSchema } from "src/validations/facture/facture-validation";
 import { useCreateInvoiceMutation } from "src/lib/services/invoicesApi";
-
-/** Maps frontend status values to backend values. */
-const statusToBackend: Record<string, string> = {
-  draft: "draft",
-  sent: "sent",
-  paid: "paid",
-  partial: "partial",
-  overdue: "overdue",
-  cancelled: "cancelled",
-};
+import {
+  useGetSuppliersQuery,
+  type Supplier,
+} from "src/lib/services/suppliersApi";
 
 interface Props {
   open: boolean;
@@ -57,8 +53,14 @@ function computeAmounts(values: FactureFormValues) {
   const amountHT = Math.max(subtotal - discount, 0);
   const amountTVA = (amountHT * (values.vatRate || 0)) / 100;
   const amountTTC = amountHT + amountTVA;
-
-  return { amountHT, amountTVA, amountTTC };
+  const amountPaid =
+    values.paymentStatus === "paid"
+      ? amountTTC
+      : values.paymentStatus === "partial"
+        ? values.amountPaid || 0
+        : 0;
+  const amountRemaining = amountTTC - amountPaid;
+  return { amountHT, amountTVA, amountTTC, amountPaid, amountRemaining };
 }
 
 const createLine = (): FactureLine => ({
@@ -67,10 +69,48 @@ const createLine = (): FactureLine => ({
   unitPrice: 0,
 });
 
+const defaultValues: FactureFormValues = {
+  invoiceNumber: "",
+  status: "draft",
+  vatRate: 19,
+  dueDate: "",
+  discountType: "percentage",
+  discountValue: 0,
+  lines: [createLine()],
+  notes: "",
+  supplierId: undefined,
+  paymentStatus: "unpaid",
+  amountPaid: 0,
+};
+
 export default function FactureModal({ open, onClose, onCreate }: Props) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [createInvoice, { isLoading: isCreating }] = useCreateInvoiceMutation();
+
+  const [supplierSearch, setSupplierSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(
+    null,
+  );
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(supplierSearch), 500);
+    return () => clearTimeout(timer);
+  }, [supplierSearch]);
+
+  const { data: suppliersData, isLoading: isLoadingSuppliers } =
+    useGetSuppliersQuery(
+      { page: 1, limit: 50, search: debouncedSearch || undefined },
+      { skip: !open },
+    );
+
+  const allSuppliers = useMemo(() => {
+    const list = suppliersData?.data || [];
+    if (!selectedSupplier) return list;
+    const ids = new Set([selectedSupplier.id]);
+    return [selectedSupplier, ...list.filter((s) => !ids.has(s.id))];
+  }, [suppliersData, selectedSupplier]);
 
   const {
     control,
@@ -82,53 +122,44 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
   } = useForm<FactureFormValues>({
     resolver: yupResolver(factureValidationSchema) as never,
     mode: "onChange",
-    defaultValues: {
-      status: "draft",
-      vatRate: 19,
-      dueDate: "",
-      discountType: "percentage",
-      discountValue: 0,
-      clientName: "",
-      clientAddress: "",
-      lines: [createLine()],
-      notes: "",
-    },
+    defaultValues,
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "lines",
-  });
-
+  const { fields, append, remove } = useFieldArray({ control, name: "lines" });
   const values = watch();
   const amounts = useMemo(() => computeAmounts(values), [values]);
 
   const closeAndReset = () => {
-    reset({
-      status: "draft",
-      vatRate: 19,
-      dueDate: "",
-      discountType: "percentage",
-      discountValue: 0,
-      clientName: "",
-      clientAddress: "",
-      lines: [createLine()],
-      notes: "",
-    });
+    reset({ ...defaultValues, lines: [createLine()] });
+    setSelectedSupplier(null);
+    setSupplierSearch("");
     onClose();
   };
 
   const onSubmit = async (formValues: FactureFormValues) => {
     try {
+      // Status stays exactly as chosen — never overridden by payment
+      const finalStatus: string = formValues.status;
+      // Recompute amounts from submitted values to avoid stale closure
+      const submittedAmounts = computeAmounts(formValues);
+      let finalAmountPaid = 0;
+
+      if (formValues.paymentStatus === "paid") {
+        finalAmountPaid = submittedAmounts.amountTTC;
+      } else if (formValues.paymentStatus === "partial") {
+        finalAmountPaid = formValues.amountPaid || 0;
+      }
+
       await createInvoice({
-        status: statusToBackend[formValues.status ?? "draft"] ?? "draft",
+        invoiceNumber: formValues.invoiceNumber,
+        status: finalStatus,
         dueDate: formValues.dueDate,
         vatRate: formValues.vatRate,
         discountType: formValues.discountType,
         discountValue: formValues.discountValue || undefined,
         notes: formValues.notes || undefined,
-        clientName: formValues.clientName ?? "",
-        clientAddress: formValues.clientAddress || undefined,
+        supplierId: formValues.supplierId!,
+        amountPaid: finalAmountPaid,
         lines: formValues.lines.map(({ description, quantity, unitPrice }) => ({
           description,
           quantity,
@@ -138,7 +169,7 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
       onCreate();
       closeAndReset();
     } catch {
-      // error toast is shown globally by baseQueryWithReauth
+      // error handled globally
     }
   };
 
@@ -146,16 +177,14 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
     <Dialog
       open={open}
       onClose={closeAndReset}
-      maxWidth="sm"
+      maxWidth="md"
       fullWidth
       fullScreen={isMobile}
       PaperProps={{
-        sx: {
-          borderRadius: isMobile ? 0 : 3,
-          overflow: "hidden",
-        },
+        sx: { borderRadius: isMobile ? 0 : 3, overflow: "hidden" },
       }}
     >
+      {/* Header */}
       <Box
         sx={{
           px: { xs: 2, md: 3 },
@@ -173,7 +202,7 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
             Nouvelle facture
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Créez une facture claire, professionnelle et prête au PDF
+            Créez une facture claire et professionnelle
           </Typography>
         </Box>
         <IconButton onClick={closeAndReset} sx={{ color: "text.secondary" }}>
@@ -187,13 +216,87 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
           onSubmit={handleSubmit(onSubmit)}
           sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}
         >
-          {/* Main Info Grid */}
+          {/* Numéro de facture */}
+          <CustomInput
+            label="Numéro de facture"
+            placeholder="Ex: FAC-2026-001"
+            {...register("invoiceNumber")}
+            error={!!errors.invoiceNumber}
+            helperText={errors.invoiceNumber?.message}
+            required
+          />
+
+          {/* Fournisseur */}
+          <Controller
+            name="supplierId"
+            control={control}
+            render={({ field: { onChange } }) => (
+              <Autocomplete
+                freeSolo={false}
+                options={allSuppliers}
+                value={selectedSupplier}
+                onChange={(_, newValue) => {
+                  setSelectedSupplier(newValue);
+                  onChange(newValue?.id);
+                }}
+                onInputChange={(_, val) => setSupplierSearch(val)}
+                inputValue={supplierSearch}
+                getOptionLabel={(o) => `${o.name} - ${o.company}`}
+                isOptionEqualToValue={(o, v) => o.id === v.id}
+                loading={isLoadingSuppliers}
+                filterOptions={(x) => x}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Fournisseur (Destinataire)"
+                    error={!!errors.supplierId}
+                    helperText={errors.supplierId?.message}
+                    required
+                    placeholder="Rechercher un fournisseur..."
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {isLoadingSuppliers && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ mr: 1 }}
+                            >
+                              Chargement...
+                            </Typography>
+                          )}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
+                  />
+                )}
+                renderOption={(props, option) => {
+                  const { key, ...rest } = props;
+                  return (
+                    <Box component="li" key={key} {...rest}>
+                      <Box sx={{ display: "flex", flexDirection: "column" }}>
+                        <Typography variant="body2" fontWeight={600}>
+                          {option.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {option.company} • {option.email}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  );
+                }}
+              />
+            )}
+          />
+
+          {/* Statut + Date d'échéance */}
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)" },
+              gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
               gap: 2,
-              alignItems: "flex-start",
             }}
           >
             <Controller
@@ -205,11 +308,10 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
                   label="Statut"
                   error={!!errors.status}
                   helperText={errors.status?.message}
+                  required
                 >
                   <MenuItem value="draft">Brouillon</MenuItem>
                   <MenuItem value="sent">Envoyée</MenuItem>
-                  <MenuItem value="paid">Payée</MenuItem>
-                  <MenuItem value="partial">Partiel</MenuItem>
                   <MenuItem value="overdue">En retard</MenuItem>
                 </CustomSelect>
               )}
@@ -222,8 +324,18 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
               error={!!errors.dueDate}
               helperText={errors.dueDate?.message}
               InputLabelProps={{ shrink: true }}
+              required
             />
+          </Box>
 
+          {/* TVA + Type de remise + Valeur de remise */}
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" },
+              gap: 2,
+            }}
+          >
             <CustomInput
               label="TVA (%)"
               type="number"
@@ -257,7 +369,55 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
             />
           </Box>
 
-          {/* Product Lines Section */}
+          {/* Statut de paiement */}
+          <Box
+            sx={{
+              border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+              borderRadius: 2,
+              p: 2,
+              backgroundColor: alpha(theme.palette.primary.main, 0.03),
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+            }}
+          >
+            <Typography variant="subtitle2" fontWeight={600}>
+              Statut de paiement
+            </Typography>
+
+            <Controller
+              name="paymentStatus"
+              control={control}
+              render={({ field }) => (
+                <CustomSelect
+                  {...field}
+                  label="Paiement"
+                  error={!!errors.paymentStatus}
+                  helperText={errors.paymentStatus?.message}
+                >
+                  <MenuItem value="unpaid">Non payée</MenuItem>
+                  <MenuItem value="paid">Payée</MenuItem>
+                  <MenuItem value="partial">Partiel</MenuItem>
+                </CustomSelect>
+              )}
+            />
+
+            {values.paymentStatus === "partial" && (
+              <CustomInput
+                label="Montant payé (DT)"
+                type="number"
+                {...register("amountPaid", { valueAsNumber: true })}
+                error={!!errors.amountPaid}
+                helperText={
+                  errors.amountPaid?.message ||
+                  `Montant restant: ${formatAmount(amounts.amountRemaining)}`
+                }
+                placeholder="0.00"
+              />
+            )}
+          </Box>
+
+          {/* Lignes de produit */}
           <Box
             sx={{
               border: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
@@ -330,10 +490,6 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
                     error={!!errors.lines?.[index]?.unitPrice}
                     helperText={errors.lines?.[index]?.unitPrice?.message}
                   />
-
-                  {/* FIX: Added `mt: "28px"` to push the button down past the label text.
-                    Adjust the "28px" value up or down if your custom input label height is slightly different.
-                  */}
                   <Box
                     sx={{
                       display: "flex",
@@ -372,30 +528,18 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
             </Stack>
           </Box>
 
-          <CustomInput
-            label="Nom du client"
-            placeholder="Nom ou raison sociale du destinataire"
-            {...register("clientName")}
-            error={!!errors.clientName}
-            helperText={errors.clientName?.message}
-          />
-
-          <CustomInput
-            label="Adresse du client"
-            placeholder="Adresse complète du destinataire (optionnel)"
-            {...register("clientAddress")}
-            error={!!errors.clientAddress}
-            helperText={errors.clientAddress?.message}
-          />
-
+          {/* Notes */}
           <CustomInput
             label="Notes"
             placeholder="Ajoutez une note ou des conditions spécifiques..."
             {...register("notes")}
             error={!!errors.notes}
             helperText={errors.notes?.message}
+            multiline
+            rows={3}
           />
 
+          {/* Totaux */}
           <Box
             sx={{
               borderRadius: 3,
@@ -479,6 +623,7 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
             <CustomButton
               type="submit"
               disabled={!isValid || isSubmitting || isCreating}
+              loading={isCreating || isSubmitting}
             >
               Créer la facture
             </CustomButton>

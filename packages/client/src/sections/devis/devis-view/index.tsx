@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Card,
   IconButton,
+  Skeleton,
   Stack,
   Typography,
   alpha,
@@ -16,10 +17,10 @@ import { FolderTabNavigation } from "src/components/common/CustomTabs";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
 import { DataTable, type Column } from "src/layouts/components/custom-table";
+import { CustomPagination } from "src/layouts/components/table-pagination";
+import { useTable } from "src/hooks/use-table";
 import DevisStatusChip from "src/components/devis/DevisStatusChip";
 import type { Devis, DevisStatus } from "src/types/devis";
-import { useTable } from "src/hooks/use-table";
-import { CustomPagination } from "src/layouts/components/table-pagination";
 
 import {
   useGetDevisListQuery,
@@ -31,6 +32,8 @@ import DevisModal from "../modal/DevisModal";
 import ViewDevisDrawer from "../drawer/ViewDevisDrawer";
 import DeleteConfirmModal from "src/components/common/DeleteConfirmModal";
 import { useAlert } from "src/contexts/AlertContext";
+
+const PAGE_SIZE = 10;
 
 const formatAmount = (value: number) =>
   new Intl.NumberFormat("fr-FR", {
@@ -57,19 +60,29 @@ export default function DevisView() {
   const [selected, setSelected] = useState<Devis | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | DevisStatus>("all");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [devisToDelete, setDevisToDelete] = useState<number | null>(null);
 
-  // API hooks
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      table.onResetPage();
+    }, 400);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
   const {
     data: devisData,
-    isLoading,
+    isFetching,
     isError,
   } = useGetDevisListQuery({
     page: table.page + 1,
-    limit: table.rowsPerPage,
+    limit: PAGE_SIZE,
     status: statusFilter === "all" ? undefined : statusFilter,
-    search: search.trim() || undefined,
+    search: debouncedSearch.trim() || undefined,
   });
 
   const [deleteDevis, { isLoading: isDeleting }] = useDeleteDevisMutation();
@@ -77,6 +90,17 @@ export default function DevisView() {
 
   const devisList = devisData?.data || [];
   const pagination = devisData?.pagination;
+  const counts = devisData?.counts;
+  const totalCount = pagination?.totalCount ?? 0;
+
+  const getTabCount = (tabId: string): number | undefined => {
+    if (!counts) return undefined;
+    if (tabId === "all")
+      return (
+        (counts.en_attente ?? 0) + (counts.accepte ?? 0) + (counts.refuse ?? 0)
+      );
+    return counts[tabId as keyof typeof counts];
+  };
 
   const openDetails = (devis: Devis) => {
     setSelected(devis);
@@ -86,14 +110,8 @@ export default function DevisView() {
   const handleDownloadPdf = async (devis: Devis) => {
     if (devis.pdfUrl) {
       try {
-        const { blob, filename } = await downloadDevis(devis.id).unwrap();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-      } catch (error) {
+        await downloadDevis(devis.id).unwrap();
+      } catch {
         showAlert("Erreur lors du téléchargement du PDF", "error");
       }
     } else {
@@ -104,14 +122,8 @@ export default function DevisView() {
     }
   };
 
-  const handleDeleteClick = (id: number) => {
-    setDevisToDelete(id);
-    setShowDeleteModal(true);
-  };
-
   const handleDeleteConfirm = async () => {
     if (!devisToDelete) return;
-
     try {
       await deleteDevis(devisToDelete).unwrap();
       showAlert("Devis supprimé avec succès", "success");
@@ -124,6 +136,8 @@ export default function DevisView() {
       );
     }
   };
+
+  const isInitialLoad = isFetching && devisList.length === 0;
 
   const columns: Column<Devis>[] = [
     {
@@ -142,9 +156,41 @@ export default function DevisView() {
       ),
     },
     {
+      id: "supplier",
+      label: "Fournisseur",
+      width: 200,
+      render: (d) => (
+        <Box>
+          {d.supplier ? (
+            <>
+              <Typography variant="body2" fontWeight={600} noWrap>
+                {d.supplier.name}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                noWrap
+                display="block"
+              >
+                {d.supplier.company}
+              </Typography>
+            </>
+          ) : (
+            <Typography
+              variant="body2"
+              color="text.disabled"
+              fontStyle="italic"
+            >
+              —
+            </Typography>
+          )}
+        </Box>
+      ),
+    },
+    {
       id: "createdAt",
       label: "Date de création",
-      width: 140,
+      width: 130,
       render: (d) => (
         <Typography variant="body2" color="text.secondary" noWrap>
           {new Date(d.createdAt).toLocaleDateString("fr-FR")}
@@ -152,22 +198,12 @@ export default function DevisView() {
       ),
     },
     {
-      id: "validUntil",
-      label: "Valide jusqu'au",
-      width: 140,
-      render: (d) => (
-        <Typography variant="body2" color="text.secondary" noWrap>
-          {new Date(d.validUntil).toLocaleDateString("fr-FR")}
-        </Typography>
-      ),
-    },
-    {
       id: "amountTTC",
       label: "TTC",
-      width: 140,
+      width: 130,
       align: "right",
       render: (d) => (
-        <Typography variant="body2" fontWeight={700} noWrap>
+        <Typography variant="body2" fontWeight={700} noWrap sx={{ pr: 1.5 }}>
           {formatAmount(d.amountTTC)}
         </Typography>
       ),
@@ -178,9 +214,7 @@ export default function DevisView() {
       width: 130,
       align: "center",
       render: (d) => (
-        <Box
-          sx={{ display: "flex", justifyContent: "center", minWidth: "100px" }}
-        >
+        <Box sx={{ display: "flex", justifyContent: "center" }}>
           <DevisStatusChip status={d.status} />
         </Box>
       ),
@@ -191,12 +225,7 @@ export default function DevisView() {
       width: 110,
       align: "right",
       render: (d) => (
-        <Stack
-          direction="row"
-          justifyContent="flex-end"
-          spacing={1}
-          sx={{ minWidth: "80px" }}
-        >
+        <Stack direction="row" justifyContent="flex-end" spacing={1}>
           <IconButton
             onClick={() => openDetails(d)}
             size="small"
@@ -252,124 +281,198 @@ export default function DevisView() {
         tabs={statusTabs.map((tab) => ({
           id: tab.id,
           label: tab.label,
-          count:
-            tab.id === "all"
-              ? devisList.length
-              : devisList.filter((d) => d.status === tab.id).length,
+          count: getTabCount(tab.id),
         }))}
         activeTab={statusFilter}
-        onTabChange={(id) => setStatusFilter(id as "all" | DevisStatus)}
+        onTabChange={(id) => {
+          setStatusFilter(id as "all" | DevisStatus);
+          table.onResetPage();
+        }}
       />
 
       <Card
         sx={{
           borderTopLeftRadius: 0,
           borderTopRightRadius: 0,
-          border: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
+          bgcolor: alpha(theme.palette.background.paper, 0.9),
+          backdropFilter: "blur(12px)",
+          border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
           borderTop: "none",
-          p: { xs: 2, md: 3 },
-          width: "100%",
-          overflow: "hidden", // Prevents card from bleeding horizontally
+          p: { xs: 1.5, sm: 2.5 },
         }}
       >
         <CustomInput
-          placeholder="Rechercher par numéro ou description..."
+          fullWidth
+          placeholder="Rechercher par fournisseur, société ou matricule..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           startIcon={<Search size={18} />}
-          sx={{ mb: 3 }}
+          sx={{
+            mb: 2.5,
+            "& .MuiOutlinedInput-root": {
+              borderRadius: 3,
+              backgroundColor: alpha(theme.palette.common.white, 0.8),
+              transition: "all 0.2s",
+              "&:hover, &.Mui-focused": {
+                backgroundColor: theme.palette.common.white,
+                boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.1)}`,
+              },
+            },
+          }}
         />
 
-        {isMobile ? (
+        {isError && !isFetching ? (
+          <Typography color="error" align="center" sx={{ py: 6 }}>
+            Erreur lors du chargement des devis.
+          </Typography>
+        ) : isInitialLoad ? (
           <Stack spacing={2}>
-            {isLoading ? (
-              <Typography color="text.secondary" align="center" sx={{ py: 6 }}>
-                Chargement...
-              </Typography>
-            ) : isError ? (
-              <Typography color="error" align="center" sx={{ py: 6 }}>
-                Erreur lors du chargement des devis
-              </Typography>
-            ) : devisList.length === 0 ? (
-              <Typography color="text.secondary" align="center" sx={{ py: 6 }}>
-                Aucun devis trouvé
-              </Typography>
-            ) : (
-              devisList.map((devis) => (
-                <Card
-                  key={devis.id}
-                  variant="outlined"
-                  sx={{ p: 2, borderRadius: 2 }}
-                >
-                  <Stack spacing={1.5}>
-                    <Stack direction="row" justifyContent="space-between">
-                      <Typography fontWeight={700}>{devis.number}</Typography>
-                      <DevisStatusChip status={devis.status} />
-                    </Stack>
-                    <Box>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        display="block"
-                      >
-                        Valide jusqu&apos;au:{" "}
-                        {new Date(devis.validUntil).toLocaleDateString("fr-FR")}
-                      </Typography>
-                      <Typography variant="subtitle2" fontWeight={700}>
-                        TTC: {formatAmount(devis.amountTTC)}
-                      </Typography>
-                    </Box>
-                    <Stack direction="row" spacing={1}>
-                      <CustomButton
-                        fullWidth
-                        variant="outlined"
-                        size="small"
-                        onClick={() => openDetails(devis)}
-                      >
-                        Détails
-                      </CustomButton>
-                      <CustomButton
-                        fullWidth
-                        variant="soft"
-                        size="small"
-                        onClick={() => handleDownloadPdf(devis)}
-                      >
-                        PDF
-                      </CustomButton>
-                    </Stack>
-                  </Stack>
-                </Card>
-              ))
-            )}
+            {[...Array(5)].map((_, i) => (
+              <Skeleton key={i} variant="rounded" height={52} />
+            ))}
           </Stack>
-        ) : (
+        ) : isMobile ? (
           <>
-            <DataTable
-              columns={columns}
-              data={devisList}
-              rowKey={(d) => d.id}
-              emptyMessage={
-                isLoading
-                  ? "Chargement..."
-                  : isError
-                    ? "Erreur lors du chargement"
-                    : "Aucun devis trouvé"
-              }
-            />
-
-            {pagination && pagination.totalPages > 1 && (
+            <Stack spacing={2}>
+              {devisList.length === 0 ? (
+                <Typography
+                  color="text.secondary"
+                  align="center"
+                  sx={{ py: 6 }}
+                >
+                  Aucun devis trouvé
+                </Typography>
+              ) : (
+                devisList.map((devis) => (
+                  <Card
+                    key={devis.id}
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      borderRadius: 3,
+                      transition: "transform 0.2s, box-shadow 0.2s",
+                      "&:hover": {
+                        transform: "translateY(-2px)",
+                        boxShadow: `0 8px 24px ${alpha(theme.palette.common.black, 0.08)}`,
+                      },
+                    }}
+                  >
+                    <Stack spacing={1.5}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                      >
+                        <Typography fontWeight={700} color="primary.main">
+                          {devis.number}
+                        </Typography>
+                        <DevisStatusChip status={devis.status} />
+                      </Stack>
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 1,
+                        }}
+                      >
+                        <Box>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            display="block"
+                          >
+                            Fournisseur
+                          </Typography>
+                          <Typography variant="body2" fontWeight={500} noWrap>
+                            {devis.supplier?.name || "—"}
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            display="block"
+                          >
+                            Montant TTC
+                          </Typography>
+                          <Typography variant="body2" fontWeight={700}>
+                            {formatAmount(devis.amountTTC)}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Stack direction="row" spacing={1}>
+                        <CustomButton
+                          fullWidth
+                          variant="outlined"
+                          size="small"
+                          onClick={() => openDetails(devis)}
+                        >
+                          Détails
+                        </CustomButton>
+                        <CustomButton
+                          fullWidth
+                          variant="soft"
+                          size="small"
+                          onClick={() => handleDownloadPdf(devis)}
+                        >
+                          PDF
+                        </CustomButton>
+                      </Stack>
+                    </Stack>
+                  </Card>
+                ))
+              )}
+            </Stack>
+            <Box
+              sx={{
+                borderTop: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
+                mt: 2,
+              }}
+            >
               <CustomPagination
-                count={pagination.totalCount}
-                rowsPerPage={table.rowsPerPage}
                 page={table.page}
+                count={totalCount}
+                rowsPerPage={PAGE_SIZE}
                 onPageChange={table.onChangePage}
               />
+            </Box>
+          </>
+        ) : (
+          <>
+            <Box sx={{ width: "100%", overflow: "auto" }}>
+              <DataTable
+                columns={columns}
+                data={devisList}
+                isLoading={isFetching}
+                isError={isError}
+                rowKey={(d) => d.id}
+                emptyMessage="Aucun devis trouvé"
+              />
+            </Box>
+            {!isError && (
+              <Box
+                sx={{
+                  borderTop: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
+                  mt: 2,
+                }}
+              >
+                <CustomPagination
+                  page={table.page}
+                  count={totalCount}
+                  rowsPerPage={PAGE_SIZE}
+                  onPageChange={table.onChangePage}
+                />
+              </Box>
             )}
           </>
         )}
       </Card>
 
-      <DevisModal open={openModal} onClose={() => setOpenModal(false)} />
+      <DevisModal
+        open={openModal}
+        onClose={() => setOpenModal(false)}
+        onCreate={() => table.onResetPage()}
+      />
 
       <ViewDevisDrawer
         open={openDrawer}

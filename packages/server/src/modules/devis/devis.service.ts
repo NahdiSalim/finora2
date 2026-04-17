@@ -50,8 +50,8 @@ export class DevisService {
     // Calculate amounts
     const amounts = this.calculateAmounts(dto);
 
-    // Generate devis number
-    const number = await this.generateDevisNumber();
+    // Use provided number or fall back to auto-generated
+    const number = dto.number || (await this.generateDevisNumber());
 
     // Create devis in database
     const devis = await this.prisma.devis.create({
@@ -71,6 +71,7 @@ export class DevisService {
         companyId: targetCompanyId,
         createdBy: userId,
         createdByCompanyId,
+        ...(dto.supplierId && { supplierId: dto.supplierId }),
       },
     });
 
@@ -120,7 +121,15 @@ export class DevisService {
 
     if (search && search.trim()) {
       where.OR = [
-        { number: { contains: search.trim(), mode: 'insensitive' } },
+        {
+          supplier: {
+            OR: [
+              { name: { contains: search.trim(), mode: 'insensitive' } },
+              { company: { contains: search.trim(), mode: 'insensitive' } },
+              { taxId: { contains: search.trim(), mode: 'insensitive' } },
+            ],
+          },
+        },
         { notes: { contains: search.trim(), mode: 'insensitive' } },
       ];
     }
@@ -135,7 +144,7 @@ export class DevisService {
       }
     }
 
-    const [totalCount, devisList] = await Promise.all([
+    const [totalCount, devisList, countEnAttente, countAccepte, countRefuse] = await Promise.all([
       this.prisma.devis.count({ where }),
       this.prisma.devis.findMany({
         where,
@@ -144,14 +153,25 @@ export class DevisService {
         take: limit,
         include: {
           owner: {
+            select: { id: true, username: true, email: true },
+          },
+          supplier: {
             select: {
               id: true,
-              username: true,
+              name: true,
+              company: true,
               email: true,
+              phone: true,
+              address: true,
+              taxId: true,
+              logoUrl: true,
             },
           },
         },
       }),
+      this.prisma.devis.count({ where: { companyId: userCompanyId, status: 'en_attente' } }),
+      this.prisma.devis.count({ where: { companyId: userCompanyId, status: 'accepte' } }),
+      this.prisma.devis.count({ where: { companyId: userCompanyId, status: 'refuse' } }),
     ]);
 
     // Generate presigned URLs for all PDFs
@@ -184,6 +204,11 @@ export class DevisService {
         limitPerPage: limit,
         totalCount,
       },
+      counts: {
+        en_attente: countEnAttente,
+        accepte: countAccepte,
+        refuse: countRefuse,
+      },
     };
   }
 
@@ -195,10 +220,18 @@ export class DevisService {
       where: { id },
       include: {
         owner: {
+          select: { id: true, username: true, email: true },
+        },
+        supplier: {
           select: {
             id: true,
-            username: true,
+            name: true,
+            company: true,
             email: true,
+            phone: true,
+            address: true,
+            taxId: true,
+            logoUrl: true,
           },
         },
       },
@@ -456,6 +489,30 @@ export class DevisService {
       where: { id: devisId },
       include: {
         owner: true,
+        company: {
+          select: {
+            name: true,
+            legalName: true,
+            address: true,
+            city: true,
+            postalCode: true,
+            phone: true,
+            email: true,
+            vatNumber: true,
+            logo: true,
+          },
+        },
+        supplier: {
+          select: {
+            name: true,
+            company: true,
+            email: true,
+            phone: true,
+            address: true,
+            taxId: true,
+            logoUrl: true,
+          },
+        },
       },
     });
 
@@ -464,7 +521,7 @@ export class DevisService {
     }
 
     // Build HTML template
-    const html = this.buildDevisHtml(devis);
+    const html = await this.buildDevisHtml(devis);
 
     // Generate PDF using puppeteer
     const browser = await puppeteer.launch({
@@ -644,7 +701,7 @@ export class DevisService {
   /**
    * Build HTML template for PDF generation
    */
-  private buildDevisHtml(devis: any): string {
+  private async buildDevisHtml(devis: any): Promise<string> {
     const formatAmount = (value: number) =>
       new Intl.NumberFormat('fr-FR', {
         style: 'decimal',
@@ -666,17 +723,54 @@ export class DevisService {
       )
       .join('');
 
-    const statusLabels: Record<string, string> = {
-      en_attente: 'EN ATTENTE',
-      accepte: 'ACCEPTÉ',
-      refuse: 'REFUSÉ',
-    };
+    // Build issuer lines (client company)
+    const issuerLines: string[] = [];
+    if (devis.company) {
+      if (devis.company.legalName || devis.company.name)
+        issuerLines.push(devis.company.legalName || devis.company.name);
+      if (devis.company.address) issuerLines.push(devis.company.address);
+      if (devis.company.city || devis.company.postalCode)
+        issuerLines.push([devis.company.postalCode, devis.company.city].filter(Boolean).join(' '));
+      if (devis.company.phone) issuerLines.push('Tél : ' + devis.company.phone);
+      if (devis.company.email) issuerLines.push(devis.company.email);
+      if (devis.company.vatNumber) issuerLines.push('N° TVA : ' + devis.company.vatNumber);
+    }
+    if (issuerLines.length === 0) issuerLines.push('Votre Entreprise');
 
-    const statusColors: Record<string, string> = {
-      en_attente: '#F59E0B',
-      accepte: '#10B981',
-      refuse: '#EF4444',
-    };
+    // Build recipient lines (supplier)
+    const recipientLines: string[] = [];
+    if (devis.supplier) {
+      if (devis.supplier.name) recipientLines.push(devis.supplier.name);
+      if (devis.supplier.company) recipientLines.push(devis.supplier.company);
+      if (devis.supplier.address) recipientLines.push(devis.supplier.address);
+      if (devis.supplier.email) recipientLines.push('Email : ' + devis.supplier.email);
+      if (devis.supplier.phone) recipientLines.push('Tél : ' + devis.supplier.phone);
+      if (devis.supplier.taxId) recipientLines.push('Matricule : ' + devis.supplier.taxId);
+    }
+    if (recipientLines.length === 0) recipientLines.push('Destinataire');
+
+    // Fetch company logo as base64 data URI using MinIO SDK directly
+    const emetteurName = devis.company?.legalName || devis.company?.name || 'Émetteur';
+    let emetteurLogoDataUri: string | undefined;
+    if (devis.company?.logo) {
+      try {
+        const buffer = await this.minioService.downloadFile(devis.company.logo);
+        const ext = devis.company.logo.split('.').pop()?.toLowerCase() ?? 'png';
+        const mimeMap: Record<string, string> = {
+          png: 'image/png',
+          jpg: 'image/jpeg',
+          jpeg: 'image/jpeg',
+          gif: 'image/gif',
+          webp: 'image/webp',
+          svg: 'image/svg+xml',
+        };
+        const contentType = mimeMap[ext] ?? 'image/png';
+        emetteurLogoDataUri = `data:${contentType};base64,${buffer.toString('base64')}`;
+      } catch (error) {
+        this.logger.warn(`Failed to fetch logo for devis ${devis.id}, will use company name`);
+        emetteurLogoDataUri = undefined;
+      }
+    }
 
     return `
     <!DOCTYPE html>
@@ -686,7 +780,7 @@ export class DevisService {
         <title>Devis ${devis.number}</title>
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;800&display=swap');
-            body { 
+            body {
               font-family: 'Montserrat', 'Helvetica Neue', Helvetica, Arial, sans-serif;
               color: #111827;
               margin: 0;
@@ -696,108 +790,104 @@ export class DevisService {
             }
             .bold { font-weight: 700; }
             .heavy { font-weight: 800; }
-            .page-container {
-              max-width: 800px;
-              margin: 0 auto;
-            }
+            .page-container { max-width: 800px; margin: 0 auto; }
         </style>
     </head>
     <body>
       <div class="page-container">
-        
-        <!-- Header with Title -->
+
+        <!-- Header -->
         <table style="width: 100%; margin-bottom: 30px; border-collapse: collapse;">
           <tr>
-            <td style="width: 60%; vertical-align: middle;">
-              <h1 class="heavy" style="font-size: 48px; text-transform: uppercase; margin: 0; padding: 0; line-height: 1; color: #3B82F6;">DEVIS</h1>
+            <td style="width: 40%; vertical-align: middle;">
+              ${
+                emetteurLogoDataUri
+                  ? `<img src="${emetteurLogoDataUri}" alt="${emetteurName}" style="height: 50px; max-width: 200px; object-fit: contain;" />`
+                  : `<div style="font-size: 20px; font-weight: 700; color: #111827;">${emetteurName}</div>`
+              }
             </td>
-            <td style="width: 40%; text-align: right; vertical-align: middle;">
-              <div class="bold" style="font-size: 15px; margin-bottom: 8px;">DEVIS N° : ${devis.number}</div>
-              <div style="display: inline-block; padding: 6px 16px; background-color: ${statusColors[devis.status]}; color: white; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">
-                ${statusLabels[devis.status]}
-              </div>
+            <td style="width: 60%; text-align: right; vertical-align: middle;">
+              <h1 class="heavy" style="font-size: 48px; text-transform: uppercase; margin: 0; padding: 0; line-height: 1;">DEVIS</h1>
             </td>
           </tr>
         </table>
 
-        <!-- Dates -->
+        <!-- Date and Devis Number -->
         <table style="width: 100%; margin-bottom: 20px; font-size: 13px; border-collapse: collapse;">
           <tr>
             <td style="width: 50%; vertical-align: top;">
               <div><span class="bold">DATE :</span> ${new Date(devis.createdAt).toLocaleDateString('fr-FR')}</div>
               <div><span class="bold">VALIDE JUSQU'AU :</span> ${new Date(devis.validUntil).toLocaleDateString('fr-FR')}</div>
             </td>
+            <td style="width: 50%; text-align: right; vertical-align: top;">
+              <div class="bold" style="font-size: 15px;">DEVIS N° : ${devis.number}</div>
+            </td>
           </tr>
         </table>
 
-        <!-- Divider -->
-        <div style="border-top: 2px solid #3B82F6; margin-bottom: 25px;"></div>
+        <div style="border-top: 2px solid #333; margin-bottom: 25px;"></div>
+
+        <!-- Issuer and Recipient -->
+        <table style="width: 100%; margin-bottom: 40px; font-size: 12px; border-collapse: collapse;">
+          <tr>
+            <td style="width: 50%; vertical-align: top; padding-right: 20px;">
+              <div class="bold" style="text-transform: uppercase; margin-bottom: 8px; font-size: 11px; letter-spacing: 0.5px;">ÉMETTEUR :</div>
+              ${issuerLines.map((line, i) => `<div ${i === 0 ? 'class="bold" style="font-size: 14px; margin-bottom: 4px;"' : 'style="margin-bottom: 2px;"'}>${line}</div>`).join('')}
+            </td>
+            <td style="width: 50%; vertical-align: top; text-align: right; padding-left: 20px;">
+              <div class="bold" style="text-transform: uppercase; margin-bottom: 8px; font-size: 11px; letter-spacing: 0.5px;">DESTINATAIRE :</div>
+              ${recipientLines.map((line, i) => `<div ${i === 0 ? 'class="bold" style="font-size: 14px; margin-bottom: 4px;"' : 'style="margin-bottom: 2px;"'}>${line}</div>`).join('')}
+            </td>
+          </tr>
+        </table>
 
         <!-- Product Lines Table -->
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
           <thead>
-            <tr style="border-bottom: 2px solid #3B82F6; background: linear-gradient(to bottom, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.04));">
-              <th class="bold" style="text-align: left; padding: 12px 8px; font-size: 12px; width: 45%;">Description :</th>
-              <th class="bold" style="text-align: center; padding: 12px 8px; font-size: 12px; width: 20%;">Prix Unitaire :</th>
-              <th class="bold" style="text-align: center; padding: 12px 8px; font-size: 12px; width: 15%;">Quantité :</th>
-              <th class="bold" style="text-align: right; padding: 12px 8px; font-size: 12px; width: 20%;">Total :</th>
+            <tr style="border-bottom: 2px solid #333;">
+              <th class="bold" style="text-align: left; padding: 10px 8px; font-size: 12px; width: 45%;">Description</th>
+              <th class="bold" style="text-align: center; padding: 10px 8px; font-size: 12px; width: 20%;">Prix Unitaire</th>
+              <th class="bold" style="text-align: center; padding: 10px 8px; font-size: 12px; width: 15%;">Quantité</th>
+              <th class="bold" style="text-align: right; padding: 10px 8px; font-size: 12px; width: 20%;">Total</th>
             </tr>
           </thead>
-          <tbody>
-            ${lineItemsHtml}
-          </tbody>
+          <tbody>${lineItemsHtml}</tbody>
         </table>
 
         <!-- Totals -->
         <table style="width: 100%; margin-bottom: 30px; border-collapse: collapse;">
           <tr>
             <td style="width: 55%; vertical-align: top; padding-right: 20px; font-size: 12px;">
-              <div class="bold" style="text-transform: uppercase; margin-bottom: 10px; font-size: 13px; letter-spacing: 0.5px; color: #3B82F6;">CONDITIONS :</div>
-              <div style="padding: 15px; background-color: #F3F4F6; border-left: 4px solid #3B82F6; border-radius: 4px; line-height: 1.6;">
-                <div class="bold" style="margin-bottom: 8px;">Validité du devis :</div>
-                <div style="margin-bottom: 12px; font-size: 11px; color: #374151;">
-                  Ce devis est valable jusqu'au ${new Date(devis.validUntil).toLocaleDateString('fr-FR')}. Au-delà de cette date, les prix et conditions peuvent être révisés.
-                </div>
-                <div class="bold" style="margin-bottom: 8px;">Modalités de paiement :</div>
-                <div style="font-size: 11px; color: #374151;">
-                  50% à la commande, solde à la livraison. Paiement par virement bancaire ou chèque.
-                </div>
+              <div class="bold" style="text-transform: uppercase; margin-bottom: 10px; font-size: 13px;">CONDITIONS :</div>
+              <div style="margin-top: 10px; font-size: 10px; color: #6b7280; line-height: 1.4;">
+                Ce devis est valable jusqu'au ${new Date(devis.validUntil).toLocaleDateString('fr-FR')}.<br/>
+                Veuillez le retourner signé avec la mention "Bon pour accord".
               </div>
             </td>
-
             <td style="width: 45%; vertical-align: top; text-align: right; padding-left: 20px;">
-              <table style="width: 100%; border-collapse: collapse; font-size: 13px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(14, 165, 233, 0.05) 100%); padding: 20px; border-radius: 8px; border: 2px solid rgba(59, 130, 246, 0.2);">
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                 <tr>
-                  <td class="bold" style="padding: 8px 0; text-align: right; padding-right: 20px; color: #374151;">TOTAL HT :</td>
-                  <td style="padding: 8px 0; text-align: right; white-space: nowrap; font-weight: 600;">${formatAmount(devis.amountHT)}</td>
+                  <td class="bold" style="padding: 6px 0; text-align: right; padding-right: 15px;">TOTAL HT :</td>
+                  <td style="padding: 6px 0; text-align: right; white-space: nowrap;">${formatAmount(devis.amountHT)}</td>
                 </tr>
                 <tr>
-                  <td class="bold" style="padding: 8px 0; text-align: right; padding-right: 20px; color: #374151;">TVA (${devis.tvaRate}%) :</td>
-                  <td style="padding: 8px 0; text-align: right; white-space: nowrap; font-weight: 600;">${formatAmount(devis.amountTVA)}</td>
+                  <td class="bold" style="padding: 6px 0; text-align: right; padding-right: 15px;">TVA (${devis.tvaRate}%) :</td>
+                  <td style="padding: 6px 0; text-align: right; white-space: nowrap;">${formatAmount(devis.amountTVA)}</td>
                 </tr>
-                <tr style="border-top: 2px solid #3B82F6;">
-                  <td class="bold" style="padding: 15px 0 8px 0; text-align: right; padding-right: 20px; font-size: 16px; color: #3B82F6;">TOTAL TTC :</td>
-                  <td class="heavy" style="padding: 15px 0 8px 0; text-align: right; font-size: 20px; white-space: nowrap; color: #3B82F6;">${formatAmount(devis.amountTTC)}</td>
+                <tr style="border-top: 2px solid #333;">
+                  <td class="bold" style="padding: 12px 0 6px 0; text-align: right; padding-right: 15px; font-size: 15px;">TOTAL TTC :</td>
+                  <td class="heavy" style="padding: 12px 0 6px 0; text-align: right; font-size: 17px; white-space: nowrap;">${formatAmount(devis.amountTTC)}</td>
                 </tr>
               </table>
             </td>
           </tr>
         </table>
 
-        <!-- Footer Notes -->
-        <div style="margin-top: 40px; padding: 20px; background-color: #F9FAFB; border-radius: 8px; border: 1px solid #E5E7EB;">
-          <div style="margin-bottom: 15px;">
-            <span class="bold" style="color: #3B82F6; font-size: 12px;">NOTE :</span>
-            <div style="margin-top: 5px; font-size: 11px; color: #374151; line-height: 1.6;">
-              ${devis.notes || 'Aucune note spécifique pour ce devis.'}
-            </div>
-          </div>
-        </div>
+        ${devis.notes ? `<div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 10px; color: #6b7280;"><strong style="color: #111827;">Note :</strong> ${devis.notes}</div>` : ''}
 
       </div>
     </body>
-    </html>
-  `;
+    </html>`;
   }
 
   /**

@@ -13,6 +13,7 @@ import {
   Store,
   User,
   Users,
+  Briefcase,
 } from "lucide-react";
 
 export type NavItem = {
@@ -99,5 +100,10 @@ export const NAV_CONFIG: Record<
   "/suppliers": {
     title: "Fournisseurs",
     icon: <Store />,
+  },
+
+  "/__finances": {
+    title: "Finances",
+    icon: <Briefcase />,
   },
 };

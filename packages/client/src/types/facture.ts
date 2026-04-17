@@ -6,7 +6,22 @@ export type FactureStatus =
   | "overdue"
   | "cancelled";
 
+export type PaymentStatus = "unpaid" | "paid" | "partial";
+
 export type DiscountType = "percentage" | "fixed";
+
+export interface FactureCompany {
+  id?: number;
+  name?: string;
+  legalName?: string | null;
+  address?: string | null;
+  city?: string | null;
+  postalCode?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  vatNumber?: string | null;
+  logoUrl?: string | null;
+}
 
 export interface FactureLine {
   id?: number;
@@ -14,6 +29,17 @@ export interface FactureLine {
   quantity: number;
   unitPrice: number;
   lineTotal?: number;
+}
+
+export interface Supplier {
+  id: number;
+  name: string;
+  company: string;
+  email: string;
+  phone: string;
+  address?: string;
+  taxId?: string;
+  logoUrl?: string;
 }
 
 export interface Facture {
@@ -33,13 +59,13 @@ export interface Facture {
   vatAmount?: number; // Backend property
   amountTTC?: number; // UI property for total
   total?: number; // Backend property
-  amountPaid?: number; // UI property for amount paid
-  amountRemaining?: number; // UI property for remaining amount
+  amountPaid: number;
+  amountRemaining: number;
   remainingAmount?: number; // Backend property
   notes: string | null;
-  clientName: string | null;
-  clientAddress: string | null;
-  company?: any;
+  supplierId?: number;
+  supplier?: Supplier;
+  company?: FactureCompany;
   companyId?: number;
   createdById?: number;
   documentId?: number | null;
@@ -50,13 +76,15 @@ export interface Facture {
 }
 
 export interface FactureFormValues {
-  status?: FactureStatus;
+  invoiceNumber: string;
+  status: "draft" | "sent" | "overdue";
   dueDate: string;
   vatRate: number;
   discountType?: DiscountType;
   discountValue?: number;
   lines: FactureLine[];
   notes?: string;
-  clientName?: string;
-  clientAddress?: string;
+  supplierId?: number;
+  paymentStatus: PaymentStatus;
+  amountPaid?: number;
 }

@@ -4,20 +4,26 @@ import {
   Divider,
   Drawer,
   IconButton,
+  MenuItem,
   Typography,
   alpha,
   useTheme,
 } from "@mui/material";
-import { Download, X } from "lucide-react";
+import { Download, Send, X } from "lucide-react";
+import { useState } from "react";
 
 import type { Facture } from "src/types/facture";
 import CustomButton from "src/components/common/CustomButton";
+import CustomSelect from "src/components/common/CustomSelect";
+import { usePublishInvoiceMutation } from "src/lib/services/invoicesApi";
+import { useAlert } from "src/contexts/AlertContext";
 
 interface Props {
   open: boolean;
   onClose: () => void;
   facture: Facture | null;
   onDownloadPdf: (facture: Facture) => void;
+  onPublished?: () => void;
 }
 
 const formatAmount = (value: number) =>
@@ -30,7 +36,7 @@ const formatAmount = (value: number) =>
 const getStatusConfig = (status: string) => {
   const configs: Record<string, { label: string; color: string }> = {
     draft: { label: "Brouillon", color: "#6B7280" },
-    sent: { label: "Envoyée", color: "#6B7280" },
+    sent: { label: "Envoyée", color: "#3B82F6" },
     paid: { label: "Payée", color: "#10B981" },
     partial: { label: "Partiel", color: "#F59E0B" },
     overdue: { label: "En retard", color: "#EF4444" },
@@ -44,12 +50,35 @@ export default function ViewFactureDrawer({
   onClose,
   facture,
   onDownloadPdf,
+  onPublished,
 }: Props) {
   const theme = useTheme();
+  const { showAlert } = useAlert();
+  const [publishInvoice, { isLoading: isPublishing }] =
+    usePublishInvoiceMutation();
+  const [targetStatus, setTargetStatus] = useState<string>("sent");
 
   if (!facture) return null;
 
+  const isDraft = facture.status === "draft";
   const statusConfig = getStatusConfig(facture.status);
+
+  const handlePublish = async () => {
+    try {
+      await publishInvoice({ id: facture.id, status: targetStatus }).unwrap();
+      showAlert(
+        "Facture publiée avec succès, le PDF est en cours de génération",
+        "success",
+      );
+      if (onPublished) {
+        onPublished();
+      } else {
+        onClose();
+      }
+    } catch {
+      showAlert("Erreur lors de la publication de la facture", "error");
+    }
+  };
 
   return (
     <Drawer
@@ -115,8 +144,6 @@ export default function ViewFactureDrawer({
             <X size={18} />
           </IconButton>
         </Box>
-
-        {/* Status Badge */}
         <Chip
           label={statusConfig.label}
           sx={{
@@ -131,13 +158,7 @@ export default function ViewFactureDrawer({
       </Box>
 
       {/* Content */}
-      <Box
-        sx={{
-          p: { xs: 1.5, sm: 2 },
-          overflowY: "auto",
-          flex: 1,
-        }}
-      >
+      <Box sx={{ p: { xs: 1.5, sm: 2 }, overflowY: "auto", flex: 1 }}>
         {/* Info Grid */}
         <Box
           sx={{
@@ -161,7 +182,6 @@ export default function ViewFactureDrawer({
               gap: 2,
             }}
           >
-            {/* Created Date */}
             <Box>
               <Typography
                 variant="caption"
@@ -179,8 +199,6 @@ export default function ViewFactureDrawer({
                 {new Date(facture.createdAt).toLocaleDateString("fr-FR")}
               </Typography>
             </Box>
-
-            {/* Due Date */}
             <Box>
               <Typography
                 variant="caption"
@@ -198,8 +216,6 @@ export default function ViewFactureDrawer({
                 {new Date(facture.dueDate).toLocaleDateString("fr-FR")}
               </Typography>
             </Box>
-
-            {/* TVA Rate */}
             <Box>
               <Typography
                 variant="caption"
@@ -213,8 +229,6 @@ export default function ViewFactureDrawer({
                 {facture.tvaRate ?? facture.vatRate}%
               </Typography>
             </Box>
-
-            {/* Discount */}
             <Box>
               <Typography
                 variant="caption"
@@ -394,23 +408,43 @@ export default function ViewFactureDrawer({
           },
         }}
       >
-        <CustomButton
-          variant="contained"
-          startIcon={<Download size={18} />}
-          onClick={() => onDownloadPdf(facture)}
-          fullWidth
-          size="large"
-          sx={{
-            fontSize: 14,
-            fontWeight: 600,
-            bgcolor: "#10B981",
-            "&:hover": {
-              bgcolor: "#059669",
-            },
-          }}
-        >
-          Télécharger PDF
-        </CustomButton>
+        {isDraft ? (
+          /* Draft: show status selector + publish button */
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+            <CustomSelect
+              label="Changer le statut vers"
+              value={targetStatus}
+              onChange={(e) => setTargetStatus(e.target.value as string)}
+              size="small"
+            >
+              <MenuItem value="sent">Envoyée</MenuItem>
+              <MenuItem value="overdue">En retard</MenuItem>
+            </CustomSelect>
+            <CustomButton
+              variant="contained"
+              startIcon={<Send size={18} />}
+              onClick={handlePublish}
+              loading={isPublishing}
+              fullWidth
+              size="large"
+              sx={{ fontSize: 14, fontWeight: 600 }}
+            >
+              Publier la facture
+            </CustomButton>
+          </Box>
+        ) : (
+          /* Non-draft: show download button */
+          <CustomButton
+            variant="contained"
+            startIcon={<Download size={18} />}
+            onClick={() => onDownloadPdf(facture)}
+            fullWidth
+            size="large"
+            sx={{ fontSize: 14, fontWeight: 600 }}
+          >
+            Télécharger PDF
+          </CustomButton>
+        )}
       </Box>
     </Drawer>
   );

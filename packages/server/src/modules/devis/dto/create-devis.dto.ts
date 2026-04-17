@@ -33,6 +33,10 @@ export class DevisLineDto {
 }
 
 export class CreateDevisDto {
+  @ApiProperty({ description: 'Devis number (e.g. DEV-2026-001)' })
+  @IsString()
+  number: string;
+
   @ApiProperty({ enum: ['en_attente', 'accepte', 'refuse'] })
   @IsString()
   @IsIn(['en_attente', 'accepte', 'refuse'])
@@ -73,4 +77,9 @@ export class CreateDevisDto {
   @IsOptional()
   @IsNumber()
   clientCompanyId?: number;
+
+  @ApiProperty({ required: false, description: 'Supplier (recipient) ID' })
+  @IsOptional()
+  @IsNumber()
+  supplierId?: number;
 }

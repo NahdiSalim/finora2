@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Card,
-  CircularProgress,
   IconButton,
   Stack,
   Typography,
   alpha,
   useMediaQuery,
   useTheme,
+  Skeleton,
 } from "@mui/material";
 import { Download, Eye, Plus, Search } from "lucide-react";
 
@@ -17,13 +17,16 @@ import { FolderTabNavigation } from "src/components/common/CustomTabs";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
 import { DataTable, type Column } from "src/layouts/components/custom-table";
+import { CustomPagination } from "src/layouts/components/table-pagination";
+import { useTable } from "src/hooks/use-table";
 import FactureStatusChip from "src/components/facture/FactureStatusChip";
+import FacturePaymentChip from "src/components/facture/FacturePaymentChip";
+import FactureAnalyticsCards from "src/components/facture/FactureAnalyticsCards";
 import type { Facture, DiscountType, FactureStatus } from "src/types/facture";
 import {
   useGetInvoicesQuery,
   type Invoice,
 } from "src/lib/services/invoicesApi";
-
 import { buildFactureTemplate } from "src/components/facture/FactureTemplate";
 import FactureModal from "../modal/FactureModal";
 import ViewFactureDrawer from "../drawer/ViewFactureDrawer";
@@ -41,11 +44,14 @@ const backendStatusMap: Record<string, FactureStatus> = {
 
 const uiStatusToBackend: Record<string, string | undefined> = {
   all: undefined,
-  draft: "draft,sent",
+  draft: "draft",
+  sent: "sent",
+  overdue: "overdue",
   paid: "paid",
   partial: "partial",
-  overdue: "overdue",
 };
+
+const PAGE_SIZE = 10;
 
 // ─── Mapper ───────────────────────────────────────────────────────────────────
 
@@ -53,6 +59,7 @@ function invoiceToFacture(inv: Invoice): Facture {
   return {
     id: inv.id,
     number: inv.invoiceNumber,
+    invoiceNumber: inv.invoiceNumber,
     status: backendStatusMap[inv.status] ?? "draft",
     tvaRate: Number(inv.vatRate),
     dueDate: inv.dueDate,
@@ -60,9 +67,9 @@ function invoiceToFacture(inv: Invoice): Facture {
     discountValue: Number(inv.discountValue ?? 0),
     discountAmount:
       inv.discountAmount != null ? Number(inv.discountAmount) : null,
-    clientName: inv.clientName ?? null,
-    clientAddress: inv.clientAddress ?? null,
-    company: inv.company ?? null,
+    supplierId: inv.supplierId,
+    supplier: (inv as any).supplier ?? null,
+    company: inv.company ?? undefined,
     lines: inv.lines.map((l) => ({
       id: l.id,
       description: l.description,
@@ -79,11 +86,6 @@ function invoiceToFacture(inv: Invoice): Facture {
   };
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-/** Number of invoices fetched per page. Kept small so each batch is fast. */
-const PAGE_SIZE = 10;
-
 const formatAmount = (value: number) =>
   new Intl.NumberFormat("fr-FR", {
     style: "decimal",
@@ -94,8 +96,7 @@ const formatAmount = (value: number) =>
 const statusTabs: Array<{ id: "all" | FactureStatus; label: string }> = [
   { id: "all", label: "Toutes" },
   { id: "draft", label: "Brouillon" },
-  { id: "paid", label: "Payée" },
-  { id: "partial", label: "Partiel" },
+  { id: "sent", label: "Envoyée" },
   { id: "overdue", label: "En retard" },
 ];
 
@@ -104,227 +105,61 @@ const statusTabs: Array<{ id: "all" | FactureStatus; label: string }> = [
 export default function FactureView() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const table = useTable();
 
-  // ── Modal / drawer state ──────────────────────────────────────────────────
   const [openModal, setOpenModal] = useState(false);
   const [openDrawer, setOpenDrawer] = useState(false);
   const [selected, setSelected] = useState<Facture | null>(null);
-
-  // ── Filter state ──────────────────────────────────────────────────────────
   const [statusFilter, setStatusFilter] = useState<"all" | FactureStatus>(
     "all",
   );
-  /** Raw value bound to the input — updates on every keystroke. */
   const [search, setSearch] = useState("");
-  /**
-   * Debounced value sent to the backend — only updates 400 ms after the user
-   * stops typing. This prevents a network request on every keystroke and avoids
-   * resetting the accumulated list mid-typing.
-   */
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // ── Infinite-scroll state ─────────────────────────────────────────────────
-  /**
-   * currentPage: which backend page we last requested.
-   * allInvoices: accumulated list across all fetched pages.
-   *
-   * These two always move forward together — they reset together when
-   * statusFilter or search changes.
-   */
-  const [currentPage, setCurrentPage] = useState(1);
-  const [allInvoices, setAllInvoices] = useState<Facture[]>([]);
-
-  // ── Debounce search → resets list and page after typing stops ────────────
-  /**
-   * Fires 400 ms after the user stops typing.
-   *
-   * prevSearchRef is initialized to the same value as `search` ("").
-   * On mount — including React Strict Mode's double-invocation — prevSearch
-   * equals search so the effect exits early without scheduling a timer.
-   * This replaces the previous isMountedRef pattern, which broke under Strict
-   * Mode: the second invocation saw isMounted=true and scheduled a ghost timer
-   * that cleared allInvoices 400 ms after mount.
-   */
-  const prevSearchRef = useRef(search);
   useEffect(() => {
-    if (prevSearchRef.current === search) return () => {};
-    prevSearchRef.current = search;
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
-      setCurrentPage(1);
-      setAllInvoices([]);
+      table.onResetPage();
     }, 400);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  // ── RTK Query ─────────────────────────────────────────────────────────────
   const {
     data: apiResponse,
     isFetching,
-    error: invoiceError,
+    isError,
   } = useGetInvoicesQuery({
-    page: currentPage,
-    pageSize: PAGE_SIZE,
+    page: table.page + 1,
+    limit: PAGE_SIZE,
     status: uiStatusToBackend[statusFilter],
     search: debouncedSearch || undefined,
   });
 
-  // Total count for the current filter (used for "has more" check and tab badge).
-  const total = apiResponse?.total ?? 0;
-  const hasMore = allInvoices.length < total;
+  const invoices: Facture[] = (apiResponse?.data ?? []).map(invoiceToFacture);
+  const totalCount = apiResponse?.pagination?.totalCount ?? 0;
+  const counts = apiResponse?.counts;
+  const analytics = apiResponse?.analytics;
 
-  // ── Refs — kept in sync every render so observer callbacks are never stale ─
-  /**
-   * currentPageRef: lets the data-append effect know which page just arrived
-   * without adding currentPage as a dependency (which would cause the effect
-   * to fire before the new data arrives and re-append the old page's items).
-   */
-  const currentPageRef = useRef(currentPage);
-  currentPageRef.current = currentPage;
-
-  // Used by the IntersectionObserver callback instead of closing over the state
-  // values (which would be stale after the observer is set up).
-  const isFetchingRef = useRef(isFetching);
-  isFetchingRef.current = isFetching;
-  const hasMoreRef = useRef(hasMore);
-  hasMoreRef.current = hasMore;
-
-  /**
-   * isIntersectingRef: tracks whether the sentinel is currently inside the
-   * viewport (including the 200 px rootMargin pre-fire zone).
-   *
-   * The IntersectionObserver only fires on *changes* to intersection state —
-   * it does NOT re-fire while the sentinel stays visible. So we keep this ref
-   * updated in the observer callback and read it in the data-append effect to
-   * decide whether to immediately request the next page after a batch arrives.
-   */
-  const isIntersectingRef = useRef(false);
-
-  /** Invisible 1px div placed at the bottom of the list — the scroll trigger. */
-  const sentinelRef = useRef<HTMLDivElement>(null);
-
-  // ── Append new page data when it arrives ──────────────────────────────────
-  /**
-   * Runs whenever RTK Query delivers new data for the current query args.
-   *
-   * Page accumulation logic:
-   *   - page 1  → replace allInvoices entirely (handles filter/search resets)
-   *   - page N  → append only items whose id is not already in the list
-   *               (duplicate guard: covers edge cases where the observer fires
-   *               twice before isFetching flips to true)
-   *
-   * After appending, if the sentinel is still in the viewport and there are
-   * more pages to load, we immediately increment the page counter here.
-   * This is the fix for the core bug: because the sentinel never *exits* the
-   * viewport when the list is short, the IntersectionObserver never re-fires,
-   * so without this explicit check only the first page would ever be loaded.
-   */
-  useEffect(() => {
-    if (!apiResponse?.data) return;
-    const page = currentPageRef.current;
-    const responseTotal = apiResponse.total ?? 0;
-    const newItems = apiResponse.data.map(invoiceToFacture);
-
-    setAllInvoices((prev) => {
-      if (page === 1) {
-        console.debug("[InfiniteScroll] page 1 — replacing list", {
-          fetched: newItems.length,
-          total: responseTotal,
-        });
-        return newItems;
-      }
-
-      const existingIds = new Set(prev.map((f) => f.id));
-      const unique = newItems.filter((f) => !existingIds.has(f.id));
-      const updated = unique.length > 0 ? [...prev, ...unique] : prev;
-
-      console.debug("[InfiniteScroll] append", {
-        page,
-        added: unique.length,
-        accumulated: updated.length,
-        total: responseTotal,
-        hasMore: updated.length < responseTotal,
-      });
-
-      return updated;
-    });
-
-    // page * PAGE_SIZE is the maximum number of items that could have been
-    // fetched through the current page. If that is less than the server total,
-    // at least one more page exists.
-    //
-    // We cannot read allInvoices.length here (it reflects the pre-update value),
-    // so we use the page-based arithmetic instead — it gives the same answer
-    // without requiring a second render cycle.
-    if (isIntersectingRef.current && page * PAGE_SIZE < responseTotal) {
-      console.debug(
-        "[InfiniteScroll] sentinel still visible — auto-loading next page",
-        {
-          nextPage: page + 1,
-        },
+  const getTabCount = (tabId: string): number | undefined => {
+    if (!counts) return undefined;
+    if (tabId === "all") {
+      return (
+        (counts.draft ?? 0) +
+        (counts.paid ?? 0) +
+        (counts.partial ?? 0) +
+        (counts.overdue ?? 0) +
+        (counts.cancelled ?? 0)
       );
-      setCurrentPage((p) => p + 1);
     }
-  }, [apiResponse]);
+    // "sent" is grouped into draft count on backend — show separately if available
+    return counts[tabId as keyof typeof counts];
+  };
 
-  // ── IntersectionObserver — triggers next page load ────────────────────────
-  /**
-   * Set up once on mount. Watches the sentinel div at the bottom of the list.
-   * rootMargin: "200px" pre-fires 200px before the sentinel enters the
-   * viewport, giving the next batch time to load before the user reaches the
-   * very end of the list.
-   *
-   * Responsibility: keep isIntersectingRef up-to-date AND handle the
-   * scroll-triggered case (user scrolled far enough to bring the sentinel into
-   * view after it had previously exited).
-   *
-   * The "sentinel always visible" case (short list) is handled in the
-   * data-append effect above.
-   */
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const intersecting = entries[0].isIntersecting;
-        isIntersectingRef.current = intersecting;
-
-        console.debug("[InfiniteScroll] observer fired", {
-          intersecting,
-          isFetching: isFetchingRef.current,
-          hasMore: hasMoreRef.current,
-        });
-
-        if (intersecting && !isFetchingRef.current && hasMoreRef.current) {
-          setCurrentPage((prev) => prev + 1);
-        }
-      },
-      { rootMargin: "200px" },
-    );
-
-    if (sentinel) observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, []); // mount-only — all runtime checks go through refs
-
-  // ── Filter / search change → full reset ───────────────────────────────────
-  /**
-   * Inline in the handlers so React batches all three state updates in the
-   * same render cycle, avoiding an intermediate render with stale data.
-   */
   const handleStatusChange = (id: string) => {
     setStatusFilter(id as "all" | FactureStatus);
-    setCurrentPage(1);
-    setAllInvoices([]);
+    table.onResetPage();
   };
-
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Only update the raw input value here.
-    // The debounce effect watches `search` and will reset the page + list
-    // and update `debouncedSearch` after 400 ms of inactivity.
-    setSearch(e.target.value);
-  };
-
-  // ── Helpers ───────────────────────────────────────────────────────────────
 
   const openDetails = (facture: Facture) => {
     setSelected(facture);
@@ -340,8 +175,14 @@ export default function FactureView() {
     win.print();
   };
 
-  // ── Desktop columns ───────────────────────────────────────────────────────
+  // Called after a draft is published — close drawer and refresh
+  const handlePublished = () => {
+    setOpenDrawer(false);
+    setSelected(null);
+    table.onResetPage();
+  };
 
+  // ── Desktop columns ───────────────────────────────────────────────────────
   const columns: Column<Facture>[] = [
     {
       id: "number",
@@ -356,7 +197,7 @@ export default function FactureView() {
     {
       id: "createdAt",
       label: "Création",
-      width: 120,
+      width: 110,
       render: (f) => (
         <Typography variant="body2" color="text.secondary">
           {new Date(f.createdAt).toLocaleDateString("fr-FR")}
@@ -364,24 +205,35 @@ export default function FactureView() {
       ),
     },
     {
-      id: "dueDate",
-      label: "Échéance",
-      width: 120,
+      id: "supplier",
+      label: "Fournisseur",
+      width: 180,
       render: (f) => (
-        <Typography variant="body2" color="text.secondary">
-          {new Date(f.dueDate).toLocaleDateString("fr-FR")}
-        </Typography>
-      ),
-    },
-    {
-      id: "amountHT",
-      label: "Montant HT",
-      width: 140,
-      align: "right",
-      render: (f) => (
-        <Typography variant="body2" fontWeight={500} sx={{ pr: 1.5 }}>
-          {formatAmount(f.amountHT ?? 0)}
-        </Typography>
+        <Box>
+          {f.supplier ? (
+            <>
+              <Typography variant="body2" fontWeight={600} noWrap>
+                {f.supplier.name}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                noWrap
+                display="block"
+              >
+                {f.supplier.company}
+              </Typography>
+            </>
+          ) : (
+            <Typography
+              variant="body2"
+              color="text.disabled"
+              fontStyle="italic"
+            >
+              —
+            </Typography>
+          )}
+        </Box>
       ),
     },
     {
@@ -396,9 +248,10 @@ export default function FactureView() {
       ),
     },
     {
+      // Invoice status: Brouillon / Envoyée / En retard
       id: "status",
       label: "Statut",
-      width: 130,
+      width: 120,
       align: "center",
       render: (f) => (
         <Box sx={{ display: "flex", justifyContent: "center" }}>
@@ -407,25 +260,24 @@ export default function FactureView() {
       ),
     },
     {
+      // Payment status: Payée / Partiel / Reste à payer
       id: "amountRemaining",
-      label: "Reste à payer",
-      width: 150,
-      align: "right",
+      label: "Paiement",
+      width: 130,
+      align: "center",
       render: (f) => (
-        <Typography
-          variant="body2"
-          fontWeight={700}
-          color={(f.amountRemaining ?? 0) > 0 ? "error.main" : "success.main"}
-          sx={{ pr: 1.5 }}
-        >
-          {formatAmount(f.amountRemaining ?? 0)}
-        </Typography>
+        <Box sx={{ display: "flex", justifyContent: "center" }}>
+          <FacturePaymentChip
+            amountPaid={f.amountPaid ?? 0}
+            amountRemaining={f.amountRemaining ?? 0}
+          />
+        </Box>
       ),
     },
     {
       id: "actions",
       label: "Actions",
-      width: 110,
+      width: 90,
       align: "right",
       render: (f) => (
         <Stack direction="row" justifyContent="flex-end" spacing={1}>
@@ -442,33 +294,28 @@ export default function FactureView() {
           >
             <Eye size={16} />
           </IconButton>
-          <IconButton
-            onClick={() => handleDownloadPdf(f)}
-            size="small"
-            sx={{
-              border: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
-              borderRadius: 1.5,
-              "&:hover": {
-                backgroundColor: alpha(theme.palette.success.main, 0.08),
-              },
-            }}
-          >
-            <Download size={16} />
-          </IconButton>
+          {/* Only show download for non-draft invoices */}
+          {f.status !== "draft" && (
+            <IconButton
+              onClick={() => handleDownloadPdf(f)}
+              size="small"
+              sx={{
+                border: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+                borderRadius: 1.5,
+                "&:hover": {
+                  backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                },
+              }}
+            >
+              <Download size={16} />
+            </IconButton>
+          )}
         </Stack>
       ),
     },
   ];
 
-  // ── Derived render helpers ────────────────────────────────────────────────
-
-  /** True only during the very first fetch (list is still empty). */
-  const isInitialLoad = isFetching && allInvoices.length === 0;
-
-  /** True while fetching a subsequent page (list already has content). */
-  const isFetchingMore = isFetching && allInvoices.length > 0;
-
-  // ── Render ────────────────────────────────────────────────────────────────
+  const isInitialLoad = isFetching && invoices.length === 0;
 
   return (
     <PageHeader
@@ -490,13 +337,13 @@ export default function FactureView() {
         },
       ]}
     >
-      {/* Active tab shows the total for the current filter. Inactive tabs have
-          no badge — counting them would require extra queries. */}
+      <FactureAnalyticsCards analytics={analytics} isLoading={isInitialLoad} />
+
       <FolderTabNavigation
         tabs={statusTabs.map((tab) => ({
           id: tab.id,
           label: tab.label,
-          count: tab.id === statusFilter ? total : undefined,
+          count: getTabCount(tab.id),
         }))}
         activeTab={statusFilter}
         onTabChange={handleStatusChange}
@@ -506,121 +353,187 @@ export default function FactureView() {
         sx={{
           borderTopLeftRadius: 0,
           borderTopRightRadius: 0,
-          border: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
+          bgcolor: alpha(theme.palette.background.paper, 0.9),
+          backdropFilter: "blur(12px)",
+          border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
           borderTop: "none",
-          p: { xs: 2, md: 3 },
+          p: { xs: 1.5, sm: 2.5 },
         }}
       >
         <CustomInput
-          placeholder="Rechercher par numéro ou description..."
+          fullWidth
+          placeholder="Rechercher par fournisseur, société ou matricule..."
           value={search}
-          onChange={handleSearchChange}
+          onChange={(e) => setSearch(e.target.value)}
           startIcon={<Search size={18} />}
-          sx={{ mb: 3 }}
+          sx={{
+            mb: 2.5,
+            "& .MuiOutlinedInput-root": {
+              borderRadius: 3,
+              backgroundColor: alpha(theme.palette.common.white, 0.8),
+              transition: "all 0.2s",
+              "&:hover, &.Mui-focused": {
+                backgroundColor: theme.palette.common.white,
+                boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.1)}`,
+              },
+            },
+          }}
         />
 
-        {/* ── API error (e.g. user has no company) ── */}
-        {invoiceError && !isFetching ? (
+        {isError && !isFetching ? (
           <Typography color="error" align="center" sx={{ py: 6 }}>
-            Impossible de charger les factures. Vérifiez que votre compte est
-            bien associé à une entreprise.
+            Impossible de charger les factures.
           </Typography>
-        ) : /* ── Initial load spinner (empty list + first fetch in progress) ── */
-        isInitialLoad ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-            <CircularProgress size={32} />
-          </Box>
-        ) : isMobile ? (
-          /* ── Mobile: card list ─────────────────────────────────────────── */
+        ) : isInitialLoad ? (
           <Stack spacing={2}>
-            {allInvoices.length === 0 ? (
-              <Typography color="text.secondary" align="center" sx={{ py: 6 }}>
-                Aucune facture trouvée
-              </Typography>
-            ) : (
-              allInvoices.map((facture) => (
-                <Card
-                  key={facture.id}
-                  variant="outlined"
-                  sx={{ p: 2, borderRadius: 2 }}
-                >
-                  <Stack spacing={1.5}>
-                    <Stack direction="row" justifyContent="space-between">
-                      <Typography fontWeight={700}>{facture.number}</Typography>
-                      <FactureStatusChip status={facture.status} />
-                    </Stack>
-                    <Box>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        display="block"
-                      >
-                        Échéance:{" "}
-                        {new Date(facture.dueDate).toLocaleDateString("fr-FR")}
-                      </Typography>
-                      <Typography variant="subtitle2" fontWeight={700}>
-                        TTC: {formatAmount(facture.amountTTC ?? 0)}
-                      </Typography>
-                    </Box>
-                    <Stack direction="row" spacing={1}>
-                      <CustomButton
-                        fullWidth
-                        variant="outlined"
-                        size="small"
-                        onClick={() => openDetails(facture)}
-                      >
-                        Détails
-                      </CustomButton>
-                      <CustomButton
-                        fullWidth
-                        variant="soft"
-                        size="small"
-                        onClick={() => handleDownloadPdf(facture)}
-                      >
-                        PDF
-                      </CustomButton>
-                    </Stack>
-                  </Stack>
-                </Card>
-              ))
-            )}
+            {[...Array(5)].map((_, i) => (
+              <Skeleton key={i} variant="rounded" height={52} />
+            ))}
           </Stack>
+        ) : isMobile ? (
+          <>
+            <Stack spacing={2}>
+              {invoices.length === 0 ? (
+                <Typography
+                  color="text.secondary"
+                  align="center"
+                  sx={{ py: 6 }}
+                >
+                  Aucune facture trouvée
+                </Typography>
+              ) : (
+                invoices.map((facture) => (
+                  <Card
+                    key={facture.id}
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      borderRadius: 3,
+                      transition: "transform 0.2s, box-shadow 0.2s",
+                      "&:hover": {
+                        transform: "translateY(-2px)",
+                        boxShadow: `0 8px 24px ${alpha(theme.palette.common.black, 0.08)}`,
+                      },
+                    }}
+                  >
+                    <Stack spacing={1.5}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                      >
+                        <Typography fontWeight={700} color="primary.main">
+                          {facture.number}
+                        </Typography>
+                        <FactureStatusChip status={facture.status} />
+                      </Stack>
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 1,
+                        }}
+                      >
+                        <Box>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            display="block"
+                          >
+                            Montant TTC
+                          </Typography>
+                          <Typography variant="body2" fontWeight={700}>
+                            {formatAmount(facture.amountTTC ?? 0)}
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            display="block"
+                          >
+                            Paiement
+                          </Typography>
+                          <FacturePaymentChip
+                            amountPaid={facture.amountPaid ?? 0}
+                            amountRemaining={facture.amountRemaining ?? 0}
+                          />
+                        </Box>
+                      </Box>
+                      <Stack direction="row" spacing={1}>
+                        <CustomButton
+                          fullWidth
+                          variant="outlined"
+                          size="small"
+                          onClick={() => openDetails(facture)}
+                        >
+                          Détails
+                        </CustomButton>
+                        {facture.status !== "draft" && (
+                          <CustomButton
+                            fullWidth
+                            variant="soft"
+                            size="small"
+                            onClick={() => handleDownloadPdf(facture)}
+                          >
+                            PDF
+                          </CustomButton>
+                        )}
+                      </Stack>
+                    </Stack>
+                  </Card>
+                ))
+              )}
+            </Stack>
+            <Box
+              sx={{
+                borderTop: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
+                mt: 2,
+              }}
+            >
+              <CustomPagination
+                page={table.page}
+                count={totalCount}
+                rowsPerPage={PAGE_SIZE}
+                onPageChange={table.onChangePage}
+              />
+            </Box>
+          </>
         ) : (
-          /* ── Desktop: data table ───────────────────────────────────────── */
-          <DataTable
-            columns={columns}
-            data={allInvoices}
-            rowKey={(f) => f.id}
-            emptyMessage="Aucune facture trouvée"
-          />
-        )}
-
-        {/*
-         * Sentinel — invisible 1px element watched by IntersectionObserver.
-         * Placed inside the Card so it scrolls with the page content.
-         * rootMargin: "200px" means the observer fires when this div is
-         * within 200px of the viewport bottom, pre-loading the next batch.
-         */}
-        <div ref={sentinelRef} style={{ height: 1 }} />
-
-        {/* Bottom loader — shown while a subsequent page is being fetched. */}
-        {isFetchingMore && (
-          <Box sx={{ display: "flex", justifyContent: "center", pt: 2 }}>
-            <CircularProgress size={24} />
-          </Box>
+          <>
+            <Box sx={{ width: "100%", overflow: "auto" }}>
+              <DataTable
+                columns={columns}
+                data={invoices}
+                isLoading={isFetching}
+                isError={isError}
+                emptyMessage="Aucune facture trouvée"
+                rowKey={(f) => f.id}
+              />
+            </Box>
+            {!isError && (
+              <Box
+                sx={{
+                  borderTop: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
+                  mt: 2,
+                }}
+              >
+                <CustomPagination
+                  page={table.page}
+                  count={totalCount}
+                  rowsPerPage={PAGE_SIZE}
+                  onPageChange={table.onChangePage}
+                />
+              </Box>
+            )}
+          </>
         )}
       </Card>
 
       <FactureModal
         open={openModal}
         onClose={() => setOpenModal(false)}
-        onCreate={() => {
-          // createInvoice mutation invalidates "Invoices LIST" → RTK Query
-          // auto-refetches page 1. Reset local accumulator so the new invoice
-          // (sorted by createdAt desc) appears at the top of the list.
-          setCurrentPage(1);
-          setAllInvoices([]);
-        }}
+        onCreate={() => table.onResetPage()}
       />
 
       <ViewFactureDrawer
@@ -628,6 +541,7 @@ export default function FactureView() {
         onClose={() => setOpenDrawer(false)}
         facture={selected}
         onDownloadPdf={handleDownloadPdf}
+        onPublished={handlePublished}
       />
     </PageHeader>
   );

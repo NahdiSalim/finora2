@@ -29,6 +29,10 @@ export class InvoiceLineDto {
 }
 
 export class CreateInvoiceDto {
+  @ApiProperty()
+  @IsString()
+  invoiceNumber: string;
+
   @ApiProperty({
     enum: ['draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled'],
     required: false,
@@ -71,13 +75,13 @@ export class CreateInvoiceDto {
   @IsString()
   notes?: string;
 
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsString()
-  clientName?: string;
+  @ApiProperty()
+  @IsNumber()
+  supplierId: number;
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsString()
-  clientAddress?: string;
+  @IsNumber()
+  @Min(0)
+  amountPaid?: number;
 }

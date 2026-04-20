@@ -305,6 +305,7 @@ export default function AccountantView() {
           ref={avatarInputRef}
           type="file"
           accept={ACCEPT_IMAGE}
+          aria-label="Changer la photo de profil"
           style={{ display: "none" }}
           onChange={onAvatarFileChange}
         />
@@ -312,6 +313,7 @@ export default function AccountantView() {
           ref={coverInputRef}
           type="file"
           accept={ACCEPT_IMAGE}
+          aria-label="Changer la photo de couverture"
           style={{ display: "none" }}
           onChange={onCoverFileChange}
         />

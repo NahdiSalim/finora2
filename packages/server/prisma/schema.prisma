@@ -495,12 +495,12 @@ model Company {
   // Invoices
   invoices          Invoice[] @relation("CompanyInvoices")
 
-  // Suppliers
-  suppliers         Supplier[] @relation("CompanySuppliers")
-
   // Devis
   devis             Devis[] @relation("DevisCompany")
   createdDevis      Devis[] @relation("DevisCreatedByCompany")
+
+  // Suppliers
+  suppliers         Supplier[] @relation("CompanySuppliers")
 
   @@index([siret])
   @@index([type])
@@ -1144,6 +1144,30 @@ model RoleAction {
 }
 
 
+// From supplier.prisma
+model Supplier {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(100)
+  company   String   @db.VarChar(100)
+  email     String   @db.VarChar(100)
+  phone     String   @db.VarChar(20)
+  address   String?  @db.VarChar(200)
+  taxId     String?  @db.VarChar(50)
+  logoUrl   String?
+
+  companyId Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownerCompany Company   @relation("CompanySuppliers", fields: [companyId], references: [id], onDelete: Cascade)
+  devis        Devis[]   @relation("DevisSupplier")
+  invoices     Invoice[] @relation("InvoiceSupplier")
+
+  @@index([companyId])
+  @@map("suppliers")
+}
+
+
 // From task-client.prisma
 model TaskClient {
   id        Int      @id @default(autoincrement())
@@ -1369,24 +1393,3 @@ model User {
   @@index([status])
 }
 
-
-model Supplier {
-  id          Int       @id @default(autoincrement())
-  name        String
-  company     String
-  email       String
-  phone       String
-  address     String?
-  taxId       String?
-  logoUrl     String?
-  companyId   Int
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  companyOwner Company    @relation("CompanySuppliers", fields: [companyId], references: [id], onDelete: Cascade)
-  invoices     Invoice[]  @relation("InvoiceSupplier")
-  devis        Devis[]    @relation("DevisSupplier")
-
-  @@index([companyId])
-  @@map("suppliers")
-}

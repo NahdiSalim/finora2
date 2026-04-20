@@ -200,6 +200,21 @@ export function useNavigation() {
       }
     }
 
+    // "Paramètres de l'entreprise" is only visible for CLIENT role
+    const companySettingsConfig = NAV_CONFIG["/settings/company"];
+    if (companySettingsConfig && isClient) {
+      const hasCompanySettingsEntry = items.some(
+        (item) => item.path === `${dashboardBase}/settings/company`,
+      );
+      if (!hasCompanySettingsEntry) {
+        items.push({
+          title: companySettingsConfig.title,
+          path: `${dashboardBase}/settings/company`,
+          icon: companySettingsConfig.icon,
+        });
+      }
+    }
+
     return items;
   }, [features, dashboardBase, user]);
 

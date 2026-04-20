@@ -14,6 +14,7 @@ import {
   User,
   Users,
   Briefcase,
+  Settings,
 } from "lucide-react";
 
 export type NavItem = {
@@ -90,6 +91,11 @@ export const NAV_CONFIG: Record<
   "/profile": {
     title: "Mon profil",
     icon: <User />,
+  },
+
+  "/settings/company": {
+    title: "Paramètres de l'entreprise",
+    icon: <Settings />,
   },
 
   "/tasks": {

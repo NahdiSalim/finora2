@@ -10,7 +10,14 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { Download, Eye, Plus, Search } from "lucide-react";
+import {
+  Eye,
+  Pencil,
+  Plus,
+  Printer,
+  Search,
+  Trash2,
+} from "lucide-react";
 
 import { PageHeader } from "src/layouts/components/page-header";
 import { FolderTabNavigation } from "src/components/common/CustomTabs";
@@ -19,169 +26,145 @@ import CustomInput from "src/components/common/CustomInput";
 import { DataTable, type Column } from "src/layouts/components/custom-table";
 import { CustomPagination } from "src/layouts/components/table-pagination";
 import { useTable } from "src/hooks/use-table";
-import DevisStatusChip from "src/components/devis/DevisStatusChip";
-import type { Devis, DevisStatus } from "src/types/devis";
-
-import {
-  useGetDevisListQuery,
-  useDeleteDevisMutation,
-  useDownloadDevisMutation,
-} from "src/lib/services/devisApi";
-import { useCreateBonCommandeMutation } from "src/lib/services/bonCommandeApi";
-
-import DevisModal from "../modal/DevisModal";
-import ConvertToBcModal from "../modal/ConvertToBcModal";
-import ViewDevisDrawer from "../drawer/ViewDevisDrawer";
 import DeleteConfirmModal from "src/components/common/DeleteConfirmModal";
 import { useAlert } from "src/contexts/AlertContext";
+import BonCommandeStatusChip from "src/components/bon-commande/BonCommandeStatusChip";
+import { buildBonCommandeTemplate } from "src/components/bon-commande/BonCommandeTemplate";
+import type { BonCommande, BonCommandeStatus } from "src/types/bon-commande";
+import {
+  useGetBonCommandeListQuery,
+  useDeleteBonCommandeMutation,
+} from "src/lib/services/bonCommandeApi";
+import { useCreateBonLivraisonMutation } from "src/lib/services/bonLivraisonApi";
+import BonCommandeModal from "../modal/BonCommandeModal";
+import ConvertToBlModal from "../modal/ConvertToBlModal";
+import ViewBonCommandeDrawer from "../drawer";
 
 const PAGE_SIZE = 10;
 
-const formatAmount = (value: number) =>
+const formatAmount = (v: number) =>
   new Intl.NumberFormat("fr-FR", {
-    style: "decimal",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(value) + " DT";
+  }).format(v) + " DT";
 
-const statusTabs: Array<{ id: "all" | DevisStatus; label: string }> = [
+const statusTabs: Array<{ id: "all" | BonCommandeStatus; label: string }> = [
   { id: "all", label: "Tous" },
-  { id: "en_attente", label: "En attente" },
-  { id: "accepte", label: "Accepté" },
-  { id: "refuse", label: "Refusé" },
+  { id: "brouillon", label: "Brouillon" },
+  { id: "confirme", label: "Confirmé" },
+  { id: "annule", label: "Annulé" },
 ];
 
-export default function DevisView() {
+export default function BonCommandeView() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const table = useTable();
   const { showAlert } = useAlert();
 
   const [openModal, setOpenModal] = useState(false);
+  const [editTarget, setEditTarget] = useState<BonCommande | null>(null);
   const [openDrawer, setOpenDrawer] = useState(false);
-  const [selected, setSelected] = useState<Devis | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"all" | DevisStatus>("all");
+  const [selected, setSelected] = useState<BonCommande | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"all" | BonCommandeStatus>(
+    "all",
+  );
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [devisToDelete, setDevisToDelete] = useState<number | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
-  // Debounce search
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const t = setTimeout(() => {
       setDebouncedSearch(search);
       table.onResetPage();
     }, 400);
-    return () => clearTimeout(timer);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  const {
-    data: devisData,
-    isFetching,
-    isError,
-  } = useGetDevisListQuery({
+  const { data, isFetching, isError } = useGetBonCommandeListQuery({
     page: table.page + 1,
     limit: PAGE_SIZE,
     status: statusFilter === "all" ? undefined : statusFilter,
     search: debouncedSearch.trim() || undefined,
   });
 
-  const [deleteDevis, { isLoading: isDeleting }] = useDeleteDevisMutation();
-  const [downloadDevis] = useDownloadDevisMutation();
-  const [createBonCommande, { isLoading: isConverting }] =
-    useCreateBonCommandeMutation();
+  const [deleteBc, { isLoading: isDeleting }] = useDeleteBonCommandeMutation();
+  const [createBonLivraison, { isLoading: isConverting }] =
+    useCreateBonLivraisonMutation();
 
-  const [convertTarget, setConvertTarget] = useState<Devis | null>(null);
+  const [convertTarget, setConvertTarget] = useState<BonCommande | null>(null);
 
-  const devisList = devisData?.data || [];
-  const pagination = devisData?.pagination;
-  const counts = devisData?.counts;
-  const totalCount = pagination?.totalCount ?? 0;
+  const list = data?.data || [];
+  const totalCount = data?.pagination?.totalCount ?? 0;
+  const counts = data?.counts;
 
-  const getTabCount = (tabId: string): number | undefined => {
+  const getTabCount = (id: string) => {
     if (!counts) return undefined;
-    if (tabId === "all")
+    if (id === "all")
       return (
-        (counts.en_attente ?? 0) + (counts.accepte ?? 0) + (counts.refuse ?? 0)
+        (counts.brouillon ?? 0) + (counts.confirme ?? 0) + (counts.annule ?? 0)
       );
-    return counts[tabId as keyof typeof counts];
+    return counts[id as keyof typeof counts];
   };
 
-  const openDetails = (devis: Devis) => {
-    setSelected(devis);
-    setOpenDrawer(true);
-  };
-
-  const handleDownloadPdf = async (devis: Devis) => {
-    if (devis.pdfUrl) {
-      try {
-        await downloadDevis(devis.id).unwrap();
-      } catch {
-        showAlert("Erreur lors du téléchargement du PDF", "error");
-      }
-    } else {
-      showAlert(
-        "Le PDF est en cours de génération, veuillez réessayer dans quelques instants",
-        "info",
-      );
-    }
-  };
-
-  const handleConvertToBc = async () => {
+  const handleConvertToBl = async () => {
     if (!convertTarget) return;
     try {
       const now = new Date();
       const timestamp = String(now.getTime()).slice(-5);
-      const number = `BC-${now.getFullYear()}-${timestamp}`;
+      const number = `BL-${now.getFullYear()}-${timestamp}`;
+      const today = now.toISOString().slice(0, 10);
 
-      await createBonCommande({
+      await createBonLivraison({
         number,
-        status: "brouillon",
+        status: "en_attente",
         tvaRate: convertTarget.tvaRate,
-        validUntil: convertTarget.validUntil.slice(0, 10),
+        deliveryDate: today,
         lines: convertTarget.lines,
         notes: convertTarget.notes ?? "",
         supplierId: convertTarget.supplierId,
       }).unwrap();
 
-      showAlert("Bon de commande créé avec succès", "success");
+      showAlert("Bon de livraison créé avec succès", "success");
       setConvertTarget(null);
     } catch {
-      showAlert("Erreur lors de la création du bon de commande", "error");
+      showAlert("Erreur lors de la création du bon de livraison", "error");
     }
   };
 
-  const handleDeleteConfirm = async () => {
-    if (!devisToDelete) return;
+  const handleDelete = async () => {
+    if (!deleteId) return;
     try {
-      await deleteDevis(devisToDelete).unwrap();
-      showAlert("Devis supprimé avec succès", "success");
-      setShowDeleteModal(false);
-      setDevisToDelete(null);
-    } catch (error: any) {
-      showAlert(
-        error?.data?.message || "Erreur lors de la suppression du devis",
-        "error",
-      );
+      await deleteBc(deleteId).unwrap();
+      showAlert("Bon de commande supprimé", "success");
+      setDeleteId(null);
+    } catch {
+      showAlert("Erreur lors de la suppression", "error");
     }
   };
 
-  const isInitialLoad = isFetching && devisList.length === 0;
+  const handlePrint = (bc: BonCommande) => {
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(buildBonCommandeTemplate(bc));
+    win.document.close();
+    win.focus();
+    win.print();
+  };
 
-  const columns: Column<Devis>[] = [
+  const columns: Column<BonCommande>[] = [
     {
       id: "number",
       label: "Numéro",
       width: 140,
-      render: (d) => (
+      render: (r) => (
         <Typography
           variant="body2"
           fontWeight={600}
           color="primary.main"
           noWrap
         >
-          {d.number}
+          {r.number}
         </Typography>
       ),
     },
@@ -189,41 +172,34 @@ export default function DevisView() {
       id: "supplier",
       label: "Fournisseur",
       width: 200,
-      render: (d) => (
-        <Box>
-          {d.supplier ? (
-            <>
-              <Typography variant="body2" fontWeight={600} noWrap>
-                {d.supplier.name}
-              </Typography>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                noWrap
-                display="block"
-              >
-                {d.supplier.company}
-              </Typography>
-            </>
-          ) : (
-            <Typography
-              variant="body2"
-              color="text.disabled"
-              fontStyle="italic"
-            >
-              —
+      render: (r) =>
+        r.supplier ? (
+          <Box>
+            <Typography variant="body2" fontWeight={600} noWrap>
+              {r.supplier.name}
             </Typography>
-          )}
-        </Box>
-      ),
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              noWrap
+              display="block"
+            >
+              {r.supplier.company}
+            </Typography>
+          </Box>
+        ) : (
+          <Typography variant="body2" color="text.disabled" fontStyle="italic">
+            —
+          </Typography>
+        ),
     },
     {
       id: "createdAt",
       label: "Date de création",
       width: 130,
-      render: (d) => (
+      render: (r) => (
         <Typography variant="body2" color="text.secondary" noWrap>
-          {new Date(d.createdAt).toLocaleDateString("fr-FR")}
+          {new Date(r.createdAt).toLocaleDateString("fr-FR")}
         </Typography>
       ),
     },
@@ -232,34 +208,34 @@ export default function DevisView() {
       label: "TTC",
       width: 130,
       align: "right",
-      render: (d) => (
+      render: (r) => (
         <Typography variant="body2" fontWeight={700} noWrap sx={{ pr: 1.5 }}>
-          {formatAmount(d.amountTTC)}
+          {formatAmount(r.amountTTC)}
         </Typography>
       ),
     },
     {
       id: "status",
       label: "Statut",
-      width: 130,
+      width: 120,
       align: "center",
-      render: (d) => (
+      render: (r) => (
         <Box sx={{ display: "flex", justifyContent: "center" }}>
-          <DevisStatusChip status={d.status} />
+          <BonCommandeStatusChip status={r.status} />
         </Box>
       ),
     },
     {
       id: "actions",
       label: "Actions",
-      width: 160,
+      width: 200,
       align: "right",
-      render: (d) => (
+      render: (r) => (
         <Stack direction="row" justifyContent="flex-end" spacing={1}>
           <CustomButton
             size="small"
             variant="soft"
-            onClick={() => setConvertTarget(d)}
+            onClick={() => setConvertTarget(r)}
             sx={{
               fontSize: "0.75rem",
               px: 1.25,
@@ -268,11 +244,14 @@ export default function DevisView() {
               whiteSpace: "nowrap",
             }}
           >
-            → Créer BC
+            → Créer BL
           </CustomButton>
           <IconButton
-            onClick={() => openDetails(d)}
             size="small"
+            onClick={() => {
+              setSelected(r);
+              setOpenDrawer(true);
+            }}
             sx={{
               width: 34,
               height: 34,
@@ -291,8 +270,11 @@ export default function DevisView() {
             <Eye size={16} />
           </IconButton>
           <IconButton
-            onClick={() => handleDownloadPdf(d)}
             size="small"
+            onClick={() => {
+              setEditTarget(r);
+              setOpenModal(true);
+            }}
             sx={{
               width: 34,
               height: 34,
@@ -308,20 +290,62 @@ export default function DevisView() {
               },
             }}
           >
-            <Download size={16} />
+            <Pencil size={16} />
+          </IconButton>
+          <IconButton
+            size="small"
+            onClick={() => handlePrint(r)}
+            sx={{
+              width: 34,
+              height: 34,
+              border: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+              borderRadius: 2,
+              color: "text.secondary",
+              transition: "all 0.2s",
+              "&:hover": {
+                borderColor: theme.palette.primary.main,
+                backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                color: "primary.main",
+                transform: "translateY(-2px)",
+              },
+            }}
+          >
+            <Printer size={16} />
+          </IconButton>
+          <IconButton
+            size="small"
+            onClick={() => setDeleteId(r.id)}
+            sx={{
+              width: 34,
+              height: 34,
+              border: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+              borderRadius: 2,
+              color: "text.secondary",
+              transition: "all 0.2s",
+              "&:hover": {
+                borderColor: theme.palette.error.main,
+                backgroundColor: alpha(theme.palette.error.main, 0.08),
+                color: "error.main",
+                transform: "translateY(-2px)",
+              },
+            }}
+          >
+            <Trash2 size={16} />
           </IconButton>
         </Stack>
       ),
     },
   ];
 
+  const isInitialLoad = isFetching && list.length === 0;
+
   return (
     <PageHeader
-      title="Devis"
-      caption="Créez et gérez vos devis commerciaux en toute simplicité"
+      title="Bons de commande"
+      caption="Gérez vos bons de commande"
       actions={[
         {
-          label: "Nouveau devis",
+          label: "Nouveau BC",
           icon: <Plus size={18} />,
           onClick: () => setOpenModal(true),
           sx: {
@@ -336,14 +360,14 @@ export default function DevisView() {
       ]}
     >
       <FolderTabNavigation
-        tabs={statusTabs.map((tab) => ({
-          id: tab.id,
-          label: tab.label,
-          count: getTabCount(tab.id),
+        tabs={statusTabs.map((t) => ({
+          id: t.id,
+          label: t.label,
+          count: getTabCount(t.id),
         }))}
         activeTab={statusFilter}
         onTabChange={(id) => {
-          setStatusFilter(id as "all" | DevisStatus);
+          setStatusFilter(id as "all" | BonCommandeStatus);
           table.onResetPage();
         }}
       />
@@ -361,7 +385,7 @@ export default function DevisView() {
       >
         <CustomInput
           fullWidth
-          placeholder="Rechercher par fournisseur, société ou matricule..."
+          placeholder="Rechercher par fournisseur..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           startIcon={<Search size={18} />}
@@ -370,18 +394,13 @@ export default function DevisView() {
             "& .MuiOutlinedInput-root": {
               borderRadius: 3,
               backgroundColor: alpha(theme.palette.common.white, 0.8),
-              transition: "all 0.2s",
-              "&:hover, &.Mui-focused": {
-                backgroundColor: theme.palette.common.white,
-                boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.1)}`,
-              },
             },
           }}
         />
 
         {isError && !isFetching ? (
           <Typography color="error" align="center" sx={{ py: 6 }}>
-            Erreur lors du chargement des devis.
+            Erreur lors du chargement.
           </Typography>
         ) : isInitialLoad ? (
           <Stack spacing={2}>
@@ -392,40 +411,34 @@ export default function DevisView() {
         ) : isMobile ? (
           <>
             <Stack spacing={2}>
-              {devisList.length === 0 ? (
+              {list.length === 0 ? (
                 <Typography
                   color="text.secondary"
                   align="center"
                   sx={{ py: 6 }}
                 >
-                  Aucun devis trouvé
+                  Aucun bon de commande trouvé
                 </Typography>
               ) : (
-                devisList.map((devis) => (
+                list.map((bc) => (
                   <Card
-                    key={devis.id}
+                    key={bc.id}
                     variant="outlined"
-                    sx={{
-                      p: 2,
-                      borderRadius: 3,
-                      transition: "transform 0.2s, box-shadow 0.2s",
-                      "&:hover": {
-                        transform: "translateY(-2px)",
-                        boxShadow: `0 8px 24px ${alpha(theme.palette.common.black, 0.08)}`,
-                      },
-                    }}
+                    sx={{ p: 2, borderRadius: 3 }}
                   >
                     <Stack spacing={1.5}>
+                      {/* Header */}
                       <Stack
                         direction="row"
                         justifyContent="space-between"
                         alignItems="center"
                       >
                         <Typography fontWeight={700} color="primary.main">
-                          {devis.number}
+                          {bc.number}
                         </Typography>
-                        <DevisStatusChip status={devis.status} />
+                        <BonCommandeStatusChip status={bc.status} />
                       </Stack>
+                      {/* Info grid */}
                       <Box
                         sx={{
                           display: "grid",
@@ -442,7 +455,7 @@ export default function DevisView() {
                             Fournisseur
                           </Typography>
                           <Typography variant="body2" fontWeight={500} noWrap>
-                            {devis.supplier?.name || "—"}
+                            {bc.supplier?.name || "—"}
                           </Typography>
                         </Box>
                         <Box>
@@ -454,7 +467,7 @@ export default function DevisView() {
                             Montant TTC
                           </Typography>
                           <Typography variant="body2" fontWeight={700}>
-                            {formatAmount(devis.amountTTC)}
+                            {formatAmount(bc.amountTTC)}
                           </Typography>
                         </Box>
                       </Box>
@@ -471,7 +484,7 @@ export default function DevisView() {
                         <CustomButton
                           size="small"
                           variant="soft"
-                          onClick={() => setConvertTarget(devis)}
+                          onClick={() => setConvertTarget(bc)}
                           sx={{
                             fontSize: "0.72rem",
                             px: 1,
@@ -480,11 +493,14 @@ export default function DevisView() {
                             flex: "1 1 auto",
                           }}
                         >
-                          → Créer BC
+                          → Créer BL
                         </CustomButton>
                         <IconButton
                           size="small"
-                          onClick={() => openDetails(devis)}
+                          onClick={() => {
+                            setSelected(bc);
+                            setOpenDrawer(true);
+                          }}
                           sx={{
                             width: 34,
                             height: 34,
@@ -497,7 +513,10 @@ export default function DevisView() {
                         </IconButton>
                         <IconButton
                           size="small"
-                          onClick={() => handleDownloadPdf(devis)}
+                          onClick={() => {
+                            setEditTarget(bc);
+                            setOpenModal(true);
+                          }}
                           sx={{
                             width: 34,
                             height: 34,
@@ -506,7 +525,33 @@ export default function DevisView() {
                             color: "text.secondary",
                           }}
                         >
-                          <Download size={16} />
+                          <Pencil size={16} />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => handlePrint(bc)}
+                          sx={{
+                            width: 34,
+                            height: 34,
+                            border: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+                            borderRadius: 2,
+                            color: "text.secondary",
+                          }}
+                        >
+                          <Printer size={16} />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => setDeleteId(bc.id)}
+                          sx={{
+                            width: 34,
+                            height: 34,
+                            border: `1px solid ${alpha(theme.palette.error.main, 0.3)}`,
+                            borderRadius: 2,
+                            color: "error.main",
+                          }}
+                        >
+                          <Trash2 size={16} />
                         </IconButton>
                       </Box>
                     </Stack>
@@ -533,11 +578,11 @@ export default function DevisView() {
             <Box sx={{ width: "100%", overflow: "auto" }}>
               <DataTable
                 columns={columns}
-                data={devisList}
+                data={list}
                 isLoading={isFetching}
                 isError={isError}
-                rowKey={(d) => d.id}
-                emptyMessage="Aucun devis trouvé"
+                rowKey={(r) => r.id}
+                emptyMessage="Aucun bon de commande trouvé"
               />
             </Box>
             {!isError && (
@@ -559,33 +604,41 @@ export default function DevisView() {
         )}
       </Card>
 
-      <DevisModal
+      <BonCommandeModal
         open={openModal}
-        onClose={() => setOpenModal(false)}
-        onCreate={() => table.onResetPage()}
+        onClose={() => {
+          setOpenModal(false);
+          setEditTarget(null);
+        }}
+        onCreate={() => {
+          table.onResetPage();
+          setEditTarget(null);
+        }}
+        initialData={editTarget}
       />
-
-      <ViewDevisDrawer
+      <ViewBonCommandeDrawer
         open={openDrawer}
         onClose={() => setOpenDrawer(false)}
-        devis={selected}
-        onDownloadPdf={handleDownloadPdf}
+        bonCommande={selected}
+        onEdit={(bc) => {
+          setEditTarget(bc);
+          setOpenDrawer(false);
+          setOpenModal(true);
+        }}
       />
-
       <DeleteConfirmModal
-        open={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        onConfirm={handleDeleteConfirm}
-        title="Supprimer le devis"
-        message="Êtes-vous sûr de vouloir supprimer ce devis ? Cette action est irréversible."
+        open={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={handleDelete}
+        title="Supprimer le bon de commande"
+        message="Cette action est irréversible."
         isLoading={isDeleting}
       />
-
-      <ConvertToBcModal
+      <ConvertToBlModal
         open={!!convertTarget}
-        devis={convertTarget}
+        bonCommande={convertTarget}
         isLoading={isConverting}
-        onConfirm={handleConvertToBc}
+        onConfirm={handleConvertToBl}
         onClose={() => setConvertTarget(null)}
       />
     </PageHeader>

@@ -162,12 +162,14 @@ export function useNavigation() {
       }
     }
 
-    // For clients: inject grouped "Finances" item (Fournisseurs → Factures → Devis)
+    // For clients: inject grouped "Finances" item (Fournisseurs → Factures → Devis → BC → BL)
     if (isClient) {
       const financesConfig = NAV_CONFIG["/__finances"];
       const suppliersConfig = NAV_CONFIG["/suppliers"];
       const facturesConfig = NAV_CONFIG["/factures"];
       const devisConfig = NAV_CONFIG["/devis"];
+      const bcConfig = NAV_CONFIG["/bons-commande"];
+      const blConfig = NAV_CONFIG["/bons-livraison"];
 
       if (financesConfig && suppliersConfig && facturesConfig && devisConfig) {
         const hasFinancesEntry = items.some(
@@ -194,6 +196,24 @@ export function useNavigation() {
                 path: `${dashboardBase}/devis`,
                 icon: devisConfig.icon,
               },
+              ...(bcConfig
+                ? [
+                    {
+                      title: bcConfig.title,
+                      path: `${dashboardBase}/bons-commande`,
+                      icon: bcConfig.icon,
+                    },
+                  ]
+                : []),
+              ...(blConfig
+                ? [
+                    {
+                      title: blConfig.title,
+                      path: `${dashboardBase}/bons-livraison`,
+                      icon: blConfig.icon,
+                    },
+                  ]
+                : []),
             ],
           });
         }

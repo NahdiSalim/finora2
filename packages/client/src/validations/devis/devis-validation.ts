@@ -13,13 +13,6 @@ export const devisValidationSchema = Yup.object({
     .max(100, "La TVA ne peut pas dépasser 100%")
     .required("La TVA est requise"),
   validUntil: Yup.string().required("La date de validité est requise"),
-  discountType: Yup.string()
-    .oneOf(["percentage", "fixed"], "Type de remise invalide")
-    .required("Le type de remise est requis"),
-  discountValue: Yup.number()
-    .typeError("La valeur de remise doit être un nombre")
-    .min(0, "La remise ne peut pas être négative")
-    .required("La valeur de remise est requise"),
   lines: Yup.array()
     .of(
       Yup.object({

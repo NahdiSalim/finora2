@@ -1,13 +1,18 @@
 import { Chip , alpha } from "@mui/material";
-import type { DevisStatus } from "src/types/devis";
+import type { BonLivraisonStatus } from "src/types/bon-livraison";
 
-const STATUS_MAP: Record<DevisStatus, { label: string; color: string }> = {
-  en_attente: { label: "En attente", color: "#ff7d0d" },
-  accepte: { label: "Accepté", color: "#10B981" },
-  refuse: { label: "Refusé", color: "#ff5757" },
-};
+const STATUS_MAP: Record<BonLivraisonStatus, { label: string; color: string }> =
+  {
+    en_attente: { label: "En attente", color: "#ff7d0d" },
+    livre: { label: "Livré", color: "#10B981" },
+    annule: { label: "Annulé", color: "#ff5757" },
+  };
 
-export default function DevisStatusChip({ status }: { status: DevisStatus }) {
+export default function BonLivraisonStatusChip({
+  status,
+}: {
+  status: BonLivraisonStatus;
+}) {
   const cfg = STATUS_MAP[status] ?? STATUS_MAP.en_attente;
   return (
     <Chip

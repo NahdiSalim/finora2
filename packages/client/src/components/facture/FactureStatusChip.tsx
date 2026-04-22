@@ -1,36 +1,36 @@
 import { Chip, alpha } from "@mui/material";
 import type { FactureStatus } from "src/types/facture";
 
-interface Config {
-  label: string;
-  color: string;
-}
-
-const statusConfig: Record<FactureStatus, Config> = {
+const STATUS_MAP: Record<FactureStatus, { label: string; color: string }> = {
   draft: { label: "Brouillon", color: "#6B7280" },
-  sent: { label: "Envoyée", color: "#3B82F6" },
-  overdue: { label: "En retard", color: "#EF4444" },
-  paid: { label: "Envoyée", color: "#3B82F6" }, // legacy: was sent then paid
-  partial: { label: "Envoyée", color: "#3B82F6" }, // legacy: was sent then partial
+  sent: { label: "Envoyée", color: "#6366F1" },
+  paid: { label: "Payée", color: "#10B981" },
+  partial: { label: "Partielle", color: "#ff7d0d" },
+  overdue: { label: "En retard", color: "#ff5757" },
   cancelled: { label: "Annulée", color: "#6B7280" },
 };
 
-interface Props {
+export default function FactureStatusChip({
+  status,
+}: {
   status: FactureStatus;
-}
-
-export default function FactureStatusChip({ status }: Props) {
-  const cfg = statusConfig[status] ?? statusConfig.draft;
+}) {
+  const cfg = STATUS_MAP[status] ?? STATUS_MAP.draft;
   return (
     <Chip
-      label={cfg.label}
       size="small"
+      label={cfg.label}
       sx={{
-        fontWeight: 600,
-        fontSize: 11,
+        bgcolor: alpha(cfg.color, 0.08),
         color: cfg.color,
-        bgcolor: alpha(cfg.color, 0.12),
-        border: "none",
+        fontWeight: 600,
+        borderRadius: 2.5,
+        fontSize: 12,
+        border: `1px solid ${alpha(cfg.color, 0.25)}`,
+        px: 1.5,
+        py: 0.5,
+        height: "auto",
+        "& .MuiChip-label": { px: 1, py: 0.5 },
       }}
     />
   );

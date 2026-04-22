@@ -28,6 +28,8 @@ import { LocationModule } from './modules/location/location.module';
 import { DevisModule } from './modules/devis/devis.module';
 import { InvoiceModule } from './modules/invoice/invoice.module';
 import { SupplierModule } from './modules/supplier/supplier.module';
+import { BonCommandeModule } from './modules/bon-commande/bon-commande.module';
+import { BonLivraisonModule } from './modules/bon-livraison/bon-livraison.module';
 
 @Module({
   imports: [
@@ -75,6 +77,8 @@ import { SupplierModule } from './modules/supplier/supplier.module';
     DevisModule,
     InvoiceModule,
     SupplierModule,
+    BonCommandeModule,
+    BonLivraisonModule,
   ],
   controllers: [AppController],
   providers: [

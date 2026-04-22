@@ -174,15 +174,6 @@ export const buildDevisTemplate = (devis: Devis): string => {
                   <td class="bold" style="padding: 6px 0; text-align: right; padding-right: 15px;">TVA (${devis.tvaRate}%) :</td>
                   <td style="padding: 6px 0; text-align: right; white-space: nowrap;">${formatAmount(devis.amountTVA)}</td>
                 </tr>
-                ${
-                  devis.discountValue != null && devis.discountValue > 0
-                    ? `
-                <tr>
-                  <td class="bold" style="padding: 6px 0; text-align: right; padding-right: 15px;">REMISE${devis.discountType === "percentage" ? ` (${devis.discountValue}%)` : ""} :</td>
-                  <td style="padding: 6px 0; text-align: right; white-space: nowrap;">– ${formatAmount(devis.discountType === "percentage" ? devis.amountHT * (devis.discountValue / 100) : devis.discountValue)}</td>
-                </tr>`
-                    : ""
-                }
                 <tr style="border-top: 2px solid #333;">
                   <td class="bold" style="padding: 12px 0 6px 0; text-align: right; padding-right: 15px; font-size: 15px;">TOTAL TTC :</td>
                   <td class="heavy" style="padding: 12px 0 6px 0; text-align: right; font-size: 17px; white-space: nowrap;">${formatAmount(devis.amountTTC)}</td>

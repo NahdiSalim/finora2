@@ -9,11 +9,10 @@ import {
   Max,
   ValidateNested,
 } from 'class-validator';
-
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
-export class DevisLineDto {
+export class BonCommandeLineDto {
   @ApiProperty()
   @IsString()
   id: string;
@@ -33,14 +32,14 @@ export class DevisLineDto {
   unitPrice: number;
 }
 
-export class CreateDevisDto {
-  @ApiProperty({ description: 'Devis number (e.g. DEV-2026-001)' })
+export class CreateBonCommandeDto {
+  @ApiProperty()
   @IsString()
   number: string;
 
-  @ApiProperty({ enum: ['en_attente', 'accepte', 'refuse'] })
+  @ApiProperty({ enum: ['brouillon', 'confirme', 'annule'] })
   @IsString()
-  @IsIn(['en_attente', 'accepte', 'refuse'])
+  @IsIn(['brouillon', 'confirme', 'annule'])
   status: string;
 
   @ApiProperty()
@@ -53,23 +52,18 @@ export class CreateDevisDto {
   @IsDateString()
   validUntil: string;
 
-  @ApiProperty({ type: [DevisLineDto] })
+  @ApiProperty({ type: [BonCommandeLineDto] })
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => DevisLineDto)
-  lines: DevisLineDto[];
+  @Type(() => BonCommandeLineDto)
+  lines: BonCommandeLineDto[];
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
   notes?: string;
 
-  @ApiProperty({ required: false, description: 'For accountants creating devis for clients' })
-  @IsOptional()
-  @IsNumber()
-  clientCompanyId?: number;
-
-  @ApiProperty({ required: false, description: 'Supplier (recipient) ID' })
+  @ApiProperty({ required: false })
   @IsOptional()
   @IsNumber()
   supplierId?: number;

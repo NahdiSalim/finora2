@@ -5,6 +5,10 @@ interface Props {
   amountRemaining: number;
 }
 
+const PAID = { label: "Payée", color: "#10B981" };
+const PARTIAL = { label: "Partiel", color: "#ff7d0d" };
+const UNPAID = { label: "Non payée", color: "#6B7280" };
+
 export default function FacturePaymentChip({
   amountPaid,
   amountRemaining,
@@ -12,48 +16,28 @@ export default function FacturePaymentChip({
   const paid = amountPaid ?? 0;
   const remaining = amountRemaining ?? 0;
 
-  if (paid > 0 && remaining <= 0.01) {
-    return (
-      <Chip
-        label="Payée"
-        size="small"
-        sx={{
-          fontWeight: 600,
-          fontSize: 11,
-          color: "#10B981",
-          bgcolor: alpha("#10B981", 0.12),
-          border: "none",
-        }}
-      />
-    );
-  }
-
-  if (paid > 0 && remaining > 0.01) {
-    return (
-      <Chip
-        label="Partiel"
-        size="small"
-        sx={{
-          fontWeight: 600,
-          fontSize: 11,
-          color: "#F59E0B",
-          bgcolor: alpha("#F59E0B", 0.12),
-          border: "none",
-        }}
-      />
-    );
-  }
+  const cfg =
+    paid > 0 && remaining <= 0.01
+      ? PAID
+      : paid > 0 && remaining > 0.01
+        ? PARTIAL
+        : UNPAID;
 
   return (
     <Chip
-      label="Non payée"
       size="small"
+      label={cfg.label}
       sx={{
+        bgcolor: alpha(cfg.color, 0.08),
+        color: cfg.color,
         fontWeight: 600,
-        fontSize: 11,
-        color: "#9CA3AF",
-        bgcolor: alpha("#9CA3AF", 0.08),
-        border: "none",
+        borderRadius: 2.5,
+        fontSize: 12,
+        border: `1px solid ${alpha(cfg.color, 0.25)}`,
+        px: 1.5,
+        py: 0.5,
+        height: "auto",
+        "& .MuiChip-label": { px: 1, py: 0.5 },
       }}
     />
   );

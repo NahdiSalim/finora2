@@ -9,10 +9,6 @@ import unusedImportsPlugin from 'eslint-plugin-unused-imports';
 
 // ----------------------------------------------------------------------
 
-/**
- * @rules common
- * from 'react', 'eslint-plugin-react-hooks'...
- */
 const commonRules = () => ({
   ...reactHooksPlugin.configs.recommended.rules,
   'func-names': 1,
@@ -36,6 +32,7 @@ const commonRules = () => ({
   'react/react-in-jsx-scope': 0,
   'react/jsx-no-useless-fragment': [1, { allowExpressions: true }],
   'react/jsx-curly-brace-presence': [2, { props: 'never', children: 'never' }],
+
   // typescript
   '@typescript-eslint/no-shadow': 2,
   '@typescript-eslint/no-explicit-any': 0,
@@ -44,40 +41,23 @@ const commonRules = () => ({
   '@typescript-eslint/no-unused-vars': [1, { args: 'none' }],
 });
 
-/**
- * @rules import
- * from 'eslint-plugin-import'.
- */
 const importRules = () => ({
   ...importPlugin.configs.recommended.rules,
   'import/named': 0,
   'import/export': 0,
   'import/default': 0,
   'import/namespace': 0,
+  'import/no-unresolved': 0,
   'import/no-named-as-default': 0,
-
   'import/no-named-as-default-member': 0,
-  'import/no-cycle': [
-    0, // disabled if slow
-    { maxDepth: '∞', ignoreExternal: false, allowUnsafeDynamicCyclicDependency: false },
-  ],
+  'import/no-cycle': [0, { maxDepth: '∞', ignoreExternal: false, allowUnsafeDynamicCyclicDependency: false }],
 });
 
-/**
- * @rules unused imports
- * from 'eslint-plugin-unused-imports'.
- */
 const unusedImportsRules = () => ({
   'unused-imports/no-unused-imports': 1,
-  'unused-imports/no-unused-vars': [
-    0,
-    { vars: 'all', varsIgnorePattern: '^_', args: 'after-used', argsIgnorePattern: '^_' },
-  ],
+  'unused-imports/no-unused-vars': [0, { vars: 'all', varsIgnorePattern: '^_', args: 'after-used', argsIgnorePattern: '^_' }],
 });
 
-/**
- * Custom ESLint configuration.
- */
 export const customConfig = {
   plugins: {
     'react-hooks': reactHooksPlugin,
@@ -86,7 +66,6 @@ export const customConfig = {
     import: importPlugin,
   },
   settings: {
-    // https://www.npmjs.com/package/eslint-import-resolver-typescript
     ...importPlugin.configs.typescript.settings,
     'import/resolver': {
       ...importPlugin.configs.typescript.settings['import/resolver'],

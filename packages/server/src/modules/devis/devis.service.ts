@@ -48,7 +48,7 @@ export class DevisService {
     }
 
     // Calculate amounts
-    const amounts = this.calculateAmounts(dto);
+    const amounts = this.calculateAmounts({ lines: dto.lines, tvaRate: dto.tvaRate });
 
     // Use provided number or fall back to auto-generated
     const number = dto.number || (await this.generateDevisNumber());
@@ -60,8 +60,6 @@ export class DevisService {
         status: dto.status,
         tvaRate: dto.tvaRate,
         validUntil: new Date(dto.validUntil),
-        discountType: dto.discountType,
-        discountValue: dto.discountValue,
         lines: dto.lines as any,
         notes: dto.notes || null,
         amountHT: amounts.amountHT,
@@ -291,18 +289,11 @@ export class DevisService {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
     }
 
-    // Recalculate amounts if lines or discount changed
+    // Recalculate amounts if lines or tvaRate changed
     let amounts: any = {};
-    if (
-      dto.lines ||
-      dto.discountType !== undefined ||
-      dto.discountValue !== undefined ||
-      dto.tvaRate !== undefined
-    ) {
+    if (dto.lines || dto.tvaRate !== undefined) {
       const dataForCalculation = {
         lines: dto.lines || devis.lines,
-        discountType: dto.discountType || devis.discountType,
-        discountValue: dto.discountValue !== undefined ? dto.discountValue : devis.discountValue,
         tvaRate: dto.tvaRate !== undefined ? dto.tvaRate : devis.tvaRate,
       } as any;
 
@@ -315,8 +306,6 @@ export class DevisService {
         ...(dto.status && { status: dto.status }),
         ...(dto.tvaRate !== undefined && { tvaRate: dto.tvaRate }),
         ...(dto.validUntil && { validUntil: new Date(dto.validUntil) }),
-        ...(dto.discountType && { discountType: dto.discountType }),
-        ...(dto.discountValue !== undefined && { discountValue: dto.discountValue }),
         ...(dto.lines && { lines: dto.lines as any }),
         ...(dto.notes !== undefined && { notes: dto.notes }),
         ...(amounts.amountHT !== undefined && {
@@ -447,18 +436,9 @@ export class DevisService {
   /**
    * Calculate amounts (HT, TVA, TTC)
    */
-  private calculateAmounts(dto: {
-    lines: any[];
-    discountType: string;
-    discountValue: number;
-    tvaRate: number;
-  }) {
+  private calculateAmounts(dto: { lines: any[]; tvaRate: number }) {
     const subtotal = dto.lines.reduce((acc, line) => acc + line.quantity * line.unitPrice, 0);
-
-    const discount =
-      dto.discountType === 'percentage' ? (subtotal * dto.discountValue) / 100 : dto.discountValue;
-
-    const amountHT = Math.max(subtotal - discount, 0);
+    const amountHT = subtotal;
     const amountTVA = (amountHT * dto.tvaRate) / 100;
     const amountTTC = amountHT + amountTVA;
 
@@ -544,11 +524,12 @@ export class DevisService {
         },
       });
 
-      // Get or create folder structure: devis/YYYY-MM-DD/
+      // Get or create folder structure: devis/YYYY-MM/supplier/
       const dateFolder = await this.ensureDevisFolderStructure(
         companyId,
         devis.ownerId,
-        devis.createdAt
+        devis.createdAt,
+        devis.supplier as { name: string; company: string } | null
       );
 
       // Upload PDF to MinIO in date-specific folder
@@ -596,18 +577,19 @@ export class DevisService {
   }
 
   /**
-   * Ensure folder structure exists: devis/YYYY-MM-DD/
+   * Ensure folder structure exists: devis/YYYY-MM/supplier/
    * Creates folders if they don't exist
    */
   private async ensureDevisFolderStructure(
     companyId: number,
     ownerId: number,
-    createdAt: Date
+    createdAt: Date,
+    supplier?: { name: string; company: string } | null
   ): Promise<any> {
-    // 1. Find or create root "devis" folder
+    // 1. Root "devis" folder
     let devisFolder = await this.prisma.document.findFirst({
       where: {
-        companyId: companyId,
+        companyId,
         name: 'devis',
         isFolder: true,
         parentId: null,
@@ -622,8 +604,8 @@ export class DevisService {
           type: 'folder',
           isFolder: true,
           url: '',
-          ownerId: ownerId,
-          companyId: companyId,
+          ownerId,
+          companyId,
           createdBy: ownerId,
           createdByCompanyId: companyId,
           parentId: null,
@@ -633,37 +615,70 @@ export class DevisService {
       this.logger.log(`Created devis root folder for company ${companyId}`);
     }
 
-    // 2. Find or create date folder (YYYY-MM-DD)
-    const dateString = this.formatDate(createdAt);
-    let dateFolder = await this.prisma.document.findFirst({
+    // 2. Month folder: YYYY-MM
+    const monthStr = `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, '0')}`;
+    let monthFolder = await this.prisma.document.findFirst({
       where: {
-        companyId: companyId,
-        name: dateString,
+        companyId,
+        name: monthStr,
         isFolder: true,
         parentId: devisFolder.id,
         status: 'active',
       },
     });
 
-    if (!dateFolder) {
-      dateFolder = await this.prisma.document.create({
+    if (!monthFolder) {
+      monthFolder = await this.prisma.document.create({
         data: {
-          name: dateString,
+          name: monthStr,
           type: 'folder',
           isFolder: true,
           url: '',
-          ownerId: ownerId,
-          companyId: companyId,
+          ownerId,
+          companyId,
           createdBy: ownerId,
           createdByCompanyId: companyId,
           parentId: devisFolder.id,
           status: 'active',
         },
       });
-      this.logger.log(`Created date folder ${dateString} for company ${companyId}`);
+      this.logger.log(`Created month folder ${monthStr} for company ${companyId}`);
     }
 
-    return dateFolder;
+    // 3. Supplier folder: "<name> - <company>" (or "Sans fournisseur" if none)
+    const supplierFolderName = supplier
+      ? `${supplier.name} - ${supplier.company}`.slice(0, 100)
+      : 'Sans fournisseur';
+
+    let supplierFolder = await this.prisma.document.findFirst({
+      where: {
+        companyId,
+        name: supplierFolderName,
+        isFolder: true,
+        parentId: monthFolder.id,
+        status: 'active',
+      },
+    });
+
+    if (!supplierFolder) {
+      supplierFolder = await this.prisma.document.create({
+        data: {
+          name: supplierFolderName,
+          type: 'folder',
+          isFolder: true,
+          url: '',
+          ownerId,
+          companyId,
+          createdBy: ownerId,
+          createdByCompanyId: companyId,
+          parentId: monthFolder.id,
+          status: 'active',
+        },
+      });
+      this.logger.log(`Created supplier folder "${supplierFolderName}" for company ${companyId}`);
+    }
+
+    return supplierFolder;
   }
 
   /**
@@ -686,16 +701,6 @@ export class DevisService {
     }
 
     return path.join('/');
-  }
-
-  /**
-   * Format date as YYYY-MM-DD
-   */
-  private formatDate(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
   }
 
   /**

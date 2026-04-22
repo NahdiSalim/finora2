@@ -502,6 +502,12 @@ model Company {
   devis             Devis[] @relation("DevisCompany")
   createdDevis      Devis[] @relation("DevisCreatedByCompany")
 
+  // Bons de commande
+  bonsCommande      BonCommande[] @relation("BonCommandeCompany")
+
+  // Bons de livraison
+  bonsLivraison     BonLivraison[] @relation("BonLivraisonCompany")
+
   @@index([siret])
   @@index([type])
   @@index([status])
@@ -1364,6 +1370,12 @@ model User {
   ownedDevis            Devis[] @relation("DevisOwner")
   createdDevis          Devis[] @relation("DevisCreatedBy")
 
+  // Bons de commande
+  ownedBonsCommande     BonCommande[] @relation("BonCommandeOwner")
+
+  // Bons de livraison
+  ownedBonsLivraison    BonLivraison[] @relation("BonLivraisonOwner")
+
   @@index([email])
   @@index([companyId])
   @@index([status])
@@ -1383,10 +1395,90 @@ model Supplier {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  companyOwner Company    @relation("CompanySuppliers", fields: [companyId], references: [id], onDelete: Cascade)
-  invoices     Invoice[]  @relation("InvoiceSupplier")
-  devis        Devis[]    @relation("DevisSupplier")
+  companyOwner  Company       @relation("CompanySuppliers", fields: [companyId], references: [id], onDelete: Cascade)
+  invoices      Invoice[]     @relation("InvoiceSupplier")
+  devis         Devis[]       @relation("DevisSupplier")
+  bonsCommande  BonCommande[] @relation("BonCommandeSupplier")
+  bonsLivraison BonLivraison[] @relation("BonLivraisonSupplier")
 
   @@index([companyId])
   @@map("suppliers")
 }
+
+
+// From bon_commande.prisma
+model BonCommande {
+  id                 Int       @id @default(autoincrement())
+  number             String    @unique
+  status             String    @default("brouillon") // "brouillon" | "confirme" | "annule"
+  tvaRate            Float     @default(19)
+  validUntil         DateTime  @db.Date
+  lines              Json      // Array of {id, description, quantity, unitPrice}
+  notes              String?   @db.Text
+
+  // Calculated amounts
+  amountHT           Float
+  amountTVA          Float
+  amountTTC          Float
+
+  // Relations
+  ownerId            Int
+  companyId          Int
+  createdBy          Int?
+  createdByCompanyId Int?
+  supplierId         Int?
+
+  // Timestamps
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  owner              User      @relation("BonCommandeOwner", fields: [ownerId], references: [id])
+  company            Company   @relation("BonCommandeCompany", fields: [companyId], references: [id])
+  supplier           Supplier? @relation("BonCommandeSupplier", fields: [supplierId], references: [id])
+
+  @@index([companyId])
+  @@index([supplierId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("bons_commande")
+}
+
+
+// From bon_livraison.prisma
+model BonLivraison {
+  id                 Int       @id @default(autoincrement())
+  number             String    @unique
+  status             String    @default("en_attente") // "en_attente" | "livre" | "annule"
+  tvaRate            Float     @default(19)
+  deliveryDate       DateTime  @db.Date
+  lines              Json      // Array of {id, description, quantity, unitPrice}
+  notes              String?   @db.Text
+
+  // Calculated amounts
+  amountHT           Float
+  amountTVA          Float
+  amountTTC          Float
+
+  // Relations
+  ownerId            Int
+  companyId          Int
+  createdBy          Int?
+  createdByCompanyId Int?
+  supplierId         Int?
+
+  // Timestamps
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  owner              User      @relation("BonLivraisonOwner", fields: [ownerId], references: [id])
+  company            Company   @relation("BonLivraisonCompany", fields: [companyId], references: [id])
+  supplier           Supplier? @relation("BonLivraisonSupplier", fields: [supplierId], references: [id])
+
+  @@index([companyId])
+  @@index([supplierId])
+  @@index([status])
+  @@index([deliveryDate])
+  @@index([createdAt])
+  @@map("bons_livraison")
+}
+

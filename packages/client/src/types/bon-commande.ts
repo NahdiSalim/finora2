@@ -1,13 +1,13 @@
-export type DevisStatus = "en_attente" | "accepte" | "refuse";
+export type BonCommandeStatus = "brouillon" | "confirme" | "annule";
 
-export interface DevisLine {
+export interface BonCommandeLine {
   id: string;
   description: string;
   quantity: number;
   unitPrice: number;
 }
 
-export interface DevisSupplier {
+export interface BonCommandeSupplier {
   id: number;
   name: string;
   company: string;
@@ -18,29 +18,28 @@ export interface DevisSupplier {
   logoUrl?: string;
 }
 
-export interface Devis {
+export interface BonCommande {
   id: number;
   number: string;
-  status: DevisStatus;
+  status: BonCommandeStatus;
   tvaRate: number;
   validUntil: string;
-  lines: DevisLine[];
+  lines: BonCommandeLine[];
   notes: string;
   amountHT: number;
   amountTVA: number;
   amountTTC: number;
-  pdfUrl?: string;
   supplierId?: number;
-  supplier?: DevisSupplier | null;
+  supplier?: BonCommandeSupplier | null;
   createdAt: string;
 }
 
-export interface DevisFormValues {
+export interface BonCommandeFormValues {
   number: string;
-  status: DevisStatus;
+  status: BonCommandeStatus;
   tvaRate: number;
   validUntil: string;
-  lines: DevisLine[];
+  lines: BonCommandeLine[];
   notes: string;
   supplierId?: number;
 }

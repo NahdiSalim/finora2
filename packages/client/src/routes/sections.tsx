@@ -32,6 +32,8 @@ export const RequestPage = lazy(() => import("src/pages/requests"));
 export const FacturesPage = lazy(() => import("src/pages/factures"));
 export const DevisPage = lazy(() => import("src/pages/devis"));
 export const SuppliersPage = lazy(() => import("src/pages/suppliers"));
+export const BonCommandePage = lazy(() => import("src/pages/bon-commande"));
+export const BonLivraisonPage = lazy(() => import("src/pages/bon-livraison"));
 export const ProfilePage = lazy(() => import("src/pages/profile"));
 export const NetworkPage = lazy(() => import("src/pages/network"));
 export const NetworkAccountantProfilePage = lazy(() =>
@@ -478,6 +480,28 @@ export const routesSection: RouteObject[] = [
             element: (
               <PermissionGuard requiredPath="/suppliers" allowForRole="CLIENT">
                 <SuppliersPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "bons-commande",
+            element: (
+              <PermissionGuard
+                requiredPath="/bons-commande"
+                allowForRole="CLIENT"
+              >
+                <BonCommandePage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "bons-livraison",
+            element: (
+              <PermissionGuard
+                requiredPath="/bons-livraison"
+                allowForRole="CLIENT"
+              >
+                <BonLivraisonPage />
               </PermissionGuard>
             ),
           },

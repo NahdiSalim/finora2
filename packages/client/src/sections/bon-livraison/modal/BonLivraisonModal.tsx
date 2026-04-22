@@ -1,5 +1,4 @@
 import { useMemo, useState, useEffect } from "react";
-import { yupResolver } from "@hookform/resolvers/yup";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import {
   alpha,
@@ -20,61 +19,63 @@ import { Plus, Trash2, X } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
 import CustomSelect from "src/components/common/CustomSelect";
-import type { DevisFormValues, DevisLine } from "src/types/devis";
-import { devisValidationSchema } from "src/validations/devis/devis-validation";
-import { useCreateDevisMutation } from "src/lib/services/devisApi";
+import type {
+  BonLivraison,
+  BonLivraisonFormValues,
+  BonLivraisonLine,
+} from "src/types/bon-livraison";
+import {
+  useCreateBonLivraisonMutation,
+  useUpdateBonLivraisonMutation,
+} from "src/lib/services/bonLivraisonApi";
 import {
   useGetSuppliersQuery,
   type Supplier,
 } from "src/lib/services/suppliersApi";
 
-interface Props {
-  open: boolean;
-  onClose: () => void;
-  onCreate?: () => void;
-}
-
-const formatAmount = (value: number) =>
+const formatAmount = (v: number) =>
   new Intl.NumberFormat("fr-FR", {
-    style: "decimal",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(value) + " DT";
+  }).format(v) + " DT";
 
-function computeAmounts(values: DevisFormValues) {
-  const subtotal = values.lines.reduce(
-    (acc, line) => acc + (line.quantity || 0) * (line.unitPrice || 0),
-    0,
-  );
-  const amountHT = subtotal;
-  const amountTVA = (amountHT * (values.tvaRate || 0)) / 100;
-  const amountTTC = amountHT + amountTVA;
-  return { amountHT, amountTVA, amountTTC };
-}
-
-const createLine = (): DevisLine => ({
+const createLine = (): BonLivraisonLine => ({
   id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   description: "",
   quantity: 1,
   unitPrice: 0,
 });
 
-const defaultValues: DevisFormValues = {
+const defaultValues: BonLivraisonFormValues = {
   number: "",
   status: "en_attente",
   tvaRate: 19,
-  validUntil: "",
+  deliveryDate: "",
   lines: [createLine()],
   notes: "",
   supplierId: undefined,
 };
 
-export default function DevisModal({ open, onClose, onCreate }: Props) {
+interface Props {
+  open: boolean;
+  onClose: () => void;
+  onCreate?: () => void;
+  initialData?: BonLivraison | null;
+}
+
+export default function BonLivraisonModal({
+  open,
+  onClose,
+  onCreate,
+  initialData,
+}: Props) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const [createDevis, { isLoading: isCreating }] = useCreateDevisMutation();
+  const isEditMode = !!initialData;
+  const [create, { isLoading: isCreating }] = useCreateBonLivraisonMutation();
+  const [update, { isLoading: isUpdating }] = useUpdateBonLivraisonMutation();
+  const isLoading = isCreating || isUpdating;
 
-  // Supplier search state
   const [supplierSearch, setSupplierSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(
@@ -82,11 +83,11 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
   );
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(supplierSearch), 500);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => setDebouncedSearch(supplierSearch), 500);
+    return () => clearTimeout(t);
   }, [supplierSearch]);
 
-  const { data: suppliersData, isLoading: isLoadingSuppliers } =
+  const { data: suppliersData, isLoading: loadingSuppliers } =
     useGetSuppliersQuery(
       { page: 1, limit: 50, search: debouncedSearch || undefined },
       { skip: !open },
@@ -95,8 +96,10 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
   const allSuppliers = useMemo(() => {
     const list = suppliersData?.data || [];
     if (!selectedSupplier) return list;
-    const ids = new Set([selectedSupplier.id]);
-    return [selectedSupplier, ...list.filter((s) => !ids.has(s.id))];
+    return [
+      selectedSupplier,
+      ...list.filter((s) => s.id !== selectedSupplier.id),
+    ];
   }, [suppliersData, selectedSupplier]);
 
   const {
@@ -106,15 +109,45 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
     watch,
     handleSubmit,
     formState: { errors, isValid, isSubmitting },
-  } = useForm<DevisFormValues>({
-    resolver: yupResolver(devisValidationSchema) as never,
-    mode: "onChange",
-    defaultValues,
-  });
+  } = useForm<BonLivraisonFormValues>({ mode: "onChange", defaultValues });
+
+  // Pre-fill form in edit mode
+  useEffect(() => {
+    if (open && initialData) {
+      reset({
+        number: initialData.number,
+        status: initialData.status,
+        tvaRate: initialData.tvaRate,
+        deliveryDate: initialData.deliveryDate.slice(0, 10),
+        lines:
+          initialData.lines.length > 0 ? initialData.lines : [createLine()],
+        notes: initialData.notes ?? "",
+        supplierId: initialData.supplierId,
+      });
+      if (initialData.supplier) {
+        setSelectedSupplier(initialData.supplier as Supplier);
+        setSupplierSearch(
+          `${initialData.supplier.name} - ${initialData.supplier.company}`,
+        );
+      }
+    } else if (open && !initialData) {
+      reset({ ...defaultValues, lines: [createLine()] });
+      setSelectedSupplier(null);
+      setSupplierSearch("");
+    }
+  }, [open, initialData, reset]);
 
   const { fields, append, remove } = useFieldArray({ control, name: "lines" });
   const values = watch();
-  const amounts = useMemo(() => computeAmounts(values), [values]);
+
+  const amounts = useMemo(() => {
+    const ht = values.lines.reduce(
+      (a, l) => a + (l.quantity || 0) * (l.unitPrice || 0),
+      0,
+    );
+    const tva = (ht * (values.tvaRate || 0)) / 100;
+    return { amountHT: ht, amountTVA: tva, amountTTC: ht + tva };
+  }, [values]);
 
   const closeAndReset = () => {
     reset({ ...defaultValues, lines: [createLine()] });
@@ -123,13 +156,17 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
     onClose();
   };
 
-  const onSubmit = async (formValues: DevisFormValues) => {
+  const onSubmit = async (data: BonLivraisonFormValues) => {
     try {
-      await createDevis(formValues).unwrap();
+      if (isEditMode && initialData) {
+        await update({ id: initialData.id, data }).unwrap();
+      } else {
+        await create(data).unwrap();
+      }
       onCreate?.();
       closeAndReset();
     } catch {
-      // error handled globally
+      /* handled globally */
     }
   };
 
@@ -144,7 +181,6 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
         sx: { borderRadius: isMobile ? 0 : 3, overflow: "hidden" },
       }}
     >
-      {/* Header */}
       <Box
         sx={{
           px: { xs: 2, md: 3 },
@@ -159,10 +195,14 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
       >
         <Box>
           <Typography variant="h6" fontWeight={700}>
-            Nouveau devis
+            {isEditMode
+              ? "Modifier le bon de livraison"
+              : "Nouveau bon de livraison"}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Créez un devis professionnel et personnalisé
+            {isEditMode
+              ? "Modifiez les informations du bon de livraison"
+              : "Créez un bon de livraison professionnel"}
           </Typography>
         </Box>
         <IconButton onClick={closeAndReset} sx={{ color: "text.secondary" }}>
@@ -176,17 +216,16 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
           onSubmit={handleSubmit(onSubmit)}
           sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}
         >
-          {/* Devis number */}
           <CustomInput
-            label="Numéro de devis"
-            placeholder="Ex: DEV-2026-001"
-            {...register("number")}
+            label="Numéro de BL"
+            placeholder="Ex: BL-2026-001"
+            {...register("number", { required: true })}
             error={!!errors.number}
             helperText={errors.number?.message}
             required
           />
 
-          {/* Supplier autocomplete */}
+          {/* Supplier */}
           <Controller
             name="supplierId"
             control={control}
@@ -195,38 +234,21 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
                 freeSolo={false}
                 options={allSuppliers}
                 value={selectedSupplier}
-                onChange={(_, newValue) => {
-                  setSelectedSupplier(newValue);
-                  onChange(newValue?.id);
+                onChange={(_, v) => {
+                  setSelectedSupplier(v);
+                  onChange(v?.id);
                 }}
-                onInputChange={(_, val) => setSupplierSearch(val)}
+                onInputChange={(_, v) => setSupplierSearch(v)}
                 inputValue={supplierSearch}
                 getOptionLabel={(o) => `${o.name} - ${o.company}`}
                 isOptionEqualToValue={(o, v) => o.id === v.id}
-                loading={isLoadingSuppliers}
+                loading={loadingSuppliers}
                 filterOptions={(x) => x}
                 renderInput={(params) => (
                   <TextField
                     {...params}
                     label="Fournisseur (Destinataire)"
                     placeholder="Rechercher un fournisseur..."
-                    InputProps={{
-                      ...params.InputProps,
-                      endAdornment: (
-                        <>
-                          {isLoadingSuppliers && (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              sx={{ mr: 1 }}
-                            >
-                              Chargement...
-                            </Typography>
-                          )}
-                          {params.InputProps.endAdornment}
-                        </>
-                      ),
-                    }}
                   />
                 )}
                 renderOption={(props, option) => {
@@ -248,51 +270,41 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
             )}
           />
 
-          {/* Main info grid */}
+          {/* Main fields */}
           <Box
             sx={{
               display: "grid",
               gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)" },
               gap: 2,
-              alignItems: "flex-start",
             }}
           >
             <Controller
               name="status"
               control={control}
               render={({ field }) => (
-                <CustomSelect
-                  {...field}
-                  label="Statut"
-                  error={!!errors.status}
-                  helperText={errors.status?.message}
-                >
+                <CustomSelect {...field} label="Statut">
                   <MenuItem value="en_attente">En attente</MenuItem>
-                  <MenuItem value="accepte">Accepté</MenuItem>
-                  <MenuItem value="refuse">Refusé</MenuItem>
+                  <MenuItem value="livre">Livré</MenuItem>
+                  <MenuItem value="annule">Annulé</MenuItem>
                 </CustomSelect>
               )}
             />
-
             <CustomInput
-              label="Valide jusqu'au"
+              label="Date de livraison"
               type="date"
-              {...register("validUntil")}
-              error={!!errors.validUntil}
-              helperText={errors.validUntil?.message}
+              {...register("deliveryDate", { required: true })}
+              error={!!errors.deliveryDate}
               InputLabelProps={{ shrink: true }}
             />
-
             <CustomInput
               label="TVA (%)"
               type="number"
               {...register("tvaRate", { valueAsNumber: true })}
               error={!!errors.tvaRate}
-              helperText={errors.tvaRate?.message}
             />
           </Box>
 
-          {/* Product lines */}
+          {/* Lines */}
           <Box
             sx={{
               border: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
@@ -320,7 +332,6 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
                 Ajouter une ligne
               </CustomButton>
             </Stack>
-
             <Stack spacing={1.5}>
               {fields.map((field, index) => (
                 <Box
@@ -333,19 +344,11 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
                     },
                     gap: 1.5,
                     alignItems: "flex-start",
-                    p: { xs: 1.5, sm: 0 },
-                    border: {
-                      xs: `1px solid ${alpha(theme.palette.divider, 0.4)}`,
-                      sm: "none",
-                    },
-                    borderRadius: { xs: 2, sm: 0 },
                   }}
                 >
                   <CustomInput
                     label="Description"
                     {...register(`lines.${index}.description`)}
-                    error={!!errors.lines?.[index]?.description}
-                    helperText={errors.lines?.[index]?.description?.message}
                   />
                   <CustomInput
                     label="Qté"
@@ -353,8 +356,6 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
                     {...register(`lines.${index}.quantity`, {
                       valueAsNumber: true,
                     })}
-                    error={!!errors.lines?.[index]?.quantity}
-                    helperText={errors.lines?.[index]?.quantity?.message}
                   />
                   <CustomInput
                     label="Prix unit."
@@ -362,8 +363,6 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
                     {...register(`lines.${index}.unitPrice`, {
                       valueAsNumber: true,
                     })}
-                    error={!!errors.lines?.[index]?.unitPrice}
-                    helperText={errors.lines?.[index]?.unitPrice?.message}
                   />
                   <Box
                     sx={{
@@ -381,18 +380,6 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
                         borderRadius: 2,
                         width: 40,
                         height: 40,
-                        "&:hover": {
-                          backgroundColor: alpha(
-                            theme.palette.error.main,
-                            0.08,
-                          ),
-                        },
-                        "&:disabled": {
-                          borderColor: alpha(
-                            theme.palette.action.disabled,
-                            0.2,
-                          ),
-                        },
                       }}
                     >
                       <Trash2 size={18} />
@@ -405,15 +392,13 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
 
           <CustomInput
             label="Notes"
-            placeholder="Ajoutez une note ou des conditions spécifiques..."
+            placeholder="Notes ou conditions..."
             {...register("notes")}
-            error={!!errors.notes}
-            helperText={errors.notes?.message}
             multiline
             rows={3}
           />
 
-          {/* Totals summary */}
+          {/* Totals */}
           <Box
             sx={{
               borderRadius: 3,
@@ -424,66 +409,52 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
               display: "grid",
               gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" },
               gap: 1.5,
-              textAlign: { xs: "center", sm: "left" },
             }}
           >
-            <Box>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                textTransform="uppercase"
-                fontWeight={600}
+            {[
+              {
+                label: "Montant HT",
+                value: amounts.amountHT,
+                color: "text.secondary",
+              },
+              {
+                label: "Montant TVA",
+                value: amounts.amountTVA,
+                color: "text.secondary",
+              },
+              {
+                label: "Montant TTC",
+                value: amounts.amountTTC,
+                color: "primary.main",
+              },
+            ].map(({ label, value, color }, i) => (
+              <Box
+                key={i}
+                sx={{
+                  borderLeft:
+                    i > 0
+                      ? { sm: `1px solid ${alpha(theme.palette.divider, 0.6)}` }
+                      : undefined,
+                  pl: i > 0 ? { sm: 1.5 } : undefined,
+                }}
               >
-                Montant HT
-              </Typography>
-              <Typography variant="h6" fontWeight={700}>
-                {formatAmount(amounts.amountHT)}
-              </Typography>
-            </Box>
-            <Box
-              sx={{
-                borderLeft: {
-                  sm: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
-                },
-                pl: { sm: 1.5 },
-              }}
-            >
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                textTransform="uppercase"
-                fontWeight={600}
-              >
-                Montant TVA
-              </Typography>
-              <Typography variant="h6" fontWeight={700}>
-                {formatAmount(amounts.amountTVA)}
-              </Typography>
-            </Box>
-            <Box
-              sx={{
-                borderLeft: {
-                  sm: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
-                },
-                pl: { sm: 1.5 },
-              }}
-            >
-              <Typography
-                variant="caption"
-                color="primary.main"
-                textTransform="uppercase"
-                fontWeight={600}
-              >
-                Montant TTC
-              </Typography>
-              <Typography
-                variant="subtitle1"
-                fontWeight={800}
-                color="primary.main"
-              >
-                {formatAmount(amounts.amountTTC)}
-              </Typography>
-            </Box>
+                <Typography
+                  variant="caption"
+                  color={color}
+                  textTransform="uppercase"
+                  fontWeight={600}
+                >
+                  {label}
+                </Typography>
+                <Typography
+                  variant={i === 2 ? "subtitle1" : "h6"}
+                  fontWeight={i === 2 ? 800 : 700}
+                  color={color}
+                >
+                  {formatAmount(value)}
+                </Typography>
+              </Box>
+            ))}
           </Box>
 
           <Stack
@@ -496,10 +467,12 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
             </CustomButton>
             <CustomButton
               type="submit"
-              disabled={!isValid || isSubmitting || isCreating}
-              loading={isCreating || isSubmitting}
+              disabled={!isValid || isSubmitting || isLoading}
+              loading={isLoading || isSubmitting}
             >
-              Créer le devis
+              {isEditMode
+                ? "Enregistrer les modifications"
+                : "Créer le bon de livraison"}
             </CustomButton>
           </Stack>
         </Box>

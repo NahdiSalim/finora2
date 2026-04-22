@@ -102,6 +102,16 @@ export const NAV_CONFIG: Record<
     icon: <Store />,
   },
 
+  "/bons-commande": {
+    title: "Bons de commande",
+    icon: <FileText />,
+  },
+
+  "/bons-livraison": {
+    title: "Bons de livraison",
+    icon: <FileCheck2 />,
+  },
+
   "/__finances": {
     title: "Finances",
     icon: <Briefcase />,

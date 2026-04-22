@@ -22,6 +22,8 @@ import { notificationsApi } from "./services/notificationsApi";
 import { devisApi } from "./services/devisApi";
 import { factureApi } from "./services/factureApi";
 import { suppliersApi } from "./services/suppliersApi";
+import { bonCommandeApi } from "./services/bonCommandeApi";
+import { bonLivraisonApi } from "./services/bonLivraisonApi";
 
 const apiMiddlewares = [
   authApi.middleware,
@@ -46,6 +48,8 @@ const apiMiddlewares = [
   devisApi.middleware,
   factureApi.middleware,
   suppliersApi.middleware,
+  bonCommandeApi.middleware,
+  bonLivraisonApi.middleware,
 ];
 
 const apiResetters = [
@@ -70,6 +74,8 @@ const apiResetters = [
   devisApi.util.resetApiState,
   factureApi.util.resetApiState,
   suppliersApi.util.resetApiState,
+  bonCommandeApi.util.resetApiState,
+  bonLivraisonApi.util.resetApiState,
 ];
 
 const appReducer = combineReducers({
@@ -96,6 +102,8 @@ const appReducer = combineReducers({
   [devisApi.reducerPath]: devisApi.reducer,
   [factureApi.reducerPath]: factureApi.reducer,
   [suppliersApi.reducerPath]: suppliersApi.reducer,
+  [bonCommandeApi.reducerPath]: bonCommandeApi.reducer,
+  [bonLivraisonApi.reducerPath]: bonLivraisonApi.reducer,
 });
 
 const baseStore = configureStore({

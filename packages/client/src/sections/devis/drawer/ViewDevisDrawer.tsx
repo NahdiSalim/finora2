@@ -203,22 +203,6 @@ export default function ViewDevisDrawer({
                 {devis.tvaRate}%
               </Typography>
             </Box>
-
-            <Box>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                fontWeight={600}
-                sx={{ mb: 0.5, display: "block", fontSize: 10 }}
-              >
-                REMISE
-              </Typography>
-              <Typography variant="body2" sx={{ fontSize: 13 }}>
-                {devis.discountType === "percentage"
-                  ? `${devis.discountValue}%`
-                  : `${formatAmount(devis.discountValue)}`}
-              </Typography>
-            </Box>
           </Box>
         </Box>
 

@@ -543,11 +543,12 @@ export class InvoiceService {
         margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
       });
 
-      // Ensure folder structure: factures/YYYY-MM-DD/
+      // Ensure folder structure: factures/YYYY-MM/supplier/
       const dateFolder = await this.ensureFolderStructure(
         companyId,
         invoice.createdById,
-        invoice.createdAt
+        invoice.createdAt,
+        invoice.supplier as { name: string; company: string } | null
       );
       const folderPath = await this.buildFolderPath(dateFolder.id);
       const fileName = `${invoice.invoiceNumber}.pdf`;
@@ -753,8 +754,10 @@ export class InvoiceService {
   private async ensureFolderStructure(
     companyId: number,
     ownerId: number,
-    createdAt: Date
+    createdAt: Date,
+    supplier?: { name: string; company: string } | null
   ): Promise<any> {
+    // 1. Root "factures" folder
     let root = await this.prisma.document.findFirst({
       where: { companyId, name: 'factures', isFolder: true, parentId: null, status: 'active' },
     });
@@ -775,14 +778,15 @@ export class InvoiceService {
       });
     }
 
-    const dateStr = createdAt.toISOString().slice(0, 10); // YYYY-MM-DD
-    let dateFolder = await this.prisma.document.findFirst({
-      where: { companyId, name: dateStr, isFolder: true, parentId: root.id, status: 'active' },
+    // 2. Month folder: YYYY-MM
+    const monthStr = createdAt.toISOString().slice(0, 7); // YYYY-MM
+    let monthFolder = await this.prisma.document.findFirst({
+      where: { companyId, name: monthStr, isFolder: true, parentId: root.id, status: 'active' },
     });
-    if (!dateFolder) {
-      dateFolder = await this.prisma.document.create({
+    if (!monthFolder) {
+      monthFolder = await this.prisma.document.create({
         data: {
-          name: dateStr,
+          name: monthStr,
           type: 'folder',
           isFolder: true,
           url: '',
@@ -795,7 +799,39 @@ export class InvoiceService {
         },
       });
     }
-    return dateFolder;
+
+    // 3. Supplier folder: "<name> - <company>" (or "Sans fournisseur" if none)
+    const supplierFolderName = supplier
+      ? `${supplier.name} - ${supplier.company}`.slice(0, 100)
+      : 'Sans fournisseur';
+
+    let supplierFolder = await this.prisma.document.findFirst({
+      where: {
+        companyId,
+        name: supplierFolderName,
+        isFolder: true,
+        parentId: monthFolder.id,
+        status: 'active',
+      },
+    });
+    if (!supplierFolder) {
+      supplierFolder = await this.prisma.document.create({
+        data: {
+          name: supplierFolderName,
+          type: 'folder',
+          isFolder: true,
+          url: '',
+          ownerId,
+          companyId,
+          createdBy: ownerId,
+          createdByCompanyId: companyId,
+          parentId: monthFolder.id,
+          status: 'active',
+        },
+      });
+    }
+
+    return supplierFolder;
   }
 
   private async buildFolderPath(folderId: number): Promise<string> {

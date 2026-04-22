@@ -35,6 +35,9 @@ export const SuppliersPage = lazy(() => import("src/pages/suppliers"));
 export const BonCommandePage = lazy(() => import("src/pages/bon-commande"));
 export const BonLivraisonPage = lazy(() => import("src/pages/bon-livraison"));
 export const ProfilePage = lazy(() => import("src/pages/profile"));
+export const CompanySettingsPage = lazy(
+  () => import("src/pages/settings/company"),
+);
 export const NetworkPage = lazy(() => import("src/pages/network"));
 export const NetworkAccountantProfilePage = lazy(() =>
   import("src/pages/network/accountant-profile").then((m) => ({
@@ -258,6 +261,17 @@ export const routesSection: RouteObject[] = [
         element: (
           <PermissionGuard requiredPath="/profile/edit">
             <UserPage />
+          </PermissionGuard>
+        ),
+      },
+      {
+        path: "settings/company",
+        element: (
+          <PermissionGuard
+            requiredPath="/settings/company"
+            allowForRole="CLIENT"
+          >
+            <CompanySettingsPage />
           </PermissionGuard>
         ),
       },
@@ -568,6 +582,17 @@ export const routesSection: RouteObject[] = [
             element: (
               <PermissionGuard requiredPath="/profile/edit">
                 <UserPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "settings/company",
+            element: (
+              <PermissionGuard
+                requiredPath="/settings/company"
+                allowForRole="CLIENT"
+              >
+                <CompanySettingsPage />
               </PermissionGuard>
             ),
           },

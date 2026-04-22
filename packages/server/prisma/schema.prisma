@@ -495,9 +495,6 @@ model Company {
   // Invoices
   invoices          Invoice[] @relation("CompanyInvoices")
 
-  // Suppliers
-  suppliers         Supplier[] @relation("CompanySuppliers")
-
   // Devis
   devis             Devis[] @relation("DevisCompany")
   createdDevis      Devis[] @relation("DevisCreatedByCompany")
@@ -1147,6 +1144,30 @@ model RoleAction {
   @@unique([roleId, actionId])
   @@index([roleId])
   @@index([actionId])
+}
+
+
+// From supplier.prisma
+model Supplier {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(100)
+  company   String   @db.VarChar(100)
+  email     String   @db.VarChar(100)
+  phone     String   @db.VarChar(20)
+  address   String?  @db.VarChar(200)
+  taxId     String?  @db.VarChar(50)
+  logoUrl   String?
+
+  companyId Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownerCompany Company   @relation("CompanySuppliers", fields: [companyId], references: [id], onDelete: Cascade)
+  devis        Devis[]   @relation("DevisSupplier")
+  invoices     Invoice[] @relation("InvoiceSupplier")
+
+  @@index([companyId])
+  @@map("suppliers")
 }
 
 

@@ -28,6 +28,10 @@ import Logo from "src/components/common/Logo";
 import { GlobalFileDrawer } from "src/components/common/FileDrawer";
 import { GlobalCallHandler } from "../components/GlobalCallHandler";
 import { GlobalCallProvider } from "src/contexts/GlobalCallContext";
+import {
+  HeaderSearchProvider,
+  useHeaderSearch,
+} from "src/contexts/HeaderSearchContext";
 
 // ----------------------------------------------------------------------
 
@@ -41,7 +45,8 @@ export type DashboardLayoutProps = LayoutBaseProps & {
   };
 };
 
-export function DashboardLayout({
+// Inner component — consumes the HeaderSearchContext
+function DashboardLayoutInner({
   sx,
   cssVars,
   children,
@@ -53,6 +58,7 @@ export function DashboardLayout({
 
   const { value: open, onFalse: onClose, onTrue: onOpen } = useBoolean();
   const navItems = useNavigation();
+  const { searchContent } = useHeaderSearch();
 
   const renderHeader = () => {
     const headerSlotProps: HeaderSectionProps["slotProps"] = {
@@ -77,6 +83,7 @@ export function DashboardLayout({
                 flex: "1 1 auto",
                 justifyContent: "center",
                 minWidth: 0,
+                px: 2,
               }),
         },
       },
@@ -94,7 +101,10 @@ export function DashboardLayout({
             display: "flex",
             alignItems: "center",
             minWidth: 0,
-            flex: isMobile ? "1 1 auto" : "0 1 auto",
+            // flex-shrink:0 on desktop prevents logo from being compressed
+            // when centerArea has content — safe on other pages (empty center
+            // takes no visible space regardless)
+            flex: isMobile ? "1 1 auto" : "0 0 auto",
           }}
         >
           <MenuButton
@@ -220,5 +230,15 @@ export function DashboardLayout({
         {renderMain()}
       </LayoutSection>
     </GlobalCallProvider>
+  );
+}
+
+// Public export — wraps with HeaderSearchProvider so any child page can inject
+// content into the header via useHeaderSearch()
+export function DashboardLayout(props: DashboardLayoutProps) {
+  return (
+    <HeaderSearchProvider>
+      <DashboardLayoutInner {...props} />
+    </HeaderSearchProvider>
   );
 }

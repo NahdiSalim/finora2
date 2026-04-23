@@ -198,6 +198,15 @@ export class UserController {
     return await this.userService.updateProfile(userId, dto, photo, coverPhoto);
   }
 
+  @Get('company')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get current user company information' })
+  async getCompany(@Req() req: AuthRequest) {
+    const userId = req.user!.id;
+    return await this.userService.getCompany(userId);
+  }
+
   @Patch('company')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('logo'))

@@ -839,6 +839,29 @@ export class UserService {
     }
   }
 
+  // Get company for current user
+  async getCompany(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { company: true },
+    });
+
+    if (!user) throw new ApiError('User not found', 404, 'USER_NOT_FOUND');
+    if (!user.companyId || !user.company) throw new ApiError('No company found', 404, 'NO_COMPANY');
+
+    let logoUrl: string | null = null;
+    if (user.company.logo) {
+      try {
+        logoUrl = await this.minioService.getPresignedUrl(user.company.logo, 7 * 24 * 60 * 60);
+      } catch {
+        logoUrl = null;
+      }
+    }
+
+    const { logo, ...companyData } = user.company;
+    return { success: true, data: { ...companyData, logoUrl } };
+  }
+
   // Update company (for accountant and client)
   async updateCompany(userId: number, dto: UpdateCompanyDto, logoFile?: Express.Multer.File) {
     try {

@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString, IsNumber } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
+import { INVOICE_TEMPLATE_IDS } from '../../../common/utils/invoice-template.util';
+import type { InvoiceTemplateId } from '../../../common/utils/invoice-template.util';
 
 export class UpdateCompanyDto {
   @ApiProperty({ example: 'Entreprise SARL', description: 'Company name', required: false })
@@ -106,4 +108,14 @@ export class UpdateCompanyDto {
   })
   @IsOptional()
   logo?: any;
+
+  @ApiProperty({
+    example: 'classic',
+    description: 'Invoice template ID',
+    enum: INVOICE_TEMPLATE_IDS,
+    required: false,
+  })
+  @IsIn(INVOICE_TEMPLATE_IDS)
+  @IsOptional()
+  invoiceTemplate?: InvoiceTemplateId;
 }

@@ -1,5 +1,6 @@
 import { createApi } from "@reduxjs/toolkit/query/react";
 import { baseQueryWithReauth } from "./baseQueryWithReauth";
+import { invoicesApi } from "./invoicesApi";
 
 export interface CompanyData {
   id: number;
@@ -17,6 +18,7 @@ export interface CompanyData {
   website?: string | null;
   description?: string | null;
   logoUrl?: string | null;
+  invoiceTemplate?: string | null;
 }
 
 interface GetCompanyResponse {
@@ -47,6 +49,19 @@ export const companyApi = createApi({
         body: formData,
       }),
       invalidatesTags: ["Company"],
+      // After a successful save, explicitly invalidate the invoicesApi cache.
+      // invalidatesTags only works within the same slice — cross-slice invalidation
+      // requires dispatching the other slice's util action directly.
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          dispatch(
+            invoicesApi.util.invalidateTags([{ type: "Invoices", id: "LIST" }]),
+          );
+        } catch {
+          // save failed — nothing to invalidate
+        }
+      },
     }),
   }),
 });

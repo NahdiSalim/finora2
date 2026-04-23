@@ -105,12 +105,14 @@ export default function BonLivraisonView() {
   };
 
   const handlePrint = (bl: BonLivraison) => {
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(buildBonLivraisonTemplate(bl));
-    win.document.close();
-    win.focus();
-    win.print();
+    const html = buildBonLivraisonTemplate(bl).replace(
+      "</body>",
+      "<script>window.onload=function(){window.focus();window.print();}</script></body>",
+    );
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener,noreferrer");
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   };
 
   const columns: Column<BonLivraison>[] = [

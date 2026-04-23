@@ -10,14 +10,7 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import {
-  Eye,
-  Pencil,
-  Plus,
-  Printer,
-  Search,
-  Trash2,
-} from "lucide-react";
+import { Eye, Pencil, Plus, Printer, Search, Trash2 } from "lucide-react";
 
 import { PageHeader } from "src/layouts/components/page-header";
 import { FolderTabNavigation } from "src/components/common/CustomTabs";
@@ -144,12 +137,14 @@ export default function BonCommandeView() {
   };
 
   const handlePrint = (bc: BonCommande) => {
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(buildBonCommandeTemplate(bc));
-    win.document.close();
-    win.focus();
-    win.print();
+    const html = buildBonCommandeTemplate(bc).replace(
+      "</body>",
+      "<script>window.onload=function(){window.focus();window.print();}</script></body>",
+    );
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener,noreferrer");
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   };
 
   const columns: Column<BonCommande>[] = [

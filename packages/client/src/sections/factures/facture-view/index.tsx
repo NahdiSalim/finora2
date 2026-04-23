@@ -167,12 +167,19 @@ export default function FactureView() {
   };
 
   const handleDownloadPdf = (facture: Facture) => {
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(buildFactureTemplate(facture));
-    win.document.close();
-    win.focus();
-    win.print();
+    // Build the HTML with a self-executing print script inside the child.
+    // Use a Blob URL + noopener so the child opens in a separate renderer
+    // process — this is the only way to guarantee the parent's JS thread
+    // is never blocked by the child's print dialog.
+    const html = buildFactureTemplate(facture).replace(
+      "</body>",
+      "<script>window.onload=function(){window.focus();window.print();}</script></body>",
+    );
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener,noreferrer");
+    // Revoke after a short delay — the browser has already started loading it
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   };
 
   // Called after a draft is published — close drawer and refresh

@@ -105,6 +105,7 @@ export interface InvoiceCompany {
   postalCode: string | null;
   phone: string | null;
   email: string | null;
+  invoiceTemplate?: string | null;
 }
 
 export interface InvoiceSupplier {

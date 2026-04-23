@@ -4,6 +4,7 @@ import { MinioService } from '../../common/services/minio.service';
 import { ApiError } from '../../common/errors/api-error';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
+import { resolveTemplate } from '../../common/utils/invoice-template.util';
 import * as puppeteer from 'puppeteer';
 
 @Injectable()
@@ -170,6 +171,7 @@ export class InvoiceService {
               email: true,
               vatNumber: true,
               logo: true,
+              invoiceTemplate: true,
             },
           },
         },
@@ -295,6 +297,7 @@ export class InvoiceService {
             email: true,
             vatNumber: true,
             logo: true,
+            invoiceTemplate: true,
           },
         },
       },
@@ -504,6 +507,7 @@ export class InvoiceService {
             email: true,
             vatNumber: true,
             logo: true,
+            invoiceTemplate: true,
           },
         },
         supplier: {
@@ -625,7 +629,7 @@ export class InvoiceService {
     // Company logo — fetch via MinIO SDK and embed as base64 data URI
     // (Puppeteer cannot reach the MinIO HTTP endpoint from the server process)
     const emetteurName = invoice.company?.legalName || invoice.company?.name || 'Émetteur';
-    let logoHtml = `<div style="font-size:20px;font-weight:700;color:#111827;">${emetteurName}</div>`;
+    let logoImgTag = '';
     if (invoice.company?.logo) {
       try {
         const buf = await this.minioService.downloadFile(invoice.company.logo);
@@ -639,12 +643,294 @@ export class InvoiceService {
           svg: 'image/svg+xml',
         };
         const dataUri = `data:${mime[ext] ?? 'image/png'};base64,${buf.toString('base64')}`;
-        logoHtml = `<img src="${dataUri}" alt="${emetteurName}" style="height:50px;max-width:200px;object-fit:contain;" />`;
+        logoImgTag = `<img src="${dataUri}" alt="${emetteurName}" style="height:50px;max-width:200px;object-fit:contain;"/>`;
       } catch {
         // fallback to company name text
       }
     }
 
+    const ht = Number(invoice.subtotal);
+    const tva = Number(invoice.vatAmount);
+    const ttc = Number(invoice.total);
+    const rate = Number(invoice.vatRate);
+    const dateCreated = new Date(invoice.createdAt).toLocaleDateString('fr-FR');
+    const dateDue = new Date(invoice.dueDate).toLocaleDateString('fr-FR');
+    const hasDiscount = invoice.discountAmount && Number(invoice.discountAmount) > 0;
+
+    const templateId = resolveTemplate(invoice.company?.invoiceTemplate);
+
+    // ── Moderne ───────────────────────────────────────────────────────────────
+    if (templateId === 'moderne') {
+      const logoHtml =
+        logoImgTag ||
+        `<span style="color:rgba(255,255,255,0.9);font-size:16px;font-weight:700">${emetteurName}</span>`;
+      const discountRowHtml = hasDiscount
+        ? `<tr><td style="padding:4px 16px 4px 0;text-align:right;color:#6366f1;font-size:12px">Remise${invoice.discountType === 'percentage' ? ` (${invoice.discountValue}%)` : ''}</td><td style="padding:4px 0;text-align:right;font-weight:600;font-size:12px;white-space:nowrap;color:#1e293b">- ${fmt(Number(invoice.discountAmount))}</td></tr>`
+        : '';
+      const linesHtml = (invoice.lines as any[])
+        .map(
+          (l, i) =>
+            `<tr class="${i % 2 === 0 ? 'odd' : 'even'}"><td>${l.description}</td><td style="text-align:center">${fmt(Number(l.unitPrice))}</td><td style="text-align:center">${Number(l.quantity)}</td><td style="text-align:right;font-weight:600">${fmt(Number(l.quantity) * Number(l.unitPrice))}</td></tr>`
+        )
+        .join('');
+      return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><style>
+*{box-sizing:border-box}
+body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#1e293b;background:#f5f3ff;line-height:1.5;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.page{max-width:800px;margin:0 auto;background:#f5f3ff;width:100%}
+.hdr{background:#4f46e5;width:100%;border-collapse:collapse;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.hdr td{padding:18px 40px;vertical-align:middle}
+.meta{background:#3730a3;width:100%;border-collapse:collapse;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.meta td{padding:7px 40px;font-size:11px;color:rgba(255,255,255,0.8)}
+.content{padding:24px 40px 40px 40px;width:100%}
+.accent-wrap{border-left:4px solid #818cf8;padding-left:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.parties{width:100%;border-collapse:collapse;margin-bottom:24px}
+.plabel{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#6366f1;margin-bottom:6px}
+.pname{font-size:13px;font-weight:700;color:#1e293b;margin-bottom:3px}
+.pline{font-size:11px;color:#64748b;margin-bottom:2px}
+table.lines{width:100%;border-collapse:collapse;margin-bottom:20px}
+table.lines thead th{background:#4f46e5;color:#fff;padding:10px 12px;font-size:11px;font-weight:600;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+table.lines tbody tr.odd{background:#eef2ff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+table.lines tbody tr.even{background:#ffffff}
+table.lines tbody td{padding:10px 12px;font-size:12px;border-bottom:1px solid #e0e7ff}
+table.totals{width:100%;border-collapse:collapse;margin-bottom:0}
+table.totals td{padding:4px 0;font-size:12px;vertical-align:middle}
+table.totals td.lbl{text-align:right;padding-right:16px;color:#64748b;white-space:nowrap}
+table.totals td.val{text-align:right;font-weight:600;color:#1e293b;white-space:nowrap}
+table.ttc-band{width:100%;border-collapse:collapse;background:#4f46e5;margin-top:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+table.ttc-band td{padding:10px 16px;color:#fff}
+.notes{margin-top:24px;padding:12px 16px;background:#ede9fe;border-left:4px solid #6366f1;font-size:11px;color:#3730a3;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+</style></head><body><div class="page">
+<table class="hdr"><tr>
+<td style="width:50%;vertical-align:middle">${logoHtml}</td>
+<td style="width:50%;text-align:right;vertical-align:middle"><span style="color:#fff;font-size:32px;font-weight:900;letter-spacing:3px">FACTURE</span></td>
+</tr></table>
+<table class="meta"><tr>
+<td>N° ${invoice.invoiceNumber}</td>
+<td style="text-align:right">Date : ${dateCreated} &nbsp;|&nbsp; Échéance : ${dateDue}</td>
+</tr></table>
+<div class="content"><div class="accent-wrap">
+<table class="parties"><tr>
+<td style="width:50%;vertical-align:top;padding-right:16px">
+<div class="plabel">Émetteur</div>
+${issuerLines.map((l, i) => `<div class="${i === 0 ? 'pname' : 'pline'}">${l}</div>`).join('')}
+</td>
+<td style="width:50%;vertical-align:top;padding-left:16px">
+<div class="plabel">Destinataire</div>
+${recipientLines.map((l, i) => `<div class="${i === 0 ? 'pname' : 'pline'}">${l}</div>`).join('')}
+</td>
+</tr></table>
+<table class="lines"><thead><tr>
+<th style="width:45%">Description</th>
+<th style="text-align:center;width:20%">Prix unit.</th>
+<th style="text-align:center;width:15%">Qté</th>
+<th style="text-align:right;width:20%">Total</th>
+</tr></thead><tbody>${linesHtml}</tbody></table>
+<table style="width:100%;border-collapse:collapse;margin-bottom:0"><tr>
+<td style="width:55%;vertical-align:top;padding-right:20px;font-size:12px;color:#64748b">
+<strong style="color:#4f46e5;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Règlement</strong>
+<div style="margin-top:6px;font-weight:700;color:#1e293b">Par virement bancaire</div>
+<div style="margin-top:10px;font-size:10px;color:#94a3b8;line-height:1.5">En cas de retard de paiement, une indemnité de 10% par jour de retard sera exigible.</div>
+</td>
+<td style="width:45%;vertical-align:top">
+<table class="totals"><tbody>
+<tr><td class="lbl">Total HT</td><td class="val">${fmt(ht)}</td></tr>
+<tr><td class="lbl">TVA (${rate}%)</td><td class="val">${fmt(tva)}</td></tr>
+${discountRowHtml}
+</tbody></table>
+<table class="ttc-band"><tr>
+<td style="font-weight:700;font-size:14px">Total TTC</td>
+<td style="text-align:right;font-weight:800;font-size:16px;white-space:nowrap">${fmt(ttc)}</td>
+</tr></table>
+</td></tr></table>
+${invoice.notes ? `<div class="notes"><strong>Note :</strong> ${invoice.notes}</div>` : ''}
+</div></div>
+</div></body></html>`;
+    }
+
+    // ── Élégante ──────────────────────────────────────────────────────────────
+    if (templateId === 'elegante') {
+      const logoBlockHtml = logoImgTag
+        ? `<div style="text-align:center;padding-top:12px;margin-bottom:4px">${logoImgTag}</div>`
+        : '';
+      const discountRowHtml = hasDiscount
+        ? `<tr><td style="padding:4px 16px 4px 0;text-align:right;color:#a0856d;font-size:12px">Remise${invoice.discountType === 'percentage' ? ` (${invoice.discountValue}%)` : ''}</td><td style="padding:4px 0;text-align:right;font-weight:600;font-size:12px;white-space:nowrap;color:#1c1008">- ${fmt(Number(invoice.discountAmount))}</td></tr>`
+        : '';
+      const linesHtml = (invoice.lines as any[])
+        .map(
+          (l) =>
+            `<tr><td>${l.description}</td><td style="text-align:center">${fmt(Number(l.unitPrice))}</td><td style="text-align:center">${Number(l.quantity)}</td><td style="text-align:right;font-weight:700">${fmt(Number(l.quantity) * Number(l.unitPrice))}</td></tr>`
+        )
+        .join('');
+      return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><style>
+*{box-sizing:border-box}
+body{font-family:Georgia,'Times New Roman',serif;color:#1c1008;margin:0;padding:0;font-size:12px;line-height:1.6;background:#fdf8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.page{max-width:800px;margin:0 auto;background:#fdf8f0;width:100%}
+.gold-bar{height:3px;background:#c9a96e;width:100%;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.inner{padding:32px 40px 40px 40px;width:100%}
+.title-block{text-align:center;margin-bottom:6px}
+.title-block h1{font-family:Georgia,serif;font-size:28px;font-weight:700;letter-spacing:6px;color:#1c1008;margin:0;padding:20px 0 8px 0}
+.gold-line{width:120px;height:1px;background:#c9a96e;margin:0 auto 28px auto;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.parties-table{width:100%;border-collapse:collapse;margin-bottom:32px;font-size:12px}
+.plabel{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#c9a96e;margin-bottom:6px}
+.pname{font-weight:700;font-size:13px;margin-bottom:2px}
+.pline{color:#6b5a3e;font-size:11px;margin-bottom:1px}
+.gold-sep{height:1px;background:#c9a96e;margin-bottom:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+table.lines{width:100%;border-collapse:collapse}
+table.lines thead tr{background:#f5ede0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+table.lines thead th{padding:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#c9a96e;text-align:left;border-bottom:1px solid #c9a96e}
+table.lines thead th:last-child{text-align:right}
+table.lines tbody td{padding:12px 10px;font-size:12px;border-bottom:1px solid #e8dcc8}
+table.lines tbody td:last-child{text-align:right;font-weight:700}
+.gold-sep2{height:1px;background:#c9a96e;margin:0 0 16px 0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+table.totals{width:100%;border-collapse:collapse}
+table.totals td{padding:4px 0;font-size:12px;vertical-align:middle}
+table.totals td.lbl{text-align:right;padding-right:16px;color:#a0856d;white-space:nowrap}
+table.totals td.val{text-align:right;font-weight:600;color:#1c1008;white-space:nowrap}
+table.ttc-band{width:100%;border-collapse:collapse;background:#c9a96e;margin-top:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+table.ttc-band td{padding:10px 16px;color:#fff}
+</style></head><body><div class="page">
+<div class="gold-bar"></div>
+<div class="inner">
+${logoBlockHtml}
+<div class="title-block"><h1>FACTURE</h1></div>
+<div class="gold-line"></div>
+<table class="parties-table"><tr>
+<td style="width:34%;vertical-align:top;padding-right:12px">
+<div class="plabel">Émetteur</div>
+${issuerLines.map((l, i) => `<div class="${i === 0 ? 'pname' : 'pline'}">${l}</div>`).join('')}
+</td>
+<td style="width:34%;vertical-align:top;padding-right:12px">
+<div class="plabel">Destinataire</div>
+${recipientLines.map((l, i) => `<div class="${i === 0 ? 'pname' : 'pline'}">${l}</div>`).join('')}
+</td>
+<td style="width:32%;vertical-align:top;text-align:right">
+<div class="plabel">Référence</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:2px">N° ${invoice.invoiceNumber}</div>
+<div style="font-size:11px;color:#6b5a3e">${dateCreated}</div>
+<div style="font-size:11px;color:#6b5a3e">Éch. ${dateDue}</div>
+</td>
+</tr></table>
+<div class="gold-sep"></div>
+<table class="lines"><thead><tr>
+<th style="width:45%">Description</th>
+<th style="text-align:center;width:20%">Prix unit.</th>
+<th style="text-align:center;width:15%">Qté</th>
+<th style="width:20%">Total</th>
+</tr></thead><tbody>${linesHtml}</tbody></table>
+<div class="gold-sep2"></div>
+<table style="width:100%;border-collapse:collapse"><tr>
+<td style="width:55%;vertical-align:top;padding-right:20px;font-size:12px">
+<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#c9a96e;margin-bottom:8px">Règlement</div>
+<div style="font-weight:700;margin-bottom:4px">Par virement bancaire</div>
+<div style="margin-top:10px;font-size:10px;color:#a0856d;font-style:italic;line-height:1.5">En cas de retard de paiement, une indemnité de 10% par jour de retard sera exigible.</div>
+</td>
+<td style="width:45%;vertical-align:top">
+<table class="totals"><tbody>
+<tr><td class="lbl">Total HT</td><td class="val">${fmt(ht)}</td></tr>
+<tr><td class="lbl">TVA (${rate}%)</td><td class="val">${fmt(tva)}</td></tr>
+${discountRowHtml}
+</tbody></table>
+<table class="ttc-band"><tr>
+<td style="font-weight:700;font-size:14px">Total TTC</td>
+<td style="text-align:right;font-weight:800;font-size:16px;white-space:nowrap">${fmt(ttc)}</td>
+</tr></table>
+</td>
+</tr></table>
+${invoice.notes ? `<div style="margin-top:28px;font-size:11px;color:#6b5a3e;font-style:italic;border-top:1px solid #e8dcc8;padding-top:14px"><strong style="color:#1c1008">Note :</strong> ${invoice.notes}</div>` : ''}
+</div></div></body></html>`;
+    }
+
+    // ── Compacte ──────────────────────────────────────────────────────────────
+    if (templateId === 'compacte') {
+      const logoHtml =
+        logoImgTag ||
+        `<span style="font-size:15px;font-weight:700;color:#e2e8f0">${emetteurName}</span>`;
+      const linesHtml = (invoice.lines as any[])
+        .map(
+          (l, i) =>
+            `<tr class="${i % 2 === 0 ? 'odd' : 'even'}"><td>${l.description}</td><td style="text-align:center">${fmt(Number(l.unitPrice))}</td><td style="text-align:center">${Number(l.quantity)}</td><td style="text-align:right;font-weight:600">${fmt(Number(l.quantity) * Number(l.unitPrice))}</td></tr>`
+        )
+        .join('');
+      return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><style>
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;color:#1e293b;margin:0;padding:0;font-size:12px;line-height:1.5;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.page{max-width:800px;margin:0 auto;background:#f1f5f9;width:100%}
+.hdr{background:#1e293b;width:100%;border-collapse:collapse;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.hdr td{padding:16px 40px;vertical-align:middle}
+.sub-hdr{background:#0f172a;width:100%;border-collapse:collapse;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.sub-hdr td{padding:7px 40px;font-size:10px;color:#64748b}
+.inner{padding:20px 40px 24px 40px;width:100%}
+.parties{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px}
+.plabel{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:4px}
+.pname{font-weight:700;color:#1e293b;margin-bottom:1px}
+.pline{color:#64748b;margin-bottom:1px}
+table.lines{width:100%;border-collapse:collapse;font-size:12px}
+table.lines thead th{background:#334155;padding:8px 10px;font-size:10px;font-weight:600;text-align:left;color:#e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+table.lines thead th:last-child{text-align:right}
+table.lines tbody tr.odd{background:#f8fafc;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+table.lines tbody tr.even{background:#fff}
+table.lines tbody td{padding:7px 10px;border-bottom:1px solid #e2e8f0}
+table.lines tbody td:last-child{text-align:right;font-weight:600}
+.total-band{background:#0f766e;width:100%;border-collapse:collapse;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.total-band td{padding:12px 40px;color:#fff;vertical-align:top}
+</style></head><body><div class="page">
+<table class="hdr"><tr>
+<td style="width:50%;vertical-align:middle">${logoHtml}</td>
+<td style="width:50%;text-align:right">
+<div style="font-size:20px;font-weight:900;color:#e2e8f0;letter-spacing:2px">FACTURE</div>
+<div style="font-size:11px;color:#94a3b8;margin-top:2px">N° ${invoice.invoiceNumber}</div>
+</td>
+</tr></table>
+<table class="sub-hdr"><tr>
+<td>Date : ${dateCreated}</td>
+<td style="text-align:center">Échéance : ${dateDue}</td>
+<td style="text-align:right">TVA : ${rate}%</td>
+</tr></table>
+<div class="inner">
+<table class="parties"><tr>
+<td style="width:50%;vertical-align:top;padding-right:12px">
+<div class="plabel">Émetteur</div>
+${issuerLines.map((l, i) => `<div class="${i === 0 ? 'pname' : 'pline'}">${l}</div>`).join('')}
+</td>
+<td style="width:50%;vertical-align:top;padding-left:12px">
+<div class="plabel">Destinataire</div>
+${recipientLines.map((l, i) => `<div class="${i === 0 ? 'pname' : 'pline'}">${l}</div>`).join('')}
+</td>
+</tr></table>
+<table class="lines"><thead><tr>
+<th style="width:45%">Description</th>
+<th style="text-align:center;width:20%">Prix unit.</th>
+<th style="text-align:center;width:15%">Qté</th>
+<th style="text-align:right;width:20%">Total</th>
+</tr></thead><tbody>${linesHtml}</tbody></table>
+</div>
+<table class="total-band"><tr>
+<td style="width:55%">
+<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:rgba(255,255,255,0.6);margin-bottom:6px">Règlement</div>
+<div style="font-weight:700;color:rgba(255,255,255,0.9)">Par virement bancaire</div>
+<div style="margin-top:6px;font-size:10px;color:rgba(255,255,255,0.5);line-height:1.5">En cas de retard de paiement, une indemnité de 10% par jour de retard sera exigible.</div>
+</td>
+<td style="width:45%;text-align:right">
+<table style="width:100%;border-collapse:collapse">
+<tr><td style="padding:2px 0;text-align:right;padding-right:12px;color:rgba(255,255,255,0.7);font-size:12px">Total HT</td><td style="padding:2px 0;text-align:right;color:rgba(255,255,255,0.9);font-size:12px;white-space:nowrap">${fmt(ht)}</td></tr>
+<tr><td style="padding:2px 0;text-align:right;padding-right:12px;color:rgba(255,255,255,0.7);font-size:12px">TVA (${rate}%)</td><td style="padding:2px 0;text-align:right;color:rgba(255,255,255,0.9);font-size:12px;white-space:nowrap">${fmt(tva)}</td></tr>
+${hasDiscount ? `<tr><td style="padding:2px 0;text-align:right;padding-right:12px;color:rgba(255,255,255,0.7);font-size:12px">Remise</td><td style="padding:2px 0;text-align:right;color:rgba(255,255,255,0.9);font-size:12px;white-space:nowrap">- ${fmt(Number(invoice.discountAmount))}</td></tr>` : ''}
+<tr style="border-top:1px solid rgba(255,255,255,0.25)">
+<td style="padding:8px 12px 0 0;text-align:right;color:#fff;font-size:14px;font-weight:700">Total TTC</td>
+<td style="padding:8px 0 0 0;text-align:right;color:#fff;font-size:18px;font-weight:800;white-space:nowrap">${fmt(ttc)}</td>
+</tr></table>
+</td></tr></table>
+${invoice.notes ? `<div style="padding:14px 40px;font-size:10px;color:#475569;border-top:1px solid #cbd5e1;background:#f8fafc"><strong>Note :</strong> ${invoice.notes}</div>` : ''}
+</div></body></html>`;
+    }
+
+    // ── Classique (default) ───────────────────────────────────────────────────
+    const logoHtml =
+      logoImgTag ||
+      `<div style="font-size:20px;font-weight:700;color:#111827">${emetteurName}</div>`;
+    const discountRow = hasDiscount
+      ? `<tr><td class="bold" style="padding:6px 0;text-align:right;padding-right:15px;">REMISE${invoice.discountType === 'percentage' ? ` (${invoice.discountValue}%)` : ''} :</td><td style="padding:6px 0;text-align:right;white-space:nowrap;">– ${fmt(Number(invoice.discountAmount))}</td></tr>`
+      : '';
     const lineItemsHtml = (invoice.lines as any[])
       .map(
         (line) => `
@@ -656,20 +942,6 @@ export class InvoiceService {
       </tr>`
       )
       .join('');
-
-    const discountRow =
-      invoice.discountAmount && Number(invoice.discountAmount) > 0
-        ? `<tr>
-          <td class="bold" style="padding:6px 0;text-align:right;padding-right:15px;">REMISE${invoice.discountType === 'percentage' ? ` (${invoice.discountValue}%)` : ''} :</td>
-          <td style="padding:6px 0;text-align:right;white-space:nowrap;">– ${fmt(Number(invoice.discountAmount))}</td>
-        </tr>`
-        : '';
-
-    const notesHtml = invoice.notes
-      ? `<div style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:10px;color:#6b7280;">
-          <strong style="color:#111827;">Note :</strong> ${invoice.notes}
-        </div>`
-      : '';
 
     return `<!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8">
@@ -690,8 +962,8 @@ export class InvoiceService {
   <table style="width:100%;margin-bottom:20px;font-size:13px;border-collapse:collapse;">
     <tr>
       <td style="width:50%;vertical-align:top;">
-        <div><span class="bold">DATE :</span> ${new Date(invoice.createdAt).toLocaleDateString('fr-FR')}</div>
-        <div><span class="bold">ÉCHÉANCE :</span> ${new Date(invoice.dueDate).toLocaleDateString('fr-FR')}</div>
+        <div><span class="bold">DATE :</span> ${dateCreated}</div>
+        <div><span class="bold">ÉCHÉANCE :</span> ${dateDue}</div>
       </td>
       <td style="width:50%;text-align:right;vertical-align:top;">
         <div class="bold" style="font-size:15px;">FACTURE N° : ${invoice.invoiceNumber}</div>
@@ -732,22 +1004,22 @@ export class InvoiceService {
         <table style="width:100%;border-collapse:collapse;font-size:13px;">
           <tr>
             <td class="bold" style="padding:6px 0;text-align:right;padding-right:15px;">TOTAL HT :</td>
-            <td style="padding:6px 0;text-align:right;white-space:nowrap;">${fmt(Number(invoice.subtotal))}</td>
+            <td style="padding:6px 0;text-align:right;white-space:nowrap;">${fmt(ht)}</td>
           </tr>
           <tr>
-            <td class="bold" style="padding:6px 0;text-align:right;padding-right:15px;">TVA (${Number(invoice.vatRate)}%) :</td>
-            <td style="padding:6px 0;text-align:right;white-space:nowrap;">${fmt(Number(invoice.vatAmount))}</td>
+            <td class="bold" style="padding:6px 0;text-align:right;padding-right:15px;">TVA (${rate}%) :</td>
+            <td style="padding:6px 0;text-align:right;white-space:nowrap;">${fmt(tva)}</td>
           </tr>
           ${discountRow}
           <tr style="border-top:2px solid #333;">
             <td class="bold" style="padding:12px 0 6px 0;text-align:right;padding-right:15px;font-size:15px;">TOTAL TTC :</td>
-            <td class="heavy" style="padding:12px 0 6px 0;text-align:right;font-size:17px;white-space:nowrap;">${fmt(Number(invoice.total))}</td>
+            <td class="heavy" style="padding:12px 0 6px 0;text-align:right;font-size:17px;white-space:nowrap;">${fmt(ttc)}</td>
           </tr>
         </table>
       </td>
     </tr>
   </table>
-  ${notesHtml}
+  ${invoice.notes ? `<div style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:10px;color:#6b7280;"><strong style="color:#111827;">Note :</strong> ${invoice.notes}</div>` : ''}
 </div></body></html>`;
   }
 

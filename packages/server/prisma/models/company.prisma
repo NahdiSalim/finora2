@@ -35,6 +35,7 @@ model Company {
   socialInfo        String?
   status            String    @default("active")
   logo              String?
+  invoiceTemplate   String?   @default("classic") // "classic" | "moderne" | "elegante" | "compacte"
   
   // Storage quota management
   storageQuotaBytes BigInt?   @default(10737418240) // Default 10GB in bytes

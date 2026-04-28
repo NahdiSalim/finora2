@@ -442,6 +442,7 @@ model Company {
   socialInfo        String?
   status            String    @default("active")
   logo              String?
+  invoiceTemplate   String?   @default("classic") // "classic" | "moderne" | "elegante" | "compacte"
   
   // Storage quota management
   storageQuotaBytes BigInt?   @default(10737418240) // Default 10GB in bytes
@@ -498,6 +499,9 @@ model Company {
   // Devis
   devis             Devis[] @relation("DevisCompany")
   createdDevis      Devis[] @relation("DevisCreatedByCompany")
+
+  // Suppliers
+  suppliers         Supplier[] @relation("CompanySuppliers")
 
   // Bons de commande
   bonsCommande      BonCommande[] @relation("BonCommandeCompany")
@@ -1153,6 +1157,32 @@ model RoleAction {
 }
 
 
+// From supplier.prisma
+model Supplier {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(100)
+  company   String   @db.VarChar(100)
+  email     String   @db.VarChar(100)
+  phone     String   @db.VarChar(20)
+  address   String?  @db.VarChar(200)
+  taxId     String?  @db.VarChar(50)
+  logoUrl   String?
+
+  companyId Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownerCompany  Company        @relation("CompanySuppliers", fields: [companyId], references: [id], onDelete: Cascade)
+  devis         Devis[]        @relation("DevisSupplier")
+  invoices      Invoice[]      @relation("InvoiceSupplier")
+  bonsCommande  BonCommande[]  @relation("BonCommandeSupplier")
+  bonsLivraison BonLivraison[] @relation("BonLivraisonSupplier")
+
+  @@index([companyId])
+  @@map("suppliers")
+}
+
+
 // From task-client.prisma
 model TaskClient {
   id        Int      @id @default(autoincrement())
@@ -1430,75 +1460,57 @@ model Product {
 model BonCommande {
   id                 Int       @id @default(autoincrement())
   number             String    @unique
-  status             String    @default("brouillon") // "brouillon" | "confirme" | "annule"
+  status             String    @default("brouillon")
   tvaRate            Float     @default(19)
   validUntil         DateTime  @db.Date
-  lines              Json      // Array of {id, description, quantity, unitPrice}
+  lines              Json
   notes              String?   @db.Text
-
-  // Calculated amounts
   amountHT           Float
   amountTVA          Float
   amountTTC          Float
-
-  // Relations
   ownerId            Int
   companyId          Int
   createdBy          Int?
   createdByCompanyId Int?
   supplierId         Int?
-
-  // Timestamps
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  owner              User      @relation("BonCommandeOwner", fields: [ownerId], references: [id])
-  company            Company   @relation("BonCommandeCompany", fields: [companyId], references: [id])
-  supplier           Supplier? @relation("BonCommandeSupplier", fields: [supplierId], references: [id])
+  owner    User?     @relation("BonCommandeOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  company  Company   @relation("BonCommandeCompany", fields: [companyId], references: [id], onDelete: Cascade)
+  supplier Supplier? @relation("BonCommandeSupplier", fields: [supplierId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
-  @@index([supplierId])
   @@index([status])
-  @@index([createdAt])
   @@map("bons_commande")
 }
 
 
-// From bon_livraison.prisma
 model BonLivraison {
   id                 Int       @id @default(autoincrement())
   number             String    @unique
-  status             String    @default("en_attente") // "en_attente" | "livre" | "annule"
+  status             String    @default("en_attente")
   tvaRate            Float     @default(19)
   deliveryDate       DateTime  @db.Date
-  lines              Json      // Array of {id, description, quantity, unitPrice}
+  lines              Json
   notes              String?   @db.Text
-
-  // Calculated amounts
   amountHT           Float
   amountTVA          Float
   amountTTC          Float
-
-  // Relations
   ownerId            Int
   companyId          Int
   createdBy          Int?
   createdByCompanyId Int?
   supplierId         Int?
-
-  // Timestamps
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  owner              User      @relation("BonLivraisonOwner", fields: [ownerId], references: [id])
-  company            Company   @relation("BonLivraisonCompany", fields: [companyId], references: [id])
-  supplier           Supplier? @relation("BonLivraisonSupplier", fields: [supplierId], references: [id])
+  owner    User?     @relation("BonLivraisonOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  company  Company   @relation("BonLivraisonCompany", fields: [companyId], references: [id], onDelete: Cascade)
+  supplier Supplier? @relation("BonLivraisonSupplier", fields: [supplierId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
-  @@index([supplierId])
   @@index([status])
-  @@index([deliveryDate])
-  @@index([createdAt])
   @@map("bons_livraison")
 }
 

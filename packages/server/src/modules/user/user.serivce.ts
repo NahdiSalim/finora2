@@ -950,6 +950,7 @@ export class UserService {
           employeeCount: dto.employeeCount,
           experience: dto.experience,
           description: dto.description,
+          ...(dto.invoiceTemplate && { invoiceTemplate: dto.invoiceTemplate }),
           ...(logoPath && { logo: logoPath }),
         },
       });

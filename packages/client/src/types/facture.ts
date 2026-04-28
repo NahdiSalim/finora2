@@ -21,6 +21,7 @@ export interface FactureCompany {
   email?: string | null;
   vatNumber?: string | null;
   logoUrl?: string | null;
+  invoiceTemplate?: string | null;
 }
 
 export interface FactureLine {

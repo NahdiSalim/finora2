@@ -20,6 +20,7 @@ import { Plus, Trash2, X } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
 import CustomSelect from "src/components/common/CustomSelect";
+import ProductSearchSelect from "src/components/common/ProductSearchSelect";
 import type { FactureFormValues, FactureLine } from "src/types/facture";
 import { factureValidationSchema } from "src/validations/facture/facture-validation";
 import { useCreateInvoiceMutation } from "src/lib/services/invoicesApi";
@@ -445,6 +446,19 @@ export default function FactureModal({ open, onClose, onCreate }: Props) {
                 Ajouter une ligne
               </CustomButton>
             </Stack>
+
+            <Box sx={{ mb: 1.5 }}>
+              <ProductSearchSelect
+                open={open}
+                onSelect={(product) => {
+                  append({
+                    description: product.name,
+                    quantity: 1,
+                    unitPrice: product.unitPrice,
+                  });
+                }}
+              />
+            </Box>
 
             <Stack spacing={1.5}>
               {fields.map((field, index) => (

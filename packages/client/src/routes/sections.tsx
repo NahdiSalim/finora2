@@ -34,6 +34,7 @@ export const DevisPage = lazy(() => import("src/pages/devis"));
 export const SuppliersPage = lazy(() => import("src/pages/suppliers"));
 export const BonCommandePage = lazy(() => import("src/pages/bon-commande"));
 export const BonLivraisonPage = lazy(() => import("src/pages/bon-livraison"));
+export const ProductsPage = lazy(() => import("src/pages/products"));
 export const ProfilePage = lazy(() => import("src/pages/profile"));
 export const CompanySettingsPage = lazy(
   () => import("src/pages/settings/company"),
@@ -516,6 +517,14 @@ export const routesSection: RouteObject[] = [
                 allowForRole="CLIENT"
               >
                 <BonLivraisonPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "products",
+            element: (
+              <PermissionGuard requiredPath="/products" allowForRole="CLIENT">
+                <ProductsPage />
               </PermissionGuard>
             ),
           },

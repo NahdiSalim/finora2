@@ -14,6 +14,7 @@ import { Eye, Pencil, Plus, Printer, Search, Trash2 } from "lucide-react";
 
 import { PageHeader } from "src/layouts/components/page-header";
 import { FolderTabNavigation } from "src/components/common/CustomTabs";
+import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
 import { DataTable, type Column } from "src/layouts/components/custom-table";
 import { CustomPagination } from "src/layouts/components/table-pagination";
@@ -27,7 +28,9 @@ import {
   useGetBonLivraisonListQuery,
   useDeleteBonLivraisonMutation,
 } from "src/lib/services/bonLivraisonApi";
+import { useCreateFactureMutation } from "src/lib/services/factureApi";
 import BonLivraisonModal from "../modal/BonLivraisonModal";
+import ConvertToFactureModal from "../modal/ConvertToFactureModal";
 import ViewBonLivraisonDrawer from "../drawer";
 
 const PAGE_SIZE = 10;
@@ -79,6 +82,10 @@ export default function BonLivraisonView() {
   });
 
   const [deleteBl, { isLoading: isDeleting }] = useDeleteBonLivraisonMutation();
+  const [createFacture, { isLoading: isConverting }] =
+    useCreateFactureMutation();
+
+  const [convertTarget, setConvertTarget] = useState<BonLivraison | null>(null);
 
   const list = data?.data || [];
   const totalCount = data?.pagination?.totalCount ?? 0;
@@ -91,6 +98,40 @@ export default function BonLivraisonView() {
         (counts.en_attente ?? 0) + (counts.livre ?? 0) + (counts.annule ?? 0)
       );
     return counts[id as keyof typeof counts];
+  };
+
+  const handleConvertToFacture = async () => {
+    if (!convertTarget) return;
+    try {
+      const now = new Date();
+      const timestamp = String(now.getTime()).slice(-5);
+      const invoiceNumber = `FAC-${now.getFullYear()}-${timestamp}`;
+
+      // Due date: 30 days from today
+      const dueDate = new Date(now);
+      dueDate.setDate(dueDate.getDate() + 30);
+
+      await createFacture({
+        invoiceNumber,
+        status: "draft",
+        dueDate: dueDate.toISOString().slice(0, 10),
+        vatRate: convertTarget.tvaRate,
+        lines: convertTarget.lines.map((line) => ({
+          description: line.description,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+        })),
+        notes: convertTarget.notes ?? "",
+        supplierId: convertTarget.supplierId,
+        paymentStatus: "unpaid",
+        amountPaid: 0,
+      }).unwrap();
+
+      showAlert("Facture créée avec succès", "success");
+      setConvertTarget(null);
+    } catch {
+      showAlert("Erreur lors de la création de la facture", "error");
+    }
   };
 
   const handleDelete = async () => {
@@ -189,10 +230,24 @@ export default function BonLivraisonView() {
     {
       id: "actions",
       label: "Actions",
-      width: 160,
+      width: 200,
       align: "right",
       render: (r) => (
         <Stack direction="row" justifyContent="flex-end" spacing={1}>
+          <CustomButton
+            size="small"
+            variant="soft"
+            onClick={() => setConvertTarget(r)}
+            sx={{
+              fontSize: "0.75rem",
+              px: 1.25,
+              py: 0.5,
+              minWidth: 0,
+              whiteSpace: "nowrap",
+            }}
+          >
+            → Créer Facture
+          </CustomButton>
           <IconButton
             size="small"
             onClick={() => {
@@ -442,6 +497,20 @@ export default function BonLivraisonView() {
                           borderTop: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
                         }}
                       >
+                        <CustomButton
+                          size="small"
+                          variant="soft"
+                          onClick={() => setConvertTarget(bl)}
+                          sx={{
+                            fontSize: "0.72rem",
+                            px: 1,
+                            py: 0.5,
+                            whiteSpace: "nowrap",
+                            flex: "1 1 auto",
+                          }}
+                        >
+                          → Créer Facture
+                        </CustomButton>
                         <IconButton
                           size="small"
                           onClick={() => {
@@ -580,6 +649,13 @@ export default function BonLivraisonView() {
         title="Supprimer le bon de livraison"
         message="Cette action est irréversible."
         isLoading={isDeleting}
+      />
+      <ConvertToFactureModal
+        open={!!convertTarget}
+        bonLivraison={convertTarget}
+        isLoading={isConverting}
+        onConfirm={handleConvertToFacture}
+        onClose={() => setConvertTarget(null)}
       />
     </PageHeader>
   );

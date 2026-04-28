@@ -505,6 +505,12 @@ model Company {
   // Bons de livraison
   bonsLivraison     BonLivraison[] @relation("BonLivraisonCompany")
 
+  // Products
+  products          Product[]      @relation("CompanyProducts")
+
+  // Suppliers
+  suppliers         Supplier[]     @relation("CompanySuppliers")
+
   @@index([siret])
   @@index([type])
   @@index([status])
@@ -1147,30 +1153,6 @@ model RoleAction {
 }
 
 
-// From supplier.prisma
-model Supplier {
-  id        Int      @id @default(autoincrement())
-  name      String   @db.VarChar(100)
-  company   String   @db.VarChar(100)
-  email     String   @db.VarChar(100)
-  phone     String   @db.VarChar(20)
-  address   String?  @db.VarChar(200)
-  taxId     String?  @db.VarChar(50)
-  logoUrl   String?
-
-  companyId Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  ownerCompany Company   @relation("CompanySuppliers", fields: [companyId], references: [id], onDelete: Cascade)
-  devis        Devis[]   @relation("DevisSupplier")
-  invoices     Invoice[] @relation("InvoiceSupplier")
-
-  @@index([companyId])
-  @@map("suppliers")
-}
-
-
 // From task-client.prisma
 model TaskClient {
   id        Int      @id @default(autoincrement())
@@ -1424,6 +1406,23 @@ model Supplier {
 
   @@index([companyId])
   @@map("suppliers")
+}
+
+
+// From product.prisma
+model Product {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(200)
+  unitPrice   Float
+  companyId   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company  @relation("CompanyProducts", fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([name])
+  @@map("products")
 }
 
 

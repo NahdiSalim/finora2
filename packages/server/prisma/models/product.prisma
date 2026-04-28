@@ -1,0 +1,14 @@
+model Product {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(200)
+  unitPrice   Float
+  companyId   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company  @relation("CompanyProducts", fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([name])
+  @@map("products")
+}

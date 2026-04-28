@@ -45,6 +45,7 @@ export function useNavigation() {
         allowedPaths.add("/factures");
         allowedPaths.add("/devis");
         allowedPaths.add("/suppliers");
+        allowedPaths.add("/products");
       }
     }
 
@@ -84,10 +85,18 @@ export function useNavigation() {
         return;
       }
 
-      // For clients: skip individual factures/devis/suppliers — they are grouped below
+      // Skip /products for non-clients - only show for clients
+      if (path === "/products" && !isClient) {
+        return;
+      }
+
+      // For clients: skip individual factures/devis/suppliers/products — they are grouped below
       if (
         isClient &&
-        (path === "/factures" || path === "/devis" || path === "/suppliers")
+        (path === "/factures" ||
+          path === "/devis" ||
+          path === "/suppliers" ||
+          path === "/products")
       ) {
         return;
       }
@@ -162,10 +171,11 @@ export function useNavigation() {
       }
     }
 
-    // For clients: inject grouped "Finances" item (Fournisseurs → Factures → Devis → BC → BL)
+    // For clients: inject grouped "Finances" item (Fournisseurs → Produits → Factures → Devis → BC → BL)
     if (isClient) {
       const financesConfig = NAV_CONFIG["/__finances"];
       const suppliersConfig = NAV_CONFIG["/suppliers"];
+      const productsConfig = NAV_CONFIG["/products"];
       const facturesConfig = NAV_CONFIG["/factures"];
       const devisConfig = NAV_CONFIG["/devis"];
       const bcConfig = NAV_CONFIG["/bons-commande"];
@@ -186,6 +196,15 @@ export function useNavigation() {
                 path: `${dashboardBase}/suppliers`,
                 icon: suppliersConfig.icon,
               },
+              ...(productsConfig
+                ? [
+                    {
+                      title: productsConfig.title,
+                      path: `${dashboardBase}/products`,
+                      icon: productsConfig.icon,
+                    },
+                  ]
+                : []),
               {
                 title: facturesConfig.title,
                 path: `${dashboardBase}/factures`,

@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   List,
   MessageSquareMore,
+  Package,
   Share2,
   Store,
   User,
@@ -116,6 +117,11 @@ export const NAV_CONFIG: Record<
   "/bons-livraison": {
     title: "Bons de livraison",
     icon: <FileCheck2 />,
+  },
+
+  "/products": {
+    title: "Mes produits",
+    icon: <Package />,
   },
 
   "/__finances": {

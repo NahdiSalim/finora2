@@ -30,6 +30,7 @@ import { InvoiceModule } from './modules/invoice/invoice.module';
 import { SupplierModule } from './modules/supplier/supplier.module';
 import { BonCommandeModule } from './modules/bon-commande/bon-commande.module';
 import { BonLivraisonModule } from './modules/bon-livraison/bon-livraison.module';
+import { ProductModule } from './modules/product/product.module';
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { BonLivraisonModule } from './modules/bon-livraison/bon-livraison.module
     SupplierModule,
     BonCommandeModule,
     BonLivraisonModule,
+    ProductModule,
   ],
   controllers: [AppController],
   providers: [

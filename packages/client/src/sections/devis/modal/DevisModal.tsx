@@ -20,6 +20,7 @@ import { Plus, Trash2, X } from "lucide-react";
 import CustomButton from "src/components/common/CustomButton";
 import CustomInput from "src/components/common/CustomInput";
 import CustomSelect from "src/components/common/CustomSelect";
+import ProductSearchSelect from "src/components/common/ProductSearchSelect";
 import type { DevisFormValues, DevisLine } from "src/types/devis";
 import { devisValidationSchema } from "src/validations/devis/devis-validation";
 import { useCreateDevisMutation } from "src/lib/services/devisApi";
@@ -320,6 +321,19 @@ export default function DevisModal({ open, onClose, onCreate }: Props) {
                 Ajouter une ligne
               </CustomButton>
             </Stack>
+            <Box sx={{ mb: 1.5 }}>
+              <ProductSearchSelect
+                open={open}
+                onSelect={(product) => {
+                  append({
+                    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                    description: product.name,
+                    quantity: 1,
+                    unitPrice: product.unitPrice,
+                  });
+                }}
+              />
+            </Box>
 
             <Stack spacing={1.5}>
               {fields.map((field, index) => (

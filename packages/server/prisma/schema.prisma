@@ -512,9 +512,6 @@ model Company {
   // Products
   products          Product[]      @relation("CompanyProducts")
 
-  // Suppliers
-  suppliers         Supplier[]     @relation("CompanySuppliers")
-
   @@index([siret])
   @@index([type])
   @@index([status])
@@ -1412,30 +1409,6 @@ model User {
   @@index([email])
   @@index([companyId])
   @@index([status])
-}
-
-
-model Supplier {
-  id          Int       @id @default(autoincrement())
-  name        String
-  company     String
-  email       String
-  phone       String
-  address     String?
-  taxId       String?
-  logoUrl     String?
-  companyId   Int
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  companyOwner  Company       @relation("CompanySuppliers", fields: [companyId], references: [id], onDelete: Cascade)
-  invoices      Invoice[]     @relation("InvoiceSupplier")
-  devis         Devis[]       @relation("DevisSupplier")
-  bonsCommande  BonCommande[] @relation("BonCommandeSupplier")
-  bonsLivraison BonLivraison[] @relation("BonLivraisonSupplier")
-
-  @@index([companyId])
-  @@map("suppliers")
 }
 
 

@@ -171,11 +171,10 @@ export class InvoiceService {
               email: true,
               vatNumber: true,
               logo: true,
-              invoiceTemplate: true,
             },
           },
         },
-      }),
+      }) as Promise<any[]>,
       this.prisma.invoice.count({ where: { ...baseWhere, status: 'draft' } }),
       this.prisma.invoice.count({ where: { ...baseWhere, status: 'sent' } }),
       this.prisma.invoice.count({ where: { ...baseWhere, status: 'paid' } }),
@@ -270,7 +269,7 @@ export class InvoiceService {
   }
 
   async getInvoice(id: number, userCompanyId: number) {
-    const invoice = await this.prisma.invoice.findUnique({
+    const invoice = (await this.prisma.invoice.findUnique({
       where: { id },
       include: {
         lines: { orderBy: { order: 'asc' } },
@@ -297,11 +296,10 @@ export class InvoiceService {
             email: true,
             vatNumber: true,
             logo: true,
-            invoiceTemplate: true,
           },
         },
       },
-    });
+    })) as any;
 
     if (!invoice) throw new ApiError('Invoice not found', 404, 'NOT_FOUND');
     if (invoice.companyId !== userCompanyId)
@@ -492,7 +490,7 @@ export class InvoiceService {
    * Runs asynchronously — does not block the API response.
    */
   private async generateAndSavePdf(invoiceId: number, companyId: number): Promise<void> {
-    const invoice = await this.prisma.invoice.findUnique({
+    const invoice = (await this.prisma.invoice.findUnique({
       where: { id: invoiceId },
       include: {
         lines: { orderBy: { order: 'asc' } },
@@ -507,7 +505,6 @@ export class InvoiceService {
             email: true,
             vatNumber: true,
             logo: true,
-            invoiceTemplate: true,
           },
         },
         supplier: {
@@ -522,7 +519,7 @@ export class InvoiceService {
           },
         },
       },
-    });
+    })) as any;
 
     if (!invoice) throw new Error(`Invoice ${invoiceId} not found`);
 

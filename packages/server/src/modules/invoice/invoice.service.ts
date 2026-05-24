@@ -133,6 +133,7 @@ export class InvoiceService {
       totalCount,
       invoicesList,
       countDraft,
+      countReview,
       countSent,
       countPaid,
       countPartial,
@@ -176,6 +177,7 @@ export class InvoiceService {
         },
       }) as Promise<any[]>,
       this.prisma.invoice.count({ where: { ...baseWhere, status: 'draft' } }),
+      this.prisma.invoice.count({ where: { ...baseWhere, status: 'review' } }),
       this.prisma.invoice.count({ where: { ...baseWhere, status: 'sent' } }),
       this.prisma.invoice.count({ where: { ...baseWhere, status: 'paid' } }),
       this.prisma.invoice.count({ where: { ...baseWhere, status: 'partial' } }),
@@ -195,6 +197,7 @@ export class InvoiceService {
       totalRemaining: this.round(Number(analyticsRaw._sum.remainingAmount ?? 0)),
       counts: {
         draft: countDraft,
+        review: countReview,
         sent: countSent,
         paid: countPaid,
         partial: countPartial,

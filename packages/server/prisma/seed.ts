@@ -7,6 +7,7 @@ import { seedActions } from './seeds/actions.seed';
 import { seedUsers } from './seeds/users.seed';
 import { seedRolePermissions } from './seeds/role-permissions.seed';
 import { seedTasks } from './seeds/tasks.seed';
+import { seedChatRooms } from './seeds/chat-rooms.seed';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 if (!process.env.DATABASE_URL) {
@@ -30,6 +31,7 @@ async function main() {
     await seedUsers(prisma);
     await seedRolePermissions(prisma);
     await seedTasks(prisma);
+    await seedChatRooms(prisma);
 
     console.log('\n✅ Database seeding completed successfully!');
   } catch (error) {

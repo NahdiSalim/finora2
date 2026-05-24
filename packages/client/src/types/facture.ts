@@ -1,5 +1,6 @@
 export type FactureStatus =
   | "draft"
+  | "review"
   | "sent"
   | "paid"
   | "partial"

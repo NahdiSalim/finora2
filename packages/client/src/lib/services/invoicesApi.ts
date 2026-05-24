@@ -159,6 +159,7 @@ export interface InvoiceAnalytics {
   totalRemaining: number;
   counts: {
     draft: number;
+    review: number;
     paid: number;
     partial: number;
     overdue: number;
@@ -178,6 +179,7 @@ export interface GetInvoicesListResponse {
   };
   counts: {
     draft: number;
+    review: number;
     sent: number;
     paid: number;
     partial: number;

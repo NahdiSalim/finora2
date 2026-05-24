@@ -31,12 +31,12 @@ async function runSeeds() {
     const usersCount = await prisma.user.count();
 
     if (rolesCount > 0 || usersCount > 0) {
-      console.log(' Database already seeded, skipping...');
+      console.log('✓ Database already seeded, skipping...');
       await prisma.$disconnect();
       return;
     }
 
-    console.log(' Running database seeds...');
+    console.log('🌱 Running database seeds...');
 
     await seedRoles(prisma);
     await seedFeatures(prisma);
@@ -45,9 +45,9 @@ async function runSeeds() {
     await seedUsers(prisma);
     await seedRolePermissions(prisma);
 
-    console.log(' Database seeding completed!');
+    console.log('✓ Database seeding completed!');
   } catch (error) {
-    console.error(' Error during seeding:', error);
+    console.error('❌ Error during seeding:', error);
   } finally {
     await prisma.$disconnect();
   }
@@ -98,9 +98,9 @@ async function bootstrap() {
   // Fix path for both dev (src) and prod (dist)
   const uploadsPath = join(__dirname, '..', '..', 'uploads');
   if (!existsSync(uploadsPath)) {
-    console.error('Uploads folder not found at:', uploadsPath);
+    console.error('⚠️  Uploads folder not found at:', uploadsPath);
   } else {
-    console.log('Serving uploads from:', uploadsPath);
+    console.log('📁 Serving uploads from:', uploadsPath);
   }
   app.useStaticAssets(uploadsPath, {
     prefix: '/uploads/',
@@ -109,14 +109,18 @@ async function bootstrap() {
   // Run seeds automatically on startup
   await runSeeds();
 
-  await app.listen(process.env.PORT || 3000, '0.0.0.0');
   const port = process.env.PORT || 3000;
-  console.log(`\n Server is running on port ${port}`);
-  console.log(` Swagger UI:`);
+  await app.listen(port, '0.0.0.0');
+
+  console.log(`\n🚀 Server is running on port ${port}`);
+  console.log(`📚 Swagger UI:`);
   console.log(`   - http://localhost:${port}/docs`);
   console.log(`   - http://192.168.1.185:${port}/docs`);
   console.log(`🔌 API Base URL:`);
   console.log(`   - http://localhost:${port}/api`);
-  console.log(`   - http://192.168.1.185:${port}/api`);
+  console.log(`💬 WebSocket:`);
+  console.log(`   - ws://localhost:${port}`);
+  console.log(`   - ws://192.168.1.185:${port}`);
+  console.log(`\n✅ All services ready!\n`);
 }
 bootstrap();

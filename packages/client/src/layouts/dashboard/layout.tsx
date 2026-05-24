@@ -32,6 +32,7 @@ import {
   HeaderSearchProvider,
   useHeaderSearch,
 } from "src/contexts/HeaderSearchContext";
+import ChatbotWidget from "src/components/chatbot/ChatbotWidget";
 
 // ----------------------------------------------------------------------
 
@@ -199,6 +200,7 @@ function DashboardLayoutInner({
       {children}
       <GlobalFileDrawer />
       <GlobalCallHandler />
+      <ChatbotWidget />
     </MainSection>
   );
 

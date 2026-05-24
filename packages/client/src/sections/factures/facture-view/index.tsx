@@ -44,6 +44,7 @@ const backendStatusMap: Record<string, FactureStatus> = {
 
 const uiStatusToBackend: Record<string, string | undefined> = {
   all: undefined,
+  review: "review",
   draft: "draft",
   sent: "sent",
   overdue: "overdue",
@@ -146,6 +147,7 @@ export default function FactureView() {
     if (tabId === "all") {
       return (
         (counts.draft ?? 0) +
+        (counts.review ?? 0) +
         (counts.paid ?? 0) +
         (counts.partial ?? 0) +
         (counts.overdue ?? 0) +

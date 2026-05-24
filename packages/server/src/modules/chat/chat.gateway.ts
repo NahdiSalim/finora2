@@ -37,18 +37,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleConnection(client: Socket) {
     try {
+      console.log(`[WebSocket] Client attempting to connect: ${client.id}`);
+
       // Extraire le token JWT
       const token =
         client.handshake.auth.token || client.handshake.headers.authorization?.split(' ')[1];
 
       if (!token) {
+        console.log(`[WebSocket] No token provided, disconnecting client: ${client.id}`);
         client.disconnect();
         return;
       }
 
       // Vérifier le token
+      console.log(`[WebSocket] Verifying JWT token...`);
       const payload = this.jwtService.verify(token);
       const userId = payload.id ?? payload.sub; // JWT puts id in payload.id, not payload.sub
+      console.log(`[WebSocket] Token verified for user: ${userId}`);
 
       // Stocker la connexion
       client.data.userId = userId;
@@ -56,16 +61,25 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const userSockets = this.userSockets.get(userId) || [];
       userSockets.push(client.id);
       this.userSockets.set(userId, userSockets);
+      console.log(
+        `[WebSocket] User ${userId} connected with ${userSockets.length} active socket(s)`
+      );
 
       // Rejoindre automatiquement les salles de l'utilisateur
+      console.log(`[WebSocket] Fetching rooms for user ${userId}...`);
       const rooms = await this.chatService.getUserRooms(userId);
+      console.log(`[WebSocket] User ${userId} has ${rooms.length} room(s)`);
+
       rooms.forEach((room) => {
         client.join(`room:${room.id}`);
+        console.log(`[WebSocket] User ${userId} joined room: ${room.id}`);
       });
 
       // Notifier les autres utilisateurs
       client.broadcast.emit('user:online', { userId });
-    } catch {
+      console.log(`[WebSocket] User ${userId} connection complete, notified others`);
+    } catch (error) {
+      console.error(`[WebSocket] Connection error for client ${client.id}:`, error.message);
       client.disconnect();
     }
   }

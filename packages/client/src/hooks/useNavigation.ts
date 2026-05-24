@@ -239,6 +239,40 @@ export function useNavigation() {
       }
     }
 
+    // Define menu order for each role
+    const menuOrder: Record<string, string[]> = {
+      accountant: [
+        "/dashboard",
+        "/requests",
+        "/clients",
+        "/collaborators",
+        "/documents",
+        "/messages",
+        "/meetings",
+        "/network",
+        "/profile",
+      ],
+      client: [
+        "/requests",
+        "/__finances", // Grouped finances section
+        "/meetings",
+        "/messages",
+        "/documents",
+        "/archive",
+        "/network",
+        "/profile",
+        "/settings/company",
+      ],
+      collaborator: [
+        "/dashboard",
+        "/tasks",
+        "/documents",
+        "/messages",
+        "/meetings",
+        "/profile",
+      ],
+    };
+
     // "Paramètres de l'entreprise" is only visible for CLIENT role
     const companySettingsConfig = NAV_CONFIG["/settings/company"];
     if (companySettingsConfig && isClient) {
@@ -254,7 +288,45 @@ export function useNavigation() {
       }
     }
 
-    return items;
+    // Sort items based on the defined order for the current role
+    const currentOrder = isAccountant
+      ? menuOrder.accountant
+      : isClient
+        ? menuOrder.client
+        : isCollaboratorOnly
+          ? menuOrder.collaborator
+          : [];
+
+    const sortedItems = items.sort((a, b) => {
+      // Extract the base path (e.g., "/dashboard" from "/dashboard/client")
+      const aPath = "/" + a.path.split("/").slice(-1)[0].split("?")[0];
+      const bPath = "/" + b.path.split("/").slice(-1)[0].split("?")[0];
+
+      // Special case for finances group
+      const aIsFinances = a.title === "Finances";
+      const bIsFinances = b.title === "Finances";
+
+      const aIndex = aIsFinances
+        ? currentOrder.indexOf("/__finances")
+        : currentOrder.indexOf(aPath);
+      const bIndex = bIsFinances
+        ? currentOrder.indexOf("/__finances")
+        : currentOrder.indexOf(bPath);
+
+      // If both items are in the order array, sort by their order
+      if (aIndex !== -1 && bIndex !== -1) {
+        return aIndex - bIndex;
+      }
+
+      // If only one is in the order array, prioritize it
+      if (aIndex !== -1) return -1;
+      if (bIndex !== -1) return 1;
+
+      // If neither is in the order array, keep original order
+      return 0;
+    });
+
+    return sortedItems;
   }, [features, dashboardBase, user]);
 
   return navItems;

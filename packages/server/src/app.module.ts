@@ -31,6 +31,7 @@ import { SupplierModule } from './modules/supplier/supplier.module';
 import { BonCommandeModule } from './modules/bon-commande/bon-commande.module';
 import { BonLivraisonModule } from './modules/bon-livraison/bon-livraison.module';
 import { ProductModule } from './modules/product/product.module';
+import { ChatbotModule } from './modules/chatbot/chatbot.module';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { ProductModule } from './modules/product/product.module';
     BonCommandeModule,
     BonLivraisonModule,
     ProductModule,
+    ChatbotModule,
   ],
   controllers: [AppController],
   providers: [

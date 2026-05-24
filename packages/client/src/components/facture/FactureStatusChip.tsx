@@ -3,6 +3,7 @@ import type { FactureStatus } from "src/types/facture";
 
 const STATUS_MAP: Record<FactureStatus, { label: string; color: string }> = {
   draft: { label: "Brouillon", color: "#6B7280" },
+  review: { label: "En révision", color: "#F59E0B" },
   sent: { label: "Envoyée", color: "#6366F1" },
   paid: { label: "Payée", color: "#10B981" },
   partial: { label: "Partielle", color: "#ff7d0d" },

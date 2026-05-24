@@ -1411,7 +1411,8 @@ export class RequestService {
         } else {
           // Assigning to an ACCOUNTANT - keep as request
           updateData.assignedToId = dto.assignedToId;
-          // Note: Status is NOT automatically changed per requirement #5
+          // Auto-change status to in_progress when assigned
+          updateData.status = 'in_progress';
         }
       }
     }

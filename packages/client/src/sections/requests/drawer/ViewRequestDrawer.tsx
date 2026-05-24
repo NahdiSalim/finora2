@@ -2091,17 +2091,34 @@ export default function ViewRequestDrawer({
                   fullWidth
                   size="large"
                   sx={{
-                    fontSize: 14,
+                    fontSize: { xs: 12, sm: 14 },
                     fontWeight: 600,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    px: { xs: 1.5, sm: 2 },
                   }}
                 >
-                  {localRequest.convertedToTask?.assignee
-                    ? `Assigné à ${localRequest.convertedToTask.assignee.firstName} ${localRequest.convertedToTask.assignee.lastName}`
-                    : assignedUserId
-                      ? assignedUserId === Number(user?.id)
-                        ? "Assigné à moi"
-                        : `Assigné à ${assignableUsers.find((u) => u.id === assignedUserId)?.username || "Utilisateur"}`
-                      : "Assigner la demande"}
+                  {isMobile
+                    ? localRequest.convertedToTask?.assignee
+                      ? localRequest.convertedToTask.assignee.firstName ||
+                        "Assigné"
+                      : assignedUserId
+                        ? assignedUserId === Number(user?.id)
+                          ? "Moi"
+                          : assignableUsers.find((u) => u.id === assignedUserId)
+                              ?.firstName ||
+                            assignableUsers.find((u) => u.id === assignedUserId)
+                              ?.username ||
+                            "Assigné"
+                        : "Assigner"
+                    : localRequest.convertedToTask?.assignee
+                      ? `Assigné à ${localRequest.convertedToTask.assignee.firstName} ${localRequest.convertedToTask.assignee.lastName}`
+                      : assignedUserId
+                        ? assignedUserId === Number(user?.id)
+                          ? "Assigné à moi"
+                          : `Assigné à ${assignableUsers.find((u) => u.id === assignedUserId)?.username || "Utilisateur"}`
+                        : "Assigner la demande"}
                 </CustomButton>
 
                 {/* Response Button - Only show if not yet responded */}
@@ -2113,9 +2130,10 @@ export default function ViewRequestDrawer({
                     fullWidth
                     size="large"
                     sx={{
-                      fontSize: 14,
+                      fontSize: { xs: 12, sm: 14 },
                       fontWeight: 600,
                       bgcolor: "#10B981",
+                      px: { xs: 1.5, sm: 2 },
                       "&:hover": {
                         bgcolor: "#059669",
                       },

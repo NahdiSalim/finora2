@@ -23,19 +23,54 @@ function syncAuthToken(s: Socket): void {
  */
 export function getSocket(): Socket {
   if (!socket) {
+    const token = readTokenFromStorage();
+
+    // Only try to connect if we have a token
+    if (!token) {
+      console.warn("[Socket.IO] No auth token found, skipping connection");
+    }
+
     socket = io(SOCKET_URL, {
-      autoConnect: false,
-      transports: ["websocket"],
-      auth: { token: readTokenFromStorage() },
+      autoConnect: !!token, // Only auto-connect if we have a token
+      transports: ["websocket", "polling"], // Try websocket first, fallback to polling
+      auth: { token },
       reconnection: true,
-      reconnectionAttempts: 10,
+      reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
     });
 
     const s = socket;
 
-    s.io.on("reconnect_attempt", () => {
+    // Connection lifecycle logging
+    s.on("connect", () => {
+      console.log("[Socket.IO] Connected successfully");
+    });
+
+    s.on("disconnect", (reason) => {
+      console.warn("[Socket.IO] Disconnected:", reason);
+    });
+
+    s.on("connect_error", (error) => {
+      console.error("[Socket.IO] Connection error:", error.message);
+      // If auth failed, don't retry
+      if (error.message.includes("auth") || error.message.includes("401")) {
+        s.disconnect();
+      }
+    });
+
+    s.io.on("reconnect_attempt", (attemptNumber) => {
+      console.log(`[Socket.IO] Reconnection attempt ${attemptNumber}`);
       syncAuthToken(s);
+    });
+
+    s.io.on("reconnect", (attemptNumber) => {
+      console.log(`[Socket.IO] Reconnected after ${attemptNumber} attempts`);
+    });
+
+    s.io.on("reconnect_failed", () => {
+      console.error("[Socket.IO] Reconnection failed");
     });
   }
   return socket;
@@ -43,10 +78,17 @@ export function getSocket(): Socket {
 
 /** Connect (or reconnect) with a fresh token */
 export function connectSocket(): void {
-  const s = getSocket();
   const token = readTokenFromStorage();
+
+  if (!token) {
+    console.warn("[Socket.IO] Cannot connect without auth token");
+    return;
+  }
+
+  const s = getSocket();
   s.auth = { token };
   if (!s.connected) {
+    console.log("[Socket.IO] Connecting...");
     s.connect();
   }
 }
@@ -63,6 +105,7 @@ export function reconnectSocketWithFreshToken(): void {
   if (s.connected) {
     s.disconnect();
   }
+  console.log("[Socket.IO] Reconnecting with fresh token...");
   s.connect();
 }
 
@@ -71,7 +114,10 @@ export function reconnectSocketWithFreshToken(): void {
  * Use this when navigating away — the socket can reconnect later.
  */
 export function disconnectSocket(): void {
-  socket?.disconnect();
+  if (socket?.connected) {
+    console.log("[Socket.IO] Disconnecting...");
+    socket.disconnect();
+  }
   // Do NOT null out socket — keep the singleton for reconnection
 }
 
@@ -80,6 +126,7 @@ export function disconnectSocket(): void {
  */
 export function destroySocket(): void {
   if (socket) {
+    console.log("[Socket.IO] Destroying socket...");
     socket.removeAllListeners();
     socket.disconnect();
     socket = null;

@@ -11,47 +11,28 @@ import {
   Users,
   User,
   FileText,
+  List,
+  Folder,
+  ClipboardList,
 } from "lucide-react";
 import { useTheme, alpha } from "@mui/material/styles";
-import { useAppSelector } from "src/hooks/use-redux";
 import { useBoolean } from "minimal-shared/hooks";
 import { NavMobile } from "./nav";
 import { useNavigation } from "src/hooks/useNavigation";
-import { useDashboardBase } from "src/hooks/useDashboardBase";
+import { useDashboardBase, getRoleSlug } from "src/hooks/useDashboardBase";
+import { useVerifyUserQuery } from "src/lib/services/authApi";
 
 // ----------------------------------------------------------------------
 
 function useDashboardTabs() {
   const base = useDashboardBase();
 
-  const SUPERADMIN_TABS = [
+  // CLIENT: Demandes · Documents · Messagerie · Profil
+  const CLIENT_TABS = [
+    { label: "Demandes", path: `${base}/requests`, icon: <List size={20} /> },
     {
       label: "Documents",
-      path: `${base}/Documents`,
-      icon: <FileText size={20} />,
-    },
-    {
-      label: "Collaborateurs",
-      path: `${base}/collaborators`,
-      icon: <Users size={20} />,
-    },
-    { label: "Clients", path: `${base}/clients`, icon: <User size={20} /> },
-    {
-      label: "Messagerie",
-      path: `${base}/messages`,
-      icon: <MessageSquareMore size={20} />,
-    },
-    {
-      label: "Rendez-vous",
-      path: `${base}/meetings`,
-      icon: <Calendar size={20} />,
-    },
-  ];
-
-  const DEFAULT_TABS = [
-    {
-      label: "Documents",
-      path: `${base}/Documents`,
+      path: `${base}/documents`,
       icon: <FileText size={20} />,
     },
     {
@@ -59,20 +40,45 @@ function useDashboardTabs() {
       path: `${base}/messages`,
       icon: <MessageSquareMore size={20} />,
     },
+    { label: "Profil", path: `${base}/profile`, icon: <User size={20} /> },
+  ];
+
+  // ACCOUNTANT: Clients · Collaborateurs · Rendez-vous · Messagerie
+  const ACCOUNTANT_TABS = [
+    { label: "Clients", path: `${base}/clients`, icon: <Users size={20} /> },
+    {
+      label: "Collaborateurs",
+      path: `${base}/collaborators`,
+      icon: <ClipboardList size={20} />,
+    },
     {
       label: "Rendez-vous",
       path: `${base}/meetings`,
       icon: <Calendar size={20} />,
     },
     {
-      label: "Collaborateurs",
-      path: `${base}/collaborators`,
-      icon: <Users size={20} />,
+      label: "Messagerie",
+      path: `${base}/messages`,
+      icon: <MessageSquareMore size={20} />,
     },
-    { label: "Clients", path: `${base}/clients`, icon: <User size={20} /> },
   ];
 
-  return { SUPERADMIN_TABS, DEFAULT_TABS };
+  // COLLABORATOR: Tâches · Documents · Messagerie  (3 tabs only)
+  const COLLABORATOR_TABS = [
+    { label: "Tâches", path: `${base}/tasks`, icon: <Folder size={20} /> },
+    {
+      label: "Documents",
+      path: `${base}/documents`,
+      icon: <FileText size={20} />,
+    },
+    {
+      label: "Messagerie",
+      path: `${base}/messages`,
+      icon: <MessageSquareMore size={20} />,
+    },
+  ];
+
+  return { CLIENT_TABS, ACCOUNTANT_TABS, COLLABORATOR_TABS };
 }
 
 // ----------------------------------------------------------------------
@@ -82,6 +88,7 @@ export function BottomNav() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const navItems = useNavigation();
+  const { data: userData } = useVerifyUserQuery();
 
   const {
     value: drawerOpen,
@@ -89,19 +96,24 @@ export function BottomNav() {
     onFalse: closeDrawer,
   } = useBoolean();
 
-  const { SUPERADMIN_TABS, DEFAULT_TABS } = useDashboardTabs();
+  const { CLIENT_TABS, ACCOUNTANT_TABS, COLLABORATOR_TABS } =
+    useDashboardTabs();
 
-  const features = useAppSelector((state) => state.auth.features);
+  // Derive role from verified user data
+  const rawRole =
+    typeof userData?.role === "object"
+      ? userData.role?.code
+      : (userData?.role as string | undefined);
+  const roleSlug = getRoleSlug(rawRole);
 
-  const isSuperAdmin =
-    features?.some((f) => f.pages.some((p) => p.route === "/collaborators")) &&
-    features?.some((f) => f.pages.some((p) => p.route === "/clients"));
+  const tabs =
+    roleSlug === "client"
+      ? CLIENT_TABS
+      : roleSlug === "collaborateur"
+        ? COLLABORATOR_TABS
+        : ACCOUNTANT_TABS; // comptable + admin
 
-  const tabs = isSuperAdmin ? SUPERADMIN_TABS : DEFAULT_TABS;
-
-  const directPaths = tabs
-    .filter((t) => t.path !== "__more__")
-    .map((t) => t.path);
+  const directPaths = tabs.map((t) => t.path);
 
   const activeTab = directPaths.includes(pathname) ? pathname : "__more__";
 

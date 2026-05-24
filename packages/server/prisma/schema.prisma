@@ -794,7 +794,7 @@ model InvoicePayment {
 model Invoice {
   id              Int              @id @default(autoincrement())
   invoiceNumber   String
-  status          String           @default("draft")
+  status          String           @default("draft") // "draft" | "review" | "sent" | "paid" | "partial" | "overdue" | "cancelled"
   dueDate         DateTime         @db.Date
   vatRate         Decimal          @db.Decimal(5, 2)
   discountType    String?
@@ -808,6 +808,7 @@ model Invoice {
   notes           String?
   clientName      String?
   clientAddress   String?
+  
   companyId       Int
   createdById     Int
   supplierId      Int?
@@ -1406,6 +1407,9 @@ model User {
   // Bons de livraison
   ownedBonsLivraison    BonLivraison[] @relation("BonLivraisonOwner")
 
+  // Chatbot sessions
+  chatbotSessions       ChatbotSession[] @relation("ChatbotSessionUser")
+
   @@index([email])
   @@index([companyId])
   @@index([status])
@@ -1487,3 +1491,37 @@ model BonLivraison {
   @@map("bons_livraison")
 }
 
+
+// ─── Chatbot History ──────────────────────────────────────────────────────────
+
+model ChatbotSession {
+  id          Int              @id @default(autoincrement())
+  userId      Int
+  companyId   Int
+  title       String           @default("Nouvelle conversation") // auto-generated from first message
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  user        User             @relation("ChatbotSessionUser", fields: [userId], references: [id], onDelete: Cascade)
+  messages    ChatbotMessage[]
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([updatedAt])
+  @@map("chatbot_sessions")
+}
+
+model ChatbotMessage {
+  id          Int            @id @default(autoincrement())
+  sessionId   Int
+  role        String         // "user" | "assistant"
+  content     String         @db.Text
+  toolsUsed   String[]       // array of tool names used to produce this message
+  createdAt   DateTime       @default(now())
+
+  session     ChatbotSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([createdAt])
+  @@map("chatbot_messages")
+}

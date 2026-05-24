@@ -186,3 +186,125 @@ export function FolderTabNavigation({
     </Box>
   );
 }
+
+// ============================================================================
+// NEW MODERN TABS COMPONENT FOR REQUEST MODAL
+// ============================================================================
+
+interface ModernModalTabsProps {
+  tabs: TabItem[];
+  activeTab: string;
+  onTabChange: (tabId: string) => void;
+}
+
+export function ModernModalTabs({
+  tabs,
+  activeTab,
+  onTabChange,
+}: ModernModalTabsProps) {
+  const theme = useTheme();
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: { xs: "column", sm: "row" },
+        gap: { xs: 1, sm: 1.5 },
+        p: 1,
+        bgcolor: alpha(theme.palette.grey[500], 0.08),
+        borderRadius: 2,
+        border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+      }}
+    >
+      {tabs.map((tab) => {
+        const isActive = tab.id === activeTab;
+
+        return (
+          <Box
+            key={tab.id}
+            onClick={() => onTabChange(tab.id)}
+            sx={{
+              flex: { xs: "1 1 auto", sm: 1 },
+              cursor: "pointer",
+              px: { xs: 2.5, sm: 3 },
+              py: { xs: 1.5, sm: 1.75 },
+              borderRadius: 1.5,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 1,
+              position: "relative",
+              overflow: "hidden",
+              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+              ...(isActive && {
+                bgcolor: theme.palette.primary.main,
+                color: "white",
+                boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
+                transform: "translateY(-2px)",
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: `linear-gradient(135deg, ${alpha(theme.palette.common.white, 0.1)} 0%, transparent 100%)`,
+                  pointerEvents: "none",
+                },
+              }),
+              ...(!isActive && {
+                bgcolor: "transparent",
+                color: theme.palette.text.secondary,
+                "&:hover": {
+                  bgcolor: alpha(theme.palette.primary.main, 0.08),
+                  color: theme.palette.primary.main,
+                  transform: "translateY(-1px)",
+                },
+              }),
+            }}
+          >
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: isActive ? 600 : 500,
+                fontSize: { xs: "0.875rem", sm: "0.9rem" },
+                whiteSpace: "nowrap",
+                textOverflow: "ellipsis",
+                overflow: "hidden",
+                position: "relative",
+                zIndex: 1,
+              }}
+            >
+              {tab.label}
+            </Typography>
+
+            {tab.count !== undefined && (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  bgcolor: isActive
+                    ? alpha(theme.palette.common.white, 0.25)
+                    : alpha(theme.palette.grey[500], 0.15),
+                  color: isActive ? "white" : theme.palette.text.secondary,
+                  borderRadius: "50%",
+                  minWidth: 24,
+                  height: 24,
+                  px: 0.75,
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  lineHeight: 1,
+                  position: "relative",
+                  zIndex: 1,
+                }}
+              >
+                {tab.count}
+              </Box>
+            )}
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}

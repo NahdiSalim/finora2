@@ -22,7 +22,7 @@ import CustomSelect from "src/components/common/CustomSelect";
 import FileUpload from "src/components/common/FileUpload";
 import AudioRecorder from "src/components/common/AudioRecorder";
 import ModernTabs from "src/components/common/ModernTabs";
-import { FolderTabNavigation } from "src/components/common/CustomTabs";
+import { ModernModalTabs } from "src/components/common/CustomTabs";
 import { useCreateRequestMutation } from "src/lib/services/requestApi";
 import { useGetDocumentsQuery } from "src/lib/services/documentsApi";
 import { useAlert } from "src/contexts/AlertContext";
@@ -623,7 +623,7 @@ export default function RequestModal({ open, onClose }: Props) {
                 Pièce jointe
               </Typography>
 
-              <FolderTabNavigation
+              <ModernModalTabs
                 tabs={[
                   { id: "upload", label: "Nouveau document" },
                   { id: "select", label: "Mon espace" },

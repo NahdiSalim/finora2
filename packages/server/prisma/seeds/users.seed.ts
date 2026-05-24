@@ -17,63 +17,66 @@ export async function seedUsers(prisma: PrismaClient) {
   const collaboratorRole = await prisma.role.findUnique({ where: { code: 'COLLABORATOR' } });
   const clientRole = await prisma.role.findUnique({ where: { code: 'CLIENT' } });
 
-  // Delete existing data in correct order to respect foreign key constraints
-  await prisma.clientAccountingFirmRelationship.deleteMany({});
-  await prisma.request.deleteMany({});
-  await prisma.user.deleteMany({});
-  await prisma.company.deleteMany({});
+  // Don't delete existing data - just upsert
+  console.log('📝 Upserting users (keeping existing data)...');
 
-  // Create companies
-  const accountingFirm = await prisma.company.create({
-    data: {
-      name: 'Cabinet Comptable FINORA',
-      email: 'contact@finora-cabinet.com',
-      phone: '+216 71 123 456',
-      address: '123 Avenue Habib Bourguiba',
-      city: 'Tunis',
-      postalCode: '1000',
-      country: 'Tunisie',
-      siret: 'SIRET123456789',
-      vatNumber: 'FR12345678901',
-      legalForm: 'SARL',
-      type: 'accounting_firm',
-      status: 'active',
-      description:
-        "Cabinet d'expertise comptable spécialisé en audit, conseil fiscal et gestion d'entreprise. Plus de 15 ans d'expérience au service des PME et grandes entreprises.",
-      experience: '15',
-      specialties: [
-        'Comptabilité générale',
-        'Audit financier',
-        'Conseil fiscal',
-        'Gestion de paie',
-        'Conseil juridique',
-      ],
-      rating: 4.8,
-      numberOfReviews: 127,
-      sector: 'Services professionnels',
-      employeeCount: 25,
-    },
-  });
+  // Check if companies exist, if not create them
+  let accountingFirm = await prisma.company.findFirst({ where: { type: 'accounting_firm' } });
+  if (!accountingFirm) {
+    accountingFirm = await prisma.company.create({
+      data: {
+        name: 'Cabinet Comptable FINORA',
+        email: 'contact@finora-cabinet.com',
+        phone: '+216 71 123 456',
+        address: '123 Avenue Habib Bourguiba',
+        city: 'Tunis',
+        postalCode: '1000',
+        country: 'Tunisie',
+        siret: 'SIRET123456789',
+        vatNumber: 'FR12345678901',
+        legalForm: 'SARL',
+        type: 'accounting_firm',
+        status: 'active',
+        description:
+          "Cabinet d'expertise comptable spécialisé en audit, conseil fiscal et gestion d'entreprise. Plus de 15 ans d'expérience au service des PME et grandes entreprises.",
+        experience: '15',
+        specialties: [
+          'Comptabilité générale',
+          'Audit financier',
+          'Conseil fiscal',
+          'Gestion de paie',
+          'Conseil juridique',
+        ],
+        rating: 4.8,
+        numberOfReviews: 127,
+        sector: 'Services professionnels',
+        employeeCount: 25,
+      },
+    });
+  }
 
-  const clientCompany = await prisma.company.create({
-    data: {
-      name: 'Entreprise Client SARL',
-      email: 'contact@client-company.com',
-      phone: '+216 71 987 654',
-      address: '456 Rue de la République',
-      city: 'Tunis',
-      postalCode: '1001',
-      country: 'Tunisie',
-      siret: 'SIRET987654321',
-      vatNumber: 'FR98765432109',
-      legalForm: 'SARL',
-      type: 'client',
-      status: 'active',
-      description: 'Entreprise spécialisée dans le commerce et la distribution',
-      sector: 'Commerce',
-      employeeCount: 50,
-    },
-  });
+  let clientCompany = await prisma.company.findFirst({ where: { type: 'client' } });
+  if (!clientCompany) {
+    clientCompany = await prisma.company.create({
+      data: {
+        name: 'Entreprise Client SARL',
+        email: 'contact@client-company.com',
+        phone: '+216 71 987 654',
+        address: '456 Rue de la République',
+        city: 'Tunis',
+        postalCode: '1001',
+        country: 'Tunisie',
+        siret: 'SIRET987654321',
+        vatNumber: 'FR98765432109',
+        legalForm: 'SARL',
+        type: 'client',
+        status: 'active',
+        description: 'Entreprise spécialisée dans le commerce et la distribution',
+        sector: 'Commerce',
+        employeeCount: 50,
+      },
+    });
+  }
 
   // Create Admin user
   await prisma.user.upsert({

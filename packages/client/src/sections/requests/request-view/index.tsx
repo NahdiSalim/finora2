@@ -17,7 +17,14 @@ import {
   CardContent,
 } from "@mui/material";
 import { motion } from "framer-motion";
-import { Plus, Eye, Trash2, Search, ChevronDown } from "lucide-react";
+import {
+  Plus,
+  Eye,
+  Trash2,
+  Search,
+  ChevronDown,
+  CheckCircle,
+} from "lucide-react";
 import RequestStatusChip from "src/components/request/RequestStatusChip";
 import RequestPriorityChip from "src/components/request/RequestPriorityChip";
 
@@ -32,6 +39,7 @@ import {
   useGetMyRequestsQuery,
   useGetRequestByIdQuery,
   useDeleteRequestMutation,
+  useUpdateRequestMutation,
   useCheckHasAccountantQuery,
 } from "src/lib/services/requestApi";
 import RequestModal from "../modal/RequestModal";
@@ -80,6 +88,7 @@ export default function RequestView() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const [deleteRequest, { isLoading: isDeleting }] = useDeleteRequestMutation();
+  const [updateRequest] = useUpdateRequestMutation();
 
   // When navigated to /requests/:id (e.g. from chat), fetch the request and open its drawer
   const { data: requestByIdData } = useGetRequestByIdQuery(routeRequestId!, {
@@ -271,6 +280,22 @@ export default function RequestView() {
   const openDeleteModal = (requestId: number) => {
     setRequestToDelete(requestId);
     setShowDeleteModal(true);
+  };
+
+  const handleMarkAsComplete = async (requestId: number) => {
+    try {
+      const formData = new FormData();
+      formData.append("status", "resolved");
+
+      await updateRequest({
+        id: requestId,
+        data: formData,
+      }).unwrap();
+
+      showAlert("Demande marquée comme terminée", "success");
+    } catch (error) {
+      showAlert("Erreur lors de la mise à jour du statut", "error");
+    }
   };
 
   const formatDate = (dateString: string) =>
@@ -492,7 +517,7 @@ export default function RequestView() {
       id: "actions",
       label: "Action",
       align: "center",
-      width: 80,
+      width: 120,
       render: (request: Request) => (
         <Box sx={{ display: "flex", gap: 1, justifyContent: "center" }}>
           <Tooltip title="Voir les détails" arrow>
@@ -517,6 +542,30 @@ export default function RequestView() {
               <Eye size={16} />
             </IconButton>
           </Tooltip>
+          {isAccountant && request.status !== "resolved" && (
+            <Tooltip title="Marquer comme terminé" arrow>
+              <IconButton
+                size="small"
+                onClick={() => handleMarkAsComplete(request.id)}
+                sx={{
+                  width: 32,
+                  height: 32,
+                  border: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+                  borderRadius: 2,
+                  color: theme.palette.text.secondary,
+                  transition: "all 0.2s",
+                  "&:hover": {
+                    borderColor: "#8B5CF6",
+                    backgroundColor: alpha("#8B5CF6", 0.08),
+                    color: "#8B5CF6",
+                    transform: "translateY(-2px)",
+                  },
+                }}
+              >
+                <CheckCircle size={16} />
+              </IconButton>
+            </Tooltip>
+          )}
           {isClient && (
             <Tooltip
               title={
@@ -682,6 +731,23 @@ export default function RequestView() {
                     <Eye size={16} />
                   </IconButton>
                 </Tooltip>
+                {isAccountant && request.status !== "resolved" && (
+                  <Tooltip title="Marquer comme terminé" arrow>
+                    <IconButton
+                      onClick={() => handleMarkAsComplete(request.id)}
+                      sx={{
+                        ...actionButtonStyle(theme),
+                        "&:hover": {
+                          borderColor: "#8B5CF6",
+                          color: "#8B5CF6",
+                          bgcolor: alpha("#8B5CF6", 0.08),
+                        },
+                      }}
+                    >
+                      <CheckCircle size={16} />
+                    </IconButton>
+                  </Tooltip>
+                )}
                 {isClient && request.status !== "resolved" && (
                   <Tooltip title="Supprimer" arrow>
                     <IconButton

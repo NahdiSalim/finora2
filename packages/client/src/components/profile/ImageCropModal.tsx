@@ -129,6 +129,7 @@ export default function ImageCropModal({
     });
     ro.observe(containerRef.current);
     return () => ro.disconnect();
+     
   }, [imageSrc]);
 
   // Scale so image covers the container; initial position centered (once per image)
@@ -201,8 +202,6 @@ export default function ImageCropModal({
 
   const handleConfirm = useCallback(async () => {
     if (!imageSrc || !file) return;
-    const displayW = imageSize.width * scale;
-    const displayH = imageSize.height * scale;
     // Crop region in image coordinates (the part visible in the container)
     const cropX = -position.x / scale;
     const cropY = -position.y / scale;

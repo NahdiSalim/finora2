@@ -1,72 +1,65 @@
-import { ArgumentsHost, Catch, ExceptionFilter, Injectable, HttpException } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  Injectable,
+  HttpException,
+  Logger,
+} from '@nestjs/common';
 import { Response } from 'express';
 import { ApiError } from '../errors/api-error';
-interface HttpErrorObject {
-  errorCode?: string;
-  message?: string;
-  code?: string;
-  status?: string;
-  stack?: string;
-  isOperational?: boolean;
-}
 
 @Catch()
 @Injectable()
 export class GlobalExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(GlobalExceptionFilter.name);
+
   catch(err: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const res = ctx.getResponse<Response>();
+    const req = ctx.getRequest();
 
-    const environment = (process.env.NODE_ENV ?? 'production').trim();
-
-    if (environment === 'development') {
-      this.sendErrorForDev(err, res);
-    } else {
-      this.sendErrorForProd(err, res);
-    }
-  }
-
-  private sendErrorForDev(err: unknown, res: Response) {
-    // safely extract properties with type guards
-    const error = err as HttpErrorObject;
-
-    res.status(this.getStatusCode(err)).json({
-      status: error.status || 'error',
-      errorCode: error.errorCode || error?.code,
-      code: this.getStatusCode(err),
-      message: (error.message as string) || 'Unknown error',
-      stack: (error.stack as string) || null,
-    });
-  }
-
-  private sendErrorForProd(err: unknown, res: Response) {
-    const error = err as HttpErrorObject;
-
-    if (error?.isOperational) {
-      res.status(this.getStatusCode(err)).json({
-        status: error.status ?? 'error',
-        code: this.getStatusCode(err),
-        errorCode: error.errorCode,
-        message: (error.message as string) ?? 'Something went wrong!',
-      });
-    } else {
-      console.error('ERROR 💥:', err);
-      res.status(500).json({
-        status: 'error',
-        message: 'Something went wrong!',
-      });
-    }
-  }
-
-  private getStatusCode(err: unknown): number {
-    if (err instanceof ApiError) {
-      return err.statusCode;
-    }
-
+    // Always handle NestJS HttpExceptions with their real status code and message
     if (err instanceof HttpException) {
-      return err.getStatus();
+      const status = err.getStatus();
+      const response = err.getResponse();
+      const message =
+        typeof response === 'string'
+          ? response
+          : ((response as { message?: string | string[] }).message ?? err.message ?? 'Error');
+      if (status >= 500) {
+        this.logger.error(
+          `[${req?.method} ${req?.url}] HTTP ${status}: ${JSON.stringify(message)}`
+        );
+      }
+      res.status(status).json({
+        status: 'error',
+        code: status,
+        message: Array.isArray(message) ? message.join(', ') : message,
+      });
+      return;
     }
 
-    return 500;
+    // ApiError (operational errors)
+    if (err instanceof ApiError && err.isOperational) {
+      res.status(err.statusCode).json({
+        status: err.status ?? 'error',
+        code: err.statusCode,
+        errorCode: err.errorCode,
+        message: err.message ?? 'Something went wrong!',
+      });
+      return;
+    }
+
+    // Unknown / unexpected errors — log fully, return generic 500
+    this.logger.error(
+      `[${req?.method} ${req?.url}] Unhandled error: ${(err as Error)?.message}`,
+      (err as Error)?.stack
+    );
+    res.status(500).json({
+      status: 'error',
+      code: 500,
+      message: 'Something went wrong!',
+    });
   }
 }

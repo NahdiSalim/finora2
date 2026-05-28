@@ -1,10 +1,8 @@
 {
   "compilerOptions": {
     /* Bundler */
-    "baseUrl": ".",
-    "ignoreDeprecations": "5.0",
     "paths": {
-      "src/*": ["src/*"]
+      "src/*": ["./src/*"]
     },
     "module": "ESNext",
     "jsx": "react-jsx",
@@ -22,7 +20,8 @@
     /* Linting */
     "strict": true,
     "noEmit": true,
-    "strictNullChecks": true
+    "strictNullChecks": true,
+    "forceConsistentCasingInFileNames": true
   },
   "include": ["src"],
   "exclude": ["node_modules"],

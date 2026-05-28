@@ -29,11 +29,8 @@ import {
   List,
   FolderOpen,
 } from "lucide-react";
-import PdfIcon from "./pdfIcon";
-import ImageIcon from "./imageIcon";
-import XlsIcon from "./xlsIcon";
 import { useFileDrawerStore } from "src/stores/fileDrawerStore";
-import type { FileItem, FileType } from "src/components/common/File";
+import type { FileItem } from "src/components/common/File";
 import CustomButton from "./CustomButton";
 import CustomInput from "./CustomInput";
 import CustomSelect from "./CustomSelect";
@@ -63,15 +60,6 @@ import Lottie from "lottie-react";
 import ItemsTable from "./Itemstable";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const FILE_TYPE_ICONS: Record<FileType, React.ReactNode> = {
-  pdf: <PdfIcon />,
-  docx: <FileText size={24} color="#2B5797" />,
-  xls: <XlsIcon />,
-  jpg: <ImageIcon />,
-  png: <ImageIcon />,
-  other: <ImageIcon />,
-};
 
 function normalizeCategoryValue(v: string): string {
   const s = v.trim().toLowerCase();
@@ -484,7 +472,10 @@ function DocumentDetailsPanel({
       ? "traite"
       : processingStatus;
 
-  const breadcrumb = breadcrumbResponse?.data ?? [];
+  const breadcrumb = useMemo(
+    () => breadcrumbResponse?.data ?? [],
+    [breadcrumbResponse?.data],
+  );
   const invoiceMetadata = useMemo(() => {
     if (!hasMetadata || !metadataResponse?.data) return null;
     const d: any = metadataResponse.data as any;
@@ -853,29 +844,6 @@ function DocumentDetailsPanel({
     };
   }, [lineItems, tvaPercentValue]);
 
-  const handleExtract = async () => {
-    if (!documentId) return;
-    try {
-      const res = await extractInvoice(documentId).unwrap();
-      if (res.data?.extractedData) setLastExtractedData(res.data.extractedData);
-      // Invalidate + refetch document to reflect processingStatus='traite'
-      dispatch(
-        documentsApi.util.invalidateTags([
-          { type: "Documents", id: documentId },
-        ]),
-      );
-      dispatch(
-        documentsApi.util.invalidateTags([
-          { type: "Documents", id: `breadcrumb-${documentId}` },
-        ]),
-      );
-      await refetchDocument();
-      await refetchBreadcrumb();
-    } catch {
-      // Error handled by mutation / snackbar
-    }
-  };
-
   const handleSave = async () => {
     if (!documentId) return;
     try {
@@ -1058,6 +1026,7 @@ function DocumentDetailsPanel({
       void refetchDocument();
       void refetchMetadata();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     hasDocumentId,
     isInvoiceDocument,

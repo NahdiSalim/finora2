@@ -5,7 +5,6 @@ import {
   FileText,
   FileCheck2,
   Folder,
-  HandCoins,
   LayoutGrid,
   List,
   MessageSquareMore,
@@ -77,11 +76,6 @@ export const NAV_CONFIG: Record<
   "/messages": {
     title: "Messagerie",
     icon: <MessageSquareMore />,
-  },
-
-  "/banks": {
-    title: "Mes banques",
-    icon: <HandCoins />,
   },
 
   "/network": {

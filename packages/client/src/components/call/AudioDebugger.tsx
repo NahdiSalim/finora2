@@ -56,7 +56,7 @@ export default function AudioDebugger({
 
         contexts.push({ userId: rs.userId, context: audioContext });
 
-        const interval = setInterval(() => {
+        setInterval(() => {
           analyser.getByteFrequencyData(dataArray);
           const average =
             dataArray.reduce((sum, val) => sum + val, 0) / dataArray.length;

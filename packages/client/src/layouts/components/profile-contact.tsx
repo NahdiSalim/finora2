@@ -147,6 +147,7 @@ function ContactInfos({
     borderRadius: 2,
     overflow: "hidden" as const,
     height: 180,
+    "& iframe": { border: "none" },
   };
 
   if (isLoading) {
@@ -259,8 +260,6 @@ function ContactInfos({
           title="Google Map"
           width="100%"
           height="100%"
-          style={{ border: 0 }}
-          loading="lazy"
           allowFullScreen
           src={`https://www.google.com/maps?q=${encodeURIComponent(
             data?.address || "",

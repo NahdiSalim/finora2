@@ -95,7 +95,7 @@ export default function GlobalCallModal() {
         await audio.play().catch(() => {});
         audioElementRef.current = audio;
       }
-    } catch (error) {
+    } catch {
       // Failed to play ringtone
     }
   };
@@ -156,12 +156,13 @@ export default function GlobalCallModal() {
       }
     });
 
+    const audioRefsSnapshot = remoteAudioRefs.current;
     return () => {
-      remoteAudioRefs.current.forEach((audio) => {
+      audioRefsSnapshot.forEach((audio) => {
         audio.pause();
         audio.srcObject = null;
       });
-      remoteAudioRefs.current.clear();
+      audioRefsSnapshot.clear();
     };
   }, [remoteStreams]);
 
@@ -537,6 +538,12 @@ export default function GlobalCallModal() {
                             minHeight: 0,
                             width: "100%",
                             height: "100%",
+                            "& > video": {
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                              display: "block",
+                            },
                           }}
                         >
                           {callType === "video" ? (
@@ -547,11 +554,6 @@ export default function GlobalCallModal() {
                               }}
                               autoPlay
                               playsInline
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "cover",
-                              }}
                             />
                           ) : (
                             <Box
@@ -685,20 +687,16 @@ export default function GlobalCallModal() {
                         minHeight: 0,
                         width: "100%",
                         height: "100%",
-                      }}
-                    >
-                      <video
-                        ref={localVideoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        style={{
+                        "& > video": {
                           width: "100%",
                           height: "100%",
                           objectFit: "cover",
                           transform: "scaleX(-1)",
-                        }}
-                      />
+                          display: "block",
+                        },
+                      }}
+                    >
+                      <video ref={localVideoRef} autoPlay playsInline muted />
                       <Box
                         sx={{
                           position: "absolute",
@@ -789,6 +787,13 @@ export default function GlobalCallModal() {
                           transform: "scale(1.05)",
                           boxShadow: "0 12px 40px rgba(0,0,0,0.7)",
                         },
+                        "& > video": {
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          transform: "scaleX(-1)",
+                          display: "block",
+                        },
                       }}
                     >
                       <video
@@ -796,12 +801,6 @@ export default function GlobalCallModal() {
                         autoPlay
                         playsInline
                         muted
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                          transform: "scaleX(-1)",
-                        }}
                       />
                       <Box
                         sx={{

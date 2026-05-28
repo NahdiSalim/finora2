@@ -52,7 +52,6 @@ export function FolderTabNavigation({
         const isActive = tab.id === activeTab;
         const isLast = index === tabs.length - 1;
         const isFirst = index === 0;
-        const isMiddle = !isFirst && !isLast;
 
         // Calculate distance from active tab
         const distance = Math.abs(index - activeTabIndex);

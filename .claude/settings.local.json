@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd \"c:\\\\Users\\\\Doudou\\\\Desktop\\\\finora2\\\\packages\\\\server\"; npx tsc --noEmit 2>&1; echo \"Exit: $LASTEXITCODE\")"
+    ]
+  }
+}

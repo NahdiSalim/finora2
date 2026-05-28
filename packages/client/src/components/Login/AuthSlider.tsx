@@ -34,14 +34,6 @@ export default function AuthSlider() {
     setTimeout(() => setIsAnimating(false), 500);
   };
 
-  const handlePrev = () => {
-    if (isAnimating) return;
-    setDirection("left");
-    setIsAnimating(true);
-    setIndex((prev) => (prev - 1 + slides.length) % slides.length);
-    setTimeout(() => setIsAnimating(false), 500);
-  };
-
   const handleDotClick = (i: number) => {
     if (isAnimating || i === index) return;
     setDirection(i > index ? "right" : "left");
@@ -56,6 +48,7 @@ export default function AuthSlider() {
     }, 3000);
 
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

@@ -1002,6 +1002,7 @@ export default function ViewRequestDrawer({
                               bgcolor: alpha(theme.palette.primary.main, 0.05),
                               borderRadius: 2,
                               border: `2px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                              "& > audio": { width: "100%", height: "40px" },
                             }}
                           >
                             <Box
@@ -1079,7 +1080,6 @@ export default function ViewRequestDrawer({
                             <audio
                               key={`view-audio-${index}-${localRequest.updatedAt}`}
                               controls
-                              style={{ width: "100%", height: 40 }}
                               preload="metadata"
                               src={
                                 localRequest.attachmentUrls?.[index] ||
@@ -1935,6 +1935,7 @@ export default function ViewRequestDrawer({
                               bgcolor: alpha(theme.palette.primary.main, 0.05),
                               borderRadius: 2,
                               border: `2px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                              "& > audio": { width: "100%", height: "40px" },
                             }}
                           >
                             <Box
@@ -1979,7 +1980,6 @@ export default function ViewRequestDrawer({
                             <audio
                               key={`edit-audio-${index}-${localRequest.updatedAt}`}
                               controls
-                              style={{ width: "100%", height: 40 }}
                               preload="metadata"
                               src={
                                 localRequest.attachmentUrls?.[index] ||

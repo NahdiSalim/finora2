@@ -234,14 +234,6 @@ export const routesSection: RouteObject[] = [
         ),
       },
       {
-        path: "banks",
-        element: (
-          <PermissionGuard requiredPath="/banks">
-            <UserPage />
-          </PermissionGuard>
-        ),
-      },
-      {
         path: "network",
         element: (
           <PermissionGuard requiredPath="/network">
@@ -549,14 +541,6 @@ export const routesSection: RouteObject[] = [
             element: (
               <PermissionGuard requiredPath="/messages/:id">
                 <MessagesPage />
-              </PermissionGuard>
-            ),
-          },
-          {
-            path: "banks",
-            element: (
-              <PermissionGuard requiredPath="/banks">
-                <UserPage />
               </PermissionGuard>
             ),
           },

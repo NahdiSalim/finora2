@@ -48,6 +48,7 @@ const statusTabs: Array<{ id: "all" | DevisStatus; label: string }> = [
   { id: "all", label: "Tous" },
   { id: "en_attente", label: "En attente" },
   { id: "accepte", label: "Accepté" },
+  { id: "facture", label: "Facturé" },
   { id: "refuse", label: "Refusé" },
 ];
 

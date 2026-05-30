@@ -30,19 +30,23 @@ export class MinioService implements OnModuleInit {
       return;
     }
 
-    const port = parseInt(this.configService.get<string>('MINIO_PORT') || '9000');
+    const port = parseInt(this.configService.get<string>('MINIO_PORT') || '9000', 10);
     const useSSL = this.configService.get<string>('MINIO_USE_SSL') === 'true';
-    const accessKey = this.configService.get<string>('MINIO_ACCESS_KEY')!;
-    const secretKey = this.configService.get<string>('MINIO_SECRET_KEY')!;
-    this.bucketName = this.configService.get<string>('MINIO_BUCKET') || 'finora-documents';
+    const accessKey = this.configService.get<string>('MINIO_ACCESS_KEY')?.trim() ?? '';
+    const secretKey = this.configService.get<string>('MINIO_SECRET_KEY')?.trim() ?? '';
+    const region = this.configService.get<string>('MINIO_REGION')?.trim() || 'us-east-1';
+    this.bucketName = this.configService.get<string>('MINIO_BUCKET')?.trim() || 'finora-documents';
 
     this.minioClient = new Minio.Client({
-      endPoint: endpoint,
+      endPoint: endpoint.trim(),
       port,
       useSSL,
       accessKey,
       secretKey,
+      region,
     });
+
+    this.logger.log(`MinIO client: ${endpoint}:${port} bucket=${this.bucketName} region=${region}`);
 
     MinioService.sharedClient = this.minioClient;
     MinioService.sharedBucketName = this.bucketName;
@@ -118,10 +122,14 @@ export class MinioService implements OnModuleInit {
 
     const objectName = pathParts.join('/');
 
-    const metadata = {
-      'Content-Type': file.mimetype,
-      'X-Original-Name': file.originalname,
+    // Only ASCII-safe metadata — non-ASCII in x-amz-meta-* breaks S3 signatures (SignatureDoesNotMatch)
+    const metadata: Record<string, string> = {
+      'Content-Type': file.mimetype || 'application/octet-stream',
     };
+    const safeOriginalName = this.sanitizeFilename(file.originalname);
+    if (safeOriginalName) {
+      metadata['X-Original-Name'] = safeOriginalName;
+    }
 
     await this.minioClient.putObject(this.bucketName, objectName, file.buffer, file.size, metadata);
 

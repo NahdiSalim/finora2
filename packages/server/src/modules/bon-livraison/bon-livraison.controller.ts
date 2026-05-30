@@ -18,6 +18,7 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import type { AuthRequest } from '../auth/types/user-type';
 import { CreateBonLivraisonDto } from './dto/create-bon-livraison.dto';
 import { UpdateBonLivraisonDto } from './dto/update-bon-livraison.dto';
+import { ConvertBonLivraisonToInvoiceDto } from './dto/convert-bon-livraison-to-invoice.dto';
 
 @ApiTags('bons-livraison')
 @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -95,5 +96,18 @@ export class BonLivraisonController {
     if (!companyId)
       return { status: 'error', code: '400', message: 'User must belong to a company' };
     return this.service.remove(id, companyId);
+  }
+
+  @Post(':id/convert-to-invoice')
+  @ApiOperation({ summary: 'Convertir un bon de livraison en facture brouillon' })
+  async convertToInvoice(
+    @Req() req: AuthRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ConvertBonLivraisonToInvoiceDto
+  ) {
+    const { id: userId, companyId } = req.user!;
+    if (!companyId)
+      return { status: 'error', code: '400', message: 'User must belong to a company' };
+    return this.service.convertBonLivraisonToInvoice(id, userId, companyId, dto);
   }
 }

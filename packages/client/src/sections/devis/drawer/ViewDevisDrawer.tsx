@@ -32,6 +32,7 @@ const getStatusConfig = (status: string) => {
     en_attente: { label: "En attente", color: "#F59E0B" },
     accepte: { label: "Accepté", color: "#10B981" },
     refuse: { label: "Refusé", color: "#EF4444" },
+    facture: { label: "Facturé", color: "#6366F1" },
   };
   return configs[status] || configs.en_attente;
 };

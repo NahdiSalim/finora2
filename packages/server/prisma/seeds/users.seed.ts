@@ -168,16 +168,26 @@ export async function seedUsers(prisma: PrismaClient) {
   // Create relationship between client company and accounting firm
   const clientUser = await prisma.user.findUnique({ where: { email: 'client@finora.com' } });
 
-  if (clientUser && clientUser.companyId) {
-    await prisma.clientAccountingFirmRelationship.create({
-      data: {
+  if (clientUser?.companyId) {
+    const existingRel = await prisma.clientAccountingFirmRelationship.findFirst({
+      where: {
         clientCompanyId: clientUser.companyId,
         accountingFirmId: accountingFirm.id,
-        invitedBy: clientUser.id, // Client user who initiated the relationship
-        status: 'active',
-        relationshipStart: new Date(),
-      } as any,
+      },
     });
+    if (!existingRel) {
+      await prisma.clientAccountingFirmRelationship.create({
+        data: {
+          clientCompanyId: clientUser.companyId,
+          accountingFirmId: accountingFirm.id,
+          invitedBy: clientUser.id,
+          invitationType: 'client_to_accountant',
+          status: 'active',
+          relationshipStart: new Date(),
+          responseDate: new Date(),
+        },
+      });
+    }
   }
 
   console.log(' Users seeded successfully');

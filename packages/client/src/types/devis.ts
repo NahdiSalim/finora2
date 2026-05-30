@@ -1,4 +1,4 @@
-export type DevisStatus = "en_attente" | "accepte" | "refuse";
+export type DevisStatus = "en_attente" | "accepte" | "refuse" | "facture";
 
 export interface DevisLine {
   id: string;

@@ -298,16 +298,12 @@ export function MessagesPopover({ sx, ...other }: MessagesPopoverProps) {
   const [markAllAsRead, { isLoading: isMarkingAllAsRead }] =
     useMarkAllRoomsAsReadMutation();
 
-  // Deduplicate by roomId — keep only the latest message per room
+  // Show unread messages first (matches subtitle count); fall back to recent read
   const messages = useMemo(() => {
     const raw = recentMessagesData?.messages ?? [];
-    const seen = new Map<number, RecentMessage>();
-    for (const msg of raw) {
-      if (!seen.has(msg.roomId)) {
-        seen.set(msg.roomId, msg);
-      }
-    }
-    return Array.from(seen.values());
+    const unread = raw.filter((m) => m.unread);
+    if (unread.length > 0) return unread;
+    return raw;
   }, [recentMessagesData]);
   const totalUnread = recentMessagesData?.unreadCount ?? 0;
   const hasUnread = totalUnread > 0;

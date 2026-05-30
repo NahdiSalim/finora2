@@ -20,6 +20,7 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import type { AuthRequest } from '../auth/types/user-type';
 import { CreateDevisDto } from './dto/create-devis.dto';
 import { UpdateDevisDto } from './dto/update-devis.dto';
+import { ConvertDevisToInvoiceDto } from './dto/convert-devis-to-invoice.dto';
 
 @ApiTags('devis')
 @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -143,6 +144,27 @@ export class DevisController {
     }
 
     return this.devisService.deleteDevis(id, userCompanyId);
+  }
+
+  @Post(':id/convert-to-invoice')
+  @ApiOperation({ summary: 'Convert an accepted devis to invoice' })
+  async convertDevisToInvoice(
+    @Req() req: AuthRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ConvertDevisToInvoiceDto
+  ) {
+    const userId = req.user!.id;
+    const userCompanyId = req.user!.companyId;
+
+    if (!userCompanyId) {
+      return {
+        status: 'error',
+        code: '400',
+        message: 'User must belong to a company',
+      };
+    }
+
+    return this.devisService.convertDevisToInvoice(id, userId, userCompanyId, dto);
   }
 
   @Get(':id/download')

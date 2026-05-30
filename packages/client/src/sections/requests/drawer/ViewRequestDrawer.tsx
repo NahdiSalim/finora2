@@ -56,6 +56,7 @@ type Props = {
   onClose: () => void;
   request: Request | null;
   pageContext?: "my_requests" | "client_requests"; // To determine what assignment options to show
+  onRequestUpdated?: (request: Request) => void;
 };
 
 export default function ViewRequestDrawer({
@@ -63,6 +64,7 @@ export default function ViewRequestDrawer({
   onClose,
   request,
   pageContext = "client_requests",
+  onRequestUpdated,
 }: Props) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -185,26 +187,47 @@ export default function ViewRequestDrawer({
     },
   });
 
-  // Sync local request with prop
+  // Sync local request when opening drawer or switching to another request.
+  // Do not overwrite with stale list data after a successful edit (refetch in drawer).
   useEffect(() => {
-    if (request) {
-      setLocalRequest(request);
+    if (!request || !open) return;
 
-      // Detect if this is a voice request (has audio attachments)
-      const hasAudioAttachment = request.attachments?.some((att) => {
-        const ext = att.split(".").pop()?.toLowerCase();
-        return ["mp3", "wav", "m4a", "ogg", "webm"].includes(ext || "");
-      });
-      setIsVoiceRequest(hasAudioAttachment || false);
+    setLocalRequest((prev) => {
+      if (!prev || prev.id !== request.id) return request;
 
-      // Set initial edit tab based on request type
-      if (hasAudioAttachment) {
-        setEditTab("voice");
-      } else {
-        setEditTab("form");
+      const prevUpdated = prev.updatedAt
+        ? new Date(prev.updatedAt).getTime()
+        : 0;
+      const nextUpdated = request.updatedAt
+        ? new Date(request.updatedAt).getTime()
+        : 0;
+      const prevAttachments = prev.attachments?.length ?? 0;
+      const nextAttachments = request.attachments?.length ?? 0;
+
+      if (
+        prevUpdated > nextUpdated ||
+        prevAttachments > nextAttachments ||
+        (prev.attachmentUrls?.length ?? 0) >
+          (request.attachmentUrls?.length ?? 0)
+      ) {
+        return prev;
       }
+
+      return request;
+    });
+
+    const hasAudioAttachment = request.attachments?.some((att) => {
+      const ext = att.split(".").pop()?.toLowerCase();
+      return ["mp3", "wav", "m4a", "ogg", "webm"].includes(ext || "");
+    });
+    setIsVoiceRequest(hasAudioAttachment || false);
+
+    if (hasAudioAttachment) {
+      setEditTab("voice");
+    } else {
+      setEditTab("form");
     }
-  }, [request]);
+  }, [request?.id, request?.updatedAt, open]);
 
   // Reset form when request changes or edit mode toggles
   useEffect(() => {
@@ -393,18 +416,17 @@ export default function ViewRequestDrawer({
         }
       }
 
-      // Add new attachments if any (from form tab or voice tab)
-      if (
-        editTab === "form" &&
-        data.attachments &&
-        data.attachments.length > 0
-      ) {
+      // Add new document attachments (form tab)
+      if (data.attachments && data.attachments.length > 0) {
         data.attachments.forEach((file) => {
           if (file) {
             formData.append("attachments", file);
           }
         });
-      } else if (editTab === "voice") {
+      }
+
+      // Voice tab audio replacement
+      if (editTab === "voice") {
         // Handle voice tab audio
         if (audioBlob) {
           const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, {
@@ -435,16 +457,15 @@ export default function ViewRequestDrawer({
       const refetchResult = await refetchRequest();
 
       // Update local request with the refetched data (with fresh URLs)
-      if (refetchResult.data?.data) {
-        setLocalRequest({ ...refetchResult.data.data });
+      const freshRequest = refetchResult.data?.data ?? result.data;
+      if (freshRequest) {
+        setLocalRequest({ ...freshRequest });
+        onRequestUpdated?.(freshRequest);
 
         // Reset audio state after update
         setAudioBlob(null);
         setUploadedAudioFile(null);
         setAudioDuration(0);
-      } else if (result.data) {
-        // Fallback to update response if refetch fails
-        setLocalRequest({ ...result.data });
       }
 
       // Show appropriate message

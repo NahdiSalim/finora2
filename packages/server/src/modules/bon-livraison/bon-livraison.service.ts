@@ -3,6 +3,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { ApiError } from '../../common/errors/api-error';
 import { CreateBonLivraisonDto } from './dto/create-bon-livraison.dto';
 import { UpdateBonLivraisonDto } from './dto/update-bon-livraison.dto';
+import { ConvertBonLivraisonToInvoiceDto } from './dto/convert-bon-livraison-to-invoice.dto';
 
 @Injectable()
 export class BonLivraisonService {
@@ -218,6 +219,95 @@ export class BonLivraisonService {
     if (bl.companyId !== companyId) throw new ApiError('Accès refusé', 403, 'ACCESS_DENIED');
     await this.prisma.bonLivraison.delete({ where: { id } });
     return { status: 'success', code: '200', message: 'Bon de livraison supprimé' };
+  }
+
+  /**
+   * Convert a bon de livraison into a draft invoice.
+   * Lines, TVA rate, notes and supplier are inherited from the BL.
+   * Due date is automatically set to 30 days from today.
+   */
+  async convertBonLivraisonToInvoice(
+    id: number,
+    userId: number,
+    companyId: number,
+    dto: ConvertBonLivraisonToInvoiceDto
+  ) {
+    const bl = await this.prisma.bonLivraison.findUnique({
+      where: { id },
+      include: { supplier: true },
+    });
+
+    if (!bl) {
+      throw new ApiError('Bon de livraison introuvable', 404, 'NOT_FOUND');
+    }
+
+    if (bl.companyId !== companyId) {
+      throw new ApiError('Accès refusé', 403, 'ACCESS_DENIED');
+    }
+
+    if (bl.status === 'annule') {
+      throw new ApiError(
+        'Un bon de livraison annulé ne peut pas être converti en facture',
+        400,
+        'BL_CANCELLED'
+      );
+    }
+
+    if (!bl.supplierId) {
+      throw new ApiError(
+        'Le bon de livraison doit être associé à un fournisseur',
+        400,
+        'BL_SUPPLIER_REQUIRED'
+      );
+    }
+
+    const lines = (bl.lines as any[]) ?? [];
+    const amounts = this.calculateAmounts(lines, bl.tvaRate);
+
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 30);
+
+    const invoice = await this.prisma.invoice.create({
+      data: {
+        invoiceNumber: dto.invoiceNumber,
+        status: 'draft',
+        dueDate,
+        vatRate: bl.tvaRate,
+        subtotal: amounts.amountHT,
+        discountAmount: 0,
+        vatAmount: amounts.amountTVA,
+        total: amounts.amountTTC,
+        amountPaid: 0,
+        remainingAmount: amounts.amountTTC,
+        notes: bl.notes,
+        supplierId: bl.supplierId,
+        companyId: bl.companyId,
+        createdById: userId,
+        lines: {
+          create: lines.map((line, index) => ({
+            description: line.description,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+            lineTotal: Math.round(line.quantity * line.unitPrice * 100) / 100,
+            order: index,
+          })),
+        },
+      },
+      include: {
+        lines: { orderBy: { order: 'asc' } },
+        supplier: true,
+      },
+    });
+
+    return {
+      status: 'success',
+      code: '201',
+      data: {
+        invoice,
+        bonLivraison: bl,
+      },
+      message: 'Bon de livraison converti en facture avec succès',
+    };
   }
 
   // ==================== HELPERS ====================

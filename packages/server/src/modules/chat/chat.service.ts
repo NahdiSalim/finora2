@@ -1063,7 +1063,7 @@ export class ChatService {
    * Get recent messages (last N) across all user's rooms.
    * Returns individual messages with sender info, room context, and unread status.
    */
-  async getRecentMessages(userId: number, limit: number = 3) {
+  async getRecentMessages(userId: number, limit: number = 10) {
     // Get all rooms the user is a participant in
     const userRooms = await this.prisma.chatRoom.findMany({
       where: {
@@ -1079,59 +1079,66 @@ export class ChatService {
 
     const roomIds = userRooms.map((r) => r.id);
 
-    // Get recent received messages (not sent by current user)
-    // Fetch more than we need so we can filter to unique senders
-    const allRecentMessages = await this.prisma.chatMessage.findMany({
+    const messageInclude = {
+      sender: {
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+      room: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          participants: true,
+        },
+      },
+      request: {
+        select: { id: true, subject: true },
+      },
+      task: {
+        select: { id: true, title: true },
+      },
+      appointment: {
+        select: { id: true, title: true, date: true, hour: true, status: true, type: true },
+      },
+    } as const;
+
+    const receivedWhere = {
+      roomId: { in: roomIds },
+      deleted: false,
+      senderId: { not: userId },
+    };
+
+    // Prioritize unread messages so popover list matches unreadCount
+    const unreadMessages = await this.prisma.chatMessage.findMany({
       where: {
-        roomId: { in: roomIds },
-        deleted: false,
-        senderId: { not: userId },
+        ...receivedWhere,
+        NOT: { readBy: { has: String(userId) } },
       },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-        room: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            participants: true,
-          },
-        },
-        request: {
-          select: { id: true, subject: true },
-        },
-        task: {
-          select: { id: true, title: true },
-        },
-        appointment: {
-          select: { id: true, title: true, date: true, hour: true, status: true, type: true },
-        },
-      },
+      include: messageInclude,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: 50, // Fetch more to ensure we get enough unique senders
+      take: limit,
     });
 
-    // Get last message from each unique sender (limit to N different users)
-    const seenSenders = new Set<number>();
-    const rawMessages: typeof allRecentMessages = [];
+    const rawMessages = [...unreadMessages];
 
-    for (const msg of allRecentMessages) {
-      if (!seenSenders.has(msg.senderId)) {
-        rawMessages.push(msg);
-        seenSenders.add(msg.senderId);
-
-        if (rawMessages.length >= limit) {
-          break;
-        }
-      }
+    if (rawMessages.length < limit) {
+      const readMessages = await this.prisma.chatMessage.findMany({
+        where: {
+          ...receivedWhere,
+          readBy: { has: String(userId) },
+          id: { notIn: rawMessages.map((m) => m.id) },
+        },
+        include: messageInclude,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: limit - rawMessages.length,
+      });
+      rawMessages.push(...readMessages);
     }
 
     // Get participant profiles to determine category

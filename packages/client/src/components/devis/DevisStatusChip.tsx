@@ -1,10 +1,11 @@
-import { Chip , alpha } from "@mui/material";
+import { Chip, alpha } from "@mui/material";
 import type { DevisStatus } from "src/types/devis";
 
 const STATUS_MAP: Record<DevisStatus, { label: string; color: string }> = {
   en_attente: { label: "En attente", color: "#ff7d0d" },
   accepte: { label: "Accepté", color: "#10B981" },
   refuse: { label: "Refusé", color: "#ff5757" },
+  facture: { label: "Facturé", color: "#6366F1" },
 };
 
 export default function DevisStatusChip({ status }: { status: DevisStatus }) {

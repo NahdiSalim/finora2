@@ -64,6 +64,44 @@ export class DocumentService {
   }
 
   /**
+   * Count all files in a folder and its subfolders (all nesting levels).
+   */
+  private async countDescendantFiles(
+    folderId: number,
+    mode: 'active' | 'archived' | 'non-deleted' = 'non-deleted'
+  ): Promise<number> {
+    const fileStatusWhere =
+      mode === 'active'
+        ? { status: 'active' as const }
+        : mode === 'archived'
+          ? { status: 'archived' as const }
+          : { status: { not: 'deleted' as const } };
+
+    const directFiles = await this.prisma.document.count({
+      where: {
+        parentId: folderId,
+        isFolder: false,
+        ...fileStatusWhere,
+      },
+    });
+
+    const subfolders = await this.prisma.document.findMany({
+      where: {
+        parentId: folderId,
+        isFolder: true,
+        status: { not: 'deleted' },
+      },
+      select: { id: true },
+    });
+
+    let total = directFiles;
+    for (const subfolder of subfolders) {
+      total += await this.countDescendantFiles(subfolder.id, mode);
+    }
+    return total;
+  }
+
+  /**
    * Create a new folder
    * - CLIENT: creates in their own space (user.companyId)
    * - ACCOUNTANT: must provide clientCompanyId and have active relationship
@@ -376,13 +414,7 @@ export class DocumentService {
               status: { not: 'deleted' }, // Count all non-deleted folders
             },
           });
-          filesCount = await this.prisma.document.count({
-            where: {
-              parentId: doc.id,
-              isFolder: false,
-              status: { not: 'deleted' }, // Count all non-deleted files
-            },
-          });
+          filesCount = await this.countDescendantFiles(doc.id, 'non-deleted');
           // Check if folder has active content
           hasActiveContent = await this.hasActiveContent(doc.id);
         }
@@ -669,7 +701,7 @@ export class DocumentService {
         if (doc.isFolder) {
           // Count direct children (archived)
           foldersCount = await this.countDirectChildren(doc.id, true, 'archived');
-          filesCount = await this.countDirectChildren(doc.id, false, 'archived');
+          filesCount = await this.countDescendantFiles(doc.id, 'archived');
         }
 
         return {

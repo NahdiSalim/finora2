@@ -17,6 +17,128 @@ export class RequestService {
     private readonly notificationService: NotificationService
   ) {}
 
+  private isAudioAttachmentPath(path: string): boolean {
+    const ext = path.split('.').pop()?.toLowerCase();
+    return ['mp3', 'wav', 'm4a', 'ogg', 'webm'].includes(ext || '');
+  }
+
+  /** Register new attachment paths under Documents > Demandes for the client */
+  private async syncRequestAttachmentsToDocuments(
+    requestId: number,
+    clientId: number,
+    companyId: number,
+    subject: string,
+    attachmentPaths: string[],
+    newPathsOnly?: string[]
+  ) {
+    const pathsToSync = newPathsOnly?.length ? newPathsOnly : attachmentPaths;
+    if (pathsToSync.length === 0) return;
+
+    const requestFolderName = `demande-${requestId}`;
+
+    let demandesRootFolder = await this.prisma.document.findFirst({
+      where: {
+        companyId,
+        ownerId: clientId,
+        isFolder: true,
+        name: 'Demandes',
+        parentId: null,
+        status: 'active',
+      },
+    });
+
+    if (!demandesRootFolder) {
+      demandesRootFolder = await this.prisma.document.create({
+        data: {
+          name: 'Demandes',
+          url: `requests/root`,
+          type: 'folder',
+          status: 'active',
+          ownerId: clientId,
+          companyId,
+          isFolder: true,
+          size: 0,
+          permissions: [],
+          children: [],
+        },
+      });
+    }
+
+    let requestFolder = await this.prisma.document.findFirst({
+      where: {
+        companyId,
+        ownerId: clientId,
+        requestId,
+        isFolder: true,
+        status: 'active',
+      },
+    });
+
+    if (!requestFolder) {
+      requestFolder = await this.prisma.document.create({
+        data: {
+          name: `Demande ${requestId} - ${subject}`,
+          url: `requests/${requestFolderName}`,
+          type: 'folder',
+          status: 'active',
+          ownerId: clientId,
+          companyId,
+          requestId,
+          isFolder: true,
+          parentId: demandesRootFolder.id,
+          size: 0,
+          permissions: [],
+          children: [],
+        },
+      });
+
+      const rootChildren = [...(demandesRootFolder.children || []), requestFolder.id.toString()];
+      await this.prisma.document.update({
+        where: { id: demandesRootFolder.id },
+        data: { children: rootChildren },
+      });
+    }
+
+    const childIds = [...(requestFolder.children || [])];
+
+    for (const attachmentPath of pathsToSync) {
+      try {
+        const fileName = attachmentPath.split('/').pop() || 'attachment';
+        const existing = await this.prisma.document.findFirst({
+          where: { url: attachmentPath, requestId, companyId },
+        });
+        if (existing) continue;
+
+        const metadata = await this.minioService.getFileMetadata(attachmentPath);
+        const doc = await this.prisma.document.create({
+          data: {
+            name: fileName,
+            url: attachmentPath,
+            type: 'request_attachment',
+            status: 'active',
+            ownerId: clientId,
+            companyId,
+            requestId,
+            parentId: requestFolder.id,
+            size: metadata.size || 0,
+            mimeType: metadata.metaData?.['content-type'] || 'application/octet-stream',
+            isFolder: false,
+            permissions: [],
+            children: [],
+          },
+        });
+        childIds.push(doc.id.toString());
+      } catch (error) {
+        console.error('Error syncing attachment to documents:', error);
+      }
+    }
+
+    await this.prisma.document.update({
+      where: { id: requestFolder.id },
+      data: { children: childIds },
+    });
+  }
+
   /**
    * Create a new request (Client)
    */
@@ -1205,6 +1327,8 @@ export class RequestService {
     // Handle file uploads if provided
     let attachmentUrls: string[] = [...request.attachments]; // Start with existing attachments
 
+    const newlyUploadedPaths: string[] = [];
+
     if (files && files.length > 0) {
       const client = await this.prisma.user.findUnique({
         where: { id: request.clientId },
@@ -1215,7 +1339,6 @@ export class RequestService {
         throw new ApiError('Company not found', 404, 'COMPANY_NOT_FOUND');
       }
 
-      // Check if the new files are audio files (voice request update)
       const audioMimeTypes = [
         'audio/mpeg',
         'audio/mp3',
@@ -1229,16 +1352,13 @@ export class RequestService {
       ];
       const isAudioUpdate = files.some((f) => audioMimeTypes.includes(f.mimetype));
 
-      // If updating with audio files, REPLACE all existing audio attachments
       if (isAudioUpdate) {
-        // Remove all existing audio files from attachmentUrls
-        attachmentUrls = attachmentUrls.filter((url) => {
-          const ext = url.split('.').pop()?.toLowerCase();
-          return !['mp3', 'wav', 'm4a', 'ogg', 'webm'].includes(ext || '');
-        });
+        attachmentUrls = attachmentUrls.filter((url) => !this.isAudioAttachmentPath(url));
+      } else {
+        // Document upload: replace existing non-audio files (matches UI "remplacera l'ancienne")
+        attachmentUrls = attachmentUrls.filter((url) => this.isAudioAttachmentPath(url));
       }
 
-      // Upload new files to the request-specific folder
       const requestFolderName = `demande-${requestId}`;
       for (const file of files) {
         try {
@@ -1248,11 +1368,28 @@ export class RequestService {
             file
           );
           attachmentUrls.push(uploadedPath);
+          newlyUploadedPaths.push(uploadedPath);
         } catch (error) {
           console.error('MinIO upload error:', error);
-          // Continue without the file if upload fails
         }
       }
+
+      if (newlyUploadedPaths.length === 0) {
+        throw new ApiError(
+          'Échec du téléversement de la pièce jointe. Vérifiez que le stockage MinIO est disponible.',
+          500,
+          'UPLOAD_FAILED'
+        );
+      }
+
+      await this.syncRequestAttachmentsToDocuments(
+        requestId,
+        request.clientId,
+        client.companyId,
+        dto.subject ?? request.subject,
+        attachmentUrls,
+        newlyUploadedPaths
+      );
     }
 
     const updateData: any = {};

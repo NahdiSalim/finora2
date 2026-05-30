@@ -5,6 +5,7 @@ import { ApiError } from '../../common/errors/api-error';
 import { MSG } from '../../common/messages';
 import { CreateDevisDto } from './dto/create-devis.dto';
 import { UpdateDevisDto } from './dto/update-devis.dto';
+import { ConvertDevisToInvoiceDto } from './dto/convert-devis-to-invoice.dto';
 import * as puppeteer from 'puppeteer';
 
 @Injectable()
@@ -289,6 +290,14 @@ export class DevisService {
       throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
     }
 
+    if (devis.status === 'facture') {
+      throw new ApiError(
+        'Ce devis est déjà facturé et ne peut plus être modifié',
+        400,
+        'DEVIS_INVOICED'
+      );
+    }
+
     // Recalculate amounts if lines or tvaRate changed
     let amounts: any = {};
     if (dto.lines || dto.tvaRate !== undefined) {
@@ -428,6 +437,105 @@ export class DevisService {
       stream,
       filename: `${devis.number}.pdf`,
       mimeType: 'application/pdf',
+    };
+  }
+
+  /**
+   * Convert an accepted devis into a draft invoice and mark the devis as invoiced.
+   */
+  async convertDevisToInvoice(
+    id: number,
+    userId: number,
+    userCompanyId: number,
+    dto: ConvertDevisToInvoiceDto
+  ) {
+    const devis = await this.prisma.devis.findUnique({
+      where: { id },
+      include: {
+        supplier: true,
+      },
+    });
+
+    if (!devis) {
+      throw new ApiError('Devis not found', 404, 'NOT_FOUND');
+    }
+
+    const hasAccess =
+      devis.companyId === userCompanyId ||
+      (await this.validateAccountantClientRelationship(userCompanyId, devis.companyId));
+
+    if (!hasAccess) {
+      throw new ApiError('Access denied', 403, 'ACCESS_DENIED');
+    }
+
+    if (devis.status === 'facture') {
+      throw new ApiError('Ce devis a déjà été converti en facture', 400, 'DEVIS_ALREADY_INVOICED');
+    }
+
+    if (devis.status !== 'accepte') {
+      throw new ApiError(
+        'Seul un devis accepté peut être converti en facture',
+        400,
+        'DEVIS_NOT_ACCEPTED'
+      );
+    }
+
+    if (!devis.supplierId) {
+      throw new ApiError(
+        'Le devis doit être associé à un fournisseur',
+        400,
+        'DEVIS_SUPPLIER_REQUIRED'
+      );
+    }
+
+    const lines = (devis.lines as any[]) ?? [];
+    const amounts = this.calculateAmounts({ lines, tvaRate: devis.tvaRate });
+
+    const invoice = await this.prisma.invoice.create({
+      data: {
+        invoiceNumber: dto.invoiceNumber,
+        status: 'draft',
+        dueDate: new Date(dto.dueDate),
+        vatRate: devis.tvaRate,
+        subtotal: amounts.amountHT,
+        discountAmount: 0,
+        vatAmount: amounts.amountTVA,
+        total: amounts.amountTTC,
+        amountPaid: 0,
+        remainingAmount: amounts.amountTTC,
+        notes: devis.notes,
+        supplierId: devis.supplierId,
+        companyId: devis.companyId,
+        createdById: userId,
+        lines: {
+          create: lines.map((line, index) => ({
+            description: line.description,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+            lineTotal: Math.round(line.quantity * line.unitPrice * 100) / 100,
+            order: index,
+          })),
+        },
+      },
+      include: {
+        lines: { orderBy: { order: 'asc' } },
+        supplier: true,
+      },
+    });
+
+    const updatedDevis = await this.prisma.devis.update({
+      where: { id },
+      data: { status: 'facture' },
+    });
+
+    return {
+      status: 'success',
+      code: '201',
+      data: {
+        invoice,
+        devis: updatedDevis,
+      },
+      message: 'Devis converti en facture avec succès',
     };
   }
 

@@ -18,7 +18,20 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "seed:demo": "tsx prisma/seed-demo.ts",
+    "seed:relationship": "tsx prisma/seed-relationship.ts",
+    "test:report": "jest --verbose --silent --testPathPatterns=request.service.spec --testPathPatterns=task.service.spec --testPathPatterns=chat.gateway.spec --testPathPatterns=chat.service.spec --testPathPatterns=notification.service.spec",
+    "test:report:soumettre": "jest --verbose --silent --testPathPatterns=request.service.spec -t \"3.6.1\"",
+    "test:report:convertir": "jest --verbose --silent --testPathPatterns=request.service.spec -t \"3.6.2\"",
+    "test:report:statut": "jest --verbose --silent --testPathPatterns=task.service.spec -t \"3.6.3\"",
+    "test:report:message": "jest --verbose --silent --testPathPatterns=chat.gateway.spec -t \"4.6.1\"",
+    "test:report:groupe": "jest --verbose --silent --testPathPatterns=chat.service.spec -t \"4.6.2\"",
+    "test:report:notifications": "jest --verbose --silent --testPathPatterns=notification.service.spec -t \"4.6.3\"",
+    "test:report:totaux": "jest --verbose --silent --testPathPatterns=invoice.service.spec -t \"5.6.1\"",
+    "test:report:devis-facture": "jest --verbose --silent --testPathPatterns=devis.service.spec -t \"5.6.2\"",
+    "test:report:pdf": "jest --verbose --silent --testPathPatterns=invoice.service.spec -t \"5.6.3\"",
+    "test:report:bl-facture": "jest --verbose --silent --testPathPatterns=bon-livraison.service.spec -t \"5.6.4\""
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",
@@ -117,6 +130,10 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^prisma/(.*)$": "<rootDir>/../prisma/$1",
+      "^src/(.*)$": "<rootDir>/$1"
+    }
   }
 }

@@ -248,7 +248,7 @@ export class ChatController {
   @ApiResponse({ status: 200, description: 'Recent messages with unread count' })
   async getRecentMessages(@Request() req) {
     const userId = req.user?.id ?? req.user?.sub;
-    return this.chatService.getRecentMessages(Number(userId), 3);
+    return this.chatService.getRecentMessages(Number(userId), 10);
   }
 
   @Get('messages/unread-count')

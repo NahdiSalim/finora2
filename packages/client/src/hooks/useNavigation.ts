@@ -90,6 +90,11 @@ export function useNavigation() {
         return;
       }
 
+      // Hide Mes banques from client sidebar
+      if (path === "/banks" && isClient) {
+        return;
+      }
+
       // For clients: skip individual factures/devis/suppliers/products — they are grouped below
       if (
         isClient &&

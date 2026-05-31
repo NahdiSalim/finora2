@@ -15,7 +15,6 @@ export default function AudioRecorder({
 }: AudioRecorderProps) {
   const theme = useTheme();
   const [isRecording, setIsRecording] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
   const [audioURL, setAudioURL] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);

@@ -257,4 +257,105 @@ export const CHATBOT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
       },
     },
   },
+
+  // ─── Write actions ────────────────────────────────────────────────────────────
+
+  {
+    type: 'function',
+    function: {
+      name: 'mark_invoice_paid',
+      description:
+        'Mark an invoice as fully paid. Sets status to "paid", amountPaid to the full total, and remainingAmount to 0. ' +
+        'ALWAYS retrieve the invoice first with get_invoice_by_id to confirm details with the user before calling this. ' +
+        'Do NOT call this if the invoice is already paid or cancelled.',
+      parameters: {
+        type: 'object',
+        properties: {
+          invoiceId: {
+            type: 'number',
+            description: 'The numeric ID of the invoice to mark as paid',
+          },
+        },
+        required: ['invoiceId'],
+      },
+    },
+  },
+
+  {
+    type: 'function',
+    function: {
+      name: 'create_task',
+      description:
+        'Create a new task for the company. Use when the user asks to create, add, or schedule a task or reminder. ' +
+        'Always summarise the details and ask "Voulez-vous confirmer la création de cette tâche ?" before calling.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Task title (required)' },
+          description: { type: 'string', description: 'Optional detailed description' },
+          type: {
+            type: 'string',
+            enum: ['accounting', 'review', 'meeting', 'document', 'other'],
+            description: 'Task type. Infer from context (e.g. "relance TVA" → accounting).',
+          },
+          priority: {
+            type: 'string',
+            enum: ['low', 'medium', 'high', 'urgent'],
+            description: 'Task priority. Infer from user urgency cues. Default: medium.',
+          },
+          dueDate: {
+            type: 'string',
+            description: 'Due date in YYYY-MM-DD format (optional)',
+          },
+        },
+        required: ['title', 'type'],
+      },
+    },
+  },
+
+  {
+    type: 'function',
+    function: {
+      name: 'create_appointment',
+      description:
+        'Create a new appointment (rendez-vous). Convert natural language dates to YYYY-MM-DD and times to HH:mm. ' +
+        'Always summarise the details and ask "Voulez-vous confirmer ce rendez-vous ?" before calling.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Appointment title (required)' },
+          date: { type: 'string', description: 'Date in YYYY-MM-DD format (required)' },
+          hour: { type: 'string', description: 'Time in HH:mm format, e.g. "14:00" (required)' },
+          type: {
+            type: 'string',
+            enum: ['meeting', 'consultation', 'review', 'other'],
+            description: 'Appointment type. Default: meeting.',
+          },
+          meetingType: {
+            type: 'string',
+            enum: ['in_person', 'online', 'phone'],
+            description: 'Format of the meeting. Default: in_person.',
+          },
+          description: { type: 'string', description: 'Optional notes or context' },
+          location: { type: 'string', description: 'Optional location or address' },
+        },
+        required: ['title', 'date', 'hour'],
+      },
+    },
+  },
+
+  {
+    type: 'function',
+    function: {
+      name: 'get_financial_summary',
+      description:
+        'Get a concise financial dashboard: invoices paid this month, total unpaid amount, overdue invoices (top 5), and a breakdown by status. ' +
+        'Use this for "résumé financier", "vue d\'ensemble", or "factures en retard" requests.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
 ];

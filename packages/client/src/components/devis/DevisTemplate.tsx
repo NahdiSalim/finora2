@@ -26,18 +26,6 @@ export const buildDevisTemplate = (devis: Devis): string => {
     )
     .join("");
 
-  const statusLabels: Record<string, string> = {
-    en_attente: "EN ATTENTE",
-    accepte: "ACCEPTÉ",
-    refuse: "REFUSÉ",
-  };
-
-  const statusColors: Record<string, string> = {
-    en_attente: "#F59E0B",
-    accepte: "#10B981",
-    refuse: "#EF4444",
-  };
-
   return `
     <!DOCTYPE html>
     <html lang="fr">

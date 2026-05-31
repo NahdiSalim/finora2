@@ -107,6 +107,7 @@ export function MoveDocumentModal({
         setLoadingParentId(null);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [clientId, fetchChildren],
   );
 

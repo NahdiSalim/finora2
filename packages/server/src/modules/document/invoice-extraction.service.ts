@@ -7,11 +7,14 @@ import axios from 'axios';
 import FormData from 'form-data';
 import { NotificationService } from '../notification/notification.service';
 import { MSG } from '../../common/messages';
+import OpenAI from 'openai';
+import pdfParse from 'pdf-parse';
 
 @Injectable()
 export class InvoiceExtractionService {
   private readonly extractionApiUrl =
     process.env.INVOICE_EXTRACTION_API_URL || 'http://192.168.1.185:8000/extract-invoice-aws-v3/';
+  private readonly openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   constructor(
     private prisma: PrismaService,
@@ -201,6 +204,61 @@ export class InvoiceExtractionService {
   }
 
   /**
+   * Fallback extraction using pdf-parse + GPT-4o-mini when the external API is unavailable.
+   * Returns a JSON object in the same structure expected by parseExtractedData(), or null if unusable.
+   */
+  private async extractWithLLM(buffer: Buffer, fileName: string): Promise<any | null> {
+    const parsed = await pdfParse(buffer);
+    const text = (parsed.text ?? '').trim();
+    if (text.length < 50) return null;
+
+    const excerpt = text.length > 6000 ? text.slice(0, 6000) + '\n[... tronqué]' : text;
+
+    const response = await this.openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      temperature: 0,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'user',
+          content: `Extrais les données de cette facture et retourne UNIQUEMENT un objet JSON avec cette structure exacte (laisse null/[] si non trouvé) :
+{
+  "invoice_header": { "msg_sender_id": null, "msg_receiver_id": null },
+  "bgm": { "type": "FACTURE", "numero": null },
+  "dtm": [{ "date_periode": null }],
+  "partner_section": [
+    { "nad": { "nom": null } },
+    { "nad": { "nom": null } }
+  ],
+  "pyt_section": [],
+  "lin_section": [
+    { "lin_imd": null, "lin_qty": "1", "lin_moa": { "rff": "0" }, "lin_alc": null }
+  ],
+  "invoice_moa": [
+    { "moa": "0" },
+    { "moa": "0" },
+    { "moa": "0" }
+  ],
+  "invoice_tax": [{ "tax": "TVA 19%", "moa": "0" }],
+  "texte": null
+}
+Règles : partner_section[0] = fournisseur, partner_section[1] = client.
+invoice_moa[0]=HT, [1]=TVA, [2]=TTC.
+date_periode au format YYYY-MM-DD.
+Montants en chiffres décimaux sous forme de chaîne (ex: "1234.50").
+
+Facture (fichier: ${fileName}) :
+---
+${excerpt}`,
+        },
+      ],
+    });
+
+    const content = response.choices[0]?.message?.content ?? '';
+    return JSON.parse(content);
+  }
+
+  /**
    * Extract invoice and auto-save to DB (used after upload).
    * - Success → saves real data, processingStatus = 'enregistre'
    * - Failure → saves empty JSON, extractionStatus = 'failed'
@@ -220,12 +278,14 @@ export class InvoiceExtractionService {
     });
     if (!document || document.isFolder || document.status !== 'active') return;
 
+    let fileBuffer: Buffer | null = null;
+
     try {
       // Download from MinIO
       const fileStream = await this.minioService.getFileStream(document.url);
       const chunks: Buffer[] = [];
       for await (const chunk of fileStream) chunks.push(chunk);
-      const fileBuffer = Buffer.concat(chunks);
+      fileBuffer = Buffer.concat(chunks);
 
       // Call extraction API
       const formData = new FormData();
@@ -297,6 +357,75 @@ export class InvoiceExtractionService {
       }
     } catch (error) {
       console.error(`✗ Auto-extraction failed for document ${documentId}:`, error);
+
+      // ── LLM fallback (PDF text extraction via OpenAI) ──────────────────────
+      let fallbackSucceeded = false;
+
+      if (fileBuffer !== null && document.mimeType?.includes('pdf')) {
+        try {
+          const llmData = await this.extractWithLLM(fileBuffer, document.name);
+          if (llmData) {
+            const recalculated = this.recalculateInvoice(llmData);
+            const parsedFields = this.parseExtractedData(recalculated);
+
+            const existingFb = await this.prisma.invoiceMetadata.findUnique({
+              where: { documentId },
+            });
+            if (existingFb) {
+              await this.prisma.invoiceMetadata.update({
+                where: { documentId },
+                data: {
+                  rawData: recalculated,
+                  extractionStatus: 'success',
+                  errorMessage: null,
+                  ...parsedFields,
+                },
+              });
+            } else {
+              await this.prisma.invoiceMetadata.create({
+                data: {
+                  documentId,
+                  rawData: recalculated,
+                  extractionStatus: 'success',
+                  errorMessage: null,
+                  ...parsedFields,
+                },
+              });
+            }
+
+            await this.prisma.document.update({
+              where: { id: documentId },
+              data: { processingStatus: 'traite', extractionStatus: 'done' },
+            });
+
+            console.log(` LLM fallback extraction complete for document ${documentId}`);
+
+            if (document.createdBy) {
+              const fileUrl = await this.minioService
+                .getPresignedUrl(document.url, 7 * 24 * 60 * 60)
+                .catch(() => null);
+              this.notificationService
+                .notify({
+                  recipientId: document.createdBy,
+                  type: 'invoice',
+                  action: 'extracted',
+                  data: { fileName: document.name, fileUrl },
+                })
+                .catch(() => {});
+            }
+
+            fallbackSucceeded = true;
+          }
+        } catch (llmError: unknown) {
+          console.error(
+            `✗ LLM fallback failed for document ${documentId}:`,
+            llmError instanceof Error ? llmError.message : String(llmError)
+          );
+        }
+      }
+
+      if (fallbackSucceeded) return;
+      // ── End LLM fallback ───────────────────────────────────────────────────
 
       // Save empty JSON so GET returns 'failed' instead of 'pending'
       const emptyJson = this.emptyInvoiceJson();

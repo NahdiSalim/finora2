@@ -220,6 +220,7 @@ export default function NewAppointmentWizard({
     setTime(initialValues.time ?? "");
 
     setStep(isReport ? 1 : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialValues, isReport]);
 
   // Client creation: client connected is fixed by default (no select)

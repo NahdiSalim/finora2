@@ -32,7 +32,7 @@ export function ContactAccountantModal({
   const [visitorCompany, setVisitorCompany] = useState("");
   const [subject, setSubject] = useState(DEFAULT_SUBJECT);
   const [message, setMessage] = useState("");
-  const [sendContactMessage, { isLoading, isSuccess, isError }] =
+  const [sendContactMessage, { isLoading, isError }] =
     useSendContactMessageMutation();
 
   const handleSubmit = async (e: React.FormEvent) => {

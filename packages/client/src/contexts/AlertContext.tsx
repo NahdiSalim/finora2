@@ -104,6 +104,7 @@ export function AlertProvider({ children }: { children: ReactNode }) {
       return () => clearTimeout(timer);
     }
     return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, autoHideDuration]);
 
   return (

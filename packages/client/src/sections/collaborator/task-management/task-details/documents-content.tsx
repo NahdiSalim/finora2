@@ -166,6 +166,7 @@ export function DocumentsContent({ task, onUpdate }: DocumentsContentProps) {
                       bgcolor: alpha(theme.palette.primary.main, 0.05),
                       borderRadius: 2,
                       border: `2px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                      "& > audio": { width: "100%", height: "40px" },
                     }}
                   >
                     <Box
@@ -236,7 +237,6 @@ export function DocumentsContent({ task, onUpdate }: DocumentsContentProps) {
                     <audio
                       key={`task-audio-${index}`}
                       controls
-                      style={{ width: "100%", height: 40 }}
                       preload="metadata"
                       src={attachmentUrl}
                     >

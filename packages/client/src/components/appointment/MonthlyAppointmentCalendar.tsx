@@ -109,11 +109,6 @@ export default function MonthlyAppointmentCalendar({
     handleCloseModal();
   };
 
-  // Week days display (abbreviated on mobile)
-  const weekDaysDisplay = isMobile
-    ? ["L", "M", "M", "J", "V", "S", "D"]
-    : WEEK_DAYS;
-
   return (
     <>
       <Box

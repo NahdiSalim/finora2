@@ -120,10 +120,15 @@ export class MinioService implements OnModuleInit {
 
     const metadata = {
       'Content-Type': file.mimetype,
-      'X-Original-Name': file.originalname,
     };
 
-    await this.minioClient.putObject(this.bucketName, objectName, file.buffer, file.size, metadata);
+    await this.minioClient.putObject(
+      this.bucketName,
+      objectName,
+      file.buffer,
+      file.buffer.length,
+      metadata
+    );
 
     this.logger.log(`File uploaded: ${objectName}`);
     return objectName;

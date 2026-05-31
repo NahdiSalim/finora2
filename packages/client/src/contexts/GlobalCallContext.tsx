@@ -101,7 +101,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
         currentUserIdRef.current = payload.sub || 0;
-      } catch (error) {
+      } catch {
         // Token parse error
       }
     }
@@ -356,6 +356,7 @@ export function GlobalCallProvider({ children }: { children: ReactNode }) {
       socketInstance.off("call:rejected");
       socketInstance.off("call:ended");
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     handleOffer,
     handleAnswer,

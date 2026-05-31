@@ -1,3 +1,5 @@
 {
-  "typescript.autoClosingTags": false
+  "typescript.autoClosingTags": false,
+  "typescript.tsdk": "packages/client/node_modules/typescript/lib",
+  "js/ts.tsdk.path": "packages/client/node_modules/typescript/lib"
 }

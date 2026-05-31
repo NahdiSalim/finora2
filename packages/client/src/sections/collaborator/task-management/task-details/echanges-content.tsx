@@ -221,6 +221,16 @@ export function EchangesContent({
               borderColor: theme.palette.primary.main,
               bgcolor: "white",
             },
+            "& > input": {
+              flex: 1,
+              border: "none",
+              outline: "none",
+              background: "transparent",
+              marginLeft: "8px",
+              fontSize: "14px",
+              color: theme.palette.text.primary,
+              fontFamily: theme.typography.fontFamily as string,
+            },
           }}
         >
           <Smile size={18} color={theme.palette.text.disabled} />
@@ -231,16 +241,6 @@ export function EchangesContent({
             onKeyPress={handleKeyPress}
             placeholder="Ecrivez votre commentaire..."
             disabled={isSubmitting}
-            style={{
-              flex: 1,
-              border: "none",
-              outline: "none",
-              background: "transparent",
-              marginLeft: "8px",
-              fontSize: "14px",
-              color: theme.palette.text.primary,
-              fontFamily: theme.typography.fontFamily,
-            }}
           />
         </Box>
 

@@ -1512,14 +1512,21 @@ model ChatbotSession {
 }
 
 model ChatbotMessage {
-  id          Int            @id @default(autoincrement())
-  sessionId   Int
-  role        String         // "user" | "assistant"
-  content     String         @db.Text
-  toolsUsed   String[]       // array of tool names used to produce this message
-  createdAt   DateTime       @default(now())
+  id                   Int            @id @default(autoincrement())
+  sessionId            Int
+  role                 String         // "user" | "assistant"
+  content              String         @db.Text  // display label ("[Message vocal : 0:02]") or typed text
+  transcription        String?        @db.Text  // spoken text from Whisper; null for non-audio messages
+  toolsUsed            String[]       // array of tool names used to produce this message
+  createdAt            DateTime       @default(now())
 
-  session     ChatbotSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  // Attachment — populated on user messages that carried a file/audio upload
+  attachmentObjectPath String?        // MinIO object key, used to regenerate presigned URLs
+  attachmentName       String?        // original filename shown to user
+  attachmentMimeType   String?        // MIME type (image/*, audio/*, application/pdf, …)
+  attachmentSize       Int?           // size in bytes
+
+  session              ChatbotSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
   @@index([createdAt])

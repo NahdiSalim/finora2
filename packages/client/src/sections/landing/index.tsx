@@ -590,15 +590,17 @@ const FinoraLandingPage = () => {
       <LoaderOverlay hide={loaded}>
         <LoaderLogo>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <img
+            <Box
+              component="img"
               src="https://framerusercontent.com/images/kq857rH86cqGviBRliG7ERQy3MU.png?width=56&height=56"
               alt="Logo Finora"
-              style={{ height: 56 }}
+              sx={{ height: 56 }}
             />
-            <img
+            <Box
+              component="img"
               src="https://framerusercontent.com/images/0eFtMzYADpcGfz0iOHLgxGKIiSM.svg?width=120&height=26"
               alt="Finora"
-              style={{ height: 26, filter: "brightness(0) invert(1)" }}
+              sx={{ height: 26, filter: "brightness(0) invert(1)" }}
             />
           </Box>
           <Typography
@@ -1067,13 +1069,14 @@ const FinoraLandingPage = () => {
                   pointerEvents: "none",
                 }}
               />
-              <img
+              <Box
+                component="img"
                 src="https://framerusercontent.com/images/LW0TvSUYOx6XEjwbm3R3AbMjsw.jpg?width=1440&height=1024"
                 alt="Aperçu du tableau de bord Finora"
-                style={{
+                sx={{
                   width: "100%",
                   maxWidth: 1000,
-                  borderRadius: 28,
+                  borderRadius: "28px",
                   boxShadow:
                     "0 60px 100px -20px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.15)",
                   display: "block",
@@ -1220,22 +1223,18 @@ const FinoraLandingPage = () => {
             }}
           >
             {trustedLogos.map((logo, i) => (
-              <img
+              <Box
                 key={i}
+                component="img"
                 src={logo}
                 alt="logo client"
-                style={{
+                sx={{
                   height: 40,
                   filter: "grayscale(1)",
                   transition: "filter 0.3s",
                   cursor: "pointer",
+                  "&:hover": { filter: "grayscale(0)" },
                 }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.filter = "grayscale(0)")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.filter = "grayscale(1)")
-                }
               />
             ))}
           </Box>
@@ -1341,10 +1340,11 @@ const FinoraLandingPage = () => {
                       }}
                     >
                       <Box sx={{ position: "relative" }}>
-                        <img
+                        <Box
+                          component="img"
                           src={t.img}
                           alt={t.name}
-                          style={{
+                          sx={{
                             width: 52,
                             height: 52,
                             borderRadius: "50%",
